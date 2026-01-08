@@ -223,55 +223,60 @@ export default function LeTrendApp() {
         <>
           {/* Header */}
           <header style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '16px 20px',
             borderBottom: '1px solid rgba(74, 47, 24, 0.06)',
             background: '#FAF8F5',
             position: 'sticky',
             top: 0,
             zIndex: 50
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {currentView !== 'home' && (
-                <button
-                  onClick={handleBack}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    fontSize: '20px',
-                    cursor: 'pointer',
-                    padding: '4px 8px',
-                    marginRight: '4px'
-                  }}
-                >
-                  ←
-                </button>
-              )}
-              <Logo size={32} />
-              <span style={{
-                fontSize: '16px',
-                fontWeight: '600',
-                color: '#1A1612'
-              }}>LeTrend</span>
-            </div>
-
-            {/* Concepts remaining badge */}
-            {currentView === 'home' && plan && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                background: '#F0EBE4',
-                borderRadius: '20px'
-              }}>
-                <span style={{ fontSize: '13px', color: '#5D4D3D' }}>
-                  {plan.concepts - conceptsUsed} av {plan.concepts} kvar
-                </span>
+            <div style={{
+              maxWidth: '500px',
+              margin: '0 auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px 20px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {currentView !== 'home' && (
+                  <button
+                    onClick={handleBack}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: '20px',
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      marginRight: '4px'
+                    }}
+                  >
+                    ←
+                  </button>
+                )}
+                <Logo size={32} />
+                <span style={{
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  color: '#1A1612'
+                }}>LeTrend</span>
               </div>
-            )}
+
+              {/* Concepts remaining badge */}
+              {currentView === 'home' && plan && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  background: '#F0EBE4',
+                  borderRadius: '20px'
+                }}>
+                  <span style={{ fontSize: '13px', color: '#5D4D3D' }}>
+                    {plan.concepts - conceptsUsed} av {plan.concepts} kvar
+                  </span>
+                </div>
+              )}
+            </div>
           </header>
         </>
       )}
@@ -344,7 +349,7 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
       background: 'linear-gradient(180deg, #FAF8F5 0%, #F0EBE4 100%)'
     }}>
       <div style={{
-        maxWidth: '360px',
+        maxWidth: '400px',
         margin: '0 auto',
         width: '100%'
       }}>
@@ -529,31 +534,33 @@ function PaymentView({
         textAlign: 'center',
         borderBottom: '1px solid rgba(74, 47, 24, 0.06)'
       }}>
-        <Logo size={48} />
-        <div style={{
-          marginTop: '16px',
-          fontSize: '11px',
-          fontWeight: '600',
-          textTransform: 'uppercase',
-          letterSpacing: '0.1em',
-          color: '#9D8E7D'
-        }}>
-          {step === 'plan' && 'Steg 1 av 2'}
-          {step === 'payment' && 'Steg 2 av 2'}
+        <div style={{ maxWidth: '500px', margin: '0 auto' }}>
+          <Logo size={48} />
+          <div style={{
+            marginTop: '16px',
+            fontSize: '11px',
+            fontWeight: '600',
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            color: '#9D8E7D'
+          }}>
+            {step === 'plan' && 'Steg 1 av 2'}
+            {step === 'payment' && 'Steg 2 av 2'}
+          </div>
+          <h1 style={{
+            fontSize: '24px',
+            fontWeight: '600',
+            color: '#1A1612',
+            marginTop: '8px'
+          }}>
+            {step === 'plan' && 'Välj din plan'}
+            {step === 'payment' && 'Betalning'}
+          </h1>
         </div>
-        <h1 style={{
-          fontSize: '24px',
-          fontWeight: '600',
-          color: '#1A1612',
-          marginTop: '8px'
-        }}>
-          {step === 'plan' && 'Välj din plan'}
-          {step === 'payment' && 'Betalning'}
-        </h1>
       </div>
 
       {step === 'plan' && (
-        <div style={{ padding: '24px 16px' }}>
+        <div style={{ maxWidth: '500px', margin: '0 auto', padding: '24px 16px' }}>
           {/* Plans */}
           <div style={{
             display: 'flex',
@@ -676,7 +683,7 @@ function PaymentView({
       )}
 
       {step === 'payment' && (
-        <div style={{ padding: '24px 16px' }}>
+        <div style={{ maxWidth: '500px', margin: '0 auto', padding: '24px 16px' }}>
           {/* Selected plan summary */}
           <div style={{
             padding: '16px',
@@ -854,7 +861,7 @@ function HomeView({
   conceptsUsed: number;
 }) {
   return (
-    <main style={{ paddingBottom: '40px' }}>
+    <main style={{ maxWidth: '500px', margin: '0 auto', paddingBottom: '40px' }}>
       {/* Brand Profile Banner */}
       <div style={{
         margin: '16px',
@@ -1137,6 +1144,8 @@ function PreviewView({
 
   return (
     <main style={{
+      maxWidth: '500px',
+      margin: '0 auto',
       paddingBottom: '100px'
     }}>
       {/* Video Preview */}
@@ -1341,35 +1350,40 @@ function PreviewView({
         bottom: 0,
         left: 0,
         right: 0,
-        padding: '16px 20px',
         background: '#FFFFFF',
         borderTop: '1px solid rgba(74,47,24,0.1)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '16px'
       }}>
-        <div>
-          <div style={{ fontSize: '12px', color: '#9D8E7D' }}>Inkluderat i din plan</div>
-          <div style={{ fontSize: '14px', fontWeight: '600', color: '#1A1612' }}>
-            {conceptsRemaining} koncept kvar denna månad
+        <div style={{
+          maxWidth: '500px',
+          margin: '0 auto',
+          padding: '16px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px'
+        }}>
+          <div>
+            <div style={{ fontSize: '12px', color: '#9D8E7D' }}>Inkluderat i din plan</div>
+            <div style={{ fontSize: '14px', fontWeight: '600', color: '#1A1612' }}>
+              {conceptsRemaining} koncept kvar denna månad
+            </div>
           </div>
+          <button
+            onClick={onUnlock}
+            style={{
+              padding: '16px 28px',
+              background: 'linear-gradient(145deg, #5D3A1A, #3D2510)',
+              border: 'none',
+              borderRadius: '14px',
+              color: '#FAF8F5',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: 'pointer'
+            }}
+          >
+            Lås upp
+          </button>
         </div>
-        <button
-          onClick={onUnlock}
-          style={{
-            padding: '16px 28px',
-            background: 'linear-gradient(145deg, #5D3A1A, #3D2510)',
-            border: 'none',
-            borderRadius: '14px',
-            color: '#FAF8F5',
-            fontSize: '16px',
-            fontWeight: '600',
-            cursor: 'pointer'
-          }}
-        >
-          Lås upp
-        </button>
       </div>
     </main>
   );
@@ -1384,6 +1398,8 @@ function BriefView({ concept }: { concept: Concept }) {
 
   return (
     <main style={{
+      maxWidth: '500px',
+      margin: '0 auto',
       paddingBottom: '40px'
     }}>
       {/* Success header */}
