@@ -312,23 +312,16 @@ export default function LeTrendApp() {
 // ============================================
 function Logo({ size = 32 }: { size?: number }) {
   return (
-    <div
+    <Image
+      src="/logo.jpg.jpg"
+      alt="LeTrend"
+      width={size}
+      height={size}
       style={{
-        width: size,
-        height: size,
         borderRadius: '50%',
-        background: 'linear-gradient(145deg, #6B4423, #4A2F18)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#FAF8F5',
-        fontSize: size * 0.4,
-        fontWeight: '700',
-        fontStyle: 'italic'
+        objectFit: 'cover'
       }}
-    >
-      Le
-    </div>
+    />
   );
 }
 
@@ -355,24 +348,18 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
       }}>
         {/* Logo & Title */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div
-            style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: 'linear-gradient(145deg, #6B4423, #4A2F18)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#FAF8F5',
-              fontSize: '28px',
-              fontWeight: '700',
-              fontStyle: 'italic',
-              margin: '0 auto 20px',
-              boxShadow: '0 8px 32px rgba(107, 68, 35, 0.25)'
-            }}
-          >
-            Le
+          <div style={{ margin: '0 auto 20px', width: '80px', height: '80px' }}>
+            <Image
+              src="/logo.jpg.jpg"
+              alt="LeTrend"
+              width={80}
+              height={80}
+              style={{
+                borderRadius: '50%',
+                objectFit: 'cover',
+                boxShadow: '0 8px 32px rgba(107, 68, 35, 0.25)'
+              }}
+            />
           </div>
           <h1 style={{
             fontSize: '28px',
@@ -1165,7 +1152,7 @@ function PreviewView({
           {/* Video Preview */}
           <div style={{
             width: '100%',
-            paddingBottom: '56%',
+            paddingBottom: '177%',
             background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
             position: 'relative',
             borderRadius: '16px',
@@ -1521,7 +1508,7 @@ function BriefView({ concept }: { concept: Concept }) {
             <div>
               <div style={{
                 width: '100%',
-                paddingBottom: '56%',
+                paddingBottom: '177%',
                 background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
                 borderRadius: '16px',
                 position: 'relative',
