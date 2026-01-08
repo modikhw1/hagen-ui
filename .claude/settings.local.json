@@ -11,7 +11,8 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial commit: LeTrend app with UI updates and full app flow\n\n- Next.js 16 app with Mantine UI and Tailwind CSS\n- DM Sans font integration\n- LeTrend brown color palette \\(#4A2F18 primary\\)\n- Multiple dashboard variants \\(dashboard-1, dashboard-2\\)\n- New full app flow at /app with:\n  - Login view \\(Swedish\\)\n  - Plan selection and payment\n  - Brand profile with TikTok analysis\n  - Concept preview and unlock flow\n  - Brief view with script, checklist, analysis tabs\n- Documentation and training data for concept marketplace\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git commit:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)"
     ]
   }
 }

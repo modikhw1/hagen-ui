@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   title: "LeTrend",
   description: "Virala sketchkoncept för ditt varumärke",
   icons: {
-    icon: "/logo.jpg.jpg",
-    apple: "/logo.jpg.jpg",
+    icon: "/logo-transparent.jpg",
+    apple: "/logo-transparent.jpg",
   },
 };
 
