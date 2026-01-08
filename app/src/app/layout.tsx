@@ -8,11 +8,14 @@ import "@fontsource/dm-sans/500.css";
 import "@fontsource/dm-sans/600.css";
 import "@fontsource/dm-sans/700.css";
 import "./globals.css";
-import { Navigation } from "@/components";
 
 export const metadata: Metadata = {
-  title: "letrend",
-  description: "Proven video concepts for your business's social media",
+  title: "LeTrend",
+  description: "Virala sketchkoncept för ditt varumärke",
+  icons: {
+    icon: "/logo.jpg.jpg",
+    apple: "/logo.jpg.jpg",
+  },
 };
 
 export default function RootLayout({
@@ -28,7 +31,6 @@ export default function RootLayout({
       <body>
         <MantineProvider>
           <Notifications />
-          <Navigation />
           {children}
         </MantineProvider>
       </body>

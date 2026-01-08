@@ -318,8 +318,7 @@ function Logo({ size = 32 }: { size?: number }) {
       width={size}
       height={size}
       style={{
-        borderRadius: '50%',
-        objectFit: 'cover'
+        objectFit: 'contain'
       }}
     />
   );
@@ -348,16 +347,14 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
       }}>
         {/* Logo & Title */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
-          <div style={{ margin: '0 auto 20px', width: '80px', height: '80px' }}>
+          <div style={{ margin: '0 auto 24px', width: '120px', height: '120px' }}>
             <Image
               src="/logo.jpg.jpg"
               alt="LeTrend"
-              width={80}
-              height={80}
+              width={120}
+              height={120}
               style={{
-                borderRadius: '50%',
-                objectFit: 'cover',
-                boxShadow: '0 8px 32px rgba(107, 68, 35, 0.25)'
+                objectFit: 'contain'
               }}
             />
           </div>
@@ -522,7 +519,7 @@ function PaymentView({
         borderBottom: '1px solid rgba(74, 47, 24, 0.06)'
       }}>
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-          <Logo size={56} />
+          <Logo size={72} />
           <div style={{
             marginTop: '20px',
             fontSize: '12px',
