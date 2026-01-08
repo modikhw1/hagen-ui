@@ -230,12 +230,12 @@ export default function LeTrendApp() {
             zIndex: 50
           }}>
             <div style={{
-              maxWidth: '500px',
+              maxWidth: '1200px',
               margin: '0 auto',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: '16px 20px',
+              padding: '16px 40px',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 {currentView !== 'home' && (
@@ -349,7 +349,7 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
       background: 'linear-gradient(180deg, #FAF8F5 0%, #F0EBE4 100%)'
     }}>
       <div style={{
-        maxWidth: '400px',
+        maxWidth: '420px',
         margin: '0 auto',
         width: '100%'
       }}>
@@ -530,15 +530,15 @@ function PaymentView({
     }}>
       {/* Header */}
       <div style={{
-        padding: '24px 20px',
+        padding: '40px 20px 32px',
         textAlign: 'center',
         borderBottom: '1px solid rgba(74, 47, 24, 0.06)'
       }}>
-        <div style={{ maxWidth: '500px', margin: '0 auto' }}>
-          <Logo size={48} />
+        <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+          <Logo size={56} />
           <div style={{
-            marginTop: '16px',
-            fontSize: '11px',
+            marginTop: '20px',
+            fontSize: '12px',
             fontWeight: '600',
             textTransform: 'uppercase',
             letterSpacing: '0.1em',
@@ -548,7 +548,7 @@ function PaymentView({
             {step === 'payment' && 'Steg 2 av 2'}
           </div>
           <h1 style={{
-            fontSize: '24px',
+            fontSize: '32px',
             fontWeight: '600',
             color: '#1A1612',
             marginTop: '8px'
@@ -560,13 +560,13 @@ function PaymentView({
       </div>
 
       {step === 'plan' && (
-        <div style={{ maxWidth: '500px', margin: '0 auto', padding: '24px 16px' }}>
+        <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 24px' }}>
           {/* Plans */}
           <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px',
-            marginBottom: '24px'
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '20px',
+            marginBottom: '32px'
           }}>
             {PLANS.map(plan => (
               <div
@@ -663,27 +663,29 @@ function PaymentView({
             ))}
           </div>
 
-          <button
-            onClick={() => setStep('payment')}
-            style={{
-              width: '100%',
-              padding: '16px',
-              background: 'linear-gradient(145deg, #6B4423, #4A2F18)',
-              border: 'none',
-              borderRadius: '14px',
-              color: '#FAF8F5',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: 'pointer'
-            }}
-          >
-            Fortsätt
-          </button>
+          <div style={{ maxWidth: '320px', margin: '0 auto' }}>
+            <button
+              onClick={() => setStep('payment')}
+              style={{
+                width: '100%',
+                padding: '18px',
+                background: 'linear-gradient(145deg, #6B4423, #4A2F18)',
+                border: 'none',
+                borderRadius: '14px',
+                color: '#FAF8F5',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Fortsätt
+            </button>
+          </div>
         </div>
       )}
 
       {step === 'payment' && (
-        <div style={{ maxWidth: '500px', margin: '0 auto', padding: '24px 16px' }}>
+        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px' }}>
           {/* Selected plan summary */}
           <div style={{
             padding: '16px',
@@ -861,13 +863,13 @@ function HomeView({
   conceptsUsed: number;
 }) {
   return (
-    <main style={{ maxWidth: '500px', margin: '0 auto', paddingBottom: '40px' }}>
+    <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 40px 40px' }}>
       {/* Brand Profile Banner */}
       <div style={{
-        margin: '16px',
-        padding: '16px',
+        padding: '20px 24px',
         background: 'linear-gradient(145deg, #4A2F18, #3D2510)',
-        borderRadius: '16px'
+        borderRadius: '20px',
+        marginBottom: '32px'
       }}>
         <div
           onClick={() => setProfileExpanded(!profileExpanded)}
@@ -1010,24 +1012,28 @@ function HomeView({
       </div>
 
       {/* Section: Best Matches */}
-      <section style={{ padding: '0 16px', marginBottom: '28px' }}>
+      <section>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '12px'
+          marginBottom: '20px'
         }}>
           <div>
-            <div style={{ fontSize: '11px', color: '#9D8E7D', marginBottom: '2px' }}>
+            <div style={{ fontSize: '12px', color: '#9D8E7D', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               BÄSTA MATCHNINGAR
             </div>
-            <div style={{ fontSize: '15px', fontWeight: '600', color: '#1A1612' }}>
+            <div style={{ fontSize: '20px', fontWeight: '600', color: '#1A1612' }}>
               För {BRAND_PROFILE.handle}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gap: '16px'
+        }}>
           {CONCEPTS.map(concept => (
             <ConceptCard
               key={concept.id}
@@ -1144,207 +1150,252 @@ function PreviewView({
 
   return (
     <main style={{
-      maxWidth: '500px',
+      maxWidth: '1200px',
       margin: '0 auto',
-      paddingBottom: '100px'
+      padding: '24px 40px 120px'
     }}>
-      {/* Video Preview */}
       <div style={{
-        width: '100%',
-        paddingBottom: '56%',
-        background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
-        position: 'relative'
+        display: 'grid',
+        gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(300px, 1fr)',
+        gap: '40px',
+        alignItems: 'start'
       }}>
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: '64px',
-          height: '64px',
-          borderRadius: '50%',
-          background: 'rgba(250,248,245,0.2)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#FAF8F5',
-          fontSize: '24px',
-          cursor: 'pointer'
-        }}>
-          ▶
-        </div>
-
-        {/* Match badge */}
-        <div style={{
-          position: 'absolute',
-          top: '16px',
-          left: '16px',
-          background: concept.match > 85 ? '#5A8F5A' : '#4A2F18',
-          color: '#FFF',
-          padding: '6px 12px',
-          borderRadius: '12px',
-          fontSize: '13px',
-          fontWeight: '700'
-        }}>
-          {concept.match}% match
-        </div>
-
-        {/* Market badge */}
-        <div style={{
-          position: 'absolute',
-          top: '16px',
-          right: '16px',
-          background: 'rgba(0,0,0,0.4)',
-          color: '#FFF',
-          padding: '6px 10px',
-          borderRadius: '10px',
-          fontSize: '11px',
-          fontWeight: '600'
-        }}>
-          {concept.market}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={{ padding: '20px' }}>
-        {/* Title & Mechanism */}
-        <div style={{ marginBottom: '16px' }}>
+        {/* Left column - Video & Content */}
+        <div>
+          {/* Video Preview */}
           <div style={{
-            fontSize: '22px',
-            fontWeight: '600',
-            color: '#1A1612',
-            marginBottom: '8px'
+            width: '100%',
+            paddingBottom: '56%',
+            background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
+            position: 'relative',
+            borderRadius: '16px',
+            overflow: 'hidden'
           }}>
-            {concept.title}
+            <div style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              background: 'rgba(250,248,245,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#FAF8F5',
+              fontSize: '28px',
+              cursor: 'pointer'
+            }}>
+              ▶
+            </div>
+
+            {/* Match badge */}
+            <div style={{
+              position: 'absolute',
+              top: '16px',
+              left: '16px',
+              background: concept.match > 85 ? '#5A8F5A' : '#4A2F18',
+              color: '#FFF',
+              padding: '8px 14px',
+              borderRadius: '12px',
+              fontSize: '14px',
+              fontWeight: '700'
+            }}>
+              {concept.match}% match
+            </div>
+
+            {/* Market badge */}
+            <div style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              background: 'rgba(0,0,0,0.4)',
+              color: '#FFF',
+              padding: '6px 12px',
+              borderRadius: '10px',
+              fontSize: '12px',
+              fontWeight: '600'
+            }}>
+              {concept.market}
+            </div>
           </div>
+
+          {/* Why it works - Teaser */}
+          <div style={{
+            padding: '20px',
+            background: '#F5F2EE',
+            borderRadius: '16px',
+            marginTop: '20px'
+          }}>
+            <div style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              color: '#9D8E7D',
+              marginBottom: '10px',
+              textTransform: 'uppercase'
+            }}>
+              VARFÖR DET FUNKAR
+            </div>
+            <div style={{
+              fontSize: '15px',
+              color: '#5D4D3D',
+              lineHeight: '1.6'
+            }}>
+              {concept.whyItWorks}
+            </div>
+          </div>
+        </div>
+
+        {/* Right column - Details */}
+        <div style={{
+          background: '#FFFFFF',
+          borderRadius: '20px',
+          padding: '28px',
+          border: '1px solid rgba(74,47,24,0.08)'
+        }}>
+          {/* Title & Mechanism */}
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{
+              fontSize: '26px',
+              fontWeight: '600',
+              color: '#1A1612',
+              marginBottom: '12px'
+            }}>
+              {concept.title}
+            </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              flexWrap: 'wrap'
+            }}>
+              <span style={{
+                fontSize: '13px',
+                padding: '6px 12px',
+                background: '#F0EBE4',
+                borderRadius: '10px',
+                color: '#5D4D3D',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                {axis?.icon} {axis?.label}
+              </span>
+              <span style={{
+                fontSize: '13px',
+                padding: '6px 12px',
+                background: '#F0EBE4',
+                borderRadius: '10px',
+                color: '#5D4D3D'
+              }}>
+                {concept.difficulty}
+              </span>
+              <span style={{
+                fontSize: '13px',
+                padding: '6px 12px',
+                background: '#F0EBE4',
+                borderRadius: '10px',
+                color: '#5D4D3D'
+              }}>
+                {concept.teamSize} personer
+              </span>
+            </div>
+          </div>
+
+          {/* Description */}
+          <div style={{
+            fontSize: '15px',
+            color: '#5D4D3D',
+            lineHeight: '1.7',
+            marginBottom: '24px',
+            paddingBottom: '24px',
+            borderBottom: '1px solid rgba(74,47,24,0.08)'
+          }}>
+            {concept.description}
+          </div>
+
+          {/* What you get */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{
+              fontSize: '12px',
+              fontWeight: '600',
+              color: '#9D8E7D',
+              marginBottom: '14px',
+              textTransform: 'uppercase'
+            }}>
+              VAD DU FÅR
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[
+                { icon: '📹', label: 'Original videoreferens' },
+                { icon: '📝', label: 'Fullständigt översatt manus' },
+                { icon: '🎯', label: 'Produktionschecklista' },
+                { icon: '🧠', label: 'Humor-analys & tips' },
+              ].map((item, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  fontSize: '15px',
+                  color: '#3D3229'
+                }}>
+                  <span style={{ fontSize: '18px' }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Brand fit note */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            flexWrap: 'wrap'
+            gap: '12px',
+            padding: '14px 16px',
+            background: 'rgba(90,143,90,0.1)',
+            borderRadius: '12px',
+            marginBottom: '24px'
           }}>
-            <span style={{
-              fontSize: '12px',
-              padding: '4px 10px',
-              background: '#F0EBE4',
-              borderRadius: '10px',
-              color: '#5D4D3D',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}>
-              {axis?.icon} {axis?.label}
-            </span>
-            <span style={{
-              fontSize: '12px',
-              padding: '4px 10px',
-              background: '#F0EBE4',
-              borderRadius: '10px',
-              color: '#5D4D3D'
-            }}>
-              {concept.difficulty}
-            </span>
-            <span style={{
-              fontSize: '12px',
-              padding: '4px 10px',
-              background: '#F0EBE4',
-              borderRadius: '10px',
-              color: '#5D4D3D'
-            }}>
-              {concept.teamSize} personer
+            <span style={{ fontSize: '18px' }}>✓</span>
+            <span style={{ fontSize: '14px', color: '#3D5A3D' }}>
+              Matchar {BRAND_PROFILE.handle}s {BRAND_PROFILE.tone[0]}a ton och {concept.teamSize}-team setup
             </span>
           </div>
-        </div>
 
-        {/* Description */}
-        <div style={{
-          fontSize: '15px',
-          color: '#5D4D3D',
-          lineHeight: '1.6',
-          marginBottom: '20px'
-        }}>
-          {concept.description}
-        </div>
-
-        {/* Why it works - Teaser */}
-        <div style={{
-          padding: '16px',
-          background: '#F5F2EE',
-          borderRadius: '14px',
-          marginBottom: '20px'
-        }}>
+          {/* Unlock button */}
           <div style={{
-            fontSize: '11px',
-            fontWeight: '600',
-            color: '#9D8E7D',
-            marginBottom: '8px'
+            padding: '20px',
+            background: '#F5F2EE',
+            borderRadius: '14px'
           }}>
-            VARFÖR DET FUNKAR
-          </div>
-          <div style={{
-            fontSize: '14px',
-            color: '#5D4D3D',
-            lineHeight: '1.5'
-          }}>
-            {concept.whyItWorks}
-          </div>
-        </div>
-
-        {/* What you get */}
-        <div style={{
-          padding: '16px',
-          background: '#FFFFFF',
-          borderRadius: '14px',
-          border: '1px solid rgba(74,47,24,0.08)',
-          marginBottom: '20px'
-        }}>
-          <div style={{
-            fontSize: '11px',
-            fontWeight: '600',
-            color: '#9D8E7D',
-            marginBottom: '12px'
-          }}>
-            VAD DU FÅR
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {[
-              { icon: '📹', label: 'Original videoreferens' },
-              { icon: '📝', label: 'Fullständigt översatt manus' },
-              { icon: '🎯', label: 'Produktionschecklista' },
-              { icon: '🧠', label: 'Humor-analys & tips' },
-            ].map((item, i) => (
-              <div key={i} style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                fontSize: '14px',
-                color: '#3D3229'
-              }}>
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', color: '#9D8E7D' }}>Inkluderat i din plan</div>
+              <div style={{ fontSize: '16px', fontWeight: '600', color: '#1A1612' }}>
+                {conceptsRemaining} koncept kvar denna månad
               </div>
-            ))}
+            </div>
+            <button
+              onClick={onUnlock}
+              style={{
+                width: '100%',
+                padding: '18px 28px',
+                background: 'linear-gradient(145deg, #5D3A1A, #3D2510)',
+                border: 'none',
+                borderRadius: '14px',
+                color: '#FAF8F5',
+                fontSize: '16px',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Lås upp koncept
+            </button>
           </div>
-        </div>
-
-        {/* Brand fit note */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '10px',
-          padding: '12px 14px',
-          background: 'rgba(90,143,90,0.1)',
-          borderRadius: '12px',
-          marginBottom: '20px'
-        }}>
-          <span style={{ fontSize: '16px' }}>✓</span>
-          <span style={{ fontSize: '13px', color: '#3D5A3D' }}>
-            Matchar {BRAND_PROFILE.handle}s {BRAND_PROFILE.tone[0]}a ton och {concept.teamSize}-team setup
-          </span>
         </div>
       </div>
 
-      {/* Fixed Unlock Bar */}
+      {/* Mobile Fixed Unlock Bar - only show on small screens */}
       <div style={{
         position: 'fixed',
         bottom: 0,
@@ -1352,9 +1403,10 @@ function PreviewView({
         right: 0,
         background: '#FFFFFF',
         borderTop: '1px solid rgba(74,47,24,0.1)',
+        display: 'none' // Hidden on desktop, would use media query in real CSS
       }}>
         <div style={{
-          maxWidth: '500px',
+          maxWidth: '1200px',
           margin: '0 auto',
           padding: '16px 20px',
           display: 'flex',
@@ -1398,21 +1450,23 @@ function BriefView({ concept }: { concept: Concept }) {
 
   return (
     <main style={{
-      maxWidth: '500px',
+      maxWidth: '1200px',
       margin: '0 auto',
-      paddingBottom: '40px'
+      padding: '0 40px 40px'
     }}>
       {/* Success header */}
       <div style={{
-        padding: '24px 20px',
+        padding: '32px 40px',
         background: 'linear-gradient(145deg, #5A8F5A, #4A7A4A)',
-        textAlign: 'center'
+        textAlign: 'center',
+        borderRadius: '0 0 24px 24px',
+        marginBottom: '32px'
       }}>
-        <div style={{ fontSize: '32px', marginBottom: '8px' }}>✓</div>
-        <div style={{ fontSize: '18px', fontWeight: '600', color: '#FFF', marginBottom: '4px' }}>
+        <div style={{ fontSize: '40px', marginBottom: '12px' }}>✓</div>
+        <div style={{ fontSize: '22px', fontWeight: '600', color: '#FFF', marginBottom: '6px' }}>
           Allt klart
         </div>
-        <div style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)' }}>
+        <div style={{ fontSize: '16px', color: 'rgba(255,255,255,0.85)' }}>
           {concept.title} är redo att filmas
         </div>
       </div>
@@ -1421,7 +1475,9 @@ function BriefView({ concept }: { concept: Concept }) {
       <div style={{
         display: 'flex',
         borderBottom: '1px solid rgba(74,47,24,0.1)',
-        background: '#FFF'
+        background: '#FFF',
+        borderRadius: '16px 16px 0 0',
+        overflow: 'hidden'
       }}>
         {[
           { id: 'script' as const, label: 'Manus' },
@@ -1433,12 +1489,12 @@ function BriefView({ concept }: { concept: Concept }) {
             onClick={() => setActiveTab(tab.id)}
             style={{
               flex: 1,
-              padding: '14px 16px',
+              padding: '18px 20px',
               background: 'none',
               border: 'none',
-              borderBottom: activeTab === tab.id ? '2px solid #4A2F18' : '2px solid transparent',
+              borderBottom: activeTab === tab.id ? '3px solid #4A2F18' : '3px solid transparent',
               color: activeTab === tab.id ? '#1A1612' : '#9D8E7D',
-              fontSize: '13px',
+              fontSize: '15px',
               fontWeight: '600',
               cursor: 'pointer'
             }}
@@ -1449,69 +1505,82 @@ function BriefView({ concept }: { concept: Concept }) {
       </div>
 
       {/* Tab Content */}
-      <div style={{ padding: '20px' }}>
+      <div style={{
+        padding: '32px',
+        background: '#FFF',
+        borderRadius: '0 0 16px 16px',
+        minHeight: '400px'
+      }}>
         {activeTab === 'script' && (
-          <div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1.2fr)',
+            gap: '32px'
+          }}>
             {/* Video reference */}
-            <div style={{
-              width: '100%',
-              paddingBottom: '56%',
-              background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
-              borderRadius: '14px',
-              position: 'relative',
-              marginBottom: '20px'
-            }}>
+            <div>
               <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                width: '56px',
-                height: '56px',
-                borderRadius: '50%',
-                background: 'rgba(250,248,245,0.2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#FAF8F5',
-                fontSize: '20px',
-                cursor: 'pointer'
+                width: '100%',
+                paddingBottom: '56%',
+                background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
+                borderRadius: '16px',
+                position: 'relative',
+                overflow: 'hidden'
               }}>
-                ▶
-              </div>
-              <div style={{
-                position: 'absolute',
-                bottom: '12px',
-                left: '12px',
-                background: 'rgba(0,0,0,0.6)',
-                color: '#FFF',
-                padding: '4px 10px',
-                borderRadius: '8px',
-                fontSize: '11px'
-              }}>
-                Original referens
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'rgba(250,248,245,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FAF8F5',
+                  fontSize: '24px',
+                  cursor: 'pointer'
+                }}>
+                  ▶
+                </div>
+                <div style={{
+                  position: 'absolute',
+                  bottom: '14px',
+                  left: '14px',
+                  background: 'rgba(0,0,0,0.6)',
+                  color: '#FFF',
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }}>
+                  Original referens
+                </div>
               </div>
             </div>
 
             {/* Script */}
             <div style={{
-              padding: '20px',
+              padding: '24px',
               background: '#2C2416',
-              borderRadius: '14px',
+              borderRadius: '16px',
               fontFamily: "'SF Mono', 'Fira Code', monospace"
             }}>
               <div style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 color: 'rgba(250,248,245,0.5)',
-                marginBottom: '16px',
-                fontFamily: "'DM Sans', sans-serif"
+                marginBottom: '20px',
+                fontFamily: "'DM Sans', sans-serif",
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
               }}>
                 MANUS — Översatt & anpassat
               </div>
               <pre style={{
-                fontSize: '13px',
+                fontSize: '14px',
                 color: '#FAF8F5',
-                lineHeight: '1.7',
+                lineHeight: '1.8',
                 whiteSpace: 'pre-wrap',
                 margin: 0
               }}>
@@ -1522,150 +1591,177 @@ function BriefView({ concept }: { concept: Concept }) {
         )}
 
         {activeTab === 'checklist' && (
-          <div>
-            <div style={{
-              fontSize: '11px',
-              fontWeight: '600',
-              color: '#9D8E7D',
-              marginBottom: '16px'
-            }}>
-              PRODUKTIONSCHECKLISTA
-            </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1.5fr 1fr',
+            gap: '40px'
+          }}>
+            <div>
+              <div style={{
+                fontSize: '12px',
+                fontWeight: '600',
+                color: '#9D8E7D',
+                marginBottom: '20px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}>
+                PRODUKTIONSCHECKLISTA
+              </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {concept.productionNotes?.map((note, i) => (
-                <label
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '12px',
-                    padding: '14px 16px',
-                    background: '#FFFFFF',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(74,47,24,0.08)',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <input
-                    type="checkbox"
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {concept.productionNotes?.map((note, i) => (
+                  <label
+                    key={i}
                     style={{
-                      width: '20px',
-                      height: '20px',
-                      marginTop: '2px',
-                      accentColor: '#4A2F18'
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '14px',
+                      padding: '18px 20px',
+                      background: '#F9F7F4',
+                      borderRadius: '14px',
+                      border: '1px solid rgba(74,47,24,0.06)',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s'
                     }}
-                  />
-                  <span style={{
-                    fontSize: '14px',
-                    color: '#3D3229',
-                    lineHeight: '1.5'
-                  }}>
-                    {note}
-                  </span>
-                </label>
-              ))}
+                  >
+                    <input
+                      type="checkbox"
+                      style={{
+                        width: '22px',
+                        height: '22px',
+                        marginTop: '2px',
+                        accentColor: '#4A2F18'
+                      }}
+                    />
+                    <span style={{
+                      fontSize: '15px',
+                      color: '#3D3229',
+                      lineHeight: '1.6'
+                    }}>
+                      {note}
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             {/* Quick stats */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '12px',
-              marginTop: '24px'
-            }}>
+            <div>
               <div style={{
-                padding: '16px',
-                background: '#F5F2EE',
-                borderRadius: '12px',
-                textAlign: 'center'
+                fontSize: '12px',
+                fontWeight: '600',
+                color: '#9D8E7D',
+                marginBottom: '20px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
               }}>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: '#1A1612' }}>
-                  {concept.teamSize}
-                </div>
-                <div style={{ fontSize: '12px', color: '#7D6E5D' }}>Personer behövs</div>
+                SNABBINFO
               </div>
               <div style={{
-                padding: '16px',
-                background: '#F5F2EE',
-                borderRadius: '12px',
-                textAlign: 'center'
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px'
               }}>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: '#1A1612' }}>
-                  {concept.difficulty}
+                <div style={{
+                  padding: '24px',
+                  background: '#F5F2EE',
+                  borderRadius: '16px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#1A1612', marginBottom: '4px' }}>
+                    {concept.teamSize}
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#7D6E5D' }}>Personer behövs</div>
                 </div>
-                <div style={{ fontSize: '12px', color: '#7D6E5D' }}>Svårighetsgrad</div>
+                <div style={{
+                  padding: '24px',
+                  background: '#F5F2EE',
+                  borderRadius: '16px',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: '#1A1612', marginBottom: '4px' }}>
+                    {concept.difficulty}
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#7D6E5D' }}>Svårighetsgrad</div>
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {activeTab === 'breakdown' && (
-          <div>
-            {/* Mechanism */}
-            <div style={{
-              padding: '16px',
-              background: '#FFFFFF',
-              borderRadius: '14px',
-              border: '1px solid rgba(74,47,24,0.08)',
-              marginBottom: '16px'
-            }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '24px'
+          }}>
+            {/* Left column */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Mechanism */}
               <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginBottom: '12px'
+                padding: '24px',
+                background: '#F9F7F4',
+                borderRadius: '16px'
               }}>
-                <span style={{ fontSize: '24px' }}>{axis?.icon}</span>
-                <div>
-                  <div style={{ fontSize: '11px', color: '#9D8E7D' }}>HUMOR-MEKANISM</div>
-                  <div style={{ fontSize: '16px', fontWeight: '600', color: '#1A1612' }}>
-                    {axis?.label}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px'
+                }}>
+                  <span style={{ fontSize: '36px' }}>{axis?.icon}</span>
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#9D8E7D', textTransform: 'uppercase', letterSpacing: '0.05em' }}>HUMOR-MEKANISM</div>
+                    <div style={{ fontSize: '20px', fontWeight: '600', color: '#1A1612' }}>
+                      {axis?.label}
+                    </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Why it works */}
+              <div style={{
+                padding: '24px',
+                background: '#F5F2EE',
+                borderRadius: '16px',
+                flex: 1
+              }}>
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: '#9D8E7D',
+                  marginBottom: '14px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
+                  VARFÖR DET FUNKAR
+                </div>
+                <div style={{
+                  fontSize: '15px',
+                  color: '#3D3229',
+                  lineHeight: '1.7'
+                }}>
+                  {concept.whyItWorks}
                 </div>
               </div>
             </div>
 
-            {/* Why it works */}
+            {/* Right column - Key moments */}
             <div style={{
-              padding: '16px',
-              background: '#F5F2EE',
-              borderRadius: '14px',
-              marginBottom: '16px'
+              padding: '24px',
+              background: '#F9F7F4',
+              borderRadius: '16px'
             }}>
               <div style={{
-                fontSize: '11px',
+                fontSize: '12px',
                 fontWeight: '600',
                 color: '#9D8E7D',
-                marginBottom: '10px'
-              }}>
-                VARFÖR DET FUNKAR
-              </div>
-              <div style={{
-                fontSize: '14px',
-                color: '#3D3229',
-                lineHeight: '1.6'
-              }}>
-                {concept.whyItWorks}
-              </div>
-            </div>
-
-            {/* Key moments */}
-            <div style={{
-              padding: '16px',
-              background: '#FFFFFF',
-              borderRadius: '14px',
-              border: '1px solid rgba(74,47,24,0.08)'
-            }}>
-              <div style={{
-                fontSize: '11px',
-                fontWeight: '600',
-                color: '#9D8E7D',
-                marginBottom: '12px'
+                marginBottom: '20px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
               }}>
                 VIKTIGA MOMENT ATT SPIKA
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {[
                   'Setupen — gör den normal och relaterbar',
                   'Kontrast-momentet — här landar humorn',
@@ -1674,22 +1770,22 @@ function BriefView({ concept }: { concept: Concept }) {
                   <div key={i} style={{
                     display: 'flex',
                     alignItems: 'flex-start',
-                    gap: '10px'
+                    gap: '14px'
                   }}>
                     <span style={{
-                      width: '24px',
-                      height: '24px',
+                      width: '32px',
+                      height: '32px',
                       borderRadius: '50%',
                       background: '#4A2F18',
                       color: '#FAF8F5',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: '12px',
+                      fontSize: '14px',
                       fontWeight: '600',
                       flexShrink: 0
                     }}>{i + 1}</span>
-                    <span style={{ fontSize: '14px', color: '#3D3229', lineHeight: '1.5' }}>
+                    <span style={{ fontSize: '15px', color: '#3D3229', lineHeight: '1.6', paddingTop: '4px' }}>
                       {moment}
                     </span>
                   </div>
@@ -1702,28 +1798,41 @@ function BriefView({ concept }: { concept: Concept }) {
 
       {/* Link your video CTA */}
       <div style={{
-        margin: '0 20px',
-        padding: '16px',
+        marginTop: '32px',
+        padding: '28px 40px',
         background: 'linear-gradient(145deg, #F5F2EE, #EDE9E3)',
-        borderRadius: '14px',
-        textAlign: 'center'
+        borderRadius: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '24px'
       }}>
-        <div style={{
-          fontSize: '14px',
-          color: '#5D4D3D',
-          marginBottom: '12px'
-        }}>
-          Filmat klart? Länka din video för att spåra resultat
+        <div>
+          <div style={{
+            fontSize: '18px',
+            fontWeight: '600',
+            color: '#1A1612',
+            marginBottom: '4px'
+          }}>
+            Filmat klart?
+          </div>
+          <div style={{
+            fontSize: '15px',
+            color: '#5D4D3D'
+          }}>
+            Länka din video för att spåra resultat och få insikter
+          </div>
         </div>
         <button style={{
-          padding: '12px 24px',
+          padding: '16px 32px',
           background: '#4A2F18',
           border: 'none',
-          borderRadius: '10px',
+          borderRadius: '14px',
           color: '#FAF8F5',
-          fontSize: '14px',
+          fontSize: '15px',
           fontWeight: '600',
-          cursor: 'pointer'
+          cursor: 'pointer',
+          whiteSpace: 'nowrap'
         }}>
           Länka min TikTok-video
         </button>
