@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* LeTrend color palette */
+  --lt-cream: #FAF8F5;
+  --lt-brown-dark: #4A2F18;
+  --lt-brown-medium: #5D3A1A;
+  --lt-brown-light: #6B4423;
+  --lt-text-primary: #1A1612;
+  --lt-text-secondary: #7D6E5D;
+  --lt-text-muted: #9D8E7D;
+  --lt-text-placeholder: #B5A99A;
+  --lt-surface: #F5F2EE;
+  --lt-surface-light: #F0EBE4;
+  --lt-border: rgba(74, 47, 24, 0.08);
+  --lt-success: #5A8F5A;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* LeTrend theme colors */
+  --color-lt-cream: var(--lt-cream);
+  --color-lt-brown-dark: var(--lt-brown-dark);
+  --color-lt-brown-medium: var(--lt-brown-medium);
+  --color-lt-brown-light: var(--lt-brown-light);
+  --color-lt-text-primary: var(--lt-text-primary);
+  --color-lt-text-secondary: var(--lt-text-secondary);
+  --color-lt-text-muted: var(--lt-text-muted);
+  --color-lt-surface: var(--lt-surface);
+  --color-lt-surface-light: var(--lt-surface-light);
+  --color-lt-success: var(--lt-success);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
