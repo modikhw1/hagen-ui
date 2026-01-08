@@ -313,7 +313,7 @@ export default function LeTrendApp() {
 function Logo({ size = 32 }: { size?: number }) {
   return (
     <Image
-      src="/logo-transparent.jpg"
+      src="/transparent.png"
       alt="LeTrend"
       width={size}
       height={size}
@@ -349,7 +349,7 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ margin: '0 auto 24px', width: '120px', height: '120px' }}>
             <Image
-              src="/logo-transparent.jpg"
+              src="/transparent.png"
               alt="LeTrend"
               width={120}
               height={120}
