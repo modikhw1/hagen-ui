@@ -24,6 +24,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string, businessName: string) => Promise<{ error: Error | null; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -114,6 +115,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const signUp = async (email: string, password: string, businessName: string) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            business_name: businessName,
+          },
+        },
+      });
+
+      if (error) {
+        return { error };
+      }
+
+      // Check if email confirmation is required
+      if (data.user && !data.session) {
+        return { error: null, needsConfirmation: true };
+      }
+
+      return { error: null, needsConfirmation: false };
+    } catch (err) {
+      return { error: err as Error };
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -129,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         session,
         loading,
         signIn,
+        signUp,
         signOut,
         refreshProfile,
       }}

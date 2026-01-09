@@ -1,44 +1,54 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { loadConcepts } from '@/lib/conceptLoader';
+import { loadDefaultProfile } from '@/lib/profileLoader';
+import { display, categoryOptions } from '@/lib/display';
+import type { TranslatedConcept } from '@/lib/translator';
+import { useAuth } from '@/contexts/AuthContext';
 
 // ============================================
-// BRAND PROFILE (preset, analyzed from TikTok)
+// BRAND PROFILE (from translation layer)
 // ============================================
+const profileData = loadDefaultProfile();
 const BRAND_PROFILE = {
-  handle: '@mellowcafe',
-  avatar: 'M',
-  followers: '12,4K',
-  avgViews: '8,2K',
-  posts: 47,
-  tone: ['mysig', 'deadpan', 'relaterbar'],
-  energy: 'Varm men torr',
-  teamSize: '2-3 personer',
-  topMechanisms: ['recognition', 'contrast', 'subversion'] as const,
-  recentHits: [
-    { title: '"Vi stänger om 5 min"-blicken', views: '24K' },
-    { title: 'När stamkunden kommer in', views: '18K' },
-  ],
+  handle: profileData.handle,
+  avatar: profileData.avatarInitial,
+  followers: profileData.followers,
+  avgViews: profileData.avgViews,
+  posts: parseInt(profileData.videoCount) || 0,
+  tone: profileData.tone,
+  energy: profileData.energy,
+  teamSize: profileData.teamSize,
+  topMechanisms: profileData.topMechanisms as readonly string[],
+  recentHits: profileData.recentHits.map(h => ({
+    title: h.title,
+    views: h.views,
+  })),
 };
 
 // ============================================
 // TYPES
 // ============================================
-interface Concept {
-  id: number;
+interface UIConcept {
+  id: string;
   title: string;
   subtitle: string;
-  mechanism: keyof typeof HUMOR_AXES;
-  mechanismLabel: string;
+  mechanism: string;
   market: string;
   match: number;
   difficulty: string;
   teamSize: string;
+  filmTime: string;
   description: string;
   whyItWorks: string;
   productionNotes: string[];
   script: string;
+  // Video sources
+  videoUrl?: string;  // TikTok URL
+  gcsUri?: string;    // GCS URI for direct video
 }
 
 interface Plan {
@@ -52,87 +62,44 @@ interface Plan {
 }
 
 // ============================================
-// CONCEPTS DATA
+// CONCEPTS DATA - All from translation layer
 // ============================================
-const CONCEPTS: Concept[] = [
-  {
-    id: 1,
-    title: 'Övertidsleendet',
-    subtitle: 'Överdriven positivitet under utmattande pass',
-    mechanism: 'contrast',
-    mechanismLabel: 'Två Världar Möts',
-    market: 'SE',
-    match: 94,
-    difficulty: 'Lätt',
-    teamSize: '1-2',
-    description: 'Personal som håller ett aggressivt leende trots uppenbar utmattning. Kontrasten mellan leendet och de döda ögonen säljer skämtet.',
-    whyItWorks: 'Humorn kommer från det synliga gapet mellan spelad entusiasm och uppenbar utmattning. Publiken känner igen detta direkt från sina egna serviceupplevelser.',
-    productionNotes: [
-      'En tagning, inga klipp behövs',
-      'Funkar bäst med genuin trötthet (filma i slutet av passet)',
-      'Överdriva leendet men håll ögonen neutrala',
-      'Ingen dialog krävs - uttrycket bär det',
-    ],
-    script: `[SCEN: Bakom disken, slutet av passet]
 
-[Anställd ser utmattad ut, axlarna hänger]
+// Helper: Convert TranslatedConcept → UIConcept using display layer
+function toUIConcept(tc: TranslatedConcept): UIConcept {
+  const diffDisplay = display.difficulty(tc.difficulty);
+  const peopleDisplay = display.peopleNeeded(tc.peopleNeeded);
+  const filmDisplay = display.filmTime(tc.filmTime);
+  const marketDisplay = display.market(tc.market);
+  const mechDisplay = display.mechanism(tc.mechanism);
 
-[Kund närmar sig]
+  return {
+    id: tc.id,
+    title: tc.headline_sv || tc.headline,
+    subtitle: `${mechDisplay.label}`,
+    mechanism: tc.mechanism,
+    market: marketDisplay.flag,
+    match: tc.matchPercentage,
+    difficulty: diffDisplay.label,
+    teamSize: peopleDisplay.label,
+    filmTime: filmDisplay.label,
+    // Use Swedish content fields, fallback to generated
+    description: tc.description_sv || tc.whyItFits_sv?.join('. ') || tc.whyItFits.join('. '),
+    whyItWorks: tc.whyItWorks_sv || `${mechDisplay.label} — ${tc.whyItFits[0] || 'Beprövat format'}`,
+    productionNotes: tc.productionNotes_sv || tc.whyItFits_sv || tc.whyItFits,
+    script: tc.script_sv || `[Manus genereras...]`,
+    // Video sources
+    videoUrl: tc.sourceUrl,
+    gcsUri: tc.gcsUri,
+  };
+}
 
-[OMEDELBAR förvandling - största leendet, glada ögon]
+// Load all concepts from clips.json
+const translatedConcepts = loadConcepts();
+const CONCEPTS: UIConcept[] = translatedConcepts.map(toUIConcept);
 
-ANSTÄLLD: "Hej! Välkommen till Mellow! Vad får det lov att vara?"
-
-[Håll leendet. Ögonen dör sakta medan grinet hålls]
-
-[Text overlay: "Timme 9 av ett 8-timmars pass"]`,
-  },
-  {
-    id: 2,
-    title: 'Stamkunden',
-    subtitle: 'Förbereder beställning innan kunden ens pratar',
-    mechanism: 'recognition',
-    mechanismLabel: 'Smärtsamt Relaterbart',
-    market: 'DE',
-    match: 92,
-    difficulty: 'Lätt',
-    teamSize: '2',
-    description: 'Personal ser stamkund närma sig och förbereder tyst deras vanliga beställning. Kunden kommer fram, öppnar munnen för att beställa, får drycken i handen.',
-    whyItWorks: 'Igenkänningshumor - både stamkunder och personal känner till denna dynamik. Den tysta effektiviteten blir poängen.',
-    productionNotes: [
-      'Behöver fri sikt till dörren/entrén',
-      'Timing är allt - beställningen ska vara klar precis när kunden kommer fram',
-      'Kunden ska se lite förvånad men nöjd ut',
-      'Kan lägga till text: "När du ser din 08:00 närma sig"',
-    ],
-    script: `[SCEN: Disk, vy mot entrén]
-
-[Personal märker någon genom fönstret, börjar direkt göra dryck]
-
-[Inga ord, bara självsäker förberedelse]
-
-[Kund kommer in, går till disken, öppnar munnen]
-
-KUND: "Hej, kan jag få—"
-
-[Personal glider över drycken]
-
-PERSONAL: [liten nick]
-
-[Kund accepterar sitt öde, betalar, går]
-
-[Text overlay: "08:47:an"]`,
-  },
-];
-
-const HUMOR_AXES = {
-  contrast: { icon: '⚖️', label: 'Två Världar Möts' },
-  recognition: { icon: '😮‍💨', label: 'Smärtsamt Relaterbart' },
-  subversion: { icon: '↻', label: 'Twisten' },
-  dark: { icon: '🔥', label: 'Mörkt Men Roligt' },
-  escalation: { icon: '⚡', label: 'Spiral' },
-  deadpan: { icon: '😐', label: 'Torr & Rak' },
-};
+// HUMOR_AXES now comes from display layer
+// Usage: display.mechanism('contrast') → { label: 'Två Världar Möts', icon: '⚖️', color: '#...' }
 
 const PLANS: Plan[] = [
   {
@@ -166,21 +133,61 @@ const PLANS: Plan[] = [
 // MAIN APP
 // ============================================
 export default function LeTrendApp() {
-  const [currentView, setCurrentView] = useState<'login' | 'payment' | 'home' | 'preview' | 'brief'>('login');
-  const [selectedConcept, setSelectedConcept] = useState<Concept | null>(null);
+  const { user, profile, loading, signOut } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Views: payment, home, preview, brief (no login - we redirect instead)
+  const [currentView, setCurrentView] = useState<'payment' | 'home' | 'preview' | 'brief'>('payment');
+  const [selectedConcept, setSelectedConcept] = useState<UIConcept | null>(null);
   const [selectedPlan, setSelectedPlan] = useState('growth');
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [conceptsUsed, setConceptsUsed] = useState(1);
+  const [devModeSkipped, setDevModeSkipped] = useState(false);
 
-  const handleLogin = () => {
-    setCurrentView('payment');
-  };
+  // Auth & payment flow logic
+  useEffect(() => {
+    if (loading) return;
+
+    // Check for payment status from URL
+    const paymentStatus = searchParams.get('payment');
+    if (paymentStatus === 'success') {
+      setDevModeSkipped(true); // Treat as paid for this session
+      setCurrentView('home');
+      return;
+    }
+
+    // Not logged in → redirect to login
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    // Logged in - determine view based on payment status
+    const hasPaid = profile?.has_paid || devModeSkipped;
+
+    // Only change view if we're still on payment and user has paid
+    if (hasPaid && currentView === 'payment') {
+      setCurrentView('home');
+    }
+  }, [user, profile, loading, searchParams, router, devModeSkipped, currentView]);
 
   const handlePayment = () => {
     setCurrentView('home');
   };
 
-  const handleSelectConcept = (concept: Concept) => {
+  const handleSkipPayment = () => {
+    // Dev mode: skip payment and go to home
+    setDevModeSkipped(true);
+    setCurrentView('home');
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/login');
+  };
+
+  const handleSelectConcept = (concept: UIConcept) => {
     setSelectedConcept(concept);
     setCurrentView('preview');
   };
@@ -201,21 +208,36 @@ export default function LeTrendApp() {
 
   const plan = PLANS.find(p => p.id === selectedPlan);
 
+  // Show loading while checking auth or redirecting
+  if (loading || !user) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#FAF8F5',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>☕</div>
+          <div style={{ color: '#7D6E5D' }}>{loading ? 'Laddar...' : 'Omdirigerar...'}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       minHeight: '100vh',
       background: '#FAF8F5',
       fontFamily: "'DM Sans', -apple-system, sans-serif"
     }}>
-      {currentView === 'login' && (
-        <LoginView onLogin={handleLogin} />
-      )}
-
       {currentView === 'payment' && (
         <PaymentView
           selectedPlan={selectedPlan}
           setSelectedPlan={setSelectedPlan}
           onComplete={handlePayment}
+          onSkip={handleSkipPayment}
         />
       )}
 
@@ -261,21 +283,58 @@ export default function LeTrendApp() {
                 }}>LeTrend</span>
               </div>
 
-              {/* Concepts remaining badge */}
-              {currentView === 'home' && plan && (
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '6px 12px',
-                  background: '#F0EBE4',
-                  borderRadius: '20px'
-                }}>
-                  <span style={{ fontSize: '13px', color: '#5D4D3D' }}>
-                    {plan.concepts - conceptsUsed} av {plan.concepts} kvar
-                  </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {/* Concepts remaining badge */}
+                {currentView === 'home' && plan && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    background: '#F0EBE4',
+                    borderRadius: '20px'
+                  }}>
+                    <span style={{ fontSize: '13px', color: '#5D4D3D' }}>
+                      {plan.concepts - conceptsUsed} av {plan.concepts} kvar
+                    </span>
+                  </div>
+                )}
+
+                {/* User menu */}
+                <div style={{ position: 'relative' }}>
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 14px',
+                      background: 'transparent',
+                      border: '1px solid rgba(74, 47, 24, 0.1)',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      color: '#5D4D3D'
+                    }}
+                  >
+                    <span style={{
+                      width: '24px',
+                      height: '24px',
+                      background: '#E8E2D9',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: '#5D4D3D'
+                    }}>
+                      {profile?.business_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || '?'}
+                    </span>
+                    Logga ut
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           </header>
         </>
@@ -302,6 +361,254 @@ export default function LeTrendApp() {
 
       {currentView === 'brief' && selectedConcept && (
         <BriefView concept={selectedConcept} />
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// VIDEO PLAYER COMPONENT
+// ============================================
+function VideoPlayer({
+  videoUrl,
+  gcsUri,
+  showLabel = true
+}: {
+  videoUrl?: string;
+  gcsUri?: string;
+  showLabel?: boolean;
+}) {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch signed URL from GCS if available
+  React.useEffect(() => {
+    if (gcsUri && !signedUrl && !loading) {
+      setLoading(true);
+      setError(null);
+      // Use the video API endpoint with a generated ID
+      const videoId = gcsUri.split('/').pop()?.replace('.mp4', '') || 'video';
+      fetch(`/api/video/${videoId}?gcs_uri=${encodeURIComponent(gcsUri)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.signedUrl) {
+            setSignedUrl(data.signedUrl);
+          } else if (data.error) {
+            setError(data.error);
+          }
+        })
+        .catch(err => {
+          console.error('GCS signing failed:', err);
+          setError('Kunde inte ladda video');
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [gcsUri, signedUrl, loading]);
+
+  // Priority 1: GCS signed URL - native video player
+  if (signedUrl) {
+    return (
+      <div style={{
+        width: '100%',
+        paddingBottom: '177%',
+        position: 'relative',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        background: '#1A1612'
+      }}>
+        <video
+          src={signedUrl}
+          controls
+          playsInline
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }}
+        />
+        {showLabel && (
+          <div style={{
+            position: 'absolute',
+            bottom: '14px',
+            left: '14px',
+            background: 'rgba(0,0,0,0.6)',
+            color: '#FFF',
+            padding: '6px 12px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            zIndex: 10
+          }}>
+            Original referens
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Priority 2: Loading state for GCS
+  if (loading && gcsUri) {
+    return (
+      <div style={{
+        width: '100%',
+        paddingBottom: '177%',
+        background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
+        position: 'relative',
+        borderRadius: '16px',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          color: '#FAF8F5',
+          fontSize: '14px',
+          textAlign: 'center'
+        }}>
+          <div style={{ marginBottom: '8px' }}>⏳</div>
+          Laddar video...
+        </div>
+      </div>
+    );
+  }
+
+  // Priority 3: TikTok embed
+  const getTikTokEmbedUrl = (url: string) => {
+    const match = url.match(/video\/(\d+)/);
+    if (match) {
+      return `https://www.tiktok.com/embed/v2/${match[1]}`;
+    }
+    return null;
+  };
+
+  const embedUrl = videoUrl ? getTikTokEmbedUrl(videoUrl) : null;
+
+  if (embedUrl) {
+    return (
+      <div style={{
+        width: '100%',
+        paddingBottom: '177%',
+        position: 'relative',
+        borderRadius: '16px',
+        overflow: 'hidden',
+        background: '#1A1612'
+      }}>
+        <iframe
+          src={embedUrl}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            border: 'none'
+          }}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+        {showLabel && (
+          <div style={{
+            position: 'absolute',
+            bottom: '14px',
+            left: '14px',
+            background: 'rgba(0,0,0,0.6)',
+            color: '#FFF',
+            padding: '6px 12px',
+            borderRadius: '8px',
+            fontSize: '12px',
+            zIndex: 10
+          }}>
+            Original referens
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Fallback: placeholder with TikTok link or error
+  return (
+    <div style={{
+      width: '100%',
+      paddingBottom: '177%',
+      background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
+      position: 'relative',
+      borderRadius: '16px',
+      overflow: 'hidden'
+    }}>
+      {error ? (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          color: '#FAF8F5',
+          fontSize: '12px',
+          textAlign: 'center',
+          padding: '0 20px'
+        }}>
+          {error}
+        </div>
+      ) : videoUrl ? (
+        <a
+          href={videoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '72px',
+            height: '72px',
+            borderRadius: '50%',
+            background: 'rgba(250,248,245,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#FAF8F5',
+            fontSize: '28px',
+            cursor: 'pointer',
+            textDecoration: 'none'
+          }}
+        >
+          ▶
+        </a>
+      ) : (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '72px',
+          height: '72px',
+          borderRadius: '50%',
+          background: 'rgba(250,248,245,0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#FAF8F5',
+          fontSize: '28px'
+        }}>
+          ▶
+        </div>
+      )}
+      {showLabel && (
+        <div style={{
+          position: 'absolute',
+          bottom: '14px',
+          left: '14px',
+          background: 'rgba(0,0,0,0.6)',
+          color: '#FFF',
+          padding: '6px 12px',
+          borderRadius: '8px',
+          fontSize: '12px'
+        }}>
+          {error ? 'Video ej tillgänglig' : videoUrl ? 'Öppna på TikTok' : 'Video ej tillgänglig'}
+        </div>
       )}
     </div>
   );
@@ -495,14 +802,232 @@ function LoginView({ onLogin }: { onLogin: () => void }) {
 // ============================================
 // PAYMENT VIEW (First time onboarding)
 // ============================================
+// ============================================
+// STRIPE CHECKOUT STEP
+// ============================================
+function StripeCheckoutStep({
+  selectedPlan,
+  onBack,
+  onComplete,
+  onSkip
+}: {
+  selectedPlan: string;
+  onBack: () => void;
+  onComplete: () => void;
+  onSkip?: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { user } = useAuth();
+  const plan = PLANS.find(p => p.id === selectedPlan);
+
+  const handleStripeCheckout = async () => {
+    if (!user) {
+      window.location.href = '/login';
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.error) {
+        setError(data.error);
+        setLoading(false);
+        return;
+      }
+
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
+    } catch (err) {
+      console.error('Checkout error:', err);
+      setError('Något gick fel. Försök igen.');
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px' }}>
+      {/* Selected plan summary */}
+      <div style={{
+        padding: '20px',
+        background: '#F5F2EE',
+        borderRadius: '14px',
+        marginBottom: '24px'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '16px'
+        }}>
+          <div>
+            <div style={{ fontSize: '15px', fontWeight: '600', color: '#1A1612' }}>
+              {plan?.name}
+            </div>
+            <div style={{ fontSize: '13px', color: '#7D6E5D' }}>
+              {plan?.concepts} koncept/månad
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '22px', fontWeight: '700', color: '#1A1612' }}>
+              {plan?.price} kr
+            </div>
+            <div style={{ fontSize: '12px', color: '#7D6E5D' }}>
+              per månad
+            </div>
+          </div>
+        </div>
+
+        <div style={{
+          borderTop: '1px solid rgba(74, 47, 24, 0.1)',
+          paddingTop: '16px',
+          fontSize: '13px',
+          color: '#5D4D3D'
+        }}>
+          {plan?.features.map((f, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <span style={{ color: '#5A8B6A' }}>✓</span> {f}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {error && (
+        <div style={{
+          padding: '14px 16px',
+          background: 'linear-gradient(135deg, #FDF6F3 0%, #FAF0EC 100%)',
+          border: '1px solid rgba(180, 100, 80, 0.2)',
+          borderRadius: '14px',
+          marginBottom: '20px',
+          color: '#8B4D3D',
+          fontSize: '14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px'
+        }}>
+          <span>⚠</span> {error}
+        </div>
+      )}
+
+      {/* Stripe info */}
+      <div style={{
+        background: '#FFFFFF',
+        borderRadius: '16px',
+        padding: '24px',
+        marginBottom: '24px',
+        textAlign: 'center'
+      }}>
+        <div style={{ fontSize: '40px', marginBottom: '12px' }}>💳</div>
+        <div style={{ fontSize: '15px', color: '#1A1612', marginBottom: '8px', fontWeight: '500' }}>
+          Säker betalning via Stripe
+        </div>
+        <div style={{ fontSize: '13px', color: '#7D6E5D', lineHeight: '1.5' }}>
+          Du skickas till Stripes säkra betalningssida.<br />
+          Kortuppgifter hanteras aldrig av oss.
+        </div>
+      </div>
+
+      <button
+        onClick={handleStripeCheckout}
+        disabled={loading}
+        style={{
+          width: '100%',
+          padding: '16px',
+          background: loading
+            ? '#A89080'
+            : 'linear-gradient(145deg, #6B4423, #4A2F18)',
+          border: 'none',
+          borderRadius: '14px',
+          color: '#FAF8F5',
+          fontSize: '16px',
+          fontWeight: '600',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px'
+        }}
+      >
+        {loading && (
+          <span style={{
+            width: '16px',
+            height: '16px',
+            border: '2px solid rgba(255,255,255,0.3)',
+            borderTopColor: '#fff',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }} />
+        )}
+        {loading ? 'Laddar...' : `Betala ${plan?.price} kr`}
+      </button>
+
+      <button
+        onClick={onBack}
+        style={{
+          width: '100%',
+          padding: '12px',
+          background: 'transparent',
+          border: 'none',
+          color: '#7D6E5D',
+          fontSize: '14px',
+          cursor: 'pointer'
+        }}
+      >
+        ← Tillbaka till planer
+      </button>
+
+      {/* Dev mode: Skip payment */}
+      {onSkip && (
+        <button
+          onClick={onSkip}
+          style={{
+            width: '100%',
+            padding: '12px',
+            marginTop: '24px',
+            background: 'transparent',
+            border: '1px dashed rgba(74, 47, 24, 0.2)',
+            borderRadius: '10px',
+            color: '#9D8E7D',
+            fontSize: '13px',
+            cursor: 'pointer'
+          }}
+        >
+          🛠 Utvecklingsläge: Hoppa över betalning
+        </button>
+      )}
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function PaymentView({
   selectedPlan,
   setSelectedPlan,
-  onComplete
+  onComplete,
+  onSkip
 }: {
   selectedPlan: string;
   setSelectedPlan: (plan: string) => void;
   onComplete: () => void;
+  onSkip?: () => void;
 }) {
   const [step, setStep] = useState<'plan' | 'payment'>('plan');
 
@@ -669,162 +1194,12 @@ function PaymentView({
       )}
 
       {step === 'payment' && (
-        <div style={{ maxWidth: '480px', margin: '0 auto', padding: '40px 24px' }}>
-          {/* Selected plan summary */}
-          <div style={{
-            padding: '16px',
-            background: '#F5F2EE',
-            borderRadius: '14px',
-            marginBottom: '24px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
-            <div>
-              <div style={{ fontSize: '15px', fontWeight: '600', color: '#1A1612' }}>
-                {PLANS.find(p => p.id === selectedPlan)?.name}
-              </div>
-              <div style={{ fontSize: '13px', color: '#7D6E5D' }}>
-                {PLANS.find(p => p.id === selectedPlan)?.concepts} koncept/månad
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '18px', fontWeight: '700', color: '#1A1612' }}>
-                {PLANS.find(p => p.id === selectedPlan)?.price} kr/mån
-              </div>
-            </div>
-          </div>
-
-          {/* Payment form */}
-          <div style={{
-            background: '#FFFFFF',
-            borderRadius: '16px',
-            padding: '24px',
-            marginBottom: '24px'
-          }}>
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{
-                display: 'block',
-                fontSize: '13px',
-                fontWeight: '500',
-                color: '#5D4D3D',
-                marginBottom: '8px'
-              }}>
-                Kortnummer
-              </label>
-              <input
-                type="text"
-                placeholder="1234 5678 9012 3456"
-                style={{
-                  width: '100%',
-                  padding: '14px 16px',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(74, 47, 24, 0.15)',
-                  fontSize: '15px',
-                  outline: 'none'
-                }}
-              />
-            </div>
-
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '12px',
-              marginBottom: '20px'
-            }}>
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  color: '#5D4D3D',
-                  marginBottom: '8px'
-                }}>
-                  Utgångsdatum
-                </label>
-                <input
-                  type="text"
-                  placeholder="MM/ÅÅ"
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(74, 47, 24, 0.15)',
-                    fontSize: '15px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  color: '#5D4D3D',
-                  marginBottom: '8px'
-                }}>
-                  CVC
-                </label>
-                <input
-                  type="text"
-                  placeholder="123"
-                  style={{
-                    width: '100%',
-                    padding: '14px 16px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(74, 47, 24, 0.15)',
-                    fontSize: '15px',
-                    outline: 'none'
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={{
-              fontSize: '12px',
-              color: '#9D8E7D',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <span>🔒</span>
-              Säker betalning via Stripe
-            </div>
-          </div>
-
-          <button
-            onClick={onComplete}
-            style={{
-              width: '100%',
-              padding: '16px',
-              background: 'linear-gradient(145deg, #6B4423, #4A2F18)',
-              border: 'none',
-              borderRadius: '14px',
-              color: '#FAF8F5',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              marginBottom: '12px'
-            }}
-          >
-            Starta prenumeration
-          </button>
-
-          <button
-            onClick={() => setStep('plan')}
-            style={{
-              width: '100%',
-              padding: '12px',
-              background: 'transparent',
-              border: 'none',
-              color: '#7D6E5D',
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
-          >
-            ← Tillbaka till planer
-          </button>
-        </div>
+        <StripeCheckoutStep
+          selectedPlan={selectedPlan}
+          onBack={() => setStep('plan')}
+          onComplete={onComplete}
+          onSkip={onSkip}
+        />
       )}
     </div>
   );
@@ -842,7 +1217,7 @@ function HomeView({
 }: {
   profileExpanded: boolean;
   setProfileExpanded: (expanded: boolean) => void;
-  onSelectConcept: (concept: Concept) => void;
+  onSelectConcept: (concept: UIConcept) => void;
   plan: Plan;
   conceptsUsed: number;
 }) {
@@ -957,20 +1332,23 @@ function HomeView({
                 FUNKAR FÖR DIG
               </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {BRAND_PROFILE.topMechanisms.map(m => (
-                  <span key={m} style={{
-                    fontSize: '11px',
-                    padding: '4px 10px',
-                    background: 'rgba(90,143,90,0.3)',
-                    borderRadius: '10px',
-                    color: '#FAF8F5',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}>
-                    {HUMOR_AXES[m]?.icon} {HUMOR_AXES[m]?.label}
-                  </span>
-                ))}
+                {BRAND_PROFILE.topMechanisms.map(m => {
+                  const mech = display.mechanism(m);
+                  return (
+                    <span key={m} style={{
+                      fontSize: '11px',
+                      padding: '4px 10px',
+                      background: 'rgba(90,143,90,0.3)',
+                      borderRadius: '10px',
+                      color: '#FAF8F5',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      {mech.icon} {mech.label}
+                    </span>
+                  );
+                })}
               </div>
             </div>
 
@@ -1034,8 +1412,8 @@ function HomeView({
 // ============================================
 // CONCEPT CARD
 // ============================================
-function ConceptCard({ concept, onClick }: { concept: Concept; onClick: () => void }) {
-  const axis = HUMOR_AXES[concept.mechanism];
+function ConceptCard({ concept, onClick }: { concept: UIConcept; onClick: () => void }) {
+  const axis = display.mechanism(concept.mechanism);
 
   return (
     <div
@@ -1124,12 +1502,12 @@ function PreviewView({
   plan,
   conceptsUsed
 }: {
-  concept: Concept;
+  concept: UIConcept;
   onUnlock: () => void;
   plan: Plan;
   conceptsUsed: number;
 }) {
-  const axis = HUMOR_AXES[concept.mechanism];
+  const axis = display.mechanism(concept.mechanism);
   const conceptsRemaining = plan.concepts - conceptsUsed;
 
   return (
@@ -1147,32 +1525,8 @@ function PreviewView({
         {/* Left column - Video & Content */}
         <div>
           {/* Video Preview */}
-          <div style={{
-            width: '100%',
-            paddingBottom: '177%',
-            background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
-            position: 'relative',
-            borderRadius: '16px',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: '72px',
-              height: '72px',
-              borderRadius: '50%',
-              background: 'rgba(250,248,245,0.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#FAF8F5',
-              fontSize: '28px',
-              cursor: 'pointer'
-            }}>
-              ▶
-            </div>
+          <div style={{ position: 'relative' }}>
+            <VideoPlayer videoUrl={concept.videoUrl} gcsUri={concept.gcsUri} showLabel={false} />
 
             {/* Match badge */}
             <div style={{
@@ -1184,7 +1538,8 @@ function PreviewView({
               padding: '8px 14px',
               borderRadius: '12px',
               fontSize: '14px',
-              fontWeight: '700'
+              fontWeight: '700',
+              zIndex: 10
             }}>
               {concept.match}% match
             </div>
@@ -1199,7 +1554,8 @@ function PreviewView({
               padding: '6px 12px',
               borderRadius: '10px',
               fontSize: '12px',
-              fontWeight: '600'
+              fontWeight: '600',
+              zIndex: 10
             }}>
               {concept.market}
             </div>
@@ -1282,7 +1638,7 @@ function PreviewView({
                 borderRadius: '10px',
                 color: '#5D4D3D'
               }}>
-                {concept.teamSize} personer
+                {concept.teamSize}
               </span>
             </div>
           </div>
@@ -1428,9 +1784,9 @@ function PreviewView({
 // ============================================
 // BRIEF VIEW - After unlock (filming companion)
 // ============================================
-function BriefView({ concept }: { concept: Concept }) {
+function BriefView({ concept }: { concept: UIConcept }) {
   const [activeTab, setActiveTab] = useState<'script' | 'checklist' | 'breakdown'>('script');
-  const axis = HUMOR_AXES[concept.mechanism];
+  const axis = display.mechanism(concept.mechanism);
 
   return (
     <main style={{
@@ -1503,45 +1859,7 @@ function BriefView({ concept }: { concept: Concept }) {
           }}>
             {/* Video reference */}
             <div>
-              <div style={{
-                width: '100%',
-                paddingBottom: '177%',
-                background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
-                borderRadius: '16px',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '64px',
-                  height: '64px',
-                  borderRadius: '50%',
-                  background: 'rgba(250,248,245,0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#FAF8F5',
-                  fontSize: '24px',
-                  cursor: 'pointer'
-                }}>
-                  ▶
-                </div>
-                <div style={{
-                  position: 'absolute',
-                  bottom: '14px',
-                  left: '14px',
-                  background: 'rgba(0,0,0,0.6)',
-                  color: '#FFF',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }}>
-                  Original referens
-                </div>
-              </div>
+              <VideoPlayer videoUrl={concept.videoUrl} gcsUri={concept.gcsUri} showLabel={true} />
             </div>
 
             {/* Script */}

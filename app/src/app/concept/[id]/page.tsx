@@ -27,7 +27,8 @@ import {
   IconShoppingCart,
   IconSparkles,
 } from "@tabler/icons-react";
-import { mockConcepts } from "@/mocks/data";
+import { loadConcepts, loadConceptById } from "@/lib/conceptLoader";
+import { display } from "@/lib/display";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -49,8 +50,9 @@ export default function ConceptDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
 
-  // Find concept from mock data
-  const concept = mockConcepts.find((c) => c.id === id) || mockConcepts[0];
+  // Find concept from JSON data
+  const concepts = loadConcepts();
+  const concept = loadConceptById(id) || concepts[0];
 
   const handlePurchase = () => {
     // TODO: Navigate to checkout
@@ -74,9 +76,9 @@ export default function ConceptDetailPage({ params }: PageProps) {
         {/* Header */}
         <div>
           <Group gap="sm" mb="xs">
-            <Text size="2rem">{concept.originFlag}</Text>
+            <Text size="2rem">{display.market(concept.market).flag}</Text>
             <Badge color="gray" variant="light">
-              {concept.originCountry}
+              {display.market(concept.market).label}
             </Badge>
             {concept.isNew && (
               <Badge color="pink" variant="filled">
@@ -237,11 +239,7 @@ export default function ConceptDetailPage({ params }: PageProps) {
                   </Badge>
                 )}
 
-                {concept.purchasedBy && (
-                  <Text size="sm" c="dimmed">
-                    {concept.purchasedBy} cafés already got this
-                  </Text>
-                )}
+                {/* TODO: Add purchasedBy to TranslatedConcept when social proof is implemented */}
 
                 <Divider />
 

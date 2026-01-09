@@ -5,7 +5,8 @@ import { Container, Title, Text, Group, Stack, Grid, Paper } from "@mantine/core
 import { DashboardRow, ProfileMeter, MiniChat } from "@/components";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
-import { mockUserProfile, mockDashboardRows } from "@/mocks/data";
+import { mockUserProfile } from "@/mocks/data";
+import { loadDashboardData } from "@/lib/conceptLoader";
 import type { UserProfile } from "@/types";
 
 export default function DashboardPage() {
@@ -37,7 +38,7 @@ function DashboardContent() {
       }
     : mockUserProfile;
 
-  const rows = mockDashboardRows;
+  const { rows } = loadDashboardData();
 
   const handleConceptClick = (conceptId: string) => {
     router.push(`/concept/${conceptId}`);

@@ -1,0 +1,96 @@
+{
+  "_meta": {
+    "locale": "sv",
+    "name": "Svenska",
+    "description": "Swedish labels for UI display"
+  },
+
+  "humorMechanisms": {
+    "contrast": "Två Världar Möts",
+    "recognition": "Smärtsamt Relaterbart",
+    "subversion": "Twisten",
+    "dark": "Mörkt Men Roligt",
+    "escalation": "Spiral",
+    "deadpan": "Torr & Rak",
+    "absurdism": "Absurdism"
+  },
+
+  "difficulties": {
+    "easy": "Lätt",
+    "medium": "Medel",
+    "advanced": "Avancerad"
+  },
+
+  "filmTimes": {
+    "5min": "5 min",
+    "10min": "10 min",
+    "15min": "15 min",
+    "20min": "20 min",
+    "30min": "30 min",
+    "1hr": "1 timme",
+    "1hr_plus": "1+ timme"
+  },
+
+  "peopleNeeded": {
+    "solo": "Bara du",
+    "duo": "2 personer",
+    "small_team": "3 personer",
+    "team": "4+ personer"
+  },
+
+  "vibeAlignments": {
+    "foodies": "Matälskare",
+    "locals": "Lokalbefolkning",
+    "families": "Familjer",
+    "gen_z": "Gen Z",
+    "millennials": "Millennials",
+    "professionals": "Yrkesverksamma"
+  },
+
+  "markets": {
+    "SE": "Sverige",
+    "US": "USA",
+    "UK": "Storbritannien",
+    "global": "Global"
+  },
+
+  "trendLevels": {
+    "1": "Låg",
+    "2": "Växande",
+    "3": "Stabil",
+    "4": "Trendig",
+    "5": "Viral"
+  },
+
+  "ui": {
+    "matchLabel": "match",
+    "conceptsRemaining": "{count} av {total} kvar",
+    "unlockConcept": "Lås upp koncept",
+    "includedInPlan": "Inkluderat i din plan",
+    "conceptsLeftThisMonth": "{count} koncept kvar denna månad",
+    "whyItWorks": "Varför det funkar",
+    "whatYouGet": "Vad du får",
+    "productionChecklist": "Produktionschecklista",
+    "quickInfo": "Snabbinfo",
+    "peopleNeededLabel": "Personer behövs",
+    "difficultyLabel": "Svårighetsgrad",
+    "scriptLabel": "Manus",
+    "analysisLabel": "Analys",
+    "bestMatches": "Bästa matchningar",
+    "forBrand": "För {brand}",
+    "filmTimeLabel": "Inspelningstid"
+  },
+
+  "whatYouGetItems": [
+    { "icon": "📹", "label": "Original videoreferens" },
+    { "icon": "📝", "label": "Fullständigt översatt manus" },
+    { "icon": "🎯", "label": "Produktionschecklista" },
+    { "icon": "🧠", "label": "Humor-analys & tips" }
+  ],
+
+  "keyMoments": [
+    "Setupen — gör den normal och relaterbar",
+    "Kontrast-momentet — här landar humorn",
+    "Håll slutbeatet — låt publiken sitta med det"
+  ]
+}

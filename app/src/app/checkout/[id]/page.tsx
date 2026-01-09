@@ -24,7 +24,7 @@ import {
   IconCheck,
   IconCreditCard,
 } from "@tabler/icons-react";
-import { mockConcepts } from "@/mocks/data";
+import { loadConcepts, loadConceptById } from "@/lib/conceptLoader";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -36,8 +36,9 @@ export default function CheckoutPage({ params }: PageProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
 
-  // Find concept from mock data
-  const concept = mockConcepts.find((c) => c.id === id) || mockConcepts[0];
+  // Find concept from JSON data
+  const concepts = loadConcepts();
+  const concept = loadConceptById(id) || concepts[0];
 
   const handlePurchase = async () => {
     setIsProcessing(true);

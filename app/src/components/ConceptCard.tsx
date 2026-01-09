@@ -2,6 +2,7 @@
 
 import { Card, Text, Badge, Group, Stack, Button } from "@mantine/core";
 import { Concept } from "@/types";
+import { display } from "@/lib/display";
 
 interface ConceptCardProps {
   concept: Concept;
@@ -19,6 +20,12 @@ function TrendIndicator({ level }: { level: number }) {
 }
 
 export function ConceptCard({ concept, onClick }: ConceptCardProps) {
+  // Get display values from category keys
+  const marketDisplay = display.market(concept.market);
+  const difficultyDisplay = display.difficulty(concept.difficulty);
+  const peopleDisplay = display.peopleNeeded(concept.peopleNeeded);
+  const filmTimeDisplay = display.filmTime(concept.filmTime);
+
   return (
     <Card
       shadow="sm"
@@ -31,7 +38,7 @@ export function ConceptCard({ concept, onClick }: ConceptCardProps) {
       <Stack gap="xs">
         {/* Origin flag and badges */}
         <Group justify="space-between" align="flex-start">
-          <Text size="xl">{concept.originFlag}</Text>
+          <Text size="xl">{marketDisplay.flag}</Text>
           <Group gap={4}>
             {concept.isNew && (
               <Badge style={{ backgroundColor: "#6B4423" }} size="sm" variant="filled">
@@ -75,22 +82,15 @@ export function ConceptCard({ concept, onClick }: ConceptCardProps) {
         {/* Quick facts */}
         <Group gap="xs">
           <Badge variant="outline" size="sm" color="gray">
-            👥 {concept.peopleNeeded}
+            👥 {peopleDisplay.label}
           </Badge>
           <Badge variant="outline" size="sm" color="gray">
-            ⏱ {concept.filmTime}
+            ⏱ {filmTimeDisplay.label}
           </Badge>
           <Badge variant="outline" size="sm" color="gray">
-            {concept.difficulty}
+            {difficultyDisplay.label}
           </Badge>
         </Group>
-
-        {/* Social proof */}
-        {concept.purchasedBy && (
-          <Text size="xs" c="dimmed">
-            {concept.purchasedBy} cafés got this
-          </Text>
-        )}
 
         {/* Price */}
         <Button fullWidth variant="filled" radius="md" mt="xs" style={{ backgroundColor: "#4A2F18" }}>
