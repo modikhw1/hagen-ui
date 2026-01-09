@@ -25,7 +25,8 @@
       "Bash(railway up:*)",
       "Bash(railway service:*)",
       "Bash(npm run build:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(cat:*)"
     ]
   },
   "outputStyle": "Casual"
