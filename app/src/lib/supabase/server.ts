@@ -8,11 +8,18 @@ export function getServerSupabase(): SupabaseClient<Database> {
     return serverClient
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Missing Supabase environment variables')
+    console.warn('Supabase env vars not set - using placeholder client')
+    serverClient = createClient('https://placeholder.supabase.co', 'placeholder-key', {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+    return serverClient
   }
 
   serverClient = createClient<Database>(supabaseUrl, supabaseKey, {

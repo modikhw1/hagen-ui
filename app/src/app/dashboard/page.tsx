@@ -3,11 +3,40 @@
 import { useRouter } from "next/navigation";
 import { Container, Title, Text, Group, Stack, Grid, Paper } from "@mantine/core";
 import { DashboardRow, ProfileMeter, MiniChat } from "@/components";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useAuth } from "@/contexts/AuthContext";
 import { mockUserProfile, mockDashboardRows } from "@/mocks/data";
+import type { UserProfile } from "@/types";
 
 export default function DashboardPage() {
+  return (
+    <ProtectedRoute>
+      <DashboardContent />
+    </ProtectedRoute>
+  );
+}
+
+function DashboardContent() {
   const router = useRouter();
-  const profile = mockUserProfile;
+  const { profile: authProfile } = useAuth();
+
+  // Convert auth profile to UserProfile format, fallback to mock
+  const profile: UserProfile = authProfile
+    ? {
+        id: authProfile.id,
+        businessName: authProfile.business_name,
+        businessDescription: authProfile.business_description || "",
+        goals: authProfile.goals || [],
+        constraints: authProfile.constraints || [],
+        industryTags: authProfile.industry_tags || [],
+        profileCompleteness: authProfile.profile_completeness || 0,
+        socialLinks: {
+          tiktok: authProfile.social_tiktok || undefined,
+          instagram: authProfile.social_instagram || undefined,
+        },
+      }
+    : mockUserProfile;
+
   const rows = mockDashboardRows;
 
   const handleConceptClick = (conceptId: string) => {

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { ColorSchemeScript, MantineProvider } from "@mantine/core";
-import { Notifications } from "@mantine/notifications";
+import { ColorSchemeScript } from "@mantine/core";
+import { Providers } from "@/components/Providers";
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "@fontsource/dm-sans/400.css";
@@ -29,10 +29,9 @@ export default function RootLayout({
         <ColorSchemeScript />
       </head>
       <body>
-        <MantineProvider>
-          <Notifications />
+        <Providers>
           {children}
-        </MantineProvider>
+        </Providers>
       </body>
     </html>
   );
