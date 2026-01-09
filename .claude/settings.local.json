@@ -14,7 +14,18 @@
       "Bash(npx tsc:*)",
       "Bash(ls:*)",
       "Bash(powershell -Command \"$env:USERPROFILE\")",
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:api.github.com)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo create:*)",
+      "Bash(railway version:*)",
+      "Bash(railway --version:*)",
+      "Bash(railway login:*)",
+      "Bash(railway whoami:*)",
+      "Bash(railway init:*)",
+      "Bash(railway up:*)",
+      "Bash(railway service:*)",
+      "Bash(npm run build:*)",
+      "Bash(git push:*)"
     ]
   },
   "outputStyle": "Casual"

@@ -127,11 +127,10 @@ export default function ConceptDetailPage({ params }: PageProps) {
                   color={
                     concept.matchPercentage >= 90
                       ? "green"
-                      : "gray"
+                      : concept.matchPercentage >= 80
+                        ? "#4A2F18"
+                        : "gray"
                   }
-                  styles={{
-                    bar: concept.matchPercentage >= 80 && concept.matchPercentage < 90 ? { backgroundColor: "#4A2F18" } : undefined
-                  }}
                   size="lg"
                   radius="xl"
                   mb="md"
