@@ -144,11 +144,12 @@ body {
   width: 100%;
   max-width: 100%;
   position: relative;
+  padding-bottom: 177.78% !important; /* 9:16 aspect ratio on desktop */
 }
 
 @media (max-width: 767px) {
   .video-container {
-    padding-bottom: 125% !important; /* Less tall on mobile */
+    padding-bottom: min(150%, 70vh) !important; /* Shorter on mobile */
   }
 }
 

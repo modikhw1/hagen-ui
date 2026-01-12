@@ -541,7 +541,7 @@ function VideoPlayer({
         className="video-container"
         style={{
           width: '100%',
-          paddingBottom: 'min(177%, 80vh)',
+          paddingBottom: '177.78%',
           position: 'relative',
           borderRadius: '16px',
           overflow: 'hidden',
@@ -587,7 +587,7 @@ function VideoPlayer({
         className="video-container"
         style={{
           width: '100%',
-          paddingBottom: 'min(177%, 80vh)',
+          paddingBottom: '177.78%',
           background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
           position: 'relative',
           borderRadius: '16px',
@@ -626,7 +626,7 @@ function VideoPlayer({
         className="video-container"
         style={{
           width: '100%',
-          paddingBottom: 'min(177%, 80vh)',
+          paddingBottom: '177.78%',
           position: 'relative',
           borderRadius: '16px',
           overflow: 'hidden',
@@ -670,7 +670,7 @@ function VideoPlayer({
       className="video-container"
       style={{
         width: '100%',
-        paddingBottom: 'min(177%, 80vh)',
+        paddingBottom: '177.78%',
         background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
         position: 'relative',
         borderRadius: '16px',

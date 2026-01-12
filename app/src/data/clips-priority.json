@@ -2,7 +2,7 @@
   "_meta": {
     "version": "2.0",
     "lastUpdated": "2026-01-12",
-    "description": "Priority clips + nya klipp. Totalt 19 klipp (4 väntar på full analys).",
+    "description": "Priority clips med full analys. Totalt 19 klipp.",
     "source": "hagen-main/scripts/export-to-hagen-ui.js"
   },
   "clips": [
@@ -707,18 +707,18 @@
       "url": "https://www.tiktok.com/@erikurten/video/7556918546274569494",
       "platform": "tiktok",
       "gcs_uri": "gs://hagen-video-analysis/videos/e1ad2e56-e110-4d9d-9f0e-b9df18ff8b75.mp4",
-      "_comment": "=== BACKEND SIGNALS (pending full analysis) ===",
+      "_comment": "=== BACKEND SIGNALS (analyzed) ===",
       "humor_analysis": {
-        "handling": "[PENDING]",
-        "mechanism": "TBD",
-        "why": "Analys väntar",
-        "target_audience": "bar patrons, nightlife"
+        "handling": "GOOD",
+        "mechanism": "Subversion",
+        "why": "Videon bygger upp en förväntan att personen saknar snus, men sedan avslöjas det att frånvaron av nikotin inte påverkar henne nämnvärt. Kontrasten mellan förväntan och verkligheten är det som gör det roligt.",
+        "target_audience": "Snusare, svenskar, resenärer, backpackers"
       },
       "replicability_signals": {
-        "time_investment": 5,
-        "skill_requirements": 5,
-        "budget_requirements": 3,
-        "equipment_requirements": 2
+        "time_investment": 9,
+        "skill_requirements": 9,
+        "budget_requirements": 10,
+        "equipment_requirements": 10
       },
       "audience_signals": {
         "primary_ages": [
@@ -734,25 +734,47 @@
         "engagement_style": "active",
         "niche_specificity": 6
       },
-      "scene_breakdown": []
+      "scene_breakdown": [
+        {
+          "audio": "\"I haven't had a snus in so long\"",
+          "visual": "Kvinna står vid utsiktspunkt i öknen, ser glad ut.",
+          "duration": "3",
+          "timestamp": "0:00",
+          "narrative_function": "hook"
+        },
+        {
+          "audio": "\"How are you not going crazy\"",
+          "visual": "Annan kvinna kommer in i bild och frågar",
+          "duration": "3",
+          "timestamp": "0:03",
+          "narrative_function": "buildup"
+        },
+        {
+          "audio": "\"Nah I am fine\"",
+          "visual": "Första kvinnan ler och sitter på ett räcke och tittar ut över landskapet",
+          "duration": "4",
+          "timestamp": "0:06",
+          "narrative_function": "payoff"
+        }
+      ]
     },
     {
       "id": "clip-19762454",
       "url": "https://www.tiktok.com/@fiumerestaurant/video/7552392672019762454",
       "platform": "tiktok",
       "gcs_uri": null,
-      "_comment": "=== BACKEND SIGNALS (farlig - pending full analysis) ===",
+      "_comment": "=== BACKEND SIGNALS (analyzed) ===",
       "humor_analysis": {
-        "handling": "[PENDING]",
-        "mechanism": "TBD",
-        "why": "Analys väntar - märkt som farlig",
-        "target_audience": "restaurant, fine dining"
+        "handling": "GOOD",
+        "mechanism": "Subversion",
+        "why": "Videon sätter upp en förväntan att bartendern ska utföra ett imponerande trick, men levererar istället en enkel, nästan patetisk handling. Den överdrivna reaktionen från kollegorna förstärker det absurda och skapar humor.",
+        "target_audience": "Vuxna, Restaurangpersonal, Vardagshumor"
       },
       "replicability_signals": {
-        "time_investment": 5,
-        "skill_requirements": 5,
-        "budget_requirements": 5,
-        "equipment_requirements": 3
+        "time_investment": 10,
+        "skill_requirements": 10,
+        "budget_requirements": 10,
+        "equipment_requirements": 9
       },
       "audience_signals": {
         "primary_ages": [
@@ -768,25 +790,54 @@
         "engagement_style": "passive",
         "niche_specificity": 7
       },
-      "scene_breakdown": []
+      "scene_breakdown": [
+        {
+          "audio": "Musik, Text \"I've finally learnt how to shake 2 cocktails at once\", \"Let me call Adam over\", \"He was so impressed, he had to show Zak too\"",
+          "visual": "Bartender står vid baren med två cocktailshakers, kollegor kommer och tittar.",
+          "duration": "13",
+          "timestamp": "0:00",
+          "narrative_function": "hook/buildup"
+        },
+        {
+          "audio": "Musik, Text \"They were both so proud!\"",
+          "visual": "Bartendern ser ner med skam. Hans kollegor försöker ge honom en high five.",
+          "duration": "6",
+          "timestamp": "0:13",
+          "narrative_function": "payoff/twist"
+        },
+        {
+          "audio": "Musik",
+          "visual": "Servitris med en betalterminal blir överlycklig",
+          "duration": "7",
+          "timestamp": "0:19",
+          "narrative_function": "payoff/twist"
+        },
+        {
+          "audio": "Musik",
+          "visual": "Logotyp för Fiume Italian Restaurant",
+          "duration": "4",
+          "timestamp": "0:26",
+          "narrative_function": "branding"
+        }
+      ]
     },
     {
       "id": "clip-45435414",
       "url": "https://www.tiktok.com/@feildensarmsmellor/video/7556722838745435414",
       "platform": "tiktok",
       "gcs_uri": null,
-      "_comment": "=== BACKEND SIGNALS (pending full analysis) ===",
+      "_comment": "=== BACKEND SIGNALS (analyzed) ===",
       "humor_analysis": {
-        "handling": "[PENDING]",
-        "mechanism": "TBD",
-        "why": "Analys väntar",
-        "target_audience": "cafe, local business"
+        "handling": "GOOD",
+        "mechanism": "Subversion",
+        "why": "Humorn ligger i att förväntningen om en dålig barista vänds till att faktiskt vara ett litet barn. Kontrasten mellan det förväntade och det faktiska skapar en oväntad och rolig situation. Barnet själv är gulligt, vilket förstärker humoreffekten.",
+        "target_audience": "unga vuxna, föräldrar, kaffeälskare, människor som uppskattar söta humor"
       },
       "replicability_signals": {
-        "time_investment": 5,
-        "skill_requirements": 4,
-        "budget_requirements": 2,
-        "equipment_requirements": 2
+        "time_investment": 8,
+        "skill_requirements": 8,
+        "budget_requirements": 9,
+        "equipment_requirements": 8
       },
       "audience_signals": {
         "primary_ages": [
@@ -802,25 +853,54 @@
         "engagement_style": "passive",
         "niche_specificity": 5
       },
-      "scene_breakdown": []
+      "scene_breakdown": [
+        {
+          "audio": "Kund klagar på kaffet och säger att det smakar som om det gjorts av en 3-åring",
+          "visual": "En tjej som jobbar bakom baren pratar",
+          "duration": "4",
+          "timestamp": "0:00",
+          "narrative_function": "hook"
+        },
+        {
+          "audio": "Bartender säger att hon är ledsen och ska fixa det",
+          "visual": "Bartender pratar",
+          "duration": "3",
+          "timestamp": "0:04",
+          "narrative_function": "buildup"
+        },
+        {
+          "audio": "Bartender frågar förvånat Jayden vad han har gjort",
+          "visual": "Bartender ser chockad ut",
+          "duration": "2",
+          "timestamp": "0:07",
+          "narrative_function": "twist"
+        },
+        {
+          "audio": "Barn säger \"I tried my best\"",
+          "visual": "En liten pojke håller i en kaffekopp och ler",
+          "duration": "2",
+          "timestamp": "0:09",
+          "narrative_function": "payoff"
+        }
+      ]
     },
     {
       "id": "clip-14943766",
       "url": "https://www.tiktok.com/@viraleats.leicester/video/7555164567114943766",
       "platform": "tiktok",
       "gcs_uri": null,
-      "_comment": "=== BACKEND SIGNALS (pending full analysis) ===",
+      "_comment": "=== BACKEND SIGNALS (analyzed) ===",
       "humor_analysis": {
-        "handling": "[PENDING]",
-        "mechanism": "TBD",
-        "why": "Analys väntar",
-        "target_audience": "food lovers, cafe"
+        "handling": "GOOD",
+        "mechanism": "Subversion",
+        "why": "Humorn ligger i att kvinnan säger att hon inte ville ha vispgrädde, och istället för att ta bort den, ger försäljaren bort den till ett barn. Det oväntade i att den \"oönskade\" grädden hamnar hos någon annan skapar skratt.",
+        "target_audience": "unga vuxna, familjer, folk med humor"
       },
       "replicability_signals": {
-        "time_investment": 5,
-        "skill_requirements": 5,
-        "budget_requirements": 3,
-        "equipment_requirements": 2
+        "time_investment": 8,
+        "skill_requirements": 7,
+        "budget_requirements": 7,
+        "equipment_requirements": 6
       },
       "audience_signals": {
         "primary_ages": [
@@ -836,7 +916,50 @@
         "engagement_style": "passive",
         "niche_specificity": 5
       },
-      "scene_breakdown": []
+      "scene_breakdown": [
+        {
+          "audio": "\"Here's your hot chocolate with whipped cream. I didn't ask for any whipped cream.\"",
+          "visual": "Kvinna får varm choklad med vispgrädde, säger att hon inte ville ha det.",
+          "duration": "5",
+          "timestamp": "0:00",
+          "narrative_function": "hook/buildup"
+        },
+        {
+          "audio": "Inget",
+          "visual": "En pojke äter vispgrädden från koppen.",
+          "duration": "3",
+          "timestamp": "0:05",
+          "narrative_function": "payoff"
+        },
+        {
+          "audio": "Inget",
+          "visual": "Pojke äter vispgrädde, har grädde i hela ansiktet.",
+          "duration": "3",
+          "timestamp": "0:08",
+          "narrative_function": "payoff"
+        },
+        {
+          "audio": "Inget",
+          "visual": "Kvinna ser förvirrad ut.",
+          "duration": "2",
+          "timestamp": "0:11",
+          "narrative_function": "buildup"
+        },
+        {
+          "audio": "Inget",
+          "visual": "Pojke fortsätter äta vispgrädde.",
+          "duration": "3",
+          "timestamp": "0:13",
+          "narrative_function": "payoff"
+        },
+        {
+          "audio": "\"That should be perfect now. Thank you.\"",
+          "visual": "Kvinnan ger bort koppen utan vispgrädde",
+          "duration": "1",
+          "timestamp": "0:16",
+          "narrative_function": "twist"
+        }
+      ]
     }
   ],
   "_comment_overrides": "=== SVENSKA UI-FÄLT ===",
