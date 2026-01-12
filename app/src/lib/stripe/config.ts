@@ -4,9 +4,10 @@ if (!process.env.STRIPE_SECRET_KEY) {
   console.warn('Missing STRIPE_SECRET_KEY - Stripe will not work');
 }
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  typescript: true,
-});
+// Only initialize Stripe if key is provided (prevents build errors)
+export const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, { typescript: true })
+  : (null as unknown as Stripe);
 
 // Product configuration - adjust these as needed
 export const PRODUCTS = {
