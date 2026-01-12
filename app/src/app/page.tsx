@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { loadConcepts } from '@/lib/conceptLoader';
@@ -157,6 +157,27 @@ const PLANS: Plan[] = [
 // MAIN APP
 // ============================================
 export default function LeTrendApp() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        minHeight: '100vh',
+        background: '#FAF8F5',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>☕</div>
+          <div style={{ color: '#7D6E5D' }}>Laddar...</div>
+        </div>
+      </div>
+    }>
+      <LeTrendAppContent />
+    </Suspense>
+  );
+}
+
+function LeTrendAppContent() {
   const { user, profile, loading, signOut } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
