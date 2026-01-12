@@ -1,0 +1,80 @@
+{
+  "meta": {
+    "description": "LeTrend outreach prospects - restauranger, barer, caféer m.fl.",
+    "pricing": "550 SEK/månad",
+    "tiers": ["1 koncept/vecka", "2 koncept/vecka", "custom"],
+    "updated": "2026-01-12"
+  },
+  "prospects": [
+    {
+      "id": 1,
+      "company": "",
+      "type": "restaurang | bar | café | kedja | annat",
+      "tiktok_handle": "",
+      "instagram_handle": "",
+      "website": "",
+      "contact": {
+        "name": "",
+        "role": "",
+        "email": ""
+      },
+      "observations": {
+        "current_style": "",
+        "humor_type": "",
+        "content_frequency": "",
+        "strengths": "",
+        "opportunities": "",
+        "concept_ideas": []
+      },
+      "outreach": {
+        "status": "ej_kontaktad",
+        "mail_1_sent": null,
+        "mail_1_opened": null,
+        "mail_2_sent": null,
+        "mail_3_sent": null,
+        "response_date": null,
+        "response_type": "",
+        "notes": ""
+      },
+      "deal": {
+        "interested": false,
+        "tier": "",
+        "start_date": null,
+        "monthly_price": 550
+      }
+    }
+  ],
+  "status_options": [
+    "ej_kontaktad",
+    "mail_1_skickat",
+    "mail_2_skickat",
+    "mail_3_skickat",
+    "svar_mottaget",
+    "intresserad",
+    "kund",
+    "ej_intresserad",
+    "avslutad"
+  ],
+  "type_options": [
+    "restaurang",
+    "bar",
+    "café",
+    "kedja",
+    "food_truck",
+    "nattklubb",
+    "hotell",
+    "annat"
+  ],
+  "humor_types": [
+    "self_deprecating",
+    "behind_the_scenes",
+    "trending_sounds",
+    "sketch_comedy",
+    "day_in_the_life",
+    "customer_interactions",
+    "food_porn",
+    "staff_humor",
+    "relatable_service",
+    "absurdist"
+  ]
+}

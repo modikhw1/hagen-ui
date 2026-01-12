@@ -49,7 +49,24 @@
       "Bash(dir \"C:\\\\Users\\\\Ibnadmin\\\\Desktop\\\\hagen-main\\\\credentials\")",
       "Bash(curl:*)",
       "Bash(node -e:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(nslookup:*)",
+      "mcp__google-workspace__list_gmail_labels",
+      "Bash(dir:*)",
+      "Bash(echo:*)",
+      "mcp__google-workspace__start_google_auth",
+      "Bash(findstr:*)",
+      "Bash(claude mcp get:*)",
+      "mcp__book-series-manager__get_series_overview",
+      "mcp__google-workspace__search_gmail_messages",
+      "Bash(ren \"C:\\\\Users\\\\Ibnadmin\\\\Desktop\\\\hagen-ui\\\\.mcp.json\" \".mcp.json.backup\")",
+      "Bash(dig:*)",
+      "mcp__google-workspace__create_drive_file",
+      "mcp__google-workspace__share_drive_file",
+      "mcp__google-workspace__get_gmail_message_content",
+      "mcp__google-workspace__manage_gmail_label",
+      "WebFetch(domain:claude.ai)",
+      "mcp__google-workspace__draft_gmail_message"
     ]
   },
   "outputStyle": "Casual"

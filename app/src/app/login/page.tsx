@@ -28,6 +28,13 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    // Demo mode: demo/demo → skip to demo
+    if (email === 'demo' && password === 'demo') {
+      router.push('/?demo=true');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -265,7 +272,7 @@ export default function LoginPage() {
                 E-post
               </label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="din@email.se"
