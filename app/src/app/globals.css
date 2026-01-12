@@ -50,3 +50,117 @@ body {
   color: var(--foreground);
   font-family: 'DM Sans', system-ui, sans-serif;
 }
+
+/* ============================================
+   MOBILE RESPONSIVE STYLES
+   ============================================ */
+
+/* Main container padding */
+@media (max-width: 768px) {
+  main {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  /* Stack two-column grids on mobile */
+  .mobile-stack,
+  [style*="gridTemplateColumns: minmax(300px"],
+  [style*="gridTemplateColumns: 'minmax(300px"] {
+    display: block !important;
+  }
+
+  /* Video container - maintain aspect ratio */
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+/* Utility classes for responsive layouts */
+.responsive-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .responsive-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1024px) {
+  .responsive-grid {
+    grid-template-columns: minmax(300px, 1.2fr) minmax(300px, 1fr);
+  }
+}
+
+/* Responsive padding helper */
+.responsive-padding {
+  padding: 16px;
+}
+
+@media (min-width: 768px) {
+  .responsive-padding {
+    padding: 24px 40px;
+  }
+}
+
+/* Center content on mobile */
+.mobile-center {
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .mobile-center {
+    text-align: left;
+  }
+}
+
+/* Mobile unlock bar */
+.mobile-unlock-bar {
+  display: flex !important;
+}
+
+@media (min-width: 768px) {
+  .mobile-unlock-bar {
+    display: none !important;
+  }
+}
+
+/* Desktop unlock section - hide on mobile */
+.desktop-unlock-section {
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .desktop-unlock-section {
+    display: none !important;
+  }
+}
+
+/* Video player container - responsive aspect ratio */
+.video-container {
+  width: 100%;
+  max-width: 100%;
+  position: relative;
+}
+
+@media (max-width: 767px) {
+  .video-container {
+    padding-bottom: 125% !important; /* Less tall on mobile */
+  }
+}
+
+/* Demo profile switcher - horizontal scroll on mobile */
+@media (max-width: 480px) {
+  .demo-profile-switcher {
+    max-width: calc(100vw - 32px);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .demo-profile-switcher > div {
+    flex-wrap: nowrap !important;
+  }
+}

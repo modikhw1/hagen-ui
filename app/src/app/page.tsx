@@ -422,6 +422,7 @@ function LeTrendAppContent() {
       {/* Demo Profile Switcher - Only in demo mode on home view */}
       {isDemo && currentView === 'home' && (
         <div
+          className="demo-profile-switcher"
           onMouseEnter={() => setBottomBarHovered(true)}
           onMouseLeave={() => setBottomBarHovered(false)}
           style={{
@@ -430,9 +431,10 @@ function LeTrendAppContent() {
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 100,
-            paddingBottom: '24px',
+            paddingBottom: 'clamp(12px, 3vw, 24px)',
             opacity: bottomBarHovered ? 1 : 0.6,
-            transition: 'opacity 0.2s ease'
+            transition: 'opacity 0.2s ease',
+            maxWidth: 'calc(100vw - 24px)'
           }}
         >
           <div style={{
@@ -535,14 +537,16 @@ function VideoPlayer({
   // Priority 1: GCS signed URL - native video player
   if (signedUrl) {
     return (
-      <div style={{
-        width: '100%',
-        paddingBottom: '177%',
-        position: 'relative',
-        borderRadius: '16px',
-        overflow: 'hidden',
-        background: '#1A1612'
-      }}>
+      <div
+        className="video-container"
+        style={{
+          width: '100%',
+          paddingBottom: 'min(177%, 80vh)',
+          position: 'relative',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          background: '#1A1612'
+        }}>
         <video
           src={signedUrl}
           controls
@@ -579,14 +583,16 @@ function VideoPlayer({
   // Priority 2: Loading state for GCS
   if (loading && gcsUri) {
     return (
-      <div style={{
-        width: '100%',
-        paddingBottom: '177%',
-        background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
-        position: 'relative',
-        borderRadius: '16px',
-        overflow: 'hidden'
-      }}>
+      <div
+        className="video-container"
+        style={{
+          width: '100%',
+          paddingBottom: 'min(177%, 80vh)',
+          background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
+          position: 'relative',
+          borderRadius: '16px',
+          overflow: 'hidden'
+        }}>
         <div style={{
           position: 'absolute',
           top: '50%',
@@ -616,14 +622,16 @@ function VideoPlayer({
 
   if (embedUrl) {
     return (
-      <div style={{
-        width: '100%',
-        paddingBottom: '177%',
-        position: 'relative',
-        borderRadius: '16px',
-        overflow: 'hidden',
-        background: '#1A1612'
-      }}>
+      <div
+        className="video-container"
+        style={{
+          width: '100%',
+          paddingBottom: 'min(177%, 80vh)',
+          position: 'relative',
+          borderRadius: '16px',
+          overflow: 'hidden',
+          background: '#1A1612'
+        }}>
         <iframe
           src={embedUrl}
           style={{
@@ -658,14 +666,16 @@ function VideoPlayer({
 
   // Fallback: placeholder with TikTok link or error
   return (
-    <div style={{
-      width: '100%',
-      paddingBottom: '177%',
-      background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
-      position: 'relative',
-      borderRadius: '16px',
-      overflow: 'hidden'
-    }}>
+    <div
+      className="video-container"
+      style={{
+        width: '100%',
+        paddingBottom: 'min(177%, 80vh)',
+        background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
+        position: 'relative',
+        borderRadius: '16px',
+        overflow: 'hidden'
+      }}>
       {error ? (
         <div style={{
           position: 'absolute',
@@ -1538,7 +1548,7 @@ function HomeView({
     : CONCEPTS;
 
   return (
-    <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px 40px 40px', paddingBottom: demoProfile ? '180px' : '40px' }}>
+    <main style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(16px, 4vw, 24px) clamp(16px, 4vw, 40px) clamp(16px, 4vw, 40px)', paddingBottom: demoProfile ? '180px' : '40px' }}>
       {/* Brand Profile Banner */}
       <div style={{
         padding: '20px 24px',
@@ -1709,7 +1719,7 @@ function HomeView({
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
           gap: '16px'
         }}>
           {displayConcepts.map(concept => (
@@ -1830,12 +1840,12 @@ function PreviewView({
     <main style={{
       maxWidth: '1200px',
       margin: '0 auto',
-      padding: '24px 40px 120px'
+      padding: 'clamp(16px, 4vw, 24px) clamp(16px, 4vw, 40px) 120px'
     }}>
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(300px, 1.2fr) minmax(300px, 1fr)',
-        gap: '40px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+        gap: 'clamp(20px, 4vw, 40px)',
         alignItems: 'start'
       }}>
         {/* Left column - Video & Content */}
@@ -2052,15 +2062,17 @@ function PreviewView({
       </div>
 
       {/* Mobile Fixed Unlock Bar - only show on small screens */}
-      <div style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        background: '#FFFFFF',
-        borderTop: '1px solid rgba(74,47,24,0.1)',
-        display: 'none' // Hidden on desktop, would use media query in real CSS
-      }}>
+      <div
+        className="mobile-unlock-bar"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          background: '#FFFFFF',
+          borderTop: '1px solid rgba(74,47,24,0.1)',
+          display: 'none' // Overridden by CSS class on mobile
+        }}>
         <div style={{
           maxWidth: '1200px',
           margin: '0 auto',
@@ -2108,11 +2120,11 @@ function BriefView({ concept }: { concept: UIConcept }) {
     <main style={{
       maxWidth: '1200px',
       margin: '0 auto',
-      padding: '0 40px 40px'
+      padding: '0 clamp(16px, 4vw, 40px) 40px'
     }}>
       {/* Success header */}
       <div style={{
-        padding: '32px 40px',
+        padding: 'clamp(20px, 4vw, 32px) clamp(20px, 4vw, 40px)',
         background: 'linear-gradient(145deg, #5A8F5A, #4A7A4A)',
         textAlign: 'center',
         borderRadius: '0 0 24px 24px',
@@ -2170,8 +2182,8 @@ function BriefView({ concept }: { concept: UIConcept }) {
         {activeTab === 'script' && (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'minmax(300px, 1fr) minmax(300px, 1.2fr)',
-            gap: '32px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+            gap: 'clamp(16px, 4vw, 32px)'
           }}>
             {/* Video reference */}
             <div>
@@ -2211,8 +2223,8 @@ function BriefView({ concept }: { concept: UIConcept }) {
         {activeTab === 'checklist' && (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1.5fr 1fr',
-            gap: '40px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+            gap: 'clamp(20px, 4vw, 40px)'
           }}>
             <div>
               <div style={{
@@ -2310,8 +2322,8 @@ function BriefView({ concept }: { concept: UIConcept }) {
         {activeTab === 'breakdown' && (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '24px'
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+            gap: 'clamp(16px, 4vw, 24px)'
           }}>
             {/* Left column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

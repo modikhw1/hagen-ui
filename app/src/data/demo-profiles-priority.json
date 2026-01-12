@@ -162,6 +162,51 @@
         {
           "clipId": "clip-12846358",
           "matchOverride": 92
+        },
+        {
+          "clipId": "clip-38309408",
+          "matchOverride": 88
+        },
+        {
+          "clipId": "clip-74569494",
+          "matchOverride": 85
+        },
+        {
+          "clipId": "clip-19762454",
+          "matchOverride": 80
+        }
+      ]
+    },
+    {
+      "id": "cafe",
+      "icon": "☕",
+      "label": "Café",
+      "profile": {
+        "handle": "@local.cafe",
+        "avatar": "L",
+        "followers": "1,8K",
+        "avgViews": "650",
+        "posts": 34,
+        "tone": [
+          "mysig",
+          "hemtrevlig",
+          "lokal"
+        ],
+        "energy": "Lugn",
+        "teamSize": "1-2 personer",
+        "topMechanisms": [
+          "recognition",
+          "warmth"
+        ]
+      },
+      "concepts": [
+        {
+          "clipId": "clip-45435414",
+          "matchOverride": 90
+        },
+        {
+          "clipId": "clip-14943766",
+          "matchOverride": 88
         }
       ]
     }

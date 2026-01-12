@@ -2,7 +2,7 @@
   "_meta": {
     "version": "2.0",
     "lastUpdated": "2026-01-12",
-    "description": "Priority clips exporterade från hagen-main. Innehåller 15 klipp med full modell (AR + FT + RL).",
+    "description": "Priority clips + nya klipp. Totalt 19 klipp (4 väntar på full analys).",
     "source": "hagen-main/scripts/export-to-hagen-ui.js"
   },
   "clips": [
@@ -701,6 +701,142 @@
       },
       "scene_breakdown": [],
       "replicability_analysis": "Videon har sannolikt medel till medel-svår repliceringsgrad. Även om kärnkonceptet med en chef som tilldelar slumpmässiga uppgifter, som visas genom fyra scener, är okomplicerat, kommer en framgångsrik replikering av videon att bero på hur tilltalande och engagerande scenerna är. Scenerna kan kopier"
+    },
+    {
+      "id": "clip-74569494",
+      "url": "https://www.tiktok.com/@erikurten/video/7556918546274569494",
+      "platform": "tiktok",
+      "gcs_uri": "gs://hagen-video-analysis/videos/e1ad2e56-e110-4d9d-9f0e-b9df18ff8b75.mp4",
+      "_comment": "=== BACKEND SIGNALS (pending full analysis) ===",
+      "humor_analysis": {
+        "handling": "[PENDING]",
+        "mechanism": "TBD",
+        "why": "Analys väntar",
+        "target_audience": "bar patrons, nightlife"
+      },
+      "replicability_signals": {
+        "time_investment": 5,
+        "skill_requirements": 5,
+        "budget_requirements": 3,
+        "equipment_requirements": 2
+      },
+      "audience_signals": {
+        "primary_ages": [
+          {
+            "primary": "millennial",
+            "secondary": "gen_z"
+          }
+        ],
+        "vibe_alignments": [
+          "bar",
+          "nightlife"
+        ],
+        "engagement_style": "active",
+        "niche_specificity": 6
+      },
+      "scene_breakdown": []
+    },
+    {
+      "id": "clip-19762454",
+      "url": "https://www.tiktok.com/@fiumerestaurant/video/7552392672019762454",
+      "platform": "tiktok",
+      "gcs_uri": null,
+      "_comment": "=== BACKEND SIGNALS (farlig - pending full analysis) ===",
+      "humor_analysis": {
+        "handling": "[PENDING]",
+        "mechanism": "TBD",
+        "why": "Analys väntar - märkt som farlig",
+        "target_audience": "restaurant, fine dining"
+      },
+      "replicability_signals": {
+        "time_investment": 5,
+        "skill_requirements": 5,
+        "budget_requirements": 5,
+        "equipment_requirements": 3
+      },
+      "audience_signals": {
+        "primary_ages": [
+          {
+            "primary": "millennial",
+            "secondary": "gen_x"
+          }
+        ],
+        "vibe_alignments": [
+          "restaurant",
+          "upscale"
+        ],
+        "engagement_style": "passive",
+        "niche_specificity": 7
+      },
+      "scene_breakdown": []
+    },
+    {
+      "id": "clip-45435414",
+      "url": "https://www.tiktok.com/@feildensarmsmellor/video/7556722838745435414",
+      "platform": "tiktok",
+      "gcs_uri": null,
+      "_comment": "=== BACKEND SIGNALS (pending full analysis) ===",
+      "humor_analysis": {
+        "handling": "[PENDING]",
+        "mechanism": "TBD",
+        "why": "Analys väntar",
+        "target_audience": "cafe, local business"
+      },
+      "replicability_signals": {
+        "time_investment": 5,
+        "skill_requirements": 4,
+        "budget_requirements": 2,
+        "equipment_requirements": 2
+      },
+      "audience_signals": {
+        "primary_ages": [
+          {
+            "primary": "gen_z",
+            "secondary": "millennial"
+          }
+        ],
+        "vibe_alignments": [
+          "cafe",
+          "cozy"
+        ],
+        "engagement_style": "passive",
+        "niche_specificity": 5
+      },
+      "scene_breakdown": []
+    },
+    {
+      "id": "clip-14943766",
+      "url": "https://www.tiktok.com/@viraleats.leicester/video/7555164567114943766",
+      "platform": "tiktok",
+      "gcs_uri": null,
+      "_comment": "=== BACKEND SIGNALS (pending full analysis) ===",
+      "humor_analysis": {
+        "handling": "[PENDING]",
+        "mechanism": "TBD",
+        "why": "Analys väntar",
+        "target_audience": "food lovers, cafe"
+      },
+      "replicability_signals": {
+        "time_investment": 5,
+        "skill_requirements": 5,
+        "budget_requirements": 3,
+        "equipment_requirements": 2
+      },
+      "audience_signals": {
+        "primary_ages": [
+          {
+            "primary": "gen_z",
+            "secondary": "millennial"
+          }
+        ],
+        "vibe_alignments": [
+          "cafe",
+          "food"
+        ],
+        "engagement_style": "passive",
+        "niche_specificity": 5
+      },
+      "scene_breakdown": []
     }
   ],
   "_comment_overrides": "=== SVENSKA UI-FÄLT ===",
