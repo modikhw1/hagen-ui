@@ -9,7 +9,7 @@
  */
 
 import { translateClipToConcept, type BackendClip, type TranslatedConcept, type ClipOverride, type ClipDefaults } from './translator'
-import clipsData from '@/data/clips.json'
+import clipsData from '@/data/clips-priority.json'
 
 // Type for the clips.json structure
 interface ClipsData {
