@@ -1,30 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Storage } from '@google-cloud/storage';
-import path from 'path';
 
 // GCS Configuration
-const GCS_BUCKET = 'hagen-video-analysis';
 const GCS_PROJECT_ID = 'gen-lang-client-0853618366';
-
-// Path to credentials (relative to hagen-main)
-const CREDENTIALS_PATH = path.join(
-  process.cwd(),
-  '..',
-  '..',
-  'hagen-main',
-  'credentials',
-  'gen-lang-client-0853618366-8c06f8b7a2d1.json'
-);
 
 let storage: Storage | null = null;
 
 function getStorage(): Storage {
   if (!storage) {
     try {
-      storage = new Storage({
-        projectId: GCS_PROJECT_ID,
-        keyFilename: CREDENTIALS_PATH,
-      });
+      // Try environment variable first (for Railway/production)
+      if (process.env.GCS_CREDENTIALS_BASE64) {
+        const credentials = JSON.parse(
+          Buffer.from(process.env.GCS_CREDENTIALS_BASE64, 'base64').toString('utf-8')
+        );
+        storage = new Storage({
+          projectId: GCS_PROJECT_ID,
+          credentials,
+        });
+      } else if (process.env.GCS_CREDENTIALS_JSON) {
+        const credentials = JSON.parse(process.env.GCS_CREDENTIALS_JSON);
+        storage = new Storage({
+          projectId: GCS_PROJECT_ID,
+          credentials,
+        });
+      } else {
+        // Fallback: Let GCS SDK find credentials automatically
+        // (works with GOOGLE_APPLICATION_CREDENTIALS env var or default credentials)
+        storage = new Storage({
+          projectId: GCS_PROJECT_ID,
+        });
+      }
     } catch (error) {
       console.error('Failed to initialize GCS:', error);
       throw new Error('GCS not available');
