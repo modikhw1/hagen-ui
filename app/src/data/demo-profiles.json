@@ -1,8 +1,8 @@
 {
   "_meta": {
     "description": "Demo-profiler för LeTrend. Editera för att ändra vilka klipp som visas per profil.",
-    "lastUpdated": "2025-01-12",
-    "version": "1.0"
+    "lastUpdated": "2026-01-12",
+    "version": "2.0"
   },
   "profiles": [
     {
@@ -25,8 +25,10 @@
         ]
       },
       "concepts": [
-        { "clipId": "clip-contraband-coffee", "matchOverride": 82 },
-        { "clipId": "clip-bankhotel-reconciliation", "matchOverride": 88 }
+        { "clipId": "clip-44893709", "matchOverride": 92 },
+        { "clipId": "clip-62206230", "matchOverride": 88 },
+        { "clipId": "clip-29634592", "matchOverride": 85 },
+        { "clipId": "clip-68018446", "matchOverride": 82 }
       ]
     },
     {
@@ -49,8 +51,10 @@
         ]
       },
       "concepts": [
-        { "clipId": "clip-contraband-coffee", "matchOverride": 94 },
-        { "clipId": "clip-bankhotel-reconciliation", "matchOverride": 74 }
+        { "clipId": "clip-92037398", "matchOverride": 94 },
+        { "clipId": "clip-39251991", "matchOverride": 90 },
+        { "clipId": "clip-18074647", "matchOverride": 88 },
+        { "clipId": "clip-70690326", "matchOverride": 85 }
       ]
     },
     {
@@ -73,8 +77,10 @@
         ]
       },
       "concepts": [
-        { "clipId": "clip-bankhotel-reconciliation", "matchOverride": 89 },
-        { "clipId": "clip-contraband-coffee", "matchOverride": 77 }
+        { "clipId": "clip-29810710", "matchOverride": 94 },
+        { "clipId": "clip-12846358", "matchOverride": 89 },
+        { "clipId": "clip-76898326", "matchOverride": 85 },
+        { "clipId": "clip-84559877", "matchOverride": 82 }
       ]
     },
     {
@@ -97,8 +103,10 @@
         ]
       },
       "concepts": [
-        { "clipId": "clip-bankhotel-reconciliation", "matchOverride": 94 },
-        { "clipId": "clip-contraband-coffee", "matchOverride": 91 }
+        { "clipId": "clip-70690326", "matchOverride": 96 },
+        { "clipId": "clip-92037398", "matchOverride": 94 },
+        { "clipId": "clip-18636040", "matchOverride": 91 },
+        { "clipId": "clip-68018446", "matchOverride": 88 }
       ]
     },
     {
@@ -121,8 +129,10 @@
         ]
       },
       "concepts": [
-        { "clipId": "clip-contraband-coffee", "matchOverride": 86 },
-        { "clipId": "clip-bankhotel-reconciliation", "matchOverride": 71 }
+        { "clipId": "clip-32984598", "matchOverride": 88 },
+        { "clipId": "clip-29634592", "matchOverride": 86 },
+        { "clipId": "clip-38309408", "matchOverride": 82 },
+        { "clipId": "clip-18074647", "matchOverride": 78 }
       ]
     }
   ]
