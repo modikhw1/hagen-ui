@@ -547,6 +547,7 @@ function VideoPlayer({
           src={signedUrl}
           controls
           playsInline
+          preload="metadata"
           style={{
             position: 'absolute',
             top: 0,
