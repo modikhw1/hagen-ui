@@ -1256,6 +1256,62 @@
       "matchPercentage": 85,
       "price": 24,
       "isNew": true
+    },
+    "clip-74569494": {
+      "headline_sv": "Nikotinpanik på puben",
+      "description_sv": "En desperat jakt efter snus som tar en oväntad vändning.",
+      "whyItWorks_sv": "Bygger upp förväntan att personen saknar snus, men avslöjar sedan att frånvaron av nikotinbrist är problemet. Relaterbart för alla som känner snusare.",
+      "script_sv": "[SCEN: Bar-miljö]\n\"Har någon snus?\"\n[Panik-letande]\n\"Jag har inte känt av nikotinsuget på typ en timme\"\n[Orolig blick]",
+      "productionNotes_sv": [
+        "Spela överdrivet desperat",
+        "Pausen innan avslöjandet är nyckeln",
+        "Autentisk bar-miljö hjälper"
+      ],
+      "matchPercentage": 88,
+      "price": 24,
+      "isNew": true
+    },
+    "clip-19762454": {
+      "headline_sv": "Bartendern som \"levererade\"",
+      "description_sv": "När förväntningarna på ett cocktail-trick inte riktigt uppfylls.",
+      "whyItWorks_sv": "Sätter upp förväntan på ett imponerande bartender-trick men levererar istället något helt vardagligt. Klassisk subversion som fungerar i restaurangmiljö.",
+      "script_sv": "[SCEN: Bar med flaskor]\n[Bartender förbereder sig dramatiskt]\n[Bygger upp förväntan]\n[Levererar något helt oväntat enkelt]",
+      "productionNotes_sv": [
+        "Dramatisk uppbyggnad är viktig",
+        "Kontrasten mellan förväntan och leverans",
+        "Fungerar bäst med erfaren bartender"
+      ],
+      "matchPercentage": 85,
+      "price": 24,
+      "isNew": true
+    },
+    "clip-45435414": {
+      "headline_sv": "Världens yngsta barista",
+      "description_sv": "När den \"dåliga baristan\" visar sig vara ett litet barn.",
+      "whyItWorks_sv": "Förväntningen om en inkompetent barista vänds till charm när det visar sig vara ett barn. Kombinerar igenkänning med oväntad twist.",
+      "script_sv": "[SCEN: Café-disk]\n\"Vår nya barista är lite långsam...\"\n[Kamera panorerar]\n[Avslöjar ett litet barn vid kaffemaskinen]",
+      "productionNotes_sv": [
+        "Barnet behöver inte göra mycket",
+        "Föräldrar gillar detta format",
+        "Håll det kort och kärnfullt"
+      ],
+      "matchPercentage": 90,
+      "price": 24,
+      "isNew": true
+    },
+    "clip-14943766": {
+      "headline_sv": "Grädde-gate",
+      "description_sv": "Kunden ville inte ha grädde. Lösningen var... kreativ.",
+      "whyItWorks_sv": "Istället för att ta bort grädden sker något oväntat. Relaterbart för alla som jobbat i service och mött märkliga kundönskemål.",
+      "script_sv": "[SCEN: Café]\nKund: \"Jag ville inte ha vispgrädde\"\n[Paus]\n[Oväntad lösning som inte är att ta bort grädden]",
+      "productionNotes_sv": [
+        "Timingen på reaktionen är allt",
+        "Håll ansiktsuttrycket neutralt",
+        "Kan varieras med olika \"lösningar\""
+      ],
+      "matchPercentage": 88,
+      "price": 24,
+      "isNew": true
     }
   },
   "_comment_defaults": "=== FALLBACK-VÄRDEN ===",
