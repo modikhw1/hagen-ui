@@ -9,6 +9,7 @@ import { loadLegacyDemoProfiles } from '@/lib/demoProfileLoader';
 import { display, categoryOptions } from '@/lib/display';
 import type { TranslatedConcept } from '@/lib/translator';
 import { useAuth } from '@/contexts/AuthContext';
+import { useVideoSignedUrl } from '@/hooks/useVideoSignedUrl';
 
 // ============================================
 // BRAND PROFILE (from translation layer)
@@ -182,28 +183,87 @@ function LeTrendAppContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
+  // Check for demo/auth mode - start with URL param only (SSR-safe)
+  // sessionStorage is checked in useEffect to avoid hydration mismatch
+  const [isDemoMode, setIsDemoMode] = useState(() => {
+    return searchParams.get('demo') === 'true';
+  });
+
+  const isInitialAuth = searchParams.get('auth') === 'true';
+
   // Views: payment, home, preview, brief (no login - we redirect instead)
-  const [currentView, setCurrentView] = useState<'payment' | 'home' | 'preview' | 'brief'>('payment');
+  // Start with null - view is set in useEffect based on auth/demo state
+  const [currentView, setCurrentView] = useState<'payment' | 'home' | 'preview' | 'brief' | null>(null);
+
+  // Check sessionStorage for demo mode persistence (client-only)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const storedDemo = sessionStorage.getItem('demo-mode');
+      if (storedDemo === 'true' && !isDemoMode) {
+        setIsDemoMode(true);
+      }
+    }
+  }, [isDemoMode]);
   const [selectedConcept, setSelectedConcept] = useState<UIConcept | null>(null);
   const [selectedPlan, setSelectedPlan] = useState('growth');
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [conceptsUsed, setConceptsUsed] = useState(1);
-  const [devModeSkipped, setDevModeSkipped] = useState(false);
   const [selectedDemoProfile, setSelectedDemoProfile] = useState<string>('cafe');
   const [bottomBarHovered, setBottomBarHovered] = useState(false);
 
+  // Mobile detection with SSR-safe initial value
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Detect mobile viewport with debouncing
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const checkMobile = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setIsMobile(window.innerWidth <= 768);
+      }, 200);
+    };
+
+    // Initial check
+    setIsMobile(window.innerWidth <= 768);
+
+    window.addEventListener('resize', checkMobile);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', checkMobile);
+    };
+  }, []);
+
   // Auth & payment flow logic
   useEffect(() => {
-    // Check for demo mode from URL (only set once)
-    const isDemo = searchParams.get('demo') === 'true';
-    if (isDemo && !devModeSkipped) {
-      setDevModeSkipped(true);
-      setCurrentView('home');
+    // Check for demo mode from URL or sessionStorage
+    const urlDemo = searchParams.get('demo') === 'true';
+    const storedDemo = typeof window !== 'undefined' && sessionStorage.getItem('demo-mode') === 'true';
+
+    if (urlDemo || storedDemo) {
+      // Save to sessionStorage for persistence
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('demo-mode', 'true');
+      }
+      setIsDemoMode(true);
+      // Only set to home on initial load (when currentView is null)
+      // Don't reset if user is navigating (preview, brief)
+      if (currentView === null) {
+        setCurrentView('home');
+      }
+      return;
+    }
+
+    // Check for auth test mode from URL - show payment view
+    const isAuthMode = searchParams.get('auth') === 'true';
+    if (isAuthMode && currentView !== 'payment') {
+      setCurrentView('payment');
       return;
     }
 
     // Already in demo mode - don't interfere with navigation
-    if (devModeSkipped) {
+    if (isDemoMode) {
       return;
     }
 
@@ -212,25 +272,31 @@ function LeTrendAppContent() {
     // Check for payment status from URL
     const paymentStatus = searchParams.get('payment');
     if (paymentStatus === 'success') {
-      setDevModeSkipped(true); // Treat as paid for this session
       setCurrentView('home');
       return;
     }
 
-    // Not logged in → redirect to login
-    if (!user) {
-      router.push('/login');
+    // Not logged in and not in auth test mode → redirect to login
+    if (!user && !isAuthMode && !isDemoMode) {
+      router.replace('/login');
       return;
     }
 
     // Logged in - determine view based on payment status
     const hasPaid = profile?.has_paid;
 
-    // Only change view if we're still on payment and user has paid
-    if (hasPaid && currentView === 'payment') {
-      setCurrentView('home');
+    // Set view based on payment status
+    if (hasPaid) {
+      if (currentView !== 'home') {
+        setCurrentView('home');
+      }
+    } else {
+      // User is logged in but hasn't paid -> show payment view
+      if (currentView !== 'payment') {
+        setCurrentView('payment');
+      }
     }
-  }, [user, profile, loading, searchParams, router, devModeSkipped, currentView]);
+  }, [user, profile, loading, searchParams, router, isDemoMode, currentView]);
 
   const handlePayment = () => {
     setCurrentView('home');
@@ -238,13 +304,18 @@ function LeTrendAppContent() {
 
   const handleSkipPayment = () => {
     // Dev mode: skip payment and go to home
-    setDevModeSkipped(true);
     setCurrentView('home');
   };
 
   const handleLogout = async () => {
-    if (devModeSkipped && !user) {
+    // Clear demo mode from sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('demo-mode');
+    }
+
+    if (isDemoMode && !user) {
       // Demo mode - just redirect to login
+      setIsDemoMode(false);
       router.push('/login');
       return;
     }
@@ -253,8 +324,10 @@ function LeTrendAppContent() {
   };
 
   const handleSelectConcept = (concept: UIConcept) => {
+    console.log('handleSelectConcept called:', concept.id, concept.title);
     setSelectedConcept(concept);
     setCurrentView('preview');
+    console.log('Set currentView to preview');
   };
 
   const handleUnlock = () => {
@@ -273,11 +346,11 @@ function LeTrendAppContent() {
 
   const plan = PLANS.find(p => p.id === selectedPlan);
 
-  // Check if in demo mode
-  const isDemo = searchParams.get('demo') === 'true' || devModeSkipped;
+  // Check if in auth test mode
+  const isAuthMode = searchParams.get('auth') === 'true';
 
-  // Show loading while checking auth or redirecting (but not in demo mode)
-  if (!isDemo && (loading || !user)) {
+  // Show loading screen while auth is being checked
+  if (!isDemoMode && !isAuthMode && loading) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -288,7 +361,44 @@ function LeTrendAppContent() {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>☕</div>
-          <div style={{ color: '#7D6E5D' }}>{loading ? 'Laddar...' : 'Omdirigerar...'}</div>
+          <div style={{ color: '#7D6E5D' }}>Laddar...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // If not logged in, not in demo, and not in auth mode, redirect to login (don't render anything)
+  if (!isDemoMode && !isAuthMode && !user) {
+    // Redirect happens in useEffect, just show nothing here
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#FAF8F5',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>☕</div>
+          <div style={{ color: '#7D6E5D' }}>Omdirigerar...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while currentView is being determined
+  if (currentView === null) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: '#FAF8F5',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '32px', marginBottom: '12px' }}>☕</div>
+          <div style={{ color: '#7D6E5D' }}>Laddar...</div>
         </div>
       </div>
     );
@@ -399,7 +509,7 @@ function LeTrendAppContent() {
                     }}>
                       {profile?.business_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'D'}
                     </span>
-                    {isDemo ? 'Demo' : 'Logga ut'}
+                    {isDemoMode ? 'Avsluta demo' : 'Logga ut'}
                   </button>
                 </div>
               </div>
@@ -415,12 +525,13 @@ function LeTrendAppContent() {
           onSelectConcept={handleSelectConcept}
           plan={plan}
           conceptsUsed={conceptsUsed}
-          demoProfile={isDemo ? DEMO_PROFILES.find(p => p.id === selectedDemoProfile) : undefined}
+          demoProfile={isDemoMode ? DEMO_PROFILES.find(p => p.id === selectedDemoProfile) : undefined}
+          isMobile={isMobile}
         />
       )}
 
       {/* Demo Profile Switcher - Only in demo mode on home view */}
-      {isDemo && currentView === 'home' && (
+      {isDemoMode && currentView === 'home' && (
         <div
           className="demo-profile-switcher"
           onMouseEnter={() => setBottomBarHovered(true)}
@@ -484,11 +595,12 @@ function LeTrendAppContent() {
           onUnlock={handleUnlock}
           plan={plan}
           conceptsUsed={conceptsUsed}
+          isMobile={isMobile}
         />
       )}
 
       {currentView === 'brief' && selectedConcept && (
-        <BriefView concept={selectedConcept} />
+        <BriefView concept={selectedConcept} isMobile={isMobile} />
       )}
     </div>
   );
@@ -506,33 +618,11 @@ function VideoPlayer({
   gcsUri?: string;
   showLabel?: boolean;
 }) {
-  const [signedUrl, setSignedUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch signed URL from GCS if available
-  React.useEffect(() => {
-    if (gcsUri && !signedUrl && !loading) {
-      setLoading(true);
-      setError(null);
-      // Use the video API endpoint with a generated ID
-      const videoId = gcsUri.split('/').pop()?.replace('.mp4', '') || 'video';
-      fetch(`/api/video/${videoId}?gcs_uri=${encodeURIComponent(gcsUri)}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.signedUrl) {
-            setSignedUrl(data.signedUrl);
-          } else if (data.error) {
-            setError(data.error);
-          }
-        })
-        .catch(err => {
-          console.error('GCS signing failed:', err);
-          setError('Kunde inte ladda video');
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [gcsUri, signedUrl, loading]);
+  // Use shared hook for video signed URL fetching
+  const { signedUrl, isLoading: loading, error } = useVideoSignedUrl({
+    gcsUri,
+    enabled: true
+  });
 
   // Priority 1: GCS signed URL - native video player
   if (signedUrl) {
@@ -541,7 +631,7 @@ function VideoPlayer({
         className="video-container"
         style={{
           width: '100%',
-          paddingBottom: '177.78%',
+          aspectRatio: '9/16',
           position: 'relative',
           borderRadius: '16px',
           overflow: 'hidden',
@@ -558,7 +648,7 @@ function VideoPlayer({
             left: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'cover'
+            objectFit: 'contain'
           }}
         />
         {showLabel && (
@@ -587,7 +677,7 @@ function VideoPlayer({
         className="video-container"
         style={{
           width: '100%',
-          paddingBottom: '177.78%',
+          aspectRatio: '9/16',
           background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
           position: 'relative',
           borderRadius: '16px',
@@ -626,7 +716,7 @@ function VideoPlayer({
         className="video-container"
         style={{
           width: '100%',
-          paddingBottom: '177.78%',
+          aspectRatio: '9/16',
           position: 'relative',
           borderRadius: '16px',
           overflow: 'hidden',
@@ -670,7 +760,7 @@ function VideoPlayer({
       className="video-container"
       style={{
         width: '100%',
-        paddingBottom: '177.78%',
+        aspectRatio: '9/16',
         background: 'linear-gradient(145deg, #5D4D3D, #4A3F33)',
         position: 'relative',
         borderRadius: '16px',
@@ -960,7 +1050,8 @@ function StripeCheckoutStep({
 
   const handleStripeCheckout = async () => {
     if (!user) {
-      window.location.href = '/login';
+      // In auth test mode, show error instead of redirecting
+      setError('Du måste vara inloggad för att betala. Använd "Hoppa över betalning" i utvecklingsläge.');
       return;
     }
 
@@ -1515,7 +1606,8 @@ function HomeView({
   onSelectConcept,
   plan,
   conceptsUsed,
-  demoProfile
+  demoProfile,
+  isMobile
 }: {
   profileExpanded: boolean;
   setProfileExpanded: (expanded: boolean) => void;
@@ -1523,6 +1615,7 @@ function HomeView({
   plan: Plan;
   conceptsUsed: number;
   demoProfile?: DemoProfile;
+  isMobile?: boolean;
 }) {
   // Use demo profile if provided, otherwise default brand profile
   const activeProfile = demoProfile ? {
@@ -1719,7 +1812,7 @@ function HomeView({
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))',
           gap: '16px'
         }}>
           {displayConcepts.map(concept => (
@@ -1826,12 +1919,14 @@ function PreviewView({
   concept,
   onUnlock,
   plan,
-  conceptsUsed
+  conceptsUsed,
+  isMobile
 }: {
   concept: UIConcept;
   onUnlock: () => void;
   plan: Plan;
   conceptsUsed: number;
+  isMobile?: boolean;
 }) {
   const axis = display.mechanism(concept.mechanism);
   const conceptsRemaining = plan.concepts - conceptsUsed;
@@ -1840,18 +1935,19 @@ function PreviewView({
     <main style={{
       maxWidth: '1200px',
       margin: '0 auto',
-      padding: 'clamp(16px, 4vw, 24px) clamp(16px, 4vw, 40px) 120px'
+      padding: isMobile ? '16px 16px 120px' : 'clamp(16px, 4vw, 24px) clamp(16px, 4vw, 40px) 120px'
     }}>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
-        gap: 'clamp(20px, 4vw, 40px)',
-        alignItems: 'start'
-      }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'minmax(240px, 300px) 1fr',
+          gap: isMobile ? '20px' : 'clamp(20px, 4vw, 40px)',
+          alignItems: 'start'
+        }}>
         {/* Left column - Video & Content */}
-        <div>
+        <div style={{ maxWidth: isMobile ? '100%' : 300 }}>
           {/* Video Preview */}
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: 'relative', borderRadius: '14px', overflow: 'hidden' }}>
             <VideoPlayer videoUrl={concept.videoUrl} gcsUri={concept.gcsUri} showLabel={false} />
 
             {/* Match badge */}
@@ -2112,15 +2208,28 @@ function PreviewView({
 // ============================================
 // BRIEF VIEW - After unlock (filming companion)
 // ============================================
-function BriefView({ concept }: { concept: UIConcept }) {
+function BriefView({ concept, isMobile }: { concept: UIConcept; isMobile?: boolean }) {
   const [activeTab, setActiveTab] = useState<'script' | 'checklist' | 'breakdown'>('script');
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [videoLink, setVideoLink] = useState('');
+  const [linkSubmitted, setLinkSubmitted] = useState(false);
   const axis = display.mechanism(concept.mechanism);
+
+  const handleSubmitLink = () => {
+    if (videoLink.trim()) {
+      setLinkSubmitted(true);
+      setTimeout(() => {
+        setShowLinkModal(false);
+        setLinkSubmitted(false);
+      }, 1500);
+    }
+  };
 
   return (
     <main style={{
       maxWidth: '1200px',
       margin: '0 auto',
-      padding: '0 clamp(16px, 4vw, 40px) 40px'
+      padding: isMobile ? '0 16px 40px' : '0 clamp(16px, 4vw, 40px) 40px'
     }}>
       {/* Success header */}
       <div style={{
@@ -2140,13 +2249,14 @@ function BriefView({ concept }: { concept: UIConcept }) {
       </div>
 
       {/* Tabs */}
-      <div style={{
-        display: 'flex',
-        borderBottom: '1px solid rgba(74,47,24,0.1)',
-        background: '#FFF',
-        borderRadius: '16px 16px 0 0',
-        overflow: 'hidden'
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid rgba(74,47,24,0.1)',
+          background: '#FFF',
+          borderRadius: isMobile ? '12px 12px 0 0' : '16px 16px 0 0',
+          overflow: 'hidden'
+        }}>
         {[
           { id: 'script' as const, label: 'Manus' },
           { id: 'checklist' as const, label: 'Checklista' },
@@ -2157,12 +2267,12 @@ function BriefView({ concept }: { concept: UIConcept }) {
             onClick={() => setActiveTab(tab.id)}
             style={{
               flex: 1,
-              padding: '18px 20px',
+              padding: isMobile ? '14px 12px' : '18px 20px',
               background: 'none',
               border: 'none',
               borderBottom: activeTab === tab.id ? '3px solid #4A2F18' : '3px solid transparent',
               color: activeTab === tab.id ? '#1A1612' : '#9D8E7D',
-              fontSize: '15px',
+              fontSize: isMobile ? '14px' : '15px',
               fontWeight: '600',
               cursor: 'pointer'
             }}
@@ -2180,11 +2290,12 @@ function BriefView({ concept }: { concept: UIConcept }) {
         minHeight: '400px'
       }}>
         {activeTab === 'script' && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
-            gap: 'clamp(16px, 4vw, 32px)'
-          }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+              gap: isMobile ? '20px' : 'clamp(16px, 4vw, 32px)'
+            }}>
             {/* Video reference */}
             <div>
               <VideoPlayer videoUrl={concept.videoUrl} gcsUri={concept.gcsUri} showLabel={true} />
@@ -2221,11 +2332,12 @@ function BriefView({ concept }: { concept: UIConcept }) {
         )}
 
         {activeTab === 'checklist' && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
-            gap: 'clamp(20px, 4vw, 40px)'
-          }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+              gap: isMobile ? '20px' : 'clamp(20px, 4vw, 40px)'
+            }}>
             <div>
               <div style={{
                 fontSize: '12px',
@@ -2320,11 +2432,12 @@ function BriefView({ concept }: { concept: UIConcept }) {
         )}
 
         {activeTab === 'breakdown' && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
-            gap: 'clamp(16px, 4vw, 24px)'
-          }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+              gap: isMobile ? '20px' : 'clamp(16px, 4vw, 24px)'
+            }}>
             {/* Left column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Mechanism */}
@@ -2427,16 +2540,18 @@ function BriefView({ concept }: { concept: UIConcept }) {
       </div>
 
       {/* Link your video CTA */}
-      <div style={{
-        marginTop: '32px',
-        padding: '28px 40px',
-        background: 'linear-gradient(145deg, #F5F2EE, #EDE9E3)',
-        borderRadius: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '24px'
-      }}>
+      <div
+        style={{
+          marginTop: '32px',
+          padding: isMobile ? '20px' : '28px 40px',
+          background: 'linear-gradient(145deg, #F5F2EE, #EDE9E3)',
+          borderRadius: '20px',
+          display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          justifyContent: 'space-between',
+          gap: isMobile ? '16px' : '24px'
+        }}>
         <div>
           <div style={{
             fontSize: '18px',
@@ -2453,20 +2568,170 @@ function BriefView({ concept }: { concept: UIConcept }) {
             Länka din video för att spåra resultat och få insikter
           </div>
         </div>
-        <button style={{
-          padding: '16px 32px',
-          background: '#4A2F18',
-          border: 'none',
-          borderRadius: '14px',
-          color: '#FAF8F5',
-          fontSize: '15px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap'
-        }}>
+        <button
+          onClick={() => setShowLinkModal(true)}
+          style={{
+            padding: '16px 32px',
+            background: '#4A2F18',
+            border: 'none',
+            borderRadius: '14px',
+            color: '#FAF8F5',
+            fontSize: '15px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            width: isMobile ? '100%' : 'auto'
+          }}
+        >
           Länka min TikTok-video
         </button>
       </div>
+
+      {/* Link Video Modal */}
+      {showLinkModal && (
+        <div
+          onClick={() => setShowLinkModal(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(26, 22, 18, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              padding: '32px',
+              maxWidth: '480px',
+              width: '100%',
+              boxShadow: '0 20px 60px rgba(44, 36, 22, 0.25)'
+            }}
+          >
+            {linkSubmitted ? (
+              <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  background: '#5A8F5A',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px',
+                  fontSize: '28px',
+                  color: '#FFF'
+                }}>✓</div>
+                <div style={{ fontSize: '20px', fontWeight: '600', color: '#1A1612' }}>
+                  Länk sparad!
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                  <div style={{ fontSize: '40px', marginBottom: '12px' }}>🔗</div>
+                  <h3 style={{
+                    fontSize: '22px',
+                    fontWeight: '600',
+                    color: '#1A1612',
+                    marginBottom: '8px'
+                  }}>
+                    Länka din TikTok-video
+                  </h3>
+                  <p style={{
+                    fontSize: '15px',
+                    color: '#7D6E5D',
+                    lineHeight: '1.6'
+                  }}>
+                    Klistra in länken till din publicerade video så kan vi spåra resultat och ge dig insikter.
+                  </p>
+                </div>
+
+                <div style={{
+                  padding: '16px',
+                  background: 'rgba(139, 105, 20, 0.08)',
+                  borderRadius: '14px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '12px'
+                  }}>
+                    <span style={{ fontSize: '18px' }}>💡</span>
+                    <div style={{ fontSize: '14px', color: '#5D4D3D', lineHeight: '1.5' }}>
+                      <strong>Hur vi använder länken:</strong>
+                      <ul style={{ margin: '8px 0 0 0', paddingLeft: '16px' }}>
+                        <li>Analyserar videons prestation</li>
+                        <li>Jämför med originalet för insikter</li>
+                        <li>Förfinar framtida konceptförslag</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+
+                <input
+                  type="url"
+                  value={videoLink}
+                  onChange={(e) => setVideoLink(e.target.value)}
+                  placeholder="https://www.tiktok.com/@ditt-konto/video/..."
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    borderRadius: '14px',
+                    border: '1px solid rgba(74, 47, 24, 0.15)',
+                    fontSize: '15px',
+                    marginBottom: '20px',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                />
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={() => setShowLinkModal(false)}
+                    style={{
+                      flex: 1,
+                      padding: '16px',
+                      background: '#F0EBE4',
+                      border: 'none',
+                      borderRadius: '14px',
+                      color: '#5D4D3D',
+                      fontSize: '15px',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Avbryt
+                  </button>
+                  <button
+                    onClick={handleSubmitLink}
+                    disabled={!videoLink.trim()}
+                    style={{
+                      flex: 1,
+                      padding: '16px',
+                      background: videoLink.trim() ? 'linear-gradient(145deg, #5D3A1A, #3D2510)' : '#D0C8BE',
+                      border: 'none',
+                      borderRadius: '14px',
+                      color: '#FAF8F5',
+                      fontSize: '15px',
+                      fontWeight: '600',
+                      cursor: videoLink.trim() ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    Spara länk
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </main>
   );
 }
