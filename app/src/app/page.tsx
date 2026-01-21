@@ -10,6 +10,8 @@ import { display, categoryOptions } from '@/lib/display';
 import type { TranslatedConcept } from '@/lib/translator';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVideoSignedUrl } from '@/hooks/useVideoSignedUrl';
+import { EmailGate } from '@/components/EmailGate';
+import { WelcomeView } from '@/components/WelcomeView';
 
 // ============================================
 // BRAND PROFILE (from translation layer)
@@ -126,6 +128,8 @@ const CONCEPTS: UIConcept[] = translatedConcepts.map(toUIConcept);
 // HUMOR_AXES now comes from display layer
 // Usage: display.mechanism('contrast') → { label: 'Två Världar Möts', icon: '⚖️', color: '#...' }
 
+const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
 const PLANS: Plan[] = [
   {
     id: 'starter',
@@ -179,7 +183,7 @@ export default function LeTrendApp() {
 }
 
 function LeTrendAppContent() {
-  const { user, profile, loading, signOut } = useAuth();
+  const { user, profile, loading, syncing, signOut } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -191,9 +195,9 @@ function LeTrendAppContent() {
 
   const isInitialAuth = searchParams.get('auth') === 'true';
 
-  // Views: payment, home, preview, brief (no login - we redirect instead)
+  // Views: email-gate, welcome, payment, home, preview, brief (no login - we redirect instead)
   // Start with null - view is set in useEffect based on auth/demo state
-  const [currentView, setCurrentView] = useState<'payment' | 'home' | 'preview' | 'brief' | null>(null);
+  const [currentView, setCurrentView] = useState<'email-gate' | 'welcome' | 'payment' | 'home' | 'preview' | 'brief' | null>(null);
 
   // Check sessionStorage for demo mode persistence (client-only)
   useEffect(() => {
@@ -235,13 +239,93 @@ function LeTrendAppContent() {
     };
   }, []);
 
+  // Handle auth redirect - Supabase client handles this automatically via detectSessionInUrl
+  // PKCE uses ?code=xxx, implicit uses #access_token=xxx
+  const hasAuthCode = searchParams.get('code') !== null;
+  const [hasAuthHash, setHasAuthHash] = useState(false);
+
+  // Check for access_token in hash (implicit flow)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const hash = window.location.hash.substring(1);
+      if (hash.includes('access_token=')) {
+        setHasAuthHash(true);
+        // Clear the hash after Supabase processes it to allow normal navigation
+        setTimeout(() => {
+          if (window.location.hash) {
+            window.history.replaceState(null, '', window.location.pathname);
+            setHasAuthHash(false);
+          }
+        }, 2000);
+      }
+    }
+  }, []);
+
+  // Check for auth errors in URL hash (Supabase puts errors there)
+  useEffect(() => {
+    const checkHashError = () => {
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const error = hashParams.get('error');
+        const errorCode = hashParams.get('error_code');
+
+        if (error || errorCode) {
+          // Redirect to login with error
+          router.replace(`/login?error=${error || 'auth_failed'}&error_code=${errorCode || ''}`);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Check immediately
+    if (checkHashError()) return;
+
+    // If we have an auth code/hash, set a timeout in case it fails silently
+    // But cancel if user becomes authenticated
+    if (hasAuthCode || hasAuthHash) {
+      // If user is already authenticated, no need for timeout
+      if (user) {
+        // Clear URL and proceed
+        if (typeof window !== 'undefined') {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+        return;
+      }
+
+      const timeout = setTimeout(() => {
+        // Check again for errors
+        if (!checkHashError()) {
+          // No error in hash but still stuck - redirect to login
+          router.replace('/login?error=auth_failed&error_code=timeout');
+        }
+      }, 15000); // 15 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [router, hasAuthCode, hasAuthHash, user]);
+
   // Auth & payment flow logic
   useEffect(() => {
+    // Skip if there's auth code/hash - Supabase is processing it
+    if (hasAuthCode || hasAuthHash) return;
+
     // Check for demo mode from URL or sessionStorage
     const urlDemo = searchParams.get('demo') === 'true';
     const storedDemo = typeof window !== 'undefined' && sessionStorage.getItem('demo-mode') === 'true';
+    const hasGivenEmail = typeof window !== 'undefined' && sessionStorage.getItem('demo-email');
 
     if (urlDemo || storedDemo) {
+      // Check if email has been provided for email-gate
+      if (!hasGivenEmail) {
+        // Show email gate first - only set if not already there
+        if (currentView !== 'email-gate') {
+          setCurrentView('email-gate');
+        }
+        return; // Stop here until email is given
+      }
+
+      // Email given - proceed to demo
       // Save to sessionStorage for persistence
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('demo-mode', 'true');
@@ -249,7 +333,7 @@ function LeTrendAppContent() {
       setIsDemoMode(true);
       // Only set to home on initial load (when currentView is null)
       // Don't reset if user is navigating (preview, brief)
-      if (currentView === null) {
+      if (currentView === null || currentView === 'email-gate') {
         setCurrentView('home');
       }
       return;
@@ -267,11 +351,15 @@ function LeTrendAppContent() {
       return;
     }
 
-    if (loading) return;
+    // Wait for both auth loading and Stripe sync to complete
+    if (loading || syncing) return;
 
-    // Check for payment status from URL
+    // Check for payment status from URL (subscription or agreement completed)
     const paymentStatus = searchParams.get('payment');
-    if (paymentStatus === 'success') {
+    const subscriptionStatus = searchParams.get('subscription');
+    const agreementStatus = searchParams.get('agreement');
+
+    if (paymentStatus === 'success' || subscriptionStatus === 'success' || agreementStatus === 'completed') {
       setCurrentView('home');
       return;
     }
@@ -282,13 +370,34 @@ function LeTrendAppContent() {
       return;
     }
 
-    // Logged in - determine view based on payment status
-    const hasPaid = profile?.has_paid;
+    // Check for pending subscription (pre-registered customer) → redirect to agreement
+    // Handles: incomplete, past_due, trialing, pending_payment (active with unpaid invoice), pending_invoice
+    const subStatus = profile?.subscription_status;
+    if (subStatus === 'incomplete' ||
+        subStatus === 'past_due' ||
+        subStatus === 'trialing' ||
+        subStatus === 'pending_payment' ||
+        subStatus === 'pending_invoice') {
+      router.push('/agreement');
+      return;
+    }
 
-    // Set view based on payment status
+    // Logged in - determine view based on payment status and concepts
+    const hasPaid = profile?.has_paid;
+    const hasConcepts = profile?.has_concepts;
+
+    // Set view based on payment and concept status
     if (hasPaid) {
-      if (currentView !== 'home') {
-        setCurrentView('home');
+      if (hasConcepts) {
+        // Has paid AND has concepts → show home
+        if (currentView !== 'home' && currentView !== 'preview' && currentView !== 'brief') {
+          setCurrentView('home');
+        }
+      } else {
+        // Has paid but NO concepts yet → show welcome view
+        if (currentView !== 'welcome') {
+          setCurrentView('welcome');
+        }
       }
     } else {
       // User is logged in but hasn't paid -> show payment view
@@ -296,7 +405,7 @@ function LeTrendAppContent() {
         setCurrentView('payment');
       }
     }
-  }, [user, profile, loading, searchParams, router, isDemoMode, currentView]);
+  }, [user, profile, loading, syncing, searchParams, router, isDemoMode, currentView]);
 
   const handlePayment = () => {
     setCurrentView('home');
@@ -349,8 +458,9 @@ function LeTrendAppContent() {
   // Check if in auth test mode
   const isAuthMode = searchParams.get('auth') === 'true';
 
-  // Show loading screen while auth is being checked
-  if (!isDemoMode && !isAuthMode && loading) {
+  // Show loading screen while auth is being checked or code/hash is being processed
+  const isProcessingAuth = hasAuthCode || hasAuthHash;
+  if (!isDemoMode && !isAuthMode && (loading || isProcessingAuth)) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -361,7 +471,7 @@ function LeTrendAppContent() {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: '32px', marginBottom: '12px' }}>☕</div>
-          <div style={{ color: '#7D6E5D' }}>Laddar...</div>
+          <div style={{ color: '#7D6E5D' }}>{isProcessingAuth ? 'Bekräftar konto...' : 'Laddar...'}</div>
         </div>
       </div>
     );
@@ -404,18 +514,69 @@ function LeTrendAppContent() {
     );
   }
 
+  // Handler for email gate submission
+  const handleEmailGateSubmit = (email: string) => {
+    // Email is already stored in sessionStorage by the component
+    // Now enable demo mode and go to home
+    setIsDemoMode(true);
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('demo-mode', 'true');
+    }
+    setSelectedPlan('growth');
+    setCurrentView('home');
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
       background: '#FAF8F5',
       fontFamily: "'DM Sans', -apple-system, sans-serif"
     }}>
+      {/* Email Gate for Demo */}
+      {currentView === 'email-gate' && (
+        <EmailGate
+          onEmailSubmitted={handleEmailGateSubmit}
+          onLoginClick={() => router.push('/login')}
+        />
+      )}
+
+      {/* Welcome View for new customers without concepts */}
+      {currentView === 'welcome' && (
+        <WelcomeView
+          businessName={profile?.business_name}
+          onViewDemo={() => {
+            setIsDemoMode(true);
+            setSelectedPlan('growth');
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem('demo-mode', 'true');
+            }
+            setCurrentView('home');
+          }}
+          onContact={() => {
+            window.location.href = 'mailto:hej@letrend.se';
+          }}
+        />
+      )}
+
       {currentView === 'payment' && (
         <PaymentView
           selectedPlan={selectedPlan}
           setSelectedPlan={setSelectedPlan}
           onComplete={handlePayment}
           onSkip={handleSkipPayment}
+          onLogout={handleLogout}
+          onGoToDemo={(email) => {
+            // Save email if provided (from Skräddarsytt form)
+            if (email && typeof window !== 'undefined') {
+              sessionStorage.setItem('demo-email', email);
+            }
+            setIsDemoMode(true);
+            setSelectedPlan('growth'); // Set a default plan for demo
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem('demo-mode', 'true');
+            }
+            setCurrentView('home');
+          }}
         />
       )}
 
@@ -1250,14 +1411,52 @@ function PaymentView({
   selectedPlan,
   setSelectedPlan,
   onComplete,
-  onSkip
+  onSkip,
+  onLogout,
+  onGoToDemo
 }: {
   selectedPlan: string;
   setSelectedPlan: (plan: string) => void;
   onComplete: () => void;
   onSkip?: () => void;
+  onLogout?: () => void;
+  onGoToDemo?: (email?: string) => void;
 }) {
   const [step, setStep] = useState<'plan' | 'payment'>('plan');
+  const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '' });
+  const [contactSent, setContactSent] = useState(false);
+  const [sendingContact, setSendingContact] = useState(false);
+  const [emailError, setEmailError] = useState('');
+
+  const isCustom = selectedPlan === 'custom';
+  const hasSelection = selectedPlan && selectedPlan !== '';
+
+  const handleContinue = async () => {
+    if (isCustom) {
+      if (!contactForm.email) {
+        setEmailError('Ange din e-postadress');
+        return;
+      }
+      if (!isValidEmail(contactForm.email)) {
+        setEmailError('Ange en giltig e-postadress');
+        return;
+      }
+      setEmailError('');
+      setSendingContact(true);
+      try {
+        await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...contactForm, type: 'custom_solution' }),
+        }).catch(() => {});
+        setContactSent(true);
+      } finally {
+        setSendingContact(false);
+      }
+    } else {
+      setStep('payment');
+    }
+  };
 
   return (
     <div style={{
@@ -1269,8 +1468,28 @@ function PaymentView({
       <div style={{
         padding: '40px 20px 32px',
         textAlign: 'center',
-        borderBottom: '1px solid rgba(74, 47, 24, 0.06)'
+        borderBottom: '1px solid rgba(74, 47, 24, 0.06)',
+        position: 'relative'
       }}>
+        {/* Se demo button - more useful than logout here */}
+        {onGoToDemo && (
+          <button
+            onClick={onGoToDemo}
+            style={{
+              position: 'absolute',
+              top: '20px',
+              right: '20px',
+              background: 'none',
+              border: 'none',
+              fontSize: '14px',
+              cursor: 'pointer',
+              color: '#6B5B4F',
+            }}
+          >
+            Se demo →
+          </button>
+        )}
+
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <Logo size={72} />
           <div style={{
@@ -1297,125 +1516,312 @@ function PaymentView({
       </div>
 
       {step === 'plan' && (
-        <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 24px' }}>
-          {/* Plans */}
+        <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 24px' }}>
+          {/* Plans - 2x2 grid */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: '20px',
-            marginBottom: '32px'
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '16px',
+            marginBottom: '32px',
+            maxWidth: '600px',
+            margin: '0 auto 32px'
           }}>
-            {PLANS.map(plan => (
-              <div
-                key={plan.id}
-                onClick={() => setSelectedPlan(plan.id)}
-                style={{
-                  padding: '20px',
-                  background: selectedPlan === plan.id ? '#4A2F18' : '#FFFFFF',
-                  borderRadius: '16px',
-                  border: selectedPlan === plan.id
-                    ? '2px solid #4A2F18'
-                    : '1px solid rgba(74, 47, 24, 0.1)',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  transition: 'all 0.15s'
-                }}
-              >
-                {plan.popular && (
+            {PLANS.map(plan => {
+              const isSelected = selectedPlan === plan.id;
+              return (
+                <div
+                  key={plan.id}
+                  onClick={() => setSelectedPlan(plan.id)}
+                  style={{
+                    padding: '20px',
+                    background: isSelected ? '#4A2F18' : '#FFFFFF',
+                    borderRadius: '16px',
+                    border: isSelected
+                      ? '2px solid #4A2F18'
+                      : '1px solid rgba(74, 47, 24, 0.1)',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    transition: 'all 0.15s',
+                    transform: isSelected ? 'scale(1.02)' : 'scale(1)'
+                  }}
+                >
+                  {/* Selection indicator */}
                   <div style={{
                     position: 'absolute',
-                    top: '-10px',
-                    right: '16px',
-                    background: '#8B6914',
-                    color: '#FFF',
-                    padding: '4px 12px',
-                    borderRadius: '10px',
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    textTransform: 'uppercase'
+                    top: '12px',
+                    right: '12px',
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
+                    border: isSelected ? 'none' : '2px solid rgba(74, 47, 24, 0.2)',
+                    background: isSelected ? '#6B4423' : 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#FAF8F5',
+                    fontSize: '12px',
                   }}>
-                    Populärast
+                    {isSelected && '✓'}
                   </div>
-                )}
 
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '12px'
-                }}>
-                  <div>
+                  {plan.popular && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '-10px',
+                      left: '16px',
+                      background: '#8B6914',
+                      color: '#FFF',
+                      padding: '4px 12px',
+                      borderRadius: '10px',
+                      fontSize: '10px',
+                      fontWeight: '600',
+                      textTransform: 'uppercase'
+                    }}>
+                      Populärast
+                    </div>
+                  )}
+
+                  <div style={{ marginBottom: '12px', paddingRight: '30px' }}>
                     <div style={{
                       fontSize: '18px',
                       fontWeight: '600',
-                      color: selectedPlan === plan.id ? '#FAF8F5' : '#1A1612'
+                      color: isSelected ? '#FAF8F5' : '#1A1612'
                     }}>
                       {plan.name}
                     </div>
                     <div style={{
                       fontSize: '13px',
-                      color: selectedPlan === plan.id ? 'rgba(250,248,245,0.7)' : '#9D8E7D'
+                      color: isSelected ? 'rgba(250,248,245,0.7)' : '#9D8E7D'
                     }}>
                       {plan.concepts} koncept per månad
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{
-                      fontSize: '24px',
+
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={{
+                      fontSize: '28px',
                       fontWeight: '700',
-                      color: selectedPlan === plan.id ? '#FAF8F5' : '#1A1612'
+                      color: isSelected ? '#FAF8F5' : '#1A1612'
                     }}>
                       {plan.price} kr
-                    </div>
-                    <div style={{
-                      fontSize: '12px',
-                      color: selectedPlan === plan.id ? 'rgba(250,248,245,0.6)' : '#9D8E7D'
+                    </span>
+                    <span style={{
+                      fontSize: '14px',
+                      color: isSelected ? 'rgba(250,248,245,0.6)' : '#9D8E7D'
                     }}>
                       /{plan.period}
-                    </div>
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {plan.features.map((feature, i) => (
+                      <div key={i} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '13px',
+                        color: isSelected ? 'rgba(250,248,245,0.9)' : '#5D4D3D'
+                      }}>
+                        <span style={{ color: isSelected ? '#D4A574' : '#5A8F5A' }}>✓</span>
+                        {feature}
+                      </div>
+                    ))}
                   </div>
                 </div>
+              );
+            })}
 
+            {/* Custom solution card */}
+            <div
+              onClick={() => setSelectedPlan('custom')}
+              style={{
+                padding: '20px',
+                background: isCustom ? '#4A2F18' : '#FFFFFF',
+                borderRadius: '16px',
+                border: isCustom ? '2px solid #4A2F18' : '1px solid rgba(74, 47, 24, 0.1)',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'all 0.15s',
+                transform: isCustom ? 'scale(1.02)' : 'scale(1)'
+              }}
+            >
+              {/* Selection indicator */}
+              <div style={{
+                position: 'absolute',
+                top: '12px',
+                right: '12px',
+                width: '22px',
+                height: '22px',
+                borderRadius: '50%',
+                border: isCustom ? 'none' : '2px solid rgba(74, 47, 24, 0.2)',
+                background: isCustom ? '#6B4423' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#FAF8F5',
+                fontSize: '12px',
+              }}>
+                {isCustom && '✓'}
+              </div>
+
+              <div style={{ marginBottom: '12px', paddingRight: '30px' }}>
                 <div style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '6px'
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  color: isCustom ? '#FAF8F5' : '#1A1612'
                 }}>
-                  {plan.features.map((feature, i) => (
+                  Skräddarsytt
+                </div>
+                <div style={{
+                  fontSize: '13px',
+                  color: isCustom ? 'rgba(250,248,245,0.7)' : '#9D8E7D'
+                }}>
+                  Anpassat efter era behov
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <span style={{
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  color: isCustom ? '#D4A574' : '#6B4423'
+                }}>
+                  Kontakta oss
+                </span>
+              </div>
+
+              {isCustom && !contactSent ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <input
+                    type="text"
+                    placeholder="Ditt namn"
+                    value={contactForm.name}
+                    onChange={(e) => setContactForm(f => ({ ...f, name: e.target.value }))}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(250,248,245,0.3)',
+                      background: 'rgba(250,248,245,0.1)',
+                      color: '#FAF8F5',
+                      fontSize: '14px',
+                      outline: 'none',
+                    }}
+                  />
+                  <input
+                    type="email"
+                    placeholder="E-post *"
+                    value={contactForm.email}
+                    onChange={(e) => {
+                      setContactForm(f => ({ ...f, email: e.target.value }));
+                      setEmailError('');
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: emailError ? '2px solid #FF6B6B' : '1px solid rgba(250,248,245,0.3)',
+                      background: 'rgba(250,248,245,0.1)',
+                      color: '#FAF8F5',
+                      fontSize: '14px',
+                      outline: 'none',
+                    }}
+                  />
+                  {emailError && (
+                    <p style={{ color: '#FF6B6B', fontSize: '12px', margin: '-4px 0 0 4px' }}>
+                      {emailError}
+                    </p>
+                  )}
+                  <input
+                    type="tel"
+                    placeholder="Telefon"
+                    value={contactForm.phone}
+                    onChange={(e) => setContactForm(f => ({ ...f, phone: e.target.value }))}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(250,248,245,0.3)',
+                      background: 'rgba(250,248,245,0.1)',
+                      color: '#FAF8F5',
+                      fontSize: '14px',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              ) : isCustom && contactSent ? (
+                <div style={{
+                  padding: '16px',
+                  background: 'rgba(250,248,245,0.1)',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: '20px', marginBottom: '6px' }}>✓</div>
+                  <p style={{ color: '#D4A574', fontSize: '13px', margin: 0, marginBottom: '12px' }}>
+                    Tack! Vi hör av oss.
+                  </p>
+                  {onGoToDemo && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Skicka email till onGoToDemo så den sparas centralt
+                        onGoToDemo(contactForm.email);
+                      }}
+                      style={{
+                        padding: '10px 20px',
+                        background: 'rgba(250,248,245,0.15)',
+                        border: '1px solid rgba(250,248,245,0.3)',
+                        borderRadius: '8px',
+                        color: '#FAF8F5',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Se demo →
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {['Anpassat antal koncept', 'Personlig kontakt', 'Flexibel prissättning'].map((feature, i) => (
                     <div key={i} style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
                       fontSize: '13px',
-                      color: selectedPlan === plan.id ? 'rgba(250,248,245,0.9)' : '#5D4D3D'
+                      color: '#5D4D3D'
                     }}>
-                      <span style={{
-                        color: selectedPlan === plan.id ? '#8B6914' : '#5A8F5A'
-                      }}>✓</span>
+                      <span style={{ color: '#5A8F5A' }}>✓</span>
                       {feature}
                     </div>
                   ))}
                 </div>
-              </div>
-            ))}
+              )}
+            </div>
           </div>
 
           <div style={{ maxWidth: '320px', margin: '0 auto' }}>
             <button
-              onClick={() => setStep('payment')}
+              onClick={handleContinue}
+              disabled={!hasSelection || sendingContact || contactSent}
               style={{
                 width: '100%',
                 padding: '18px',
-                background: 'linear-gradient(145deg, #6B4423, #4A2F18)',
-                border: 'none',
+                background: hasSelection && !contactSent
+                  ? 'linear-gradient(145deg, #6B4423, #4A2F18)'
+                  : 'transparent',
+                border: hasSelection ? 'none' : '2px solid rgba(74, 47, 24, 0.2)',
                 borderRadius: '14px',
-                color: '#FAF8F5',
+                color: hasSelection && !contactSent ? '#FAF8F5' : '#9D8E7D',
                 fontSize: '16px',
                 fontWeight: '600',
-                cursor: 'pointer'
+                cursor: !hasSelection || sendingContact || contactSent ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                opacity: sendingContact ? 0.7 : 1,
               }}
             >
-              Fortsätt
+              {sendingContact ? 'Skickar...' : contactSent ? 'Skickat!' : isCustom ? 'Skicka förfrågan' : hasSelection ? 'Fortsätt' : 'Välj ett alternativ'}
             </button>
           </div>
         </div>

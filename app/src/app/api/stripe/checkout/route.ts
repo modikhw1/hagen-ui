@@ -12,6 +12,15 @@ const supabaseAdmin = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if Stripe is configured
+    if (!stripe) {
+      console.error('Stripe not configured - missing STRIPE_SECRET_KEY');
+      return NextResponse.json(
+        { error: 'Betalning ej konfigurerad. Kontakta support.' },
+        { status: 503 }
+      );
+    }
+
     const { userId, userEmail } = await request.json();
 
     if (!userId || !userEmail) {

@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase/client';
 
-type Mode = 'login' | 'register' | 'forgot';
+type Mode = 'login' | 'register' | 'forgot' | 'resend';
 
-export default function LoginPage() {
+function LoginContent() {
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +17,23 @@ export default function LoginPage() {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signIn, signUp } = useAuth();
+
+  // Check for error/success in URL params
+  useEffect(() => {
+    const urlError = searchParams.get('error');
+    const errorCode = searchParams.get('error_code');
+
+    if (urlError === 'auth_failed' || errorCode === 'otp_expired' || errorCode === 'timeout') {
+      if (errorCode === 'timeout') {
+        setError('Bekräftelsen tog för lång tid. Försök skicka en ny länk.');
+      } else {
+        setError('Bekräftelselänken har gått ut. Ange din e-post nedan för att få en ny.');
+      }
+      setMode('resend');
+    }
+  }, [searchParams]);
 
   // Compute password strength inline (no state needed)
   const passwordStrength = mode === 'register' && password
@@ -29,24 +45,50 @@ export default function LoginPage() {
     setError('');
     setSuccess('');
 
-    // Demo mode: demo/demo → skip to demo
+    // Demo mode: demo/demo → skip directly to demo view
     if (email === 'demo' && password === 'demo') {
       router.push('/?demo=true');
       return;
     }
 
+    // Auth test mode: auth1/auth1 → go to auth/payment flow
+    if (email === 'auth1' && password === 'auth1') {
+      router.push('/?auth=true');
+      return;
+    }
+
     setLoading(true);
 
+    // Add timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+      setError('Förfrågan tog för lång tid. Försök igen.');
+    }, 15000);
+
     try {
-      if (mode === 'forgot') {
-        // Password reset
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/app`,
+      if (mode === 'forgot' || mode === 'resend') {
+        // Password reset or resend confirmation
+        const { error } = await supabase.auth.resend({
+          type: 'signup',
+          email,
         });
+        clearTimeout(timeoutId);
         if (error) {
-          setError('Kunde inte skicka återställningslänk');
+          // If resend fails, try resetPassword as fallback for forgot mode
+          if (mode === 'forgot') {
+            const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+              redirectTo: `${window.location.origin}/app`,
+            });
+            if (resetError) {
+              setError('Kunde inte skicka e-post. Kontrollera adressen.');
+            } else {
+              setSuccess('Kolla din e-post för återställningslänk!');
+            }
+          } else {
+            setError('Kunde inte skicka bekräftelse. Kontrollera e-postadressen.');
+          }
         } else {
-          setSuccess('Kolla din e-post för återställningslänk!');
+          setSuccess('✓ Ny bekräftelselänk skickad! Kolla din e-post.');
         }
         setLoading(false);
         return;
@@ -55,12 +97,14 @@ export default function LoginPage() {
       if (mode === 'login') {
         console.log('Attempting login for:', email);
         const { error } = await signIn(email, password);
+        clearTimeout(timeoutId);
         if (error) {
           console.log('Login error:', error);
           if (error.message.includes('Invalid login')) {
             setError('Fel e-post eller lösenord');
           } else if (error.message.includes('Email not confirmed')) {
-            setError('Du behöver bekräfta din e-post först. Kolla din inkorg!');
+            setError('Du behöver bekräfta din e-post först.');
+            setMode('resend');
           } else {
             setError(error.message || 'Inloggningen misslyckades');
           }
@@ -68,7 +112,7 @@ export default function LoginPage() {
           return;
         }
         console.log('Login successful, redirecting...');
-        router.push('/app');
+        router.push('/');
       } else {
         // Register
         if (!businessName.trim()) {
@@ -85,6 +129,7 @@ export default function LoginPage() {
 
         console.log('Attempting signup for:', email, 'business:', businessName);
         const { error, needsConfirmation } = await signUp(email, password, businessName);
+        clearTimeout(timeoutId);
 
         if (error) {
           console.log('Signup error:', error);
@@ -112,7 +157,7 @@ export default function LoginPage() {
 
         // Auto-logged in
         setSuccess('🎉 Välkommen! Omdirigerar...');
-        setTimeout(() => router.push('/app'), 1000);
+        setTimeout(() => router.push('/'), 1000);
       }
     } catch (err) {
       console.error('Auth error:', err);
@@ -167,7 +212,7 @@ export default function LoginPage() {
             color: '#1A1612',
             marginBottom: '8px'
           }}>
-            {mode === 'login' ? 'Välkommen tillbaka' : mode === 'register' ? 'Skapa konto' : 'Återställ lösenord'}
+            {mode === 'login' ? 'Välkommen tillbaka' : mode === 'register' ? 'Skapa konto' : mode === 'resend' ? 'Skicka ny bekräftelse' : 'Återställ lösenord'}
           </h1>
           <p style={{
             fontSize: '15px',
@@ -178,6 +223,8 @@ export default function LoginPage() {
               ? 'Logga in för att se dina koncept'
               : mode === 'register'
               ? 'Kom igång med virala sketchkoncept'
+              : mode === 'resend'
+              ? 'Ange din e-post så skickar vi en ny bekräftelselänk'
               : 'Ange din e-post för att återställa lösenordet'
             }
           </p>
@@ -219,13 +266,33 @@ export default function LoginPage() {
                 marginBottom: '20px',
                 color: '#3D6B4D',
                 fontSize: '14px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '10px',
                 lineHeight: '1.5'
               }}>
-                <span style={{ fontSize: '16px', flexShrink: 0 }}>✓</span>
-                <span>{success}</span>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: success.includes('e-post') ? '16px' : 0 }}>
+                  <span style={{ fontSize: '16px', flexShrink: 0 }}>✓</span>
+                  <span>{success}</span>
+                </div>
+                {/* Show login link after registration success */}
+                {success.includes('e-post') && (
+                  <button
+                    type="button"
+                    onClick={() => { setMode('login'); setSuccess(''); setEmail(''); setPassword(''); }}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: '#FFFFFF',
+                      border: '1px solid rgba(80, 140, 100, 0.3)',
+                      borderRadius: '8px',
+                      color: '#3D6B4D',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      marginTop: '4px',
+                    }}
+                  >
+                    ← Gå till inloggning
+                  </button>
+                )}
               </div>
             )}
 
@@ -290,7 +357,7 @@ export default function LoginPage() {
               />
             </div>
 
-            {mode !== 'forgot' && (
+            {mode !== 'forgot' && mode !== 'resend' && (
               <div style={{ marginBottom: '24px' }}>
                 <label style={{
                   display: 'block',
@@ -380,7 +447,7 @@ export default function LoginPage() {
               )}
               {loading
                 ? (mode === 'login' ? 'Loggar in...' : mode === 'register' ? 'Skapar konto...' : 'Skickar...')
-                : (mode === 'login' ? 'Logga in' : mode === 'register' ? 'Skapa konto' : 'Skicka återställningslänk')
+                : (mode === 'login' ? 'Logga in' : mode === 'register' ? 'Skapa konto' : mode === 'resend' ? 'Skicka ny bekräftelse' : 'Skicka återställningslänk')
               }
             </button>
 
@@ -450,7 +517,7 @@ export default function LoginPage() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => { setMode('login'); setError(''); setSuccess(''); }}
+                  onClick={() => { setMode('login'); setError(''); setSuccess(''); router.replace('/login'); }}
                   style={{
                     background: 'none',
                     border: 'none',
@@ -466,7 +533,63 @@ export default function LoginPage() {
             </div>
           </div>
         </form>
+
+        {/* Demo button - visible always */}
+        <div style={{
+          marginTop: '24px',
+          textAlign: 'center',
+        }}>
+          <p style={{
+            fontSize: '13px',
+            color: '#A89080',
+            marginBottom: '12px'
+          }}>
+            Vill du se hur det fungerar först?
+          </p>
+          <button
+            type="button"
+            onClick={() => router.push('/?demo=true')}
+            style={{
+              padding: '12px 24px',
+              background: 'transparent',
+              border: '2px solid #E8E0D8',
+              borderRadius: '12px',
+              color: '#5D4D3D',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+          >
+            Se demo →
+          </button>
+        </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(180deg, #FAF8F5 0%, #F0EBE4 100%)'
+      }}>
+        <div style={{
+          width: '32px',
+          height: '32px',
+          border: '3px solid #E8E0D8',
+          borderTopColor: '#6B4423',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

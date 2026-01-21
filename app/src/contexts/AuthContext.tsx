@@ -16,6 +16,11 @@ interface Profile {
   social_tiktok: string | null;
   social_instagram: string | null;
   has_paid: boolean;
+  has_concepts: boolean;
+  // Subscription fields for Stripe integration
+  subscription_status: string | null;
+  subscription_id: string | null;
+  stripe_customer_id: string | null;
 }
 
 interface AuthContextType {
@@ -23,6 +28,7 @@ interface AuthContextType {
   profile: Profile | null;
   session: Session | null;
   loading: boolean;
+  syncing: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, businessName: string) => Promise<{ error: Error | null; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
@@ -36,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -57,6 +64,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Sync Stripe customer data to Supabase (for pre-registered customers)
+  const syncStripeCustomer = async (userId: string, email: string) => {
+    try {
+      const res = await fetch('/api/stripe/sync-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, email }),
+      });
+      const data = await res.json();
+      return data.synced;
+    } catch (err) {
+      console.error('Stripe sync error:', err);
+      return false;
+    }
+  };
+
   const refreshProfile = async () => {
     if (user) {
       const profileData = await fetchProfile(user.id);
@@ -71,22 +94,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        const profileData = await fetchProfile(session.user.id);
-        setProfile(profileData);
+        try {
+          // First fetch profile
+          let profileData = await fetchProfile(session.user.id);
+          setProfile(profileData);
+
+          // Always sync from Stripe to get latest subscription status
+          if (profileData && session.user.email) {
+            setSyncing(true);
+            try {
+              const synced = await syncStripeCustomer(session.user.id, session.user.email);
+              if (synced) {
+                // Re-fetch profile after sync
+                profileData = await fetchProfile(session.user.id);
+                setProfile(profileData);
+              }
+            } catch (syncErr) {
+              console.error('Stripe sync failed:', syncErr);
+            } finally {
+              setSyncing(false);
+            }
+          }
+        } catch (err) {
+          console.error('Profile fetch failed:', err);
+        }
       }
 
+      setLoading(false);
+    }).catch(err => {
+      console.error('getSession failed:', err);
       setLoading(false);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state change:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          const profileData = await fetchProfile(session.user.id);
-          setProfile(profileData);
+          try {
+            // First fetch profile
+            let profileData = await fetchProfile(session.user.id);
+            setProfile(profileData);
+
+            // On sign in, always sync Stripe data to get latest subscription status
+            if (event === 'SIGNED_IN' && profileData && session.user.email) {
+              setSyncing(true);
+              try {
+                const synced = await syncStripeCustomer(session.user.id, session.user.email);
+                if (synced) {
+                  // Re-fetch profile after sync
+                  profileData = await fetchProfile(session.user.id);
+                  setProfile(profileData);
+                }
+              } catch (syncErr) {
+                console.error('Stripe sync failed:', syncErr);
+              } finally {
+                setSyncing(false);
+              }
+            }
+          } catch (err) {
+            console.error('Profile fetch in auth change failed:', err);
+          }
         } else {
           setProfile(null);
         }
@@ -156,6 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         session,
         loading,
+        syncing,
         signIn,
         signUp,
         signOut,
