@@ -79,7 +79,12 @@
       "mcp__supabase__list_migrations",
       "mcp__supabase__get_project",
       "mcp__supabase__search_docs",
-      "mcp__supabase__get_logs"
+      "mcp__supabase__get_logs",
+      "mcp__supabase__list_edge_functions",
+      "mcp__supabase__deploy_edge_function",
+      "WebFetch(domain:fllzlpecwwabwgfbnxfu.supabase.co)",
+      "mcp__supabase__get_edge_function",
+      "Bash(python3:*)"
     ]
   },
   "outputStyle": "Casual"
