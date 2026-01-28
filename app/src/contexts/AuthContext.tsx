@@ -171,13 +171,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
         return { error };
+      }
+
+      // Set user and session immediately to avoid race condition
+      if (data.session && data.user) {
+        setSession(data.session);
+        setUser(data.user);
+        // Fetch profile right away
+        const profileData = await fetchProfile(data.user.id);
+        setProfile(profileData);
       }
 
       return { error: null };

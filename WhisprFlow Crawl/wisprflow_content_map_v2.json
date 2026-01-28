@@ -1,0 +1,1042 @@
+{
+  "metadata": {
+    "source": "wisprflow.ai",
+    "scraped_date": "2026-01-22",
+    "company": "Wispr",
+    "product": "Flow",
+    "funding": "$81M raised",
+    "category": "AI Voice-to-Text / Dictation",
+    "platforms": ["Mac", "Windows", "iPhone"],
+    "tech_stack": "Webflow",
+    "total_urls_discovered": 195
+  },
+
+  "sitemap": {
+    "core_pages": [
+      "/", "/features", "/pricing", "/about", "/privacy", "/business"
+    ],
+    "segment_pages": [
+      "/developers", "/students", "/content-creators", "/lawyers",
+      "/sales", "/accessibility", "/leaders", "/customer-support"
+    ],
+    "case_studies": [
+      "/case-study/reid-hoffman",
+      "/case-study/gaurav-vohra",
+      "/case-study/writing-a-book-with-flow",
+      "/case-study/clay",
+      "/case-study/tijs-nieuwboer",
+      "/case-study/anthony-troli"
+    ],
+    "resources": [
+      "/blog", "/careers", "/support", "/demo", "/workflows", "/use-cases"
+    ]
+  },
+
+  "brand_voice": {
+    "tone": "Confident, friendly, empowering",
+    "style": "Short punchy headlines, conversational body copy",
+    "recurring_phrases": [
+      "4x faster than typing",
+      "Effortless voice dictation",
+      "Start flowing",
+      "Download for free",
+      "Speak naturally",
+      "Flow works wherever you work"
+    ],
+    "voice_characteristics": {
+      "sentence_length": "Short to medium",
+      "active_vs_passive": "Predominantly active voice",
+      "technical_level": "Accessible, avoids jargon except for segment pages",
+      "emotional_appeal": "Liberation, empowerment, relief"
+    }
+  },
+
+  "sections": [
+    {
+      "id": "hero_main",
+      "page": "/",
+      "section_type": "hero",
+      "headline": "Don't type, just speak",
+      "subheadline": "The voice-to-text AI that turns speech into clear, polished writing in every app.",
+      "cta_primary": "Download for free",
+      "cta_secondary": "Try Flow (demo)",
+      "intent": {
+        "primary": "value_proposition",
+        "secondary": "instant_gratification",
+        "emotion": "liberation",
+        "persuasion_type": "transformation_promise"
+      },
+      "design_pattern": {
+        "type": "hero_with_demo",
+        "elements": ["headline", "subheadline", "cta_buttons", "platform_badges", "interactive_demo"],
+        "visual_treatment": "dark_gradient_bg",
+        "animation": {
+          "type": "typing_comparison",
+          "description": "Side-by-side animated demo showing text appearing slowly via keyboard vs instantly via voice. Keyboard animation shows character-by-character typing with realistic delays. Voice side shows text flowing in sentence chunks with smooth fade-in.",
+          "trigger": "on_viewport_enter",
+          "duration": "continuous_loop"
+        }
+      },
+      "reusability": {
+        "text_swappable": true,
+        "intent_preserved_if": "maintains transformation/before-after framing",
+        "design_dependent": true
+      }
+    },
+
+    {
+      "id": "speed_comparison",
+      "page": "/",
+      "section_type": "proof_point",
+      "headline": "4x faster than typing",
+      "body": "After 150 years of using the same keyboard, voice that actually works is finally here. When you create, code, and respond faster, you free up time for more. Speak naturally at the speed you think and let Flow handle the rest.",
+      "data_point": {
+        "keyboard_wpm": 45,
+        "flow_wpm": 220,
+        "improvement_factor": "4x"
+      },
+      "intent": {
+        "primary": "quantified_benefit",
+        "secondary": "historical_context",
+        "emotion": "empowerment",
+        "persuasion_type": "data_driven_proof"
+      },
+      "design_pattern": {
+        "type": "side_by_side_comparison",
+        "elements": ["animated_typing_demo", "wpm_counters", "progress_bars"],
+        "visual_treatment": "before_after_split",
+        "animation": {
+          "type": "wpm_counter_race",
+          "description": "Two parallel progress bars with real-time WPM counters. Left side (keyboard) fills slowly at 45 WPM pace. Right side (Flow) fills rapidly at 220 WPM. Numbers increment dynamically. Bars use contrasting colors to emphasize speed difference.",
+          "trigger": "on_viewport_enter",
+          "duration": "5-8 seconds"
+        }
+      },
+      "reusability": {
+        "text_swappable": true,
+        "intent_preserved_if": "shows measurable improvement with numbers",
+        "design_dependent": true
+      }
+    },
+
+    {
+      "id": "social_proof_logos",
+      "page": "/",
+      "section_type": "trust_bar",
+      "headline": "Used by professionals everywhere to speed up their thoughts",
+      "logos": [
+        "Lovable", "Menlo", "Clay", "Mercury", "Groupon", "Vercel",
+        "OpenAI", "Replit", "Nuuly", "Warp", "Rivian", "Substack",
+        "Amazon", "Perplexity", "Strava", "Nvidia"
+      ],
+      "intent": {
+        "primary": "credibility",
+        "secondary": "aspiration",
+        "emotion": "trust",
+        "persuasion_type": "social_proof"
+      },
+      "design_pattern": {
+        "type": "scrolling_logo_marquee",
+        "elements": ["grayscale_logos", "infinite_scroll", "subtle_animation"],
+        "visual_treatment": "monochrome_on_dark",
+        "animation": {
+          "type": "infinite_horizontal_scroll",
+          "description": "Continuous horizontal scroll of company logos in grayscale. Seamless loop with no visible break. Logos maintain consistent height and spacing. Slow, steady pace creates sense of established credibility without distraction.",
+          "trigger": "always_active",
+          "duration": "infinite",
+          "speed": "slow_steady"
+        }
+      },
+      "reusability": {
+        "text_swappable": false,
+        "intent_preserved_if": "shows recognizable brands in target market",
+        "design_dependent": false
+      }
+    },
+
+    {
+      "id": "app_compatibility",
+      "page": "/",
+      "section_type": "feature_showcase",
+      "headline": "Write faster in all your apps, on any device",
+      "subheadline": "Seamless speech-to-text in every application on your iPhone or computer.",
+      "apps_shown": [
+        "X/Twitter", "WhatsApp", "Todolist", "VSCode", "Things", "Telegram",
+        "Superhuman", "Teams", "Slack", "Signal", "Replit", "Raycast",
+        "Obsidian", "Outlook", "Messenger", "Notion", "Perplexity", "Linear",
+        "Mail", "Instagram", "Figma", "Gmail", "iMessage", "GitHub",
+        "Google Docs", "Cursor", "Zoom", "Claude", "Arc", "Apple Notes", "ChatGPT"
+      ],
+      "intent": {
+        "primary": "universal_compatibility",
+        "secondary": "workflow_integration",
+        "emotion": "relief",
+        "persuasion_type": "objection_handling"
+      },
+      "design_pattern": {
+        "type": "icon_grid_animated",
+        "elements": ["app_icons", "floating_animation", "3d_depth"],
+        "visual_treatment": "glass_morphism",
+        "animation": {
+          "type": "floating_icon_grid",
+          "description": "App icons arranged in a 3D floating grid with subtle parallax effect. Icons gently bob up and down at different rates, creating organic 'breathing' motion. Glass-morphism effect with subtle blur and transparency. Hover states cause individual icons to slightly elevate and glow.",
+          "trigger": "always_active",
+          "duration": "infinite",
+          "interaction": "hover_elevate"
+        }
+      },
+      "reusability": {
+        "text_swappable": true,
+        "intent_preserved_if": "demonstrates broad integration/compatibility",
+        "design_dependent": true
+      }
+    },
+
+    {
+      "id": "segment_tabs",
+      "page": "/",
+      "section_type": "audience_segmentation",
+      "headline": "Flow is made for you",
+      "segments": [
+        {
+          "id": "teams",
+          "label": "Teams",
+          "url": "/business",
+          "hook": "Fewer meetings, faster alignment, and a voice for everyone when it matters most.",
+          "features": ["centralized admin controls", "special pricing"]
+        },
+        {
+          "id": "students",
+          "label": "Students",
+          "url": "/students",
+          "hook": "Blank pages and looming deadlines? Flow's got you. Capture class notes, draft cover letters, and break through writer's block with minimal effort."
+        },
+        {
+          "id": "developers",
+          "label": "Developers",
+          "url": "/developers",
+          "hook": "Dictate in natural language and let Flow translate—perfect for Cursor, VS Code, or wherever you build."
+        },
+        {
+          "id": "creators",
+          "label": "Creators",
+          "url": "/content-creators",
+          "hook": "Ideas hit fast, but execution is slow. Breeze through unread DMs, comment replies, and draft content with your voice."
+        },
+        {
+          "id": "sales",
+          "label": "Sales",
+          "url": "/sales",
+          "hook": "Slow follow ups mean lost deals. With Flow, you can follow up instantly after meetings, personalize outreach, and punch up your pitch."
+        },
+        {
+          "id": "customer_support",
+          "label": "Customer Support",
+          "url": "/customer-support",
+          "hook": "Speak naturally to resolve tickets faster. Skip the script. Flow helps reps speak naturally while still sending perfect replies."
+        },
+        {
+          "id": "lawyers",
+          "label": "Lawyers",
+          "url": "/lawyers",
+          "hook": "Legal precision demands perfect transcription. Flow delivers smart dictation for contracts, case notes, and client records.",
+          "compliance": ["HIPAA-ready", "SOC 2 Type II (Enterprise)"]
+        },
+        {
+          "id": "leaders",
+          "label": "Leaders",
+          "url": "/leaders",
+          "hook": "Who doesn't want faster teams and happier people? Flow delivers instant productivity your team will actually use."
+        },
+        {
+          "id": "accessibility",
+          "label": "Accessibility",
+          "url": "/accessibility",
+          "hook": "Your voice deserves a shortcut. Flow supports anyone who feels slowed down by a keyboard."
+        }
+      ],
+      "intent": {
+        "primary": "personalization",
+        "secondary": "relevance",
+        "emotion": "recognition",
+        "persuasion_type": "segmented_value_props"
+      },
+      "design_pattern": {
+        "type": "tabbed_content_cards",
+        "elements": ["tab_navigation", "image_preview", "segment_description", "dual_cta"],
+        "visual_treatment": "card_with_illustration",
+        "animation": {
+          "type": "tab_content_transition",
+          "description": "Horizontal tab bar with pill-shaped active indicator that slides between tabs. Content below crossfades on tab change. Image preview slides in from right. Text content fades up with slight delay. Smooth easing on all transitions.",
+          "trigger": "on_tab_click",
+          "duration": "300-400ms",
+          "easing": "ease-out"
+        }
+      },
+      "reusability": {
+        "text_swappable": true,
+        "intent_preserved_if": "addresses specific audience pain points",
+        "design_dependent": true
+      }
+    },
+
+    {
+      "id": "ai_auto_edits",
+      "page": "/",
+      "section_type": "feature_deep_dive",
+      "headline": "AI Auto Edits",
+      "body": "Speak naturally and Flow transcribes and edits your voice, instantly. Rambled thoughts become clear, perfectly formatted text, without the filler words or typos.",
+      "features": [
+        {
+          "name": "Personal dictionary",
+          "description": "Flow automatically learns your unique words and adds them to your personal dictionary.",
+          "examples": ["Robyn", "Viktor", "SaaS", "Caltrain", "Mackey", "Nguyen", "Leong"]
+        },
+        {
+          "name": "Snippet library",
+          "description": "Create voice shortcuts for the things your team says over and over. From scheduling links to FAQs, just speak a cue and get the full formatted text.",
+          "examples": ["Calendar", "Hours", "Support intro", "FAQ", "Careers link", "Elevator pitch", "Address"]
+        },
+        {
+          "name": "Different tones for each app",
+          "description": "Flow automatically adjusts tone based on the app you're using. Sound like you—not a robot."
+        },
+        {
+          "name": "100+ languages",
+          "description": "Flow automatically detects and transcribes in your language, letting you move between them—just like you do."
+        }
+      ],
+      "intent": {
+        "primary": "feature_education",
+        "secondary": "differentiation",
+        "emotion": "delight",
+        "persuasion_type": "capability_showcase"
+      },
+      "design_pattern": {
+        "type": "feature_grid_with_demos",
+        "elements": ["feature_cards", "interactive_demos", "example_data"],
+        "visual_treatment": "dark_cards_on_gradient",
+        "animation": {
+          "type": "staggered_card_reveal",
+          "description": "Feature cards reveal with staggered fade-up animation as they enter viewport. Each card has subtle hover state with elevation change. Interactive demo areas show live typing/correction examples. Dictionary words appear one by one like being typed.",
+          "trigger": "on_viewport_enter",
+          "duration": "staggered_100ms_delay"
+        }
+      },
+      "reusability": {
+        "text_swappable": true,
+        "intent_preserved_if": "shows intelligent automation/personalization",
+        "design_dependent": true
+      }
+    },
+
+    {
+      "id": "testimonials",
+      "page": "/",
+      "section_type": "social_proof_quotes",
+      "headline": "Love letters to Flow",
+      "testimonials": [
+        {
+          "quote": "This is the best AI product I've used since ChatGPT.",
+          "author": "Rahul Vohra",
+          "title": "CEO, Superhuman",
+          "intent_category": "authority_endorsement"
+        },
+        {
+          "quote": "I have Parkinson's, and this app has just made my life so much easier using my Mac. I can't even explain the change that it has provided for me.",
+          "author": "Rich Pankey",
+          "title": "Indirect Sourcing Manager",
+          "intent_category": "accessibility_impact"
+        },
+        {
+          "quote": "I was able to dictate ~70% of our Q2 board doc with Wispr, it was a massive time saver!",
+          "author": "Jeff Seibert",
+          "title": "CEO, Digits AI",
+          "intent_category": "productivity_proof"
+        },
+        {
+          "quote": "You're making texting actually delightful right now! Can see it becoming a can't live without product fast.",
+          "author": "Tara Tan",
+          "title": "Founding Partner at Strange Ventures",
+          "intent_category": "product_stickiness"
+        },
+        {
+          "quote": "I'm afraid I'm getting addicted to this great platform. It allows me to get into a flow state and not have autocorrect or voice dictation stop and interrupt me while I'm attempting to articulate my ideas.",
+          "author": "Greg Dickson",
+          "title": "Bestselling Author and Business Coach",
+          "intent_category": "workflow_transformation"
+        }
+      ],
+      "intent": {
+        "primary": "social_proof",
+        "secondary": "emotional_resonance",
+        "emotion": "trust_and_aspiration",
+        "persuasion_type": "peer_validation"
+      },
+      "design_pattern": {
+        "type": "testimonial_carousel",
+        "elements": ["quote_cards", "author_photos", "titles", "navigation_dots"],
+        "visual_treatment": "cards_on_dark",
+        "animation": {
+          "type": "carousel_slide",
+          "description": "Horizontal carousel with 3-5 visible cards. Auto-advances every 5 seconds. Manual navigation via dots or swipe. Cards slide with smooth easing. Active card slightly elevated. Quote text uses typewriter effect on first appearance.",
+          "trigger": "auto_and_manual",
+          "duration": "500ms_transition",
+          "auto_advance": "5000ms"
+        }
+      },
+      "reusability": {
+        "text_swappable": true,
+        "intent_preserved_if": "real users with specific outcomes",
+        "design_dependent": false
+      }
+    },
+
+    {
+      "id": "cta_final",
+      "page": "/",
+      "section_type": "closing_cta",
+      "headline": "Start flowing",
+      "subheadline": "Effortless voice dictation in every application: 4x faster than typing, AI commands and auto-edits.",
+      "cta_primary": "Try Flow",
+      "cta_secondary": "Download for free",
+      "availability": "Available on Mac, Windows and iPhone",
+      "intent": {
+        "primary": "conversion",
+        "secondary": "urgency",
+        "emotion": "excitement",
+        "persuasion_type": "final_push"
+      },
+      "design_pattern": {
+        "type": "hero_cta_block",
+        "elements": ["headline", "value_recap", "dual_cta", "platform_note"],
+        "visual_treatment": "gradient_with_image",
+        "animation": {
+          "type": "subtle_gradient_shift",
+          "description": "Background gradient slowly shifts hue over time, creating subtle living feel. CTA buttons have hover pulse effect. Platform icons fade in sequentially.",
+          "trigger": "always_active",
+          "duration": "slow_continuous"
+        }
+      },
+      "reusability": {
+        "text_swappable": true,
+        "intent_preserved_if": "summarizes value + clear action",
+        "design_dependent": false
+      }
+    }
+  ],
+
+  "page_specific": {
+    "features": {
+      "headline": "Do more with your voice",
+      "subheadline": "Voice-to-text that turns your thoughts into clear, polished text in any app or website.",
+      "design_pattern": {
+        "type": "tabbed_feature_showcase",
+        "animation": {
+          "type": "tab_content_morph",
+          "description": "Large tabbed interface with smooth content transitions. Each tab has dedicated video/demo area. Content sections fade and slide on tab change. Feature lists animate in with stagger effect."
+        }
+      },
+      "tabs": [
+        {
+          "name": "Speak",
+          "headline": "Speak naturally. Flow writes it perfectly.",
+          "body": "Flow works wherever you work. Any app, device, or language.",
+          "features": [
+            {"name": "Speak into any app", "description": "Flow works everywhere: Notion, Gmail, Google Docs, WhatsApp, Cursor, anything with a text field."},
+            {"name": "Spells names right", "description": "Flow uses surrounding context to spell uncommon names right."},
+            {"name": "100+ languages", "description": "Flow works in 100+ languages."},
+            {"name": "Whisper", "description": "Flow even works when you're whispering."}
+          ]
+        },
+        {
+          "name": "Refine",
+          "headline": "Flow edits while you speak.",
+          "body": "Flow goes beyond basic dictation: cleaning up filler words, formatting lists, catching punctuation, and understanding corrections in real time.",
+          "features": [
+            {"name": "Backtrack", "description": "Flow understands when you change your mind. Say 'Let's meet at 2… actually 3,' and Flow writes the corrected version instantly."},
+            {"name": "Remove fillers", "description": "Flow automatically removes 'um,' 'uh,' and other pauses."},
+            {"name": "Numbered lists", "description": "Just speak the numbers and Flow turns it into a formatted list."},
+            {"name": "Auto punctuation", "description": "Flow detects punctuation naturally from your pauses and tone."}
+          ]
+        },
+        {
+          "name": "Personalize",
+          "headline": "Flow adapts to you.",
+          "body": "Flow learns your words, phrases, and tone, and keeps them consistent across every app and device.",
+          "features": [
+            {"name": "Dictionary", "description": "Personal word library that learns your vocabulary"},
+            {"name": "Snippets", "description": "Voice shortcuts for frequently used text blocks"},
+            {"name": "Styles", "description": "App-specific tone adjustments"}
+          ]
+        },
+        {
+          "name": "Collaborate",
+          "headline": "Work better together with shared voice tools.",
+          "body": "Flow helps teams move faster with shared context, consistent language, and tools that keep everyone aligned.",
+          "features": [
+            {"name": "Shared dictionary", "description": "Team-wide vocabulary consistency"},
+            {"name": "Shared snippets", "description": "Common responses and templates for the whole team"},
+            {"name": "Usage dashboards", "description": "Track team adoption and productivity gains"}
+          ]
+        },
+        {
+          "name": "Build",
+          "headline": "Built for developers, not just dictation.",
+          "body": "Flow understands syntax, file names, and code formatting so your voice fits seamlessly into your workflow.",
+          "features": [
+            {"name": "File tagging", "description": "Reference files by name for context-aware dictation"},
+            {"name": "Syntax awareness", "description": "Proper formatting for code, variables, functions"},
+            {"name": "Dev jargon", "description": "Understands technical terminology out of the box"}
+          ]
+        }
+      ]
+    },
+
+    "pricing": {
+      "headline": "Start Flowing today",
+      "subheadline": "Download the app to get started with 14 days of Flow Pro for free. No credit card required.",
+      "design_pattern": {
+        "type": "pricing_comparison_table",
+        "animation": {
+          "type": "plan_card_hover",
+          "description": "Three plan cards with consistent layout. Popular plan (Pro) visually emphasized. Cards elevate on hover with shadow increase. Feature checkmarks animate in on scroll. Toggle for annual/monthly pricing with price counter animation."
+        }
+      },
+      "plans": [
+        {
+          "name": "Flow Basic",
+          "price": "Free",
+          "price_subtext": null,
+          "target": "For individuals",
+          "highlighted": false,
+          "features": [
+            "2,000 words per week on Mac or Windows",
+            "1,000 words per week on Flow for iPhone",
+            "Custom dictionary and snippets",
+            "Support for 100+ languages",
+            "Privacy mode (Zero Data Retention)",
+            "HIPAA-ready"
+          ],
+          "cta": "Download for free"
+        },
+        {
+          "name": "Flow Pro",
+          "price": "$12/user/mo",
+          "price_subtext": "billed annually ($15/mo if monthly)",
+          "target": "For individuals and teams",
+          "highlighted": true,
+          "features": [
+            "Unlimited words per week on Mac, Windows, and iPhone",
+            "Prioritized support and feature requests",
+            "Command mode for editing",
+            "Early access to new features",
+            "Team collaboration features"
+          ],
+          "cta": "Start free trial"
+        },
+        {
+          "name": "Flow Enterprise",
+          "price": "Contact us",
+          "price_subtext": null,
+          "target": "For teams who need advanced security & support",
+          "highlighted": false,
+          "features": [
+            "Dedicated support",
+            "SOC 2 Type II and ISO 27001 compliance",
+            "Enforced HIPAA compliance",
+            "Enforced Privacy Mode (Zero Data Retention)",
+            "SSO / SAML",
+            "Advanced usage dashboards",
+            "Bulk pricing discounts"
+          ],
+          "cta": "Talk to sales"
+        }
+      ],
+      "special_offers": {
+        "students": {
+          "headline": "Students get 3 months free + 50% off",
+          "price": "$6/month",
+          "verification": "Student email required"
+        }
+      },
+      "calculator": {
+        "headline": "Calculate your savings",
+        "description": "See how much time and money Flow could save you",
+        "inputs": ["typing_hours_per_day", "hourly_rate"],
+        "example_output": {
+          "typing_hours": 2,
+          "hourly_rate": 50,
+          "monthly_savings": "$1,302/mo",
+          "yearly_savings": "$15,624/yr"
+        }
+      },
+      "faq": [
+        {"q": "Is there a free trial?", "a": "Yes, 14 days of Flow Pro free, no credit card required."},
+        {"q": "Can I cancel anytime?", "a": "Yes, cancel your subscription anytime."},
+        {"q": "What payment methods?", "a": "Credit card and PayPal supported."},
+        {"q": "Is there a refund policy?", "a": "30-day money-back guarantee."}
+      ]
+    },
+
+    "about": {
+      "tagline": "The Voice Interface Company.",
+      "mission": "We are a team of designers, AI researchers, and engineers who step away from the status quo to rethink the fundamental layer of computing — how humans interact with technology.",
+      "vision": "Our mission is to make interacting with your devices as effortless as talking to a close friend.",
+      "design_pattern": {
+        "type": "story_narrative_layout",
+        "animation": {
+          "type": "scroll_triggered_reveals",
+          "description": "Long-form narrative page with sections revealing on scroll. Team photos fade in with parallax effect. Investor logos appear in grid formation. News articles cards slide up from bottom."
+        }
+      },
+      "values": [
+        "We care about building intelligence that mimics humans.",
+        "We care about designing with incredible attention to detail.",
+        "We care about building magic.",
+        "We care about building experiences that feel intuitive.",
+        "We care about building software that seamlessly fits into your life."
+      ],
+      "investors": {
+        "headline": "Backed by the best",
+        "total_raised": "$81M",
+        "firms": [
+          {"name": "Menlo Ventures", "logo": true},
+          {"name": "8VC", "logo": true},
+          {"name": "NEA", "logo": true},
+          {"name": "MVP Ventures", "logo": true},
+          {"name": "Neo", "logo": true},
+          {"name": "Aix", "logo": true}
+        ],
+        "angels": [
+          {"name": "Arash Ferdowsi", "title": "CTO, Dropbox"},
+          {"name": "Dave Gilboa", "title": "CEO, Warby Parker"},
+          {"name": "Kevin Weil", "title": "CPO, OpenAI"},
+          {"name": "Will Ahmed", "title": "CEO, Whoop"},
+          {"name": "Rahul Vohra", "title": "CEO, Superhuman"},
+          {"name": "Fred Ehrsam", "title": "Founder, Coinbase"}
+        ]
+      },
+      "press": [
+        {"outlet": "TechCrunch", "headline": "Wispr Flow raises $31M..."},
+        {"outlet": "The Verge", "headline": "AI voice dictation startup..."},
+        {"outlet": "Forbes", "headline": "Wispr is changing how we write..."}
+      ]
+    },
+
+    "privacy": {
+      "headline": "Privacy first. Security always.",
+      "subheadline": "We've built Flow with privacy and control front and center, whether you're an individual or a business.",
+      "design_pattern": {
+        "type": "trust_focused_layout",
+        "animation": {
+          "type": "certification_badge_reveal",
+          "description": "Certification badges animate in with slight bounce. Security features listed with checkmark animations. FAQ accordion with smooth expand/collapse."
+        }
+      },
+      "certifications": [
+        {
+          "name": "SOC 2 Type II",
+          "description": "Annual security audits and controls verification",
+          "availability": "All plans"
+        },
+        {
+          "name": "HIPAA",
+          "description": "Healthcare data protection compliant",
+          "availability": "All plans (enforced on Enterprise)"
+        },
+        {
+          "name": "ISO 27001",
+          "description": "International security standard",
+          "availability": "Enterprise"
+        }
+      ],
+      "key_features": [
+        {
+          "name": "Privacy Mode",
+          "description": "Zero data retention. When it's on, your dictation data isn't stored or used for model training.",
+          "toggle": true
+        },
+        {
+          "name": "End-to-end Encryption",
+          "description": "Your data is encrypted in transit and at rest."
+        },
+        {
+          "name": "SSO/SAML",
+          "description": "Enterprise plans include SSO/SAML integration."
+        },
+        {
+          "name": "BAA Available",
+          "description": "Business Associate Agreement available for HIPAA compliance."
+        }
+      ],
+      "faq": [
+        {"q": "Is my voice data stored?", "a": "With Privacy Mode on, no voice data is stored or used for training."},
+        {"q": "Can my employer see what I dictate?", "a": "No, admins can see usage metrics but not content."},
+        {"q": "Is Flow HIPAA compliant?", "a": "Yes, all plans are HIPAA-ready with BAA available."}
+      ]
+    },
+
+    "business": {
+      "headline": "Flow for Teams",
+      "subheadline": "Fewer meetings, faster alignment, and a voice for everyone when it matters most.",
+      "design_pattern": {
+        "type": "b2b_feature_showcase",
+        "animation": {
+          "type": "dashboard_preview_demo",
+          "description": "Animated dashboard mockups showing usage metrics. Team collaboration features with avatar animations. Case study cards with logo and quote slide in."
+        }
+      },
+      "key_features": [
+        {
+          "name": "Shared Dictionary",
+          "description": "Keep company terminology consistent across the team"
+        },
+        {
+          "name": "Shared Snippets",
+          "description": "Common responses, templates, and boilerplate for everyone"
+        },
+        {
+          "name": "Usage Dashboards",
+          "description": "Track adoption, productivity gains, and ROI"
+        },
+        {
+          "name": "Centralized Admin",
+          "description": "Manage team settings, enforce policies"
+        }
+      ],
+      "case_study": {
+        "company": "Clay",
+        "logo": true,
+        "headline": "Clay reaches prospects 20% faster with Flow",
+        "quote": "Flow has transformed how our team communicates...",
+        "metrics": {
+          "speed_improvement": "20%",
+          "metric_type": "faster GTM"
+        }
+      },
+      "pricing_cta": "See team pricing"
+    },
+
+    "developers": {
+      "headline": "Dictation built for developers",
+      "subheadline": "Speak code, not commands. Flow understands syntax, file names, and dev jargon.",
+      "design_pattern": {
+        "type": "developer_focused_dark",
+        "animation": {
+          "type": "code_typing_demo",
+          "description": "Live code editor mockup with syntax highlighting. Dictated text appears as code with proper formatting. Terminal-style animations for command examples."
+        }
+      },
+      "key_features": [
+        {
+          "name": "Vibe Coding",
+          "description": "Describe what you want in natural language, Flow outputs proper syntax"
+        },
+        {
+          "name": "File Tagging",
+          "description": "Reference files by name ('in the utils file...') for context"
+        },
+        {
+          "name": "Syntax Awareness",
+          "description": "Proper casing, brackets, and formatting for code"
+        },
+        {
+          "name": "Dev Jargon",
+          "description": "Understands API, REST, GraphQL, npm, etc. out of the box"
+        }
+      ],
+      "integrations": ["Cursor", "VS Code", "Replit", "GitHub", "Terminal"],
+      "testimonial": {
+        "source": "Tech With Tim",
+        "type": "video",
+        "quote": "Flow is a game changer for coding..."
+      }
+    },
+
+    "students": {
+      "headline": "For late nights and big ideas",
+      "subheadline": "Blank pages and looming deadlines? Flow's got you.",
+      "design_pattern": {
+        "type": "youthful_energetic",
+        "animation": {
+          "type": "student_scenario_carousel",
+          "description": "Rotating scenarios (essay writing, class notes, cover letters) with relevant UI mockups. Discount callout pulses subtly to draw attention."
+        }
+      },
+      "use_cases": [
+        "Class notes and lecture capture",
+        "Essay and paper writing",
+        "Cover letters and applications",
+        "Breaking through writer's block"
+      ],
+      "pricing": {
+        "headline": "Students get 3 months free + 50% off Pro",
+        "price": "$6/month after trial",
+        "verification": "Verify with student email (.edu)"
+      },
+      "ambassador_program": {
+        "headline": "Become a Flow Ambassador",
+        "benefits": ["Free Pro subscription", "Exclusive swag", "Community access"]
+      },
+      "testimonials": [
+        {
+          "quote": "Flow helped me write my thesis 3x faster",
+          "author": "Sarah K.",
+          "school": "Stanford University"
+        }
+      ]
+    },
+
+    "sales": {
+      "headline": "Close deals faster with your voice",
+      "subheadline": "Slow follow ups mean lost deals. With Flow, you can follow up instantly after meetings.",
+      "design_pattern": {
+        "type": "sales_roi_focused",
+        "animation": {
+          "type": "crm_integration_demo",
+          "description": "CRM interface mockup with dictated notes appearing. Follow-up email being composed via voice. Metrics dashboard showing time saved."
+        }
+      },
+      "key_features": [
+        {
+          "name": "Instant Follow-ups",
+          "description": "Dictate meeting notes and follow-up emails immediately after calls"
+        },
+        {
+          "name": "CRM Integration",
+          "description": "Works with Salesforce, HubSpot, and any CRM with a text field"
+        },
+        {
+          "name": "Sales Snippets",
+          "description": "Voice shortcuts for pricing, availability, and common objection responses"
+        },
+        {
+          "name": "Personalized Outreach",
+          "description": "Quickly customize templates with voice"
+        }
+      ],
+      "social_proof": {
+        "quote": "Flow is a game changer for sales teams",
+        "author": "Mark Cuban",
+        "context": "Investor"
+      }
+    },
+
+    "accessibility": {
+      "headline": "Keyboards don't work for everyone",
+      "subheadline": "Your voice deserves a shortcut. Flow supports anyone who feels slowed down by a keyboard.",
+      "design_pattern": {
+        "type": "empathetic_storytelling",
+        "animation": {
+          "type": "testimonial_video_focus",
+          "description": "Video testimonials from users with various conditions. Subtle, respectful animations. Accessibility-first design with high contrast and clear typography."
+        }
+      },
+      "conditions_addressed": [
+        "Parkinson's disease",
+        "Arthritis and joint pain",
+        "Carpal tunnel syndrome",
+        "Dyslexia",
+        "RSI (Repetitive Strain Injury)",
+        "Limited mobility"
+      ],
+      "testimonials": [
+        {
+          "quote": "I have Parkinson's, and this app has just made my life so much easier using my Mac. I can't even explain the change that it has provided for me.",
+          "author": "Rich Pankey",
+          "condition": "Parkinson's"
+        },
+        {
+          "quote": "With arthritis in my hands, typing was becoming impossible. Flow gave me my productivity back.",
+          "author": "Margaret L.",
+          "condition": "Arthritis"
+        }
+      ],
+      "commitment": "Flow is committed to making voice technology accessible to everyone. If you need accommodations, reach out to our support team."
+    }
+  },
+
+  "copy_patterns": {
+    "headline_formulas": [
+      {
+        "pattern": "Don't [old way], just [new way]",
+        "example": "Don't type, just speak",
+        "intent": "transformation_contrast"
+      },
+      {
+        "pattern": "[Number]x faster than [status quo]",
+        "example": "4x faster than typing",
+        "intent": "quantified_improvement"
+      },
+      {
+        "pattern": "Do more with [your asset]",
+        "example": "Do more with your voice",
+        "intent": "empowerment"
+      },
+      {
+        "pattern": "[Tool] [action] while you [activity]",
+        "example": "Flow edits while you speak",
+        "intent": "effortless_automation"
+      },
+      {
+        "pattern": "[Tool] adapts to you",
+        "example": "Flow adapts to you",
+        "intent": "personalization"
+      },
+      {
+        "pattern": "Work better together with [feature]",
+        "example": "Work better together with shared voice tools",
+        "intent": "collaboration"
+      },
+      {
+        "pattern": "Built for [audience], not just [basic use]",
+        "example": "Built for developers, not just dictation",
+        "intent": "specialized_value"
+      },
+      {
+        "pattern": "[Pain point]? [Solution].",
+        "example": "Blank pages and looming deadlines? Flow's got you.",
+        "intent": "problem_solution"
+      },
+      {
+        "pattern": "For [time/situation] and [outcome]",
+        "example": "For late nights and big ideas",
+        "intent": "lifestyle_positioning"
+      },
+      {
+        "pattern": "[Plural noun] don't work for everyone",
+        "example": "Keyboards don't work for everyone",
+        "intent": "inclusive_positioning"
+      }
+    ],
+    "cta_patterns": [
+      {"text": "Download for free", "intent": "low_friction_start", "context": "primary"},
+      {"text": "Try Flow", "intent": "demo_experience", "context": "primary"},
+      {"text": "Get started", "intent": "action_oriented", "context": "primary"},
+      {"text": "Talk to sales", "intent": "enterprise_qualification", "context": "enterprise"},
+      {"text": "Learn more", "intent": "information_seeking", "context": "secondary"},
+      {"text": "Start free trial", "intent": "trial_conversion", "context": "pricing"},
+      {"text": "See team pricing", "intent": "team_qualification", "context": "business"}
+    ],
+    "segment_hook_formula": "[Pain point]? [Solution promise]. [Specific benefit].",
+    "value_prop_formula": "[Benefit] in every [context]: [proof point], [feature], and [feature]."
+  },
+
+  "design_system_observations": {
+    "colors": {
+      "background_primary": "dark gradient (deep purple/blue, #0a0a1a to #1a1a3a)",
+      "background_secondary": "slightly lighter dark (#151530)",
+      "accent_primary": "electric blue (#4a9eff)",
+      "accent_secondary": "purple (#8b5cf6)",
+      "text_primary": "white (#ffffff)",
+      "text_secondary": "gray (#a0a0b0)",
+      "success": "green (#22c55e)",
+      "card_bg": "semi-transparent dark with blur"
+    },
+    "typography": {
+      "font_family": "Sans-serif (appears to be Inter or similar)",
+      "headlines": {
+        "size": "Large (48-72px on desktop)",
+        "weight": "Bold (700)",
+        "line_height": "Tight (1.1-1.2)",
+        "letter_spacing": "Slightly negative"
+      },
+      "body": {
+        "size": "16-18px",
+        "weight": "Regular (400)",
+        "line_height": "Relaxed (1.6-1.8)"
+      },
+      "cta_buttons": {
+        "size": "14-16px",
+        "weight": "Semibold (600)",
+        "text_transform": "None"
+      }
+    },
+    "spacing": {
+      "section_padding": "80-120px vertical",
+      "content_max_width": "1200px",
+      "card_padding": "24-32px",
+      "element_gap": "16-24px"
+    },
+    "components": [
+      {
+        "name": "Sticky navbar",
+        "description": "Fixed top nav with blur backdrop, mega-menu dropdowns on hover",
+        "animation": "dropdown_fade_slide"
+      },
+      {
+        "name": "Logo marquee",
+        "description": "Infinite horizontal scroll of grayscale company logos",
+        "animation": "continuous_slide"
+      },
+      {
+        "name": "Tab switcher",
+        "description": "Horizontal pill-style tabs with sliding indicator",
+        "animation": "indicator_slide, content_crossfade"
+      },
+      {
+        "name": "Testimonial carousel",
+        "description": "Card-based carousel with navigation dots",
+        "animation": "slide_and_fade"
+      },
+      {
+        "name": "Feature card",
+        "description": "Dark card with icon, title, description",
+        "animation": "hover_elevate"
+      },
+      {
+        "name": "Pricing table",
+        "description": "3-column plan comparison with feature lists",
+        "animation": "hover_highlight"
+      },
+      {
+        "name": "FAQ accordion",
+        "description": "Expandable Q&A sections",
+        "animation": "smooth_expand_collapse"
+      },
+      {
+        "name": "CTA button",
+        "description": "Primary (filled blue) and secondary (outline) variants",
+        "animation": "hover_glow, click_press"
+      },
+      {
+        "name": "App icon grid",
+        "description": "Floating 3D grid of app icons",
+        "animation": "gentle_float, hover_elevate"
+      }
+    ],
+    "animations": {
+      "page_transitions": "Smooth fade between routes",
+      "scroll_effects": [
+        "Parallax on hero images",
+        "Fade-up reveals on scroll",
+        "Staggered element appearance"
+      ],
+      "micro_interactions": [
+        "Button hover glow",
+        "Card elevation on hover",
+        "Tab indicator slide",
+        "Accordion expand/collapse",
+        "Counter increment animation"
+      ],
+      "loading_states": "Skeleton screens with pulse animation",
+      "demo_animations": [
+        "Typing simulation comparison",
+        "WPM counter race",
+        "Live transcription demo"
+      ]
+    },
+    "responsive_behavior": {
+      "mobile_breakpoint": "768px",
+      "tablet_breakpoint": "1024px",
+      "mobile_nav": "Hamburger menu with slide-out drawer",
+      "mobile_adjustments": [
+        "Stacked layouts replace side-by-side",
+        "Reduced section padding",
+        "Smaller typography scale",
+        "Touch-friendly tap targets"
+      ]
+    }
+  }
+}

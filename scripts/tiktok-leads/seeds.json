@@ -1,0 +1,26 @@
+{
+  "description": "Seed profiles for TikTok lead scraper - Swedish businesses doing humor/sketch content",
+  "criteria": {
+    "followerRange": [50, 4000],
+    "country": "Sweden",
+    "types": ["restaurang", "café", "bar", "kedja"],
+    "contentStyle": "humor/sketch"
+  },
+  "seeds": [
+    { "username": "krogocompany", "notes": "Good example of humor content" },
+    { "username": "interpooluppsala", "notes": "Pool hall with sketch content" },
+    { "username": "kappabar", "notes": "Gaming bar" },
+    { "username": "beirutbites", "notes": "Middle Eastern food" },
+    { "username": "mexik", "notes": "Mexican restaurant" },
+    { "username": "sushikungensushikungen", "notes": "Sushi restaurant" },
+    { "username": "blubnan.liljeholm", "notes": "Lebanese restaurant" },
+    { "username": "karlacafee", "notes": "Café in Stockholm" },
+    { "username": "restaurangsukai", "notes": "Sushi/Asian fusion" },
+    { "username": "restaurangsobi", "notes": "Asian fusion Örebro" },
+    { "username": "urfa_sofrasi_malmo", "notes": "Turkish grill Malmö" },
+    { "username": "bramsburgers", "notes": "Halal burger chain" },
+    { "username": "mcdonaldsfyris", "notes": "McDonald's franchise Uppsala" },
+    { "username": "miss.goa", "notes": "Indian restaurant" },
+    { "username": "filmstaden", "notes": "Cinema chain" }
+  ]
+}

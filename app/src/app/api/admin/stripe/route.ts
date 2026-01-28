@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe/config';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { verifyAdminAccess } from '@/lib/auth/admin';
@@ -573,8 +574,8 @@ async function getPaymentLinks(body: {
         status: sub.status,
         amount: sub.items.data.reduce((sum, i) => sum + ((i.price.unit_amount || 0) / 100), 0),
         currency: sub.items.data[0]?.price.currency || 'sek',
-        current_period_end: sub.current_period_end
-          ? new Date(sub.current_period_end * 1000).toISOString()
+        current_period_end: (sub as Stripe.Subscription & { current_period_end?: number }).current_period_end
+          ? new Date((sub as Stripe.Subscription & { current_period_end?: number }).current_period_end! * 1000).toISOString()
           : null,
       })),
 
@@ -617,7 +618,8 @@ async function createUserAccount(body: {
   const supabase = getServerSupabase();
 
   // Check if user already exists
-  const { data: existingProfile } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existingProfile } = await (supabase as any)
     .from('profiles')
     .select('id')
     .eq('email', email)
@@ -626,7 +628,8 @@ async function createUserAccount(body: {
   if (existingProfile) {
     // User exists - just update stripe_customer_id if provided
     if (stripe_customer_id) {
-      await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
         .from('profiles')
         .update({ stripe_customer_id })
         .eq('id', existingProfile.id);
@@ -657,7 +660,8 @@ async function createUserAccount(body: {
 
   // Create/update profile
   if (authData.user) {
-    await supabase.from('profiles').upsert({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).from('profiles').upsert({
       id: authData.user.id,
       email,
       business_name: business_name || null,
@@ -838,7 +842,7 @@ async function listCustomers(params: URLSearchParams) {
   const email = params.get('email');
   const search = params.get('search');
 
-  let customers: Stripe.ApiList<Stripe.Customer>;
+  let customers: { data: Stripe.Customer[] };
 
   if (email) {
     customers = await stripe.customers.list({ email, limit });
@@ -908,7 +912,7 @@ async function getCustomer(params: URLSearchParams) {
       metadata: customer.metadata,
       stripe_url: `https://dashboard.stripe.com/customers/${customer.id}`,
     },
-    subscriptions: subscriptions.data.map(s => ({
+    subscriptions: subscriptions.data.map((s: Stripe.Subscription & { current_period_end?: number }) => ({
       id: s.id,
       status: s.status,
       current_period_end: s.current_period_end ? new Date(s.current_period_end * 1000).toISOString() : null,
@@ -948,7 +952,7 @@ async function listSubscriptions(params: URLSearchParams) {
 
   return NextResponse.json({
     success: true,
-    subscriptions: subscriptions.data.map(s => {
+    subscriptions: subscriptions.data.map((s: Stripe.Subscription & { current_period_end?: number }) => {
       const customer = s.customer as Stripe.Customer;
       return {
         id: s.id,

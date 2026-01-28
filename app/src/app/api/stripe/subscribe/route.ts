@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: 'subscription',
-      success_url: `${request.nextUrl.origin}/app?subscription=success`,
-      cancel_url: `${request.nextUrl.origin}/app?subscription=cancelled`,
+      success_url: `${request.nextUrl.origin}/?subscription=success`,
+      cancel_url: `${request.nextUrl.origin}/?subscription=cancelled`,
       metadata: {
         supabase_user_id: userId,
         plan_id: planId,

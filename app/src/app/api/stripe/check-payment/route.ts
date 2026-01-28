@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import Stripe from 'stripe';
 import { stripe } from '@/lib/stripe/config';
 import { createClient } from '@supabase/supabase-js';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
@@ -68,20 +69,23 @@ export async function POST(request: NextRequest) {
     // Map Stripe status to our status
     const status = subscription.status;
     const isPaid = status === 'active' || status === 'trialing';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subAny = subscription as any;
 
     // Update profile if we have userId
     let profileUpdated = false;
     if (userId) {
       const supabase = getSupabaseAdmin();
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('profiles')
         .update({
           subscription_status: status,
           subscription_id: subscription.id,
           has_paid: isPaid,
           stripe_customer_id: subscription.customer as string,
-          current_period_end: subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000).toISOString()
+          current_period_end: subAny.current_period_end
+            ? new Date(subAny.current_period_end * 1000).toISOString()
             : null,
         })
         .eq('id', userId);
@@ -98,8 +102,8 @@ export async function POST(request: NextRequest) {
         id: subscription.id,
         status: subscription.status,
         isPaid,
-        currentPeriodEnd: subscription.current_period_end
-          ? new Date(subscription.current_period_end * 1000).toISOString()
+        currentPeriodEnd: subAny.current_period_end
+          ? new Date(subAny.current_period_end * 1000).toISOString()
           : null,
       },
       profileUpdated,

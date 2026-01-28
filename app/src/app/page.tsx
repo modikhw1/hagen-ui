@@ -5,12 +5,10 @@ import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { loadConcepts } from '@/lib/conceptLoader';
 import { loadDefaultProfile } from '@/lib/profileLoader';
-import { loadLegacyDemoProfiles } from '@/lib/demoProfileLoader';
 import { display, categoryOptions } from '@/lib/display';
 import type { TranslatedConcept } from '@/lib/translator';
 import { useAuth } from '@/contexts/AuthContext';
 import { useVideoSignedUrl } from '@/hooks/useVideoSignedUrl';
-import { EmailGate } from '@/components/EmailGate';
 import { WelcomeView } from '@/components/WelcomeView';
 
 // ============================================
@@ -32,29 +30,6 @@ const BRAND_PROFILE = {
     views: h.views,
   })),
 };
-
-// ============================================
-// DEMO PROFILES - Loaded from JSON
-// ============================================
-interface DemoProfile {
-  id: string;
-  icon: string;
-  label: string;
-  handle: string;
-  avatar: string;
-  followers: string;
-  avgViews: string;
-  posts: number;
-  tone: string[];
-  energy: string;
-  teamSize: string;
-  topMechanisms: readonly string[];
-  recentHits: { title: string; views: string }[];
-  conceptMatches: { id: string; match: number }[];
-}
-
-// Load from demo-profiles.json via translation layer
-const DEMO_PROFILES: DemoProfile[] = loadLegacyDemoProfiles();
 
 // ============================================
 // TYPES
@@ -187,33 +162,16 @@ function LeTrendAppContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Check for demo/auth mode - start with URL param only (SSR-safe)
-  // sessionStorage is checked in useEffect to avoid hydration mismatch
-  const [isDemoMode, setIsDemoMode] = useState(() => {
-    return searchParams.get('demo') === 'true';
-  });
-
   const isInitialAuth = searchParams.get('auth') === 'true';
 
-  // Views: email-gate, welcome, payment, home, preview, brief (no login - we redirect instead)
-  // Start with null - view is set in useEffect based on auth/demo state
-  const [currentView, setCurrentView] = useState<'email-gate' | 'welcome' | 'payment' | 'home' | 'preview' | 'brief' | null>(null);
+  // Views: welcome, payment, home, preview, brief (no login - we redirect instead)
+  // Start with null - view is set in useEffect based on auth state
+  const [currentView, setCurrentView] = useState<'welcome' | 'payment' | 'home' | 'preview' | 'brief' | null>(null);
 
-  // Check sessionStorage for demo mode persistence (client-only)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedDemo = sessionStorage.getItem('demo-mode');
-      if (storedDemo === 'true' && !isDemoMode) {
-        setIsDemoMode(true);
-      }
-    }
-  }, [isDemoMode]);
   const [selectedConcept, setSelectedConcept] = useState<UIConcept | null>(null);
   const [selectedPlan, setSelectedPlan] = useState('growth');
   const [profileExpanded, setProfileExpanded] = useState(false);
   const [conceptsUsed, setConceptsUsed] = useState(1);
-  const [selectedDemoProfile, setSelectedDemoProfile] = useState<string>('cafe');
-  const [bottomBarHovered, setBottomBarHovered] = useState(false);
 
   // Mobile detection with SSR-safe initial value
   const [isMobile, setIsMobile] = useState(false);
@@ -310,44 +268,10 @@ function LeTrendAppContent() {
     // Skip if there's auth code/hash - Supabase is processing it
     if (hasAuthCode || hasAuthHash) return;
 
-    // Check for demo mode from URL or sessionStorage
-    const urlDemo = searchParams.get('demo') === 'true';
-    const storedDemo = typeof window !== 'undefined' && sessionStorage.getItem('demo-mode') === 'true';
-    const hasGivenEmail = typeof window !== 'undefined' && sessionStorage.getItem('demo-email');
-
-    if (urlDemo || storedDemo) {
-      // Check if email has been provided for email-gate
-      if (!hasGivenEmail) {
-        // Show email gate first - only set if not already there
-        if (currentView !== 'email-gate') {
-          setCurrentView('email-gate');
-        }
-        return; // Stop here until email is given
-      }
-
-      // Email given - proceed to demo
-      // Save to sessionStorage for persistence
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('demo-mode', 'true');
-      }
-      setIsDemoMode(true);
-      // Only set to home on initial load (when currentView is null)
-      // Don't reset if user is navigating (preview, brief)
-      if (currentView === null || currentView === 'email-gate') {
-        setCurrentView('home');
-      }
-      return;
-    }
-
     // Check for auth test mode from URL - show payment view
     const isAuthMode = searchParams.get('auth') === 'true';
     if (isAuthMode && currentView !== 'payment') {
       setCurrentView('payment');
-      return;
-    }
-
-    // Already in demo mode - don't interfere with navigation
-    if (isDemoMode) {
       return;
     }
 
@@ -365,7 +289,7 @@ function LeTrendAppContent() {
     }
 
     // Not logged in and not in auth test mode → redirect to login
-    if (!user && !isAuthMode && !isDemoMode) {
+    if (!user && !isAuthMode) {
       router.replace('/login');
       return;
     }
@@ -405,7 +329,7 @@ function LeTrendAppContent() {
         setCurrentView('payment');
       }
     }
-  }, [user, profile, loading, syncing, searchParams, router, isDemoMode, currentView]);
+  }, [user, profile, loading, syncing, searchParams, router, currentView]);
 
   const handlePayment = () => {
     setCurrentView('home');
@@ -417,17 +341,6 @@ function LeTrendAppContent() {
   };
 
   const handleLogout = async () => {
-    // Clear demo mode from sessionStorage
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('demo-mode');
-    }
-
-    if (isDemoMode && !user) {
-      // Demo mode - just redirect to login
-      setIsDemoMode(false);
-      router.push('/login');
-      return;
-    }
     await signOut();
     router.push('/login');
   };
@@ -460,7 +373,7 @@ function LeTrendAppContent() {
 
   // Show loading screen while auth is being checked or code/hash is being processed
   const isProcessingAuth = hasAuthCode || hasAuthHash;
-  if (!isDemoMode && !isAuthMode && (loading || isProcessingAuth)) {
+  if (!isAuthMode && (loading || isProcessingAuth)) {
     return (
       <div style={{
         minHeight: '100vh',
@@ -478,7 +391,7 @@ function LeTrendAppContent() {
   }
 
   // If not logged in, not in demo, and not in auth mode, redirect to login (don't render anything)
-  if (!isDemoMode && !isAuthMode && !user) {
+  if (!isAuthMode && !user) {
     // Redirect happens in useEffect, just show nothing here
     return (
       <div style={{
@@ -514,44 +427,17 @@ function LeTrendAppContent() {
     );
   }
 
-  // Handler for email gate submission
-  const handleEmailGateSubmit = (email: string) => {
-    // Email is already stored in sessionStorage by the component
-    // Now enable demo mode and go to home
-    setIsDemoMode(true);
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('demo-mode', 'true');
-    }
-    setSelectedPlan('growth');
-    setCurrentView('home');
-  };
-
   return (
     <div style={{
       minHeight: '100vh',
       background: '#FAF8F5',
       fontFamily: "'DM Sans', -apple-system, sans-serif"
     }}>
-      {/* Email Gate for Demo */}
-      {currentView === 'email-gate' && (
-        <EmailGate
-          onEmailSubmitted={handleEmailGateSubmit}
-          onLoginClick={() => router.push('/login')}
-        />
-      )}
-
       {/* Welcome View for new customers without concepts */}
       {currentView === 'welcome' && (
         <WelcomeView
           businessName={profile?.business_name}
-          onViewDemo={() => {
-            setIsDemoMode(true);
-            setSelectedPlan('growth');
-            if (typeof window !== 'undefined') {
-              sessionStorage.setItem('demo-mode', 'true');
-            }
-            setCurrentView('home');
-          }}
+          onViewDemo={() => router.push('/demo')}
           onContact={() => {
             window.location.href = 'mailto:hej@letrend.se';
           }}
@@ -565,18 +451,6 @@ function LeTrendAppContent() {
           onComplete={handlePayment}
           onSkip={handleSkipPayment}
           onLogout={handleLogout}
-          onGoToDemo={(email) => {
-            // Save email if provided (from Skräddarsytt form)
-            if (email && typeof window !== 'undefined') {
-              sessionStorage.setItem('demo-email', email);
-            }
-            setIsDemoMode(true);
-            setSelectedPlan('growth'); // Set a default plan for demo
-            if (typeof window !== 'undefined') {
-              sessionStorage.setItem('demo-mode', 'true');
-            }
-            setCurrentView('home');
-          }}
         />
       )}
 
@@ -670,7 +544,7 @@ function LeTrendAppContent() {
                     }}>
                       {profile?.business_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'D'}
                     </span>
-                    {isDemoMode ? 'Avsluta demo' : 'Logga ut'}
+                    Logga ut
                   </button>
                 </div>
               </div>
@@ -686,68 +560,8 @@ function LeTrendAppContent() {
           onSelectConcept={handleSelectConcept}
           plan={plan}
           conceptsUsed={conceptsUsed}
-          demoProfile={isDemoMode ? DEMO_PROFILES.find(p => p.id === selectedDemoProfile) : undefined}
           isMobile={isMobile}
         />
-      )}
-
-      {/* Demo Profile Switcher - Only in demo mode on home view */}
-      {isDemoMode && currentView === 'home' && (
-        <div
-          className="demo-profile-switcher"
-          onMouseEnter={() => setBottomBarHovered(true)}
-          onMouseLeave={() => setBottomBarHovered(false)}
-          style={{
-            position: 'fixed',
-            bottom: 0,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 100,
-            paddingBottom: 'clamp(12px, 3vw, 24px)',
-            opacity: bottomBarHovered ? 1 : 0.6,
-            transition: 'opacity 0.2s ease',
-            maxWidth: 'calc(100vw - 24px)'
-          }}
-        >
-          <div style={{
-            display: 'flex',
-            gap: '4px',
-            background: '#FFFFFF',
-            padding: '7px',
-            borderRadius: '13px',
-            boxShadow: '0 2px 12px rgba(44, 36, 22, 0.15)'
-          }}>
-            {DEMO_PROFILES.map(profile => (
-              <button
-                key={profile.id}
-                onClick={() => setSelectedDemoProfile(profile.id)}
-                style={{
-                  padding: '9px 13px',
-                  background: selectedDemoProfile === profile.id
-                    ? 'linear-gradient(145deg, #4A2F18, #3D2510)'
-                    : 'transparent',
-                  border: 'none',
-                  borderRadius: '9px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <span style={{ fontSize: '15px' }}>{profile.icon}</span>
-                <span style={{
-                  fontSize: '13px',
-                  fontWeight: '500',
-                  color: selectedDemoProfile === profile.id ? '#FAF8F5' : '#5D4D3D',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {profile.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
       )}
 
       {currentView === 'preview' && selectedConcept && plan && (
@@ -1413,14 +1227,12 @@ function PaymentView({
   onComplete,
   onSkip,
   onLogout,
-  onGoToDemo
 }: {
   selectedPlan: string;
   setSelectedPlan: (plan: string) => void;
   onComplete: () => void;
   onSkip?: () => void;
   onLogout?: () => void;
-  onGoToDemo?: (email?: string) => void;
 }) {
   const [step, setStep] = useState<'plan' | 'payment'>('plan');
   const [contactForm, setContactForm] = useState({ name: '', email: '', phone: '' });
@@ -1471,25 +1283,6 @@ function PaymentView({
         borderBottom: '1px solid rgba(74, 47, 24, 0.06)',
         position: 'relative'
       }}>
-        {/* Se demo button - more useful than logout here */}
-        {onGoToDemo && (
-          <button
-            onClick={onGoToDemo}
-            style={{
-              position: 'absolute',
-              top: '20px',
-              right: '20px',
-              background: 'none',
-              border: 'none',
-              fontSize: '14px',
-              cursor: 'pointer',
-              color: '#6B5B4F',
-            }}
-          >
-            Se demo →
-          </button>
-        )}
-
         <div style={{ maxWidth: '900px', margin: '0 auto' }}>
           <Logo size={72} />
           <div style={{
@@ -1760,27 +1553,6 @@ function PaymentView({
                   <p style={{ color: '#D4A574', fontSize: '13px', margin: 0, marginBottom: '12px' }}>
                     Tack! Vi hör av oss.
                   </p>
-                  {onGoToDemo && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Skicka email till onGoToDemo så den sparas centralt
-                        onGoToDemo(contactForm.email);
-                      }}
-                      style={{
-                        padding: '10px 20px',
-                        background: 'rgba(250,248,245,0.15)',
-                        border: '1px solid rgba(250,248,245,0.3)',
-                        borderRadius: '8px',
-                        color: '#FAF8F5',
-                        fontSize: '13px',
-                        fontWeight: '500',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Se demo →
-                    </button>
-                  )}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -2012,7 +1784,6 @@ function HomeView({
   onSelectConcept,
   plan,
   conceptsUsed,
-  demoProfile,
   isMobile
 }: {
   profileExpanded: boolean;
@@ -2020,34 +1791,16 @@ function HomeView({
   onSelectConcept: (concept: UIConcept) => void;
   plan: Plan;
   conceptsUsed: number;
-  demoProfile?: DemoProfile;
   isMobile?: boolean;
 }) {
-  // Use demo profile if provided, otherwise default brand profile
-  const activeProfile = demoProfile ? {
-    handle: demoProfile.handle,
-    avatar: demoProfile.avatar,
-    followers: demoProfile.followers,
-    avgViews: demoProfile.avgViews,
-    posts: demoProfile.posts,
-    tone: demoProfile.tone,
-    energy: demoProfile.energy,
-    teamSize: demoProfile.teamSize,
-    topMechanisms: demoProfile.topMechanisms,
-    recentHits: demoProfile.recentHits,
-  } : BRAND_PROFILE;
+  // Use the brand profile
+  const activeProfile = BRAND_PROFILE;
 
-  // Get concepts with custom match percentages for demo profile
-  const displayConcepts = demoProfile
-    ? demoProfile.conceptMatches.map(cm => {
-        const baseConcept = CONCEPTS.find(c => c.id === cm.id);
-        if (!baseConcept) return null;
-        return { ...baseConcept, match: cm.match };
-      }).filter((c): c is UIConcept => c !== null)
-    : CONCEPTS;
+  // Get all concepts
+  const displayConcepts = CONCEPTS;
 
   return (
-    <main style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(16px, 4vw, 24px) clamp(16px, 4vw, 40px) clamp(16px, 4vw, 40px)', paddingBottom: demoProfile ? '180px' : '40px' }}>
+    <main style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(16px, 4vw, 24px) clamp(16px, 4vw, 40px) clamp(16px, 4vw, 40px)', paddingBottom: '40px' }}>
       {/* Brand Profile Banner */}
       <div style={{
         padding: '20px 24px',

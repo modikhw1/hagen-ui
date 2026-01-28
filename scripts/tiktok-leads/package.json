@@ -1,0 +1,24 @@
+{
+  "name": "tiktok-lead-scraper",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "TikTok lead scraper using network expansion from seed profiles",
+  "scripts": {
+    "scrape": "npx ts-node scrape-network.ts",
+    "scrape:test": "npx ts-node scrape-network.ts --test",
+    "filter": "npx ts-node filter-candidates.ts",
+    "all": "npm run scrape && npm run filter",
+    "rapidapi": "npx ts-node scrape-followers-rapidapi.ts",
+    "rapidapi:test": "npx ts-node scrape-followers-rapidapi.ts --test",
+    "tikwm": "npx ts-node scrape-followers-tikwm.ts",
+    "tikwm:test": "npx ts-node scrape-followers-tikwm.ts --test"
+  },
+  "dependencies": {
+    "apify-client": "^2.9.0"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  }
+}

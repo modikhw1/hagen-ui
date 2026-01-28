@@ -63,7 +63,8 @@ export async function GET(request: NextRequest) {
 
     // Determine status and build response
     if (subscriptions.data.length > 0) {
-      const sub = subscriptions.data[0];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sub = subscriptions.data[0] as any;
       const invoice = sub.latest_invoice as {
         id?: string;
         hosted_invoice_url?: string;

@@ -77,8 +77,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: 'payment',
-      success_url: `${request.nextUrl.origin}/app?payment=success`,
-      cancel_url: `${request.nextUrl.origin}/app?payment=cancelled`,
+      success_url: `${request.nextUrl.origin}/?payment=success`,
+      cancel_url: `${request.nextUrl.origin}/?payment=cancelled`,
       metadata: {
         supabase_user_id: userId,
       },

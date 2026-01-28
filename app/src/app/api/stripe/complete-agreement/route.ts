@@ -83,8 +83,8 @@ export async function POST(request: NextRequest) {
           price: item.price.id,
           quantity: item.quantity || 1,
         })),
-        success_url: `${request.nextUrl.origin}/app?agreement=completed`,
-        cancel_url: `${request.nextUrl.origin}/app?agreement=cancelled`,
+        success_url: `${request.nextUrl.origin}/?agreement=completed`,
+        cancel_url: `${request.nextUrl.origin}/?agreement=cancelled`,
         metadata: {
           supabase_user_id: userId || '',
           subscription_id: subscriptionId,

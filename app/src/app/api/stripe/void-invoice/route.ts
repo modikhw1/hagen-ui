@@ -23,13 +23,15 @@ export async function POST(request: NextRequest) {
           paid_out_of_band: true,
         });
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const invoiceData = paidInvoice as any;
         return NextResponse.json({
           success: true,
           action: 'marked_paid',
           invoice: {
-            id: paidInvoice.id,
-            status: paidInvoice.status,
-            paid: paidInvoice.paid,
+            id: invoiceData.id,
+            status: invoiceData.status,
+            paid: invoiceData.paid,
           },
         });
       } else {

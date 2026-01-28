@@ -25,6 +25,7 @@ const createSupabaseClient = (): SupabaseClient<Database> => {
     return createClient('https://placeholder.supabase.co', 'placeholder-key')
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: true,
@@ -34,7 +35,7 @@ const createSupabaseClient = (): SupabaseClient<Database> => {
       flowType: 'implicit',
       // Increase lock timeout to prevent "signal aborted" errors
       lockAcquireTimeout: 10000,
-    },
+    } as any,
   })
 
   // Sync access token to cookie for server-side auth

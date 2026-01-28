@@ -45,13 +45,7 @@ function LoginContent() {
     setError('');
     setSuccess('');
 
-    // Demo mode: demo/demo → skip directly to demo view
-    if (email === 'demo' && password === 'demo') {
-      router.push('/?demo=true');
-      return;
-    }
-
-    // Auth test mode: auth1/auth1 → go to auth/payment flow
+    // Auth test mode: auth1/auth1 → go to auth/payment flow (dev only)
     if (email === 'auth1' && password === 'auth1') {
       router.push('/?auth=true');
       return;
@@ -548,7 +542,7 @@ function LoginContent() {
           </p>
           <button
             type="button"
-            onClick={() => router.push('/?demo=true')}
+            onClick={() => router.push('/demo')}
             style={{
               padding: '12px 24px',
               background: 'transparent',

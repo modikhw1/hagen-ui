@@ -92,7 +92,8 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json()
     const supabase = getServerSupabase()
 
-    const { data: profile, error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: profile, error } = await (supabase as any)
       .from('profiles')
       .update(body)
       .eq('id', userId)

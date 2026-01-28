@@ -59,7 +59,7 @@ export default function AgreementPage() {
           setError(data.error);
         } else if (data.agreement) {
           if (data.agreement.status === 'active') {
-            router.push('/app');
+            router.push('/');
             return;
           }
           // Add businessName from profile

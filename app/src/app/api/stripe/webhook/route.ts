@@ -166,7 +166,8 @@ export async function POST(request: NextRequest) {
     }
 
     case 'invoice.paid': {
-      const invoice = event.data.object as Stripe.Invoice;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const invoice = event.data.object as any;
       const subscriptionId = invoice.subscription as string | null;
 
       if (subscriptionId) {

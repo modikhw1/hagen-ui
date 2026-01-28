@@ -1,0 +1,66 @@
+[
+  {
+    "username": "conorfawcett",
+    "seedCount": 2,
+    "seeds": [
+      "krogocompany",
+      "mcdonaldsfyris"
+    ],
+    "nickname": "Conor Fawcett",
+    "bio": "",
+    "followerCount": 356,
+    "followingCount": 9363,
+    "verified": false,
+    "profileUrl": "https://tiktok.com/@conorfawcett",
+    "foundVia": "krogocompany",
+    "seedType": "bar"
+  },
+  {
+    "username": "m07l09",
+    "seedCount": 2,
+    "seeds": [
+      "krogocompany",
+      "kappabar"
+    ],
+    "nickname": "M🧸",
+    "bio": "",
+    "followerCount": 28,
+    "followingCount": 1969,
+    "verified": false,
+    "profileUrl": "https://tiktok.com/@m07l09",
+    "foundVia": "krogocompany",
+    "seedType": "bar"
+  },
+  {
+    "username": "ami.rhc",
+    "seedCount": 2,
+    "seeds": [
+      "cafepomflora",
+      "karlacafee"
+    ],
+    "nickname": "Minci💗",
+    "bio": "",
+    "followerCount": 36,
+    "followingCount": 207,
+    "verified": false,
+    "profileUrl": "https://tiktok.com/@ami.rhc",
+    "foundVia": "cafepomflora",
+    "seedType": "café"
+  },
+  {
+    "username": "majopirajo",
+    "seedCount": 2,
+    "seeds": [
+      "cafepomflora",
+      "karlacafee"
+    ],
+    "nickname": "Botten upp 🍻",
+    "bio": "",
+    "followerCount": 88,
+    "followingCount": 1697,
+    "verified": false,
+    "profileUrl": "https://tiktok.com/@majopirajo",
+    "foundVia": "cafepomflora",
+    "seedType": "café"
+  }
+]

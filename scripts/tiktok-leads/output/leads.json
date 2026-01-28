@@ -1,0 +1,267 @@
+[
+  {
+    "username": "kayakomat.jonkoping",
+    "nickname": "Kayakomat Jönköping",
+    "followerCount": 286,
+    "foundVia": "following:krogocompany",
+    "occurrences": 1,
+    "sources": [
+      "following:krogocompany"
+    ],
+    "score": 38,
+    "swedishIndicators": [
+      "swedish_chars",
+      "city:jönköping"
+    ],
+    "foodIndicators": [
+      "mat"
+    ]
+  },
+  {
+    "username": "lindstroms_malmborgs",
+    "nickname": "Malmborgs&Lindströms konditori",
+    "followerCount": 872,
+    "foundVia": "following:krogocompany",
+    "occurrences": 1,
+    "sources": [
+      "following:krogocompany"
+    ],
+    "score": 33,
+    "swedishIndicators": [
+      "swedish_chars"
+    ],
+    "foodIndicators": [
+      "konditori"
+    ]
+  },
+  {
+    "username": "kappaorebro",
+    "nickname": "Kappa Bar Örebro",
+    "followerCount": 96,
+    "foundVia": "following:kappabar",
+    "occurrences": 1,
+    "sources": [
+      "following:kappabar"
+    ],
+    "score": 33,
+    "swedishIndicators": [
+      "swedish_chars",
+      "city:örebro"
+    ],
+    "foodIndicators": [
+      "bar"
+    ]
+  },
+  {
+    "username": "landhskonditori",
+    "nickname": "Landhs konditori",
+    "followerCount": 480,
+    "foundVia": "following:krogocompany",
+    "occurrences": 1,
+    "sources": [
+      "following:krogocompany"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "konditori"
+    ]
+  },
+  {
+    "username": "scienceparkjkpg",
+    "nickname": "Science Park Jönköping",
+    "followerCount": 165,
+    "foundVia": "following:krogocompany",
+    "occurrences": 1,
+    "sources": [
+      "following:krogocompany"
+    ],
+    "score": 28,
+    "swedishIndicators": [
+      "swedish_chars",
+      "city:jönköping"
+    ],
+    "foodIndicators": []
+  },
+  {
+    "username": "restaurangneo",
+    "nickname": "RestaurangNeo",
+    "followerCount": 340,
+    "foundVia": "following:krogocompany",
+    "occurrences": 1,
+    "sources": [
+      "following:krogocompany"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "restaurang"
+    ]
+  },
+  {
+    "username": "krogcompanyvarnamo",
+    "nickname": "krogcompanyvarnamo",
+    "followerCount": 758,
+    "foundVia": "following:krogocompany",
+    "occurrences": 1,
+    "sources": [
+      "following:krogocompany"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "krog"
+    ]
+  },
+  {
+    "username": "kappabargbg",
+    "nickname": "KappabarGBG",
+    "followerCount": 555,
+    "foundVia": "following:kappabar",
+    "occurrences": 1,
+    "sources": [
+      "following:kappabar"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "bar"
+    ]
+  },
+  {
+    "username": "ivansseafoodboil",
+    "nickname": "Ivans grill",
+    "followerCount": 270,
+    "foundVia": "following:karlacafee",
+    "occurrences": 1,
+    "sources": [
+      "following:karlacafee"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "food"
+    ]
+  },
+  {
+    "username": "italienskanrestaurang",
+    "nickname": "Italienskan",
+    "followerCount": 89,
+    "foundVia": "following:karlacafee",
+    "occurrences": 1,
+    "sources": [
+      "following:karlacafee"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "restaurang",
+      "italiensk"
+    ]
+  },
+  {
+    "username": "omayma_cafe",
+    "nickname": "omayma_nytorget",
+    "followerCount": 958,
+    "foundVia": "following:karlacafee",
+    "occurrences": 1,
+    "sources": [
+      "following:karlacafee"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "cafe"
+    ]
+  },
+  {
+    "username": "mattepatte100",
+    "nickname": "Mathilda Andersson",
+    "followerCount": 673,
+    "foundVia": "following:karlacafee",
+    "occurrences": 1,
+    "sources": [
+      "following:karlacafee"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "mat"
+    ]
+  },
+  {
+    "username": "krubburgers",
+    "nickname": "KRUBB Burgers",
+    "followerCount": 1875,
+    "foundVia": "following:restaurangsukai",
+    "occurrences": 1,
+    "sources": [
+      "following:restaurangsukai"
+    ],
+    "score": 28,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "burger"
+    ]
+  },
+  {
+    "username": "stortorgskallaren",
+    "nickname": "Stortorgskällaren",
+    "followerCount": 443,
+    "foundVia": "following:restaurangsukai",
+    "occurrences": 1,
+    "sources": [
+      "following:restaurangsukai"
+    ],
+    "score": 28,
+    "swedishIndicators": [
+      "swedish_chars"
+    ],
+    "foodIndicators": []
+  },
+  {
+    "username": "fratelli.stockhol",
+    "nickname": "Fratelli Stockholm",
+    "followerCount": 1925,
+    "foundVia": "following:restaurangsukai",
+    "occurrences": 1,
+    "sources": [
+      "following:restaurangsukai"
+    ],
+    "score": 28,
+    "swedishIndicators": [
+      "city:stockholm"
+    ],
+    "foodIndicators": []
+  },
+  {
+    "username": "krogoco.ua",
+    "nickname": "Krog&Co UA",
+    "followerCount": 57,
+    "foundVia": "following:krogocompany",
+    "occurrences": 1,
+    "sources": [
+      "following:krogocompany"
+    ],
+    "score": 23,
+    "swedishIndicators": [],
+    "foodIndicators": [
+      "krog"
+    ]
+  },
+  {
+    "username": "pataka.stockholm",
+    "nickname": "Pataka Resturang",
+    "followerCount": 105,
+    "foundVia": "following:karlacafee",
+    "occurrences": 1,
+    "sources": [
+      "following:karlacafee"
+    ],
+    "score": 23,
+    "swedishIndicators": [
+      "city:stockholm"
+    ],
+    "foodIndicators": []
+  }
+]
