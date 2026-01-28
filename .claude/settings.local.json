@@ -67,7 +67,10 @@
       "mcp__google-workspace__manage_gmail_label",
       "WebFetch(domain:claude.ai)",
       "mcp__google-workspace__draft_gmail_message",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git rm:*)",
+      "Bash(wc:*)",
+      "Bash(mkdir:*)"
     ]
   },
   "outputStyle": "Casual"
