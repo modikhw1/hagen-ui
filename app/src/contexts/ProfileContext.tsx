@@ -16,14 +16,17 @@ export interface Profile {
   email?: string
   business_name: string
   business_description: string | null
-  goals: string[]
-  constraints: string[]
-  industry_tags: string[]
-  profile_completeness: number
-  social_tiktok: string | null
-  social_instagram: string | null
+  // New flexible fields
+  social_links: { tiktok?: string; instagram?: string; [key: string]: string | undefined }
+  tone: string[]
+  energy: string | null
+  industry: string | null
+  matching_data: Record<string, unknown>
+  // Flags
   has_paid?: boolean
-  // Extensible - add new fields here
+  has_concepts?: boolean
+  is_admin?: boolean
+  // Extensible
   [key: string]: unknown
 }
 
@@ -158,13 +161,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     email: authProfile.email,
     business_name: authProfile.business_name,
     business_description: authProfile.business_description,
-    goals: authProfile.goals || [],
-    constraints: authProfile.constraints || [],
-    industry_tags: authProfile.industry_tags || [],
-    profile_completeness: authProfile.profile_completeness || 0,
-    social_tiktok: authProfile.social_tiktok,
-    social_instagram: authProfile.social_instagram,
+    social_links: authProfile.social_links || {},
+    tone: authProfile.tone || [],
+    energy: authProfile.energy,
+    industry: authProfile.industry,
+    matching_data: authProfile.matching_data || {},
     has_paid: authProfile.has_paid,
+    has_concepts: authProfile.has_concepts,
+    is_admin: authProfile.is_admin,
   } : null
 
   // Active display name
@@ -176,9 +180,16 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const activeProfileMeta: ProfileMeta = isDemo
     ? activeDemoProfile.profile
     : {
-        ...DEFAULT_USER_PROFILE_META,
-        handle: profile?.social_tiktok || DEFAULT_USER_PROFILE_META.handle,
+        handle: profile?.social_links?.tiktok || DEFAULT_USER_PROFILE_META.handle,
         avatar: profile?.business_name?.charAt(0) || 'M',
+        followers: DEFAULT_USER_PROFILE_META.followers, // TODO: fetch from TikTok API
+        avgViews: DEFAULT_USER_PROFILE_META.avgViews,
+        posts: DEFAULT_USER_PROFILE_META.posts,
+        tone: profile?.tone?.length ? profile.tone : DEFAULT_USER_PROFILE_META.tone,
+        energy: profile?.energy || DEFAULT_USER_PROFILE_META.energy,
+        teamSize: DEFAULT_USER_PROFILE_META.teamSize,
+        topMechanisms: DEFAULT_USER_PROFILE_META.topMechanisms,
+        recentHits: DEFAULT_USER_PROFILE_META.recentHits,
       }
 
   // Concepts for active profile
@@ -203,7 +214,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const { error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('profiles')
         .update(updates)
         .eq('id', user.id)

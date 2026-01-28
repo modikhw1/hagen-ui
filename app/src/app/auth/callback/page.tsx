@@ -11,94 +11,91 @@ function AuthCallbackContent() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [businessName, setBusinessName] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    handleCallback();
-  }, []);
+    // Check for error in URL first
+    const errorParam = searchParams.get('error');
+    const errorDesc = searchParams.get('error_description');
 
-  const handleCallback = async () => {
-    try {
-      const errorParam = searchParams.get('error');
-      const errorDescription = searchParams.get('error_description');
+    if (errorParam) {
+      console.log('Error in URL:', errorParam, errorDesc);
+      if (errorParam === 'access_denied' && errorDesc?.includes('expired')) {
+        setError('Länken har gått ut. Be om en ny inbjudan.');
+      } else {
+        setError(errorDesc || errorParam);
+      }
+      setStatus('error');
+      return;
+    }
 
-      if (errorParam) {
-        setError(errorDescription || errorParam);
-        setStatus('error');
+    // Listen for auth state changes - this handles token exchange
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event, 'Session:', !!session);
+
+      // Password was updated - redirect!
+      if (event === 'USER_UPDATED' && session) {
+        console.log('Password updated, redirecting to home...');
+        router.push('/');
         return;
       }
 
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        if (session && status === 'loading') {
+          console.log('Session established for:', session.user.email);
 
-      if (sessionError) {
-        setError(sessionError.message);
-        setStatus('error');
-        return;
-      }
+          // Fetch profile to get business name
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('business_name')
+            .eq('id', session.user.id)
+            .single() as { data: { business_name: string } | null };
 
-      if (!session) {
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token');
-
-        if (accessToken && refreshToken) {
-          const { error: setSessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-
-          if (setSessionError) {
-            setError(setSessionError.message);
-            setStatus('error');
-            return;
+          if (profileData?.business_name) {
+            setBusinessName(profileData.business_name);
           }
-        } else {
-          setError('Ingen giltig session hittades');
-          setStatus('error');
-          return;
+
+          // Check if this is invite/recovery flow
+          const flowParam = searchParams.get('flow');
+          const isInviteFlow = flowParam === 'invite';
+          const hasInvitedAt = !!session.user.invited_at;
+
+          console.log('Flow:', { flowParam, isInviteFlow, hasInvitedAt });
+
+          if (isInviteFlow || hasInvitedAt) {
+            setStatus('set-password');
+          } else {
+            setStatus('success');
+            router.push('/');
+          }
         }
       }
 
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-
-      if (!currentSession) {
-        setError('Kunde inte skapa session');
+      if (event === 'SIGNED_OUT') {
+        setError('Sessionen avslutades');
         setStatus('error');
-        return;
       }
+    });
 
-      setUserEmail(currentSession.user.email || null);
-
-      const flowParam = searchParams.get('flow');
-      const typeParam = searchParams.get('type');
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const hashType = hashParams.get('type');
-
-      const isInviteFlow = flowParam === 'invite' || typeParam === 'invite' || hashType === 'invite';
-      const hasInvitedAt = !!currentSession.user.invited_at;
-
-      const createdAt = new Date(currentSession.user.created_at);
-      const now = new Date();
-      const isNewUser = (now.getTime() - createdAt.getTime()) < 2 * 60 * 1000;
-
-      if (isInviteFlow || (hasInvitedAt && isNewUser)) {
-        setStatus('set-password');
-        return;
+    // Timeout fallback
+    const timeout = setTimeout(() => {
+      if (status === 'loading') {
+        console.log('Timeout - no session established');
+        setError('Kunde inte verifiera länken. Prova igen.');
+        setStatus('error');
       }
+    }, 10000);
 
-      setStatus('success');
-      router.push('/');
-    } catch (err) {
-      console.error('Callback error:', err);
-      setError('Ett oväntat fel uppstod');
-      setStatus('error');
-    }
-  };
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
+  }, [searchParams, router, status]);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('handleSetPassword called');
+    console.log('Setting password...');
     setError(null);
     setIsSubmitting(true);
 
@@ -115,20 +112,26 @@ function AuthCallbackContent() {
     }
 
     try {
-      console.log('Updating password...');
-      const { error: updateError } = await supabase.auth.updateUser({
+      console.log('Calling updateUser...');
+      const { data, error: updateError } = await supabase.auth.updateUser({
         password: password,
       });
+      console.log('updateUser returned:', { data: !!data, error: updateError });
 
       if (updateError) {
         console.error('Update error:', updateError);
+        // If password already set, just redirect
+        if (updateError.message.includes('different from the old')) {
+          console.log('Password already set, redirecting...');
+          router.push('/');
+          return;
+        }
         setError(updateError.message);
         setIsSubmitting(false);
         return;
       }
 
-      console.log('Password set successfully!');
-      setStatus('success');
+      console.log('Password set successfully! Redirecting...');
       router.push('/');
     } catch (err) {
       console.error('Password update error:', err);
@@ -178,9 +181,11 @@ function AuthCallbackContent() {
           <div className="w-12 h-12 bg-[#6B4423] rounded-full inline-flex items-center justify-center mb-6">
             <span className="font-serif italic text-base text-[#FAF8F5]">Le</span>
           </div>
-          <h1 className="text-2xl text-[#1A1612] mb-2 font-semibold">Välkommen!</h1>
+          <h1 className="text-2xl text-[#1A1612] mb-2 font-semibold">
+            Välkommen{businessName ? `, ${businessName}` : ''}!
+          </h1>
           <p className="text-[#5D4D3D] text-sm mb-6">
-            {userEmail ? `Inloggad som ${userEmail}` : 'Välj ett lösenord för ditt konto'}
+            Välj ett lösenord för att slutföra din registrering
           </p>
 
           <form onSubmit={handleSetPassword} className="text-left">
@@ -189,13 +194,12 @@ function AuthCallbackContent() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => {
-                  console.log('Password changed:', e.target.value.length, 'chars');
-                  setPassword(e.target.value);
-                }}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full p-3 text-sm text-[#1A1612] bg-white border border-[#E5E0DA] rounded-lg outline-none focus:border-[#6B4423]"
                 placeholder="Minst 6 tecken"
                 autoComplete="new-password"
+                minLength={6}
+                required
               />
             </div>
 
@@ -205,8 +209,9 @@ function AuthCallbackContent() {
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                className="w-full p-3 text-sm border border-[#E5E0DA] rounded-lg outline-none focus:border-[#6B4423]"
+                className="w-full p-3 text-sm text-[#1A1612] bg-white border border-[#E5E0DA] rounded-lg outline-none focus:border-[#6B4423]"
                 placeholder="Skriv lösenordet igen"
+                autoComplete="new-password"
                 required
               />
             </div>

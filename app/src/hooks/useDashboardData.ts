@@ -65,13 +65,13 @@ export function useDashboardData(): DashboardData {
         id: contextProfile.id,
         businessName: contextProfile.business_name,
         businessDescription: contextProfile.business_description || '',
-        goals: contextProfile.goals || [],
-        constraints: contextProfile.constraints || [],
-        industryTags: contextProfile.industry_tags || [],
-        profileCompleteness: contextProfile.profile_completeness || 0,
+        goals: [],
+        constraints: [],
+        industryTags: contextProfile.industry ? [contextProfile.industry] : [],
+        profileCompleteness: 0,
         socialLinks: {
-          tiktok: contextProfile.social_tiktok || undefined,
-          instagram: contextProfile.social_instagram || undefined,
+          tiktok: contextProfile.social_links?.tiktok || undefined,
+          instagram: contextProfile.social_links?.instagram || undefined,
         },
       }
     : mockUserProfile

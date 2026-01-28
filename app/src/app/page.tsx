@@ -570,7 +570,7 @@ function LeTrendAppContent() {
           plan={plan}
           conceptsUsed={conceptsUsed}
           demoProfile={isDemoMode ? DEMO_PROFILES.find(p => p.id === selectedDemoProfile) : undefined}
-          userProfile={!isDemoMode && profile ? { business_name: profile.business_name, social_tiktok: profile.social_tiktok } : undefined}
+          userProfile={!isDemoMode && profile ? { business_name: profile.business_name, social_tiktok: profile.social_links?.tiktok } : undefined}
           isMobile={isMobile}
         />
       )}

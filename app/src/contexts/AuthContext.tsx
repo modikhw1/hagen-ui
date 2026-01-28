@@ -9,13 +9,14 @@ interface Profile {
   email: string;
   business_name: string;
   business_description: string | null;
-  goals: string[];
-  constraints: string[];
-  industry_tags: string[];
-  profile_completeness: number;
-  social_tiktok: string | null;
-  social_instagram: string | null;
+  social_links: { tiktok?: string; instagram?: string; [key: string]: string | undefined };
+  tone: string[];
+  energy: string | null;
+  industry: string | null;
+  matching_data: Record<string, unknown>;
   has_paid: boolean;
+  has_concepts: boolean;
+  is_admin: boolean;
 }
 
 interface AuthContextType {
