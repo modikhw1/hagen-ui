@@ -11,7 +11,6 @@ export function middleware(request: NextRequest) {
 
   // Redirect legacy/missing routes to correct destinations
   const legacyRedirects: Record<string, string> = {
-    '/payment': '/?auth=true',
     '/register': '/login',
     '/signup': '/login',
     '/auth': '/login',

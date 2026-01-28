@@ -70,7 +70,11 @@
       "Bash(python:*)",
       "Bash(git rm:*)",
       "Bash(wc:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(cmd /c \"taskkill /F /IM node.exe\")",
+      "Bash(rm:*)",
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)"
     ]
   },
   "outputStyle": "Casual"

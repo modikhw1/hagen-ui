@@ -126,6 +126,30 @@ const CONCEPTS: UIConcept[] = translatedConcepts.map(toUIConcept);
 // HUMOR_AXES now comes from display layer
 // Usage: display.mechanism('contrast') → { label: 'Två Världar Möts', icon: '⚖️', color: '#...' }
 
+// ============================================
+// DEFAULT PROFILE FOR LOGGED-IN USERS
+// ============================================
+const DEFAULT_LOGGED_IN_PROFILE = {
+  handle: '@mittforetag',
+  avatar: 'M',
+  followers: '0',
+  avgViews: '0',
+  posts: 0,
+  tone: ['personlig', 'genuin'],
+  energy: 'Balanserad',
+  teamSize: '1-2 personer',
+  topMechanisms: ['recognition', 'contrast'] as readonly string[],
+  recentHits: [] as { title: string; views: string }[],
+};
+
+// Curated default concepts for new logged-in users (4 starter concepts)
+const DEFAULT_USER_CONCEPT_IDS = [
+  { id: 'clip-45435414', match: 92 },
+  { id: 'clip-84559877', match: 88 },
+  { id: 'clip-44893709', match: 85 },
+  { id: 'clip-14943766', match: 82 },
+];
+
 const PLANS: Plan[] = [
   {
     id: 'starter',
@@ -194,6 +218,7 @@ function LeTrendAppContent() {
   // Views: payment, home, preview, brief (no login - we redirect instead)
   // Start with null - view is set in useEffect based on auth/demo state
   const [currentView, setCurrentView] = useState<'payment' | 'home' | 'preview' | 'brief' | null>(null);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   // Check sessionStorage for demo mode persistence (client-only)
   useEffect(() => {
@@ -255,12 +280,8 @@ function LeTrendAppContent() {
       return;
     }
 
-    // Check for auth test mode from URL - show payment view
+    // Auth mode param (legacy - payment disabled)
     const isAuthMode = searchParams.get('auth') === 'true';
-    if (isAuthMode && currentView !== 'payment') {
-      setCurrentView('payment');
-      return;
-    }
 
     // Already in demo mode - don't interfere with navigation
     if (isDemoMode) {
@@ -282,19 +303,9 @@ function LeTrendAppContent() {
       return;
     }
 
-    // Logged in - determine view based on payment status
-    const hasPaid = profile?.has_paid;
-
-    // Set view based on payment status
-    if (hasPaid) {
-      if (currentView !== 'home') {
-        setCurrentView('home');
-      }
-    } else {
-      // User is logged in but hasn't paid -> show payment view
-      if (currentView !== 'payment') {
-        setCurrentView('payment');
-      }
+    // Logged in - go directly to home on initial load only
+    if (currentView === null) {
+      setCurrentView('home');
     }
   }, [user, profile, loading, searchParams, router, isDemoMode, currentView]);
 
@@ -461,57 +472,90 @@ function LeTrendAppContent() {
                 }}>LeTrend</span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                {/* Concepts remaining badge */}
-                {currentView === 'home' && plan && (
-                  <div style={{
+              {/* User menu */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => isDemoMode ? handleLogout() : setShowProfileMenu(!showProfileMenu)}
+                  style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 12px',
-                    background: '#F0EBE4',
-                    borderRadius: '20px'
+                    gap: '8px',
+                    padding: '8px 14px',
+                    background: 'transparent',
+                    border: '1px solid rgba(74, 47, 24, 0.1)',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    color: '#5D4D3D'
+                  }}
+                >
+                  <span style={{
+                    width: '24px',
+                    height: '24px',
+                    background: '#E8E2D9',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    color: '#5D4D3D'
                   }}>
-                    <span style={{ fontSize: '13px', color: '#5D4D3D' }}>
-                      {plan.concepts - conceptsUsed} av {plan.concepts} kvar
-                    </span>
-                  </div>
-                )}
+                    {profile?.business_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'D'}
+                  </span>
+                  {isDemoMode ? 'Avsluta demo' : (profile?.business_name || 'Profil')}
+                </button>
 
-                {/* User menu */}
-                <div style={{ position: 'relative' }}>
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 14px',
-                      background: 'transparent',
-                      border: '1px solid rgba(74, 47, 24, 0.1)',
-                      borderRadius: '10px',
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      color: '#5D4D3D'
-                    }}
-                  >
-                    <span style={{
-                      width: '24px',
-                      height: '24px',
-                      background: '#E8E2D9',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      color: '#5D4D3D'
+                {/* Dropdown menu */}
+                {showProfileMenu && !isDemoMode && (
+                  <>
+                    <div
+                      onClick={() => setShowProfileMenu(false)}
+                      style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 40
+                      }}
+                    />
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '8px',
+                      background: '#FFFFFF',
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                      border: '1px solid rgba(74,47,24,0.08)',
+                      minWidth: '200px',
+                      zIndex: 50,
+                      overflow: 'hidden'
                     }}>
-                      {profile?.business_name?.charAt(0).toUpperCase() || user?.email?.charAt(0).toUpperCase() || 'D'}
-                    </span>
-                    {isDemoMode ? 'Avsluta demo' : 'Logga ut'}
-                  </button>
-                </div>
+                      {[
+                        { label: 'Fakturering', onClick: () => { console.log('Billing'); setShowProfileMenu(false); } },
+                        { label: 'Inställningar', onClick: () => { console.log('Settings'); setShowProfileMenu(false); } },
+                        { label: 'Logga ut', onClick: () => { handleLogout(); setShowProfileMenu(false); }, danger: true }
+                      ].map((item, index) => (
+                        <button
+                          key={item.label}
+                          onClick={item.onClick}
+                          style={{
+                            width: '100%',
+                            padding: '14px 18px',
+                            background: 'none',
+                            border: 'none',
+                            borderBottom: index < 2 ? '1px solid rgba(74,47,24,0.06)' : 'none',
+                            textAlign: 'left',
+                            fontSize: '14px',
+                            color: item.danger ? '#C45C5C' : '#1A1612',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </header>
@@ -526,6 +570,7 @@ function LeTrendAppContent() {
           plan={plan}
           conceptsUsed={conceptsUsed}
           demoProfile={isDemoMode ? DEMO_PROFILES.find(p => p.id === selectedDemoProfile) : undefined}
+          userProfile={!isDemoMode && profile ? { business_name: profile.business_name, social_tiktok: profile.social_tiktok } : undefined}
           isMobile={isMobile}
         />
       )}
@@ -1607,6 +1652,7 @@ function HomeView({
   plan,
   conceptsUsed,
   demoProfile,
+  userProfile,
   isMobile
 }: {
   profileExpanded: boolean;
@@ -1615,9 +1661,10 @@ function HomeView({
   plan: Plan;
   conceptsUsed: number;
   demoProfile?: DemoProfile;
+  userProfile?: { business_name?: string; social_tiktok?: string | null };
   isMobile?: boolean;
 }) {
-  // Use demo profile if provided, otherwise default brand profile
+  // Priority: demo profile > logged-in user defaults > brand profile fallback
   const activeProfile = demoProfile ? {
     handle: demoProfile.handle,
     avatar: demoProfile.avatar,
@@ -1629,16 +1676,27 @@ function HomeView({
     teamSize: demoProfile.teamSize,
     topMechanisms: demoProfile.topMechanisms,
     recentHits: demoProfile.recentHits,
+  } : userProfile ? {
+    // Logged-in user: use defaults with their name
+    ...DEFAULT_LOGGED_IN_PROFILE,
+    handle: userProfile.social_tiktok || `@${userProfile.business_name?.toLowerCase().replace(/\s+/g, '') || 'mittforetag'}`,
+    avatar: userProfile.business_name?.charAt(0).toUpperCase() || 'M',
   } : BRAND_PROFILE;
 
-  // Get concepts with custom match percentages for demo profile
+  // Get concepts: demo profile > logged-in user curated > all concepts
   const displayConcepts = demoProfile
     ? demoProfile.conceptMatches.map(cm => {
         const baseConcept = CONCEPTS.find(c => c.id === cm.id);
         if (!baseConcept) return null;
         return { ...baseConcept, match: cm.match };
       }).filter((c): c is UIConcept => c !== null)
-    : CONCEPTS;
+    : userProfile
+      ? DEFAULT_USER_CONCEPT_IDS.map(cm => {
+          const baseConcept = CONCEPTS.find(c => c.id === cm.id);
+          if (!baseConcept) return null;
+          return { ...baseConcept, match: cm.match };
+        }).filter((c): c is UIConcept => c !== null)
+      : CONCEPTS;
 
   return (
     <main style={{ maxWidth: '1200px', margin: '0 auto', padding: 'clamp(16px, 4vw, 24px) clamp(16px, 4vw, 40px) clamp(16px, 4vw, 40px)', paddingBottom: demoProfile ? '180px' : '40px' }}>

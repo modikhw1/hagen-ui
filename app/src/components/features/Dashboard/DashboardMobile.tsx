@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { useDashboardData, DemoProfile, ConceptWithMatch } from '@/hooks/useDashboardData'
+import { useAuth } from '@/contexts/AuthContext'
 import { display } from '@/lib/display'
 import type { TranslatedConcept } from '@/lib/translator'
 import { colors, fontFamily, pageContainer, scrollContainer, buttonBase, headerStyle, sectionLabel, tagStyle } from '@/styles/mobile-design'
@@ -175,6 +176,8 @@ function DashboardMobileContent() {
     user,
     loading,
     isDemo,
+    activeDisplayName,
+    activeProfileMeta,
     categories,
     categoryIndex,
     setCategoryIndex,
@@ -185,8 +188,20 @@ function DashboardMobileContent() {
     olderConcepts,
     handleConceptClick,
   } = useDashboardData()
+  const { signOut } = useAuth()
 
   const [showPicker, setShowPicker] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+
+  const handleLogout = async () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('demo-mode')
+    }
+    if (!isDemo && user) {
+      await signOut()
+    }
+    router.push('/m/login')
+  }
 
   // Redirect to login if not authenticated and not in demo mode
   useEffect(() => {
@@ -201,7 +216,7 @@ function DashboardMobileContent() {
 
   return (
     <div style={{ ...pageContainer, background: colors.bg }}>
-      {showPicker && (
+      {isDemo && showPicker && (
         <CategoryPicker
           categories={categories}
           selectedIndex={categoryIndex}
@@ -226,23 +241,95 @@ function DashboardMobileContent() {
             <span style={{ fontSize: 18, fontWeight: 600, color: colors.text, fontFamily }}>LeTrend</span>
           </div>
 
-          <button
-            onClick={() => setShowPicker(true)}
-            style={{
-              ...buttonBase,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              background: colors.muted,
-              padding: '8px 14px',
-              borderRadius: 20,
-            }}
-          >
-            <span style={{ fontSize: 16 }}>{currentCategory.icon}</span>
-            <span style={{ fontSize: 14, fontWeight: 500, color: colors.text, fontFamily }}>{currentCategory.label}</span>
-            <span style={{ color: colors.textSubtle, fontSize: 10 }}>▼</span>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {isDemo && (
+              <button
+                onClick={() => setShowPicker(true)}
+                style={{
+                  ...buttonBase,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: colors.muted,
+                  padding: '8px 12px',
+                  borderRadius: 16,
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{currentCategory.icon}</span>
+                <span style={{ color: colors.textSubtle, fontSize: 10 }}>▼</span>
+              </button>
+            )}
+
+            {/* Hamburger menu button */}
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              style={{
+                ...buttonBase,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4,
+                padding: 10,
+                background: colors.muted,
+                borderRadius: 10,
+              }}
+            >
+              <span style={{ width: 18, height: 2, background: colors.text, borderRadius: 1 }} />
+              <span style={{ width: 18, height: 2, background: colors.text, borderRadius: 1 }} />
+              <span style={{ width: 18, height: 2, background: colors.text, borderRadius: 1 }} />
+            </button>
+          </div>
         </div>
+
+        {/* Dropdown menu */}
+        {showMenu && (
+          <>
+            <div
+              onClick={() => setShowMenu(false)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.3)',
+                zIndex: 40
+              }}
+            />
+            <div style={{
+              position: 'absolute',
+              top: 60,
+              right: 16,
+              background: colors.card,
+              borderRadius: 12,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              minWidth: 180,
+              zIndex: 50,
+              overflow: 'hidden'
+            }}>
+              {(isDemo ? [
+                { label: 'Avsluta demo', onClick: () => { handleLogout(); setShowMenu(false); }, danger: true }
+              ] : [
+                { label: 'Fakturering', onClick: () => { console.log('Billing'); setShowMenu(false); } },
+                { label: 'Inställningar', onClick: () => { console.log('Settings'); setShowMenu(false); } },
+                { label: 'Logga ut', onClick: () => { handleLogout(); setShowMenu(false); }, danger: true }
+              ]).map((item, index, arr) => (
+                <button
+                  key={item.label}
+                  onClick={item.onClick}
+                  style={{
+                    ...buttonBase,
+                    width: '100%',
+                    padding: '14px 18px',
+                    borderBottom: index < arr.length - 1 ? `1px solid ${colors.muted}` : 'none',
+                    textAlign: 'left',
+                    fontSize: 14,
+                    color: item.danger ? '#C45C5C' : colors.text,
+                    fontFamily
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Profile Summary */}
         <div style={{ padding: '16px 24px', background: colors.muted }}>
@@ -260,14 +347,14 @@ function DashboardMobileContent() {
               fontSize: 18,
               fontFamily
             }}>
-              {currentCategory.profile.avatar}
+              {activeProfileMeta.avatar}
             </div>
             <div>
               <div style={{ fontSize: 16, fontWeight: 600, color: colors.text, fontFamily }}>
-                {currentCategory.profile.handle}
+                {activeProfileMeta.handle}
               </div>
               <div style={{ fontSize: 13, color: colors.textMuted, fontFamily }}>
-                {currentCategory.profile.followers} följare · {currentCategory.profile.posts} inlägg analyserade
+                {activeProfileMeta.followers} följare · {activeProfileMeta.posts} inlägg analyserade
               </div>
             </div>
           </div>
@@ -322,6 +409,7 @@ function DashboardMobileContent() {
               ))}
             </>
           )}
+
         </div>
       </div>
     </div>
