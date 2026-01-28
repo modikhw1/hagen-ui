@@ -129,6 +129,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [isDemo, setIsDemo] = useState(false)
   const [activeDemoIndex, setActiveDemoIndex] = useState(0)
 
+  // User clips from database
+  const [userClips, setUserClips] = useState<{ clipId: string; matchOverride?: number }[]>([])
+  const [clipsLoading, setClipsLoading] = useState(false)
+
   // Load demo profiles from JSON
   const demoProfiles = demoProfilesData.profiles as DemoProfile[]
   const activeDemoProfile = demoProfiles[activeDemoIndex] || demoProfiles[0]
@@ -154,6 +158,45 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       }
     }
   }, [user])
+
+  // Fetch user_clips from database for logged-in users
+  useEffect(() => {
+    async function fetchUserClips() {
+      if (!user || isDemo) {
+        setUserClips([])
+        return
+      }
+
+      setClipsLoading(true)
+      try {
+        const { data, error } = await supabase
+          .from('user_clips')
+          .select('clip_id')
+          .eq('user_id', user.id)
+
+        if (error) {
+          console.error('Error fetching user_clips:', error)
+          setUserClips([])
+        } else if (data && data.length > 0) {
+          // Convert to concept format
+          setUserClips(data.map((row: { clip_id: string }) => ({
+            clipId: row.clip_id,
+            matchOverride: 90 // Default match score for assigned clips
+          })))
+        } else {
+          // No clips assigned - use defaults
+          setUserClips(DEFAULT_USER_CONCEPTS)
+        }
+      } catch (err) {
+        console.error('Error fetching user_clips:', err)
+        setUserClips([])
+      } finally {
+        setClipsLoading(false)
+      }
+    }
+
+    fetchUserClips()
+  }, [user, isDemo])
 
   // Convert auth profile to our Profile type
   const profile: Profile | null = authProfile ? {
@@ -192,10 +235,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         recentHits: DEFAULT_USER_PROFILE_META.recentHits,
       }
 
-  // Concepts for active profile
+  // Concepts for active profile - use user_clips from DB for logged-in users
   const conceptSource = isDemo
     ? activeDemoProfile.concepts
-    : DEFAULT_USER_CONCEPTS
+    : (userClips.length > 0 ? userClips : DEFAULT_USER_CONCEPTS)
 
   const concepts: ConceptWithMatch[] = conceptSource.reduce<ConceptWithMatch[]>((acc, c) => {
     const concept = loadConceptById(c.clipId)

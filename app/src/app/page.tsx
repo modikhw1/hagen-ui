@@ -570,7 +570,12 @@ function LeTrendAppContent() {
           plan={plan}
           conceptsUsed={conceptsUsed}
           demoProfile={isDemoMode ? DEMO_PROFILES.find(p => p.id === selectedDemoProfile) : undefined}
-          userProfile={!isDemoMode && profile ? { business_name: profile.business_name, social_tiktok: profile.social_links?.tiktok } : undefined}
+          userProfile={!isDemoMode && profile ? {
+            business_name: profile.business_name,
+            social_tiktok: profile.social_links?.tiktok,
+            tone: profile.tone || [],
+            energy: profile.energy || null,
+          } : undefined}
           isMobile={isMobile}
         />
       )}
@@ -1661,7 +1666,12 @@ function HomeView({
   plan: Plan;
   conceptsUsed: number;
   demoProfile?: DemoProfile;
-  userProfile?: { business_name?: string; social_tiktok?: string | null };
+  userProfile?: {
+    business_name?: string;
+    social_tiktok?: string | null;
+    tone?: string[];
+    energy?: string | null;
+  };
   isMobile?: boolean;
 }) {
   // Priority: demo profile > logged-in user defaults > brand profile fallback
@@ -1677,10 +1687,12 @@ function HomeView({
     topMechanisms: demoProfile.topMechanisms,
     recentHits: demoProfile.recentHits,
   } : userProfile ? {
-    // Logged-in user: use defaults with their name
+    // Logged-in user: use their profile data with fallbacks
     ...DEFAULT_LOGGED_IN_PROFILE,
     handle: userProfile.social_tiktok || `@${userProfile.business_name?.toLowerCase().replace(/\s+/g, '') || 'mittforetag'}`,
     avatar: userProfile.business_name?.charAt(0).toUpperCase() || 'M',
+    tone: userProfile.tone?.length ? userProfile.tone : DEFAULT_LOGGED_IN_PROFILE.tone,
+    energy: userProfile.energy || DEFAULT_LOGGED_IN_PROFILE.energy,
   } : BRAND_PROFILE;
 
   // Get concepts: demo profile > logged-in user curated > all concepts
