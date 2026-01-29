@@ -11,7 +11,16 @@ const createSupabaseClient = (): SupabaseClient<Database> => {
     console.warn('Supabase env vars not set - using placeholder client')
     return createClient('https://placeholder.supabase.co', 'placeholder-key')
   }
-  return createClient<Database>(supabaseUrl, supabaseAnonKey)
+  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      // Disable Web Locks API to avoid "signal is aborted" errors
+      lock: 'no-op',
+      // Ensure we detect session from URL
+      detectSessionInUrl: true,
+      // Flow type for PKCE
+      flowType: 'pkce',
+    }
+  })
 }
 
 export const supabase = createSupabaseClient()

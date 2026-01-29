@@ -84,7 +84,8 @@
       "mcp__supabase__deploy_edge_function",
       "WebFetch(domain:fllzlpecwwabwgfbnxfu.supabase.co)",
       "mcp__supabase__get_edge_function",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(netstat:*)"
     ]
   },
   "outputStyle": "Casual"

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 
@@ -13,63 +13,147 @@ function AuthCallbackContent() {
   const [error, setError] = useState<string | null>(null);
   const [businessName, setBusinessName] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const processedRef = useRef(false);
 
   useEffect(() => {
-    // Check for error in URL first
-    const errorParam = searchParams.get('error');
-    const errorDesc = searchParams.get('error_description');
+    // Prevent double processing
+    if (processedRef.current) return;
+    processedRef.current = true;
 
-    if (errorParam) {
-      console.log('Error in URL:', errorParam, errorDesc);
-      if (errorParam === 'access_denied' && errorDesc?.includes('expired')) {
-        setError('Länken har gått ut. Be om en ny inbjudan.');
-      } else {
-        setError(errorDesc || errorParam);
+    const handleAuth = async () => {
+      try {
+        // Check for error in URL first
+        const errorParam = searchParams.get('error');
+        const errorDesc = searchParams.get('error_description');
+
+        if (errorParam) {
+          console.log('Error in URL:', errorParam, errorDesc);
+          if (errorParam === 'access_denied' && errorDesc?.includes('expired')) {
+            setError('Länken har gått ut. Be om en ny inbjudan.');
+          } else {
+            setError(errorDesc || errorParam);
+          }
+          setStatus('error');
+          return;
+        }
+
+        // Get the hash from URL (Supabase puts tokens there after redirect)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
+
+        console.log('Hash params:', { hasAccessToken: !!accessToken, type });
+
+        // If we have tokens in the hash, set the session manually
+        if (accessToken && refreshToken) {
+          console.log('Setting session from hash tokens...');
+          const { data, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            setError('Kunde inte verifiera sessionen: ' + sessionError.message);
+            setStatus('error');
+            return;
+          }
+
+          if (data.session) {
+            await handleSessionEstablished(data.session, type === 'invite' || type === 'recovery');
+            return;
+          }
+        }
+
+        // Fallback: check if we already have a session
+        console.log('Checking existing session...');
+        const { data: { session }, error: getSessionError } = await supabase.auth.getSession();
+
+        if (getSessionError) {
+          // Handle abort errors gracefully
+          if (getSessionError.message?.includes('abort')) {
+            console.log('Session check aborted, retrying...');
+            // Wait a bit and retry
+            await new Promise(r => setTimeout(r, 500));
+            const retry = await supabase.auth.getSession();
+            if (retry.data.session) {
+              const flowParam = searchParams.get('flow');
+              await handleSessionEstablished(retry.data.session, flowParam === 'invite');
+              return;
+            }
+          }
+          console.error('Get session error:', getSessionError);
+          setError('Kunde inte hämta session');
+          setStatus('error');
+          return;
+        }
+
+        if (session) {
+          const flowParam = searchParams.get('flow');
+          await handleSessionEstablished(session, flowParam === 'invite' || !!session.user.invited_at);
+          return;
+        }
+
+        // No session found - wait a bit for auth state change
+        console.log('No immediate session, waiting for auth state...');
+
+      } catch (err) {
+        console.error('Auth error:', err);
+        // Don't show error for abort signals - they're usually benign
+        if (err instanceof Error && err.message?.includes('abort')) {
+          console.log('Abort signal caught, continuing...');
+          return;
+        }
+        setError('Ett fel uppstod vid verifiering');
+        setStatus('error');
       }
-      setStatus('error');
-      return;
-    }
+    };
 
-    // Listen for auth state changes - this handles token exchange
+    const handleSessionEstablished = async (session: any, isInviteFlow: boolean) => {
+      console.log('Session established for:', session.user.email);
+
+      // Fetch profile to get business name
+      try {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('business_name')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profileData?.business_name) {
+          setBusinessName(profileData.business_name);
+        }
+      } catch (e) {
+        console.log('Could not fetch profile:', e);
+      }
+
+      console.log('Flow:', { isInviteFlow, hasInvitedAt: !!session.user.invited_at });
+
+      if (isInviteFlow || session.user.invited_at) {
+        setStatus('set-password');
+      } else {
+        setStatus('success');
+        router.push('/');
+      }
+    };
+
+    // Start auth handling
+    handleAuth();
+
+    // Also listen for auth state changes as backup
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event, 'Session:', !!session);
 
-      // Password was updated - redirect!
       if (event === 'USER_UPDATED' && session) {
         console.log('Password updated, redirecting to home...');
         router.push('/');
         return;
       }
 
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
-        if (session && status === 'loading') {
-          console.log('Session established for:', session.user.email);
-
-          // Fetch profile to get business name
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('business_name')
-            .eq('id', session.user.id)
-            .single() as { data: { business_name: string } | null };
-
-          if (profileData?.business_name) {
-            setBusinessName(profileData.business_name);
-          }
-
-          // Check if this is invite/recovery flow
-          const flowParam = searchParams.get('flow');
-          const isInviteFlow = flowParam === 'invite';
-          const hasInvitedAt = !!session.user.invited_at;
-
-          console.log('Flow:', { flowParam, isInviteFlow, hasInvitedAt });
-
-          if (isInviteFlow || hasInvitedAt) {
-            setStatus('set-password');
-          } else {
-            setStatus('success');
-            router.push('/');
-          }
-        }
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && status === 'loading') {
+        const flowParam = searchParams.get('flow');
+        await handleSessionEstablished(session, flowParam === 'invite' || !!session.user.invited_at);
       }
 
       if (event === 'SIGNED_OUT') {
@@ -78,14 +162,14 @@ function AuthCallbackContent() {
       }
     });
 
-    // Timeout fallback
+    // Timeout fallback - longer timeout
     const timeout = setTimeout(() => {
       if (status === 'loading') {
         console.log('Timeout - no session established');
         setError('Kunde inte verifiera länken. Prova igen.');
         setStatus('error');
       }
-    }, 10000);
+    }, 15000);
 
     return () => {
       subscription.unsubscribe();
