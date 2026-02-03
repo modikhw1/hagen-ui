@@ -14,7 +14,9 @@ const createSupabaseClient = (): SupabaseClient<Database> => {
   return createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       // Disable Web Locks API to avoid "signal is aborted" errors
-      lock: 'no-op',
+      lock: async (name: string, acquireTimeout: number, fn: () => Promise<any>) => {
+        return await fn()
+      },
       // Ensure we detect session from URL
       detectSessionInUrl: true,
       // Flow type for PKCE
