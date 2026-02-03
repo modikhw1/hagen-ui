@@ -17,3 +17,5 @@ nul
 
 # Secrets
 Credentials.json
+.mcp.json
+.claude/settings.local.json
