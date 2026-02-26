@@ -37,12 +37,10 @@ test.describe('Login Flow', () => {
     await page.fill('input[type="password"]', 'wrongpassword');
     await page.getByRole('button', { name: 'Logga in' }).click();
     
-    // Wait for error message
     await expect(page.locator('text=Fel e-post eller lösenord')).toBeVisible({ timeout: 10000 });
   });
 
   test('logs in successfully with valid credentials', async ({ page }) => {
-    // Login succeeds - redirects to home (which may auto-redirect to app)
     const email = process.env.TEST_USER_EMAIL || 'test@letrend.se';
     const password = process.env.TEST_USER_PASSWORD || 'Test1234!';
     
@@ -50,19 +48,72 @@ test.describe('Login Flow', () => {
     await page.fill('input[type="password"]', password);
     await page.getByRole('button', { name: 'Logga in' }).click();
     
-    // Should redirect away from login - either /app or /
     await expect(page).not.toHaveURL(/\/login/, { timeout: 15000 });
   });
-});
 
-test.describe('Demo Login', () => {
-  test('can login with demo credentials', async ({ page }) => {
+  test('demo login works', async ({ page }) => {
     await page.goto('/login');
     await page.fill('input[placeholder*="din@email.se"]', 'demo');
     await page.fill('input[type="password"]', 'demo');
     await page.getByRole('button', { name: 'Logga in' }).click();
     
-    // Demo should redirect - desktop goes to /?demo=true, mobile to /m
-    await expect(page).toHaveURL(/\/app\/?|\/\?demo=true|\/m(\?.*)?$/, { timeout: 10000 });
+    // Desktop: /app or /?demo=true, Mobile: /m or /m?demo=true
+    await expect(page).toHaveURL(/\/app\/?|\/\?demo=true|\/m\/?|\/m\?demo=true/, { timeout: 10000 });
+  });
+});
+
+test.describe('Password Reset Flow', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/login');
+    await page.click('text=Glömt lösenordet?');
+  });
+
+  test('shows password reset form', async ({ page }) => {
+    await expect(page.locator('text=Återställ lösenord')).toBeVisible();
+    await expect(page.locator('input[placeholder*="din@email.se"]')).toBeVisible();
+  });
+
+  test('validates email before sending reset', async ({ page }) => {
+    await page.fill('input[placeholder*="din@email.se"]', 'invalid-email');
+    await page.click('text=Skicka återställningslänk');
+    
+    await expect(page.locator('text=Ange en giltig e-postadress')).toBeVisible();
+  });
+
+  test('shows success message after requesting reset', async ({ page }) => {
+    await page.fill('input[placeholder*="din@email.se"]', 'test@test.com');
+    await page.click('text=Skicka återställningslänk');
+    
+    await expect(page.locator('text=Kolla din e-post')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('can navigate back to login', async ({ page }) => {
+    await page.click('text=Tillbaka till inloggning');
+    
+    await expect(page.locator('text=Välkommen tillbaka')).toBeVisible();
+  });
+});
+
+test.describe('Auth Callback Flow', () => {
+  test('shows loading state while verifying', async ({ page }) => {
+    await page.goto('/auth/callback?code=test_code');
+    
+    await expect(page.locator('text=Verifierar...')).toBeVisible({ timeout: 10000 });
+  });
+
+  test('shows error for invalid/expired token', async ({ page }) => {
+    await page.goto('/auth/callback?error=access_denied&error_description=Token+expired');
+    
+    await expect(page.locator('text=Något gick fel')).toBeVisible({ timeout: 10000 });
+  });
+});
+
+test.describe('Registration Flow', () => {
+  test('shows registration form when clicking create account', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/login');
+    await page.click('text=Skapa ett här');
+    
+    await expect(page.getByRole('heading', { name: 'Skapa konto' })).toBeVisible();
   });
 });

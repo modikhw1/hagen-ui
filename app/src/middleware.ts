@@ -27,11 +27,12 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Skip if already on /m/ routes, API routes, or static files
+  // Skip if already on /m/ routes, API routes, auth callback, or static files
   if (
     pathname.startsWith('/m') ||
     pathname.startsWith('/api') ||
     pathname.startsWith('/_next') ||
+    pathname.startsWith('/auth/callback') ||
     pathname.includes('.')
   ) {
     return NextResponse.next()
