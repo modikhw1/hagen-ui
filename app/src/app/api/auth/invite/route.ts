@@ -102,10 +102,6 @@ export async function POST(request: NextRequest) {
         has_paid: false, // Will be true after agreement is accepted
         has_concepts: false,
         is_admin: false,
-        // Store invite details for agreement flow
-        invite_price: price || null,
-        invite_coupon: couponCode || null,
-        invite_accepted: false,
       });
 
     if (profileError) {
