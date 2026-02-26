@@ -1,19 +1,72 @@
 'use client';
 
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+
+type AuthStatus = 'loading' | 'set-password' | 'error' | 'success';
+
+interface AuthState {
+  status: AuthStatus;
+  error: string | null;
+  password: string;
+  confirmPassword: string;
+  businessName: string | null;
+  isSubmitting: boolean;
+}
 
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<'loading' | 'set-password' | 'error' | 'success'>('loading');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [businessName, setBusinessName] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [state, setState] = useState<AuthState>({
+    status: 'loading',
+    error: null,
+    password: '',
+    confirmPassword: '',
+    businessName: null,
+    isSubmitting: false,
+  });
   const processedRef = useRef(false);
+  const statusRef = useRef<AuthStatus>('loading');
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    statusRef.current = state.status;
+  }, [state.status]);
+
+  const updateState = useCallback((updates: Partial<AuthState>) => {
+    setState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const handleSessionEstablished = useCallback(async (session: any, isInviteFlow: boolean) => {
+    console.log('Session established for:', session.user.email);
+
+    // Fetch profile to get business name
+    let fetchedBusinessName: string | null = null;
+    try {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('business_name')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profileData?.business_name) {
+        fetchedBusinessName = profileData.business_name;
+      }
+    } catch (e) {
+      console.log('Could not fetch profile:', e);
+    }
+
+    console.log('Flow:', { isInviteFlow, hasInvitedAt: !!session.user.invited_at });
+
+    if (isInviteFlow || session.user.invited_at) {
+      updateState({ status: 'set-password', businessName: fetchedBusinessName });
+    } else {
+      // Normal login - redirect
+      updateState({ status: 'success' });
+      router.push('/');
+    }
+  }, [router, updateState]);
 
   useEffect(() => {
     // Prevent double processing
@@ -28,12 +81,21 @@ function AuthCallbackContent() {
 
         if (errorParam) {
           console.log('Error in URL:', errorParam, errorDesc);
-          if (errorParam === 'access_denied' && errorDesc?.includes('expired')) {
-            setError('Länken har gått ut. Be om en ny inbjudan.');
+          
+          // Handle specific error cases
+          if (errorParam === 'access_denied') {
+            if (errorDesc?.includes('expired')) {
+              updateState({ status: 'error', error: 'Länken har gått ut. Be om en ny inbjudan.' });
+            } else if (errorDesc?.includes('invalid') || errorDesc?.includes('malformed')) {
+              updateState({ status: 'error', error: 'Länken är ogiltig. Be om en ny inbjudan.' });
+            } else {
+              updateState({ status: 'error', error: errorDesc || 'Åtkomst nekad' });
+            }
+          } else if (errorParam === 'server_error') {
+            updateState({ status: 'error', error: 'Serverfel. Försök igen senare.' });
           } else {
-            setError(errorDesc || errorParam);
+            updateState({ status: 'error', error: errorDesc || errorParam });
           }
-          setStatus('error');
           return;
         }
 
@@ -55,8 +117,7 @@ function AuthCallbackContent() {
 
           if (sessionError) {
             console.error('Session error:', sessionError);
-            setError('Kunde inte verifiera sessionen: ' + sessionError.message);
-            setStatus('error');
+            updateState({ status: 'error', error: 'Kunde inte verifiera sessionen. Länken kan ha gått ut.' });
             return;
           }
 
@@ -68,24 +129,21 @@ function AuthCallbackContent() {
 
         // Fallback: check if we already have a session
         console.log('Checking existing session...');
+        
+        // Wait a bit for any ongoing auth to complete
+        await new Promise(r => setTimeout(r, 500));
+        
         const { data: { session }, error: getSessionError } = await supabase.auth.getSession();
 
         if (getSessionError) {
-          // Handle abort errors gracefully
-          if (getSessionError.message?.includes('abort')) {
-            console.log('Session check aborted, retrying...');
-            // Wait a bit and retry
-            await new Promise(r => setTimeout(r, 500));
-            const retry = await supabase.auth.getSession();
-            if (retry.data.session) {
-              const flowParam = searchParams.get('flow');
-              await handleSessionEstablished(retry.data.session, flowParam === 'invite');
-              return;
-            }
-          }
           console.error('Get session error:', getSessionError);
-          setError('Kunde inte hämta session');
-          setStatus('error');
+          
+          // Check for network errors
+          if (getSessionError.message?.includes('network') || getSessionError.message?.includes('fetch')) {
+            updateState({ status: 'error', error: 'Nätverksfel. Kontrollera din internetanslutning.' });
+          } else {
+            updateState({ status: 'error', error: 'Kunde inte hämta session' });
+          }
           return;
         }
 
@@ -95,46 +153,30 @@ function AuthCallbackContent() {
           return;
         }
 
-        // No session found - wait a bit for auth state change
-        console.log('No immediate session, waiting for auth state...');
+        // No session found - could be an error scenario
+        console.log('No session found after all attempts');
+        
+        // Check if this looks like a failed auth attempt
+        const hashParamsStr = window.location.hash;
+        if (hashParamsStr && !accessToken) {
+          // Has hash but no valid tokens - likely an error
+          updateState({ status: 'error', error: 'Autentiseringen misslyckades. Länken kan ha gått ut.' });
+          return;
+        }
+
+        // Otherwise show loading state
+        updateState({ status: 'loading' });
 
       } catch (err) {
         console.error('Auth error:', err);
-        // Don't show error for abort signals - they're usually benign
-        if (err instanceof Error && err.message?.includes('abort')) {
-          console.log('Abort signal caught, continuing...');
+        
+        // Don't show error for abort signals
+        if (err instanceof Error && (err.message?.includes('abort') || err.message?.includes('network'))) {
+          console.log('Network/abort error caught, retrying...');
           return;
         }
-        setError('Ett fel uppstod vid verifiering');
-        setStatus('error');
-      }
-    };
-
-    const handleSessionEstablished = async (session: any, isInviteFlow: boolean) => {
-      console.log('Session established for:', session.user.email);
-
-      // Fetch profile to get business name
-      try {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('business_name')
-          .eq('id', session.user.id)
-          .single();
-
-        if (profileData?.business_name) {
-          setBusinessName(profileData.business_name);
-        }
-      } catch (e) {
-        console.log('Could not fetch profile:', e);
-      }
-
-      console.log('Flow:', { isInviteFlow, hasInvitedAt: !!session.user.invited_at });
-
-      if (isInviteFlow || session.user.invited_at) {
-        setStatus('set-password');
-      } else {
-        setStatus('success');
-        router.push('/');
+        
+        updateState({ status: 'error', error: 'Ett fel uppstod vid verifiering' });
       }
     };
 
@@ -145,73 +187,80 @@ function AuthCallbackContent() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth event:', event, 'Session:', !!session);
 
+      // Skip if we've already handled this
+      if (statusRef.current !== 'loading') return;
+
       if (event === 'USER_UPDATED' && session) {
-        console.log('Password updated, redirecting to home...');
+        console.log('User updated, redirecting...');
         router.push('/');
         return;
       }
 
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && status === 'loading') {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
         const flowParam = searchParams.get('flow');
         await handleSessionEstablished(session, flowParam === 'invite' || !!session.user.invited_at);
+        return;
       }
 
       if (event === 'SIGNED_OUT') {
-        setError('Sessionen avslutades');
-        setStatus('error');
+        updateState({ status: 'error', error: 'Sessionen avslutades. Försök logga in igen.' });
+        return;
       }
     });
 
-    // Timeout fallback - longer timeout
+    // Timeout fallback
     const timeout = setTimeout(() => {
-      if (status === 'loading') {
+      if (statusRef.current === 'loading') {
         console.log('Timeout - no session established');
-        setError('Kunde inte verifiera länken. Prova igen.');
-        setStatus('error');
+        updateState({ status: 'error', error: 'Verifieringen tog för lång tid. Försök igen eller begär en ny länk.' });
       }
-    }, 15000);
+    }, 20000);
 
     return () => {
       subscription.unsubscribe();
       clearTimeout(timeout);
     };
-  }, [searchParams, router, status]);
+  }, [searchParams, router, handleSessionEstablished, updateState]);
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     console.log('Setting password...');
-    setError(null);
-    setIsSubmitting(true);
+    updateState({ error: null, isSubmitting: true });
 
-    if (password.length < 6) {
-      setError('Lösenordet måste vara minst 6 tecken');
-      setIsSubmitting(false);
+    const pwd = state.password;
+    const confirmPwd = state.confirmPassword;
+
+    if (pwd.length < 6) {
+      updateState({ error: 'Lösenordet måste vara minst 6 tecken', isSubmitting: false });
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError('Lösenorden matchar inte');
-      setIsSubmitting(false);
+    if (pwd !== confirmPwd) {
+      updateState({ error: 'Lösenorden matchar inte', isSubmitting: false });
       return;
     }
 
     try {
       console.log('Calling updateUser...');
       const { data, error: updateError } = await supabase.auth.updateUser({
-        password: password,
+        password: pwd,
       });
-      console.log('updateUser returned:', { data: !!data, error: updateError });
 
       if (updateError) {
         console.error('Update error:', updateError);
-        // If password already set, just redirect
-        if (updateError.message.includes('different from the old')) {
-          console.log('Password already set, redirecting...');
-          router.push('/');
+        
+        // Handle specific password errors
+        if (updateError.message.includes('different from the old') || updateError.message.includes('same password')) {
+          updateState({ error: 'Detta lösenord har redan använts. Välj ett annat.', isSubmitting: false });
           return;
         }
-        setError(updateError.message);
-        setIsSubmitting(false);
+        
+        if (updateError.message.includes('weak') || updateError.message.includes('strength')) {
+          updateState({ error: 'Lösenordet är för svagt. Använd minst 6 tecken.', isSubmitting: false });
+          return;
+        }
+        
+        updateState({ error: updateError.message || 'Kunde inte uppdatera lösenord', isSubmitting: false });
         return;
       }
 
@@ -219,10 +268,11 @@ function AuthCallbackContent() {
       router.push('/');
     } catch (err) {
       console.error('Password update error:', err);
-      setError('Kunde inte uppdatera lösenord');
-      setIsSubmitting(false);
+      updateState({ error: 'Kunde inte uppdatera lösenord', isSubmitting: false });
     }
   };
+
+  const { status, error, password, confirmPassword, businessName, isSubmitting } = state;
 
   if (status === 'loading') {
     return (
@@ -233,6 +283,9 @@ function AuthCallbackContent() {
           </div>
           <h1 className="text-2xl text-[#1A1612] mb-2 font-semibold">Verifierar...</h1>
           <p className="text-[#5D4D3D] text-sm mb-6">Vänta medan vi verifierar din inbjudan</p>
+          <div className="flex justify-center">
+            <div className="w-6 h-6 border-2 border-[#6B4423] border-t-transparent rounded-full animate-spin" />
+          </div>
         </div>
       </div>
     );
@@ -242,8 +295,8 @@ function AuthCallbackContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] p-5">
         <div className="bg-white rounded-2xl p-10 max-w-md w-full shadow-lg text-center">
-          <div className="w-12 h-12 bg-[#6B4423] rounded-full inline-flex items-center justify-center mb-6">
-            <span className="font-serif italic text-base text-[#FAF8F5]">Le</span>
+          <div className="w-12 h-12 bg-red-100 rounded-full inline-flex items-center justify-center mb-6">
+            <span className="text-red-600 text-xl">✕</span>
           </div>
           <h1 className="text-2xl text-[#1A1612] mb-2 font-semibold">Något gick fel</h1>
           <p className="text-red-600 text-sm mb-4">{error}</p>
@@ -278,7 +331,7 @@ function AuthCallbackContent() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => updateState({ password: e.target.value })}
                 className="w-full p-3 text-sm text-[#1A1612] bg-white border border-[#E5E0DA] rounded-lg outline-none focus:border-[#6B4423]"
                 placeholder="Minst 6 tecken"
                 autoComplete="new-password"
@@ -292,7 +345,7 @@ function AuthCallbackContent() {
               <input
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => updateState({ confirmPassword: e.target.value })}
                 className="w-full p-3 text-sm text-[#1A1612] bg-white border border-[#E5E0DA] rounded-lg outline-none focus:border-[#6B4423]"
                 placeholder="Skriv lösenordet igen"
                 autoComplete="new-password"
@@ -305,8 +358,11 @@ function AuthCallbackContent() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 bg-gradient-to-br from-[#6B4423] to-[#4A2F18] text-white rounded-lg font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-3 bg-gradient-to-br from-[#6B4423] to-[#4A2F18] text-white rounded-lg font-semibold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
+              {isSubmitting && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
               {isSubmitting ? 'Sparar...' : 'Skapa konto'}
             </button>
           </form>
@@ -319,8 +375,8 @@ function AuthCallbackContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] p-5">
         <div className="bg-white rounded-2xl p-10 max-w-md w-full shadow-lg text-center">
-          <div className="w-12 h-12 bg-[#6B4423] rounded-full inline-flex items-center justify-center mb-6">
-            <span className="font-serif italic text-base text-[#FAF8F5]">Le</span>
+          <div className="w-12 h-12 bg-green-100 rounded-full inline-flex items-center justify-center mb-6">
+            <span className="text-green-600 text-xl">✓</span>
           </div>
           <h1 className="text-2xl text-[#1A1612] mb-2 font-semibold">Klart!</h1>
           <p className="text-[#5D4D3D] text-sm">Du skickas vidare...</p>
@@ -337,6 +393,9 @@ export default function AuthCallbackPage() {
     <Suspense fallback={
       <div className="min-h-screen flex items-center justify-center bg-[#FAF8F5] p-5">
         <div className="bg-white rounded-2xl p-10 max-w-md w-full shadow-lg text-center">
+          <div className="w-12 h-12 bg-[#6B4423] rounded-full inline-flex items-center justify-center mb-6">
+            <span className="font-serif italic text-base text-[#FAF8F5]">Le</span>
+          </div>
           <p className="text-[#5D4D3D]">Laddar...</p>
         </div>
       </div>

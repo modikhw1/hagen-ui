@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase/client'
@@ -50,10 +50,13 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
   const [businessName, setBusinessName] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [localLoading, setLocalLoading] = useState(false)
 
   const router = useRouter()
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, loading: authLoading } = useAuth()
+
+  // Combined loading state
+  const loading = localLoading || authLoading
 
   // Compute password strength
   const passwordStrength: PasswordStrength = mode === 'register' && password
@@ -65,9 +68,51 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
     setSuccess('')
   }
 
+  // Handle network errors gracefully
+  const handleAuthError = (err: unknown, fallbackMessage: string): string => {
+    if (err instanceof Error) {
+      // Network errors
+      if (err.message.includes('fetch') || err.message.includes('network')) {
+        return 'Nätverksfel. Kontrollera din internetanslutning.'
+      }
+      // Timeout errors
+      if (err.message.includes('timeout') || err.message.includes('timed out')) {
+        return 'Förfrågan tog för lång tid. Försök igen.'
+      }
+      // Supabase-specific errors
+      if (err.message.includes('Invalid login')) {
+        return 'Fel e-post eller lösenord'
+      }
+      if (err.message.includes('Email not confirmed')) {
+        return 'Du behöver bekräfta din e-post först. Kolla din inkorg.'
+      }
+      if (err.message.includes('already registered') || err.message.includes('already been registered')) {
+        return 'E-postadressen är redan registrerad. Prova logga in istället!'
+      }
+      if (err.message.includes('invalid') && err.message.includes('email')) {
+        return 'Ogiltig e-postadress'
+      }
+      if (err.message.includes('password') && err.message.includes('weak')) {
+        return 'Lösenordet är för svagt. Använd minst 6 tecken.'
+      }
+      if (err.message.includes('rate limit') || err.message.includes('too many requests')) {
+        return 'För många försök. Vänta en stund och försök igen.'
+      }
+      return err.message
+    }
+    return fallbackMessage
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError('Ange en giltig e-postadress')
+      return
+    }
 
     // Demo mode: demo/demo
     if (email === 'demo' && password === 'demo') {
@@ -83,80 +128,71 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
       }
     }
 
-    setLoading(true)
+    setLocalLoading(true)
 
     try {
       if (mode === 'forgot') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: resetRedirectUrl,
         })
+        
         if (error) {
-          setError('Kunde inte skicka återställningslänk')
+          setError(handleAuthError(error, 'Kunde inte skicka återställningslänk'))
         } else {
           setSuccess('Kolla din e-post för återställningslänk!')
         }
-        setLoading(false)
+        setLocalLoading(false)
         return
       }
 
       if (mode === 'login') {
         const { error } = await signIn(email, password)
+        
         if (error) {
-          if (error.message.includes('Invalid login')) {
-            setError('Fel e-post eller lösenord')
-          } else if (error.message.includes('Email not confirmed')) {
-            setError('Du behöver bekräfta din e-post först.')
-          } else {
-            setError(error.message || 'Inloggningen misslyckades')
-          }
-          setLoading(false)
+          setError(handleAuthError(error, 'Inloggningen misslyckades'))
+          setLocalLoading(false)
           return
         }
-        router.push(loginRedirect)
+        
+        // Wait a moment for auth state to propagate, then redirect
+        setSuccess('Inloggningen lyckades! Omdirigerar...')
+        setTimeout(() => router.push(loginRedirect), 500)
       } else {
         // Register
         if (!businessName.trim()) {
           setError('Ange ditt företagsnamn')
-          setLoading(false)
+          setLocalLoading(false)
           return
         }
 
         if (password.length < 6) {
           setError('Lösenordet måste vara minst 6 tecken')
-          setLoading(false)
+          setLocalLoading(false)
           return
         }
 
-        const { error, needsConfirmation } = await signUp(email, password, businessName)
+        const { error: signUpError, needsConfirmation } = await signUp(email, password, businessName)
 
-        if (error) {
-          if (error.message.includes('already registered') || error.message.includes('already been registered')) {
-            setError('E-postadressen är redan registrerad. Prova logga in istället!')
-          } else if (error.message.includes('invalid') && error.message.includes('email')) {
-            setError('Ogiltig e-postadress')
-          } else if (error.message.includes('password')) {
-            setError('Lösenordet uppfyller inte kraven')
-          } else {
-            setError(error.message || 'Registreringen misslyckades')
-          }
-          setLoading(false)
+        if (signUpError) {
+          setError(handleAuthError(signUpError, 'Registreringen misslyckades'))
+          setLocalLoading(false)
           return
         }
 
         if (needsConfirmation) {
           setSuccess('Konto skapat! Kolla din e-post för att bekräfta.')
-          setLoading(false)
+          setLocalLoading(false)
           return
         }
 
         setSuccess('Välkommen! Omdirigerar...')
         setTimeout(() => router.push(loginRedirect), 1000)
       }
-    } catch {
-      setError('Något gick fel. Försök igen.')
+    } catch (err) {
+      setError(handleAuthError(err, 'Något gick fel. Försök igen.'))
     }
 
-    setLoading(false)
+    setLocalLoading(false)
   }
 
   return {
