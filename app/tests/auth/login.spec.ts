@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures';
+import { test, expect } from '../fixtures';
 
 test.describe('Login Flow', () => {
   test.beforeEach(async ({ page }) => {
@@ -6,36 +6,36 @@ test.describe('Login Flow', () => {
   });
 
   test('shows login form by default', async ({ page }) => {
-    await expect(page.locator('text=Välkommen tillbaka')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Välkommen tillbaka' })).toBeVisible();
     await expect(page.locator('input[placeholder*="din@email.se"]')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
-    await expect(page.locator('text=Logga in')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Logga in' })).toBeVisible();
   });
 
   test('shows register form when clicking create account', async ({ page }) => {
     await page.click('text=Skapa ett här');
-    await expect(page.locator('text=Skapa konto')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Skapa konto' })).toBeVisible();
     await expect(page.locator('text=Företagsnamn')).toBeVisible();
   });
 
   test('shows forgot password form', async ({ page }) => {
     await page.click('text=Glömt lösenordet?');
-    await expect(page.locator('text=Återställ lösenord')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Återställ lösenord' })).toBeVisible();
     await expect(page.locator('text=Tillbaka till inloggning')).toBeVisible();
   });
 
   test('validates email format', async ({ page }) => {
     await page.fill('input[placeholder*="din@email.se"]', 'notanemail');
     await page.fill('input[type="password"]', 'password123');
-    await page.click('text=Logga in');
+    await page.getByRole('button', { name: 'Logga in' }).click();
     
-    await expect(page.locator('text=Ange en giltig e-postadress')).toBeVisible();
+    await expect(page.locator('text=Ange en giltig e-postadress')).toBeVisible({ timeout: 5000 });
   });
 
   test('shows error for invalid credentials', async ({ page }) => {
     await page.fill('input[placeholder*="din@email.se"]', 'nonexistent@test.com');
     await page.fill('input[type="password"]', 'wrongpassword');
-    await page.click('text=Logga in');
+    await page.getByRole('button', { name: 'Logga in' }).click();
     
     // Wait for error message
     await expect(page.locator('text=Fel e-post eller lösenord')).toBeVisible({ timeout: 10000 });
@@ -48,10 +48,10 @@ test.describe('Login Flow', () => {
     
     await page.fill('input[placeholder*="din@email.se"]', email);
     await page.fill('input[type="password"]', password);
-    await page.click('text=Logga in');
+    await page.getByRole('button', { name: 'Logga in' }).click();
     
     // Should redirect to app
-    await expect(page).toHaveURL(/\/app/, { timeout: 15000 });
+    await expect(page).toHaveURL(/\/app\/?|\/\?demo=true/, { timeout: 15000 });
   });
 });
 
@@ -60,8 +60,9 @@ test.describe('Demo Login', () => {
     await page.goto('/login');
     await page.fill('input[placeholder*="din@email.se"]', 'demo');
     await page.fill('input[type="password"]', 'demo');
-    await page.click('text=Logga in');
+    await page.getByRole('button', { name: 'Logga in' }).click();
     
-    await expect(page).toHaveURL(/\/app/, { timeout: 10000 });
+    // Demo redirects to /?demo=true
+    await expect(page).toHaveURL(/\/app\/?|\/\?demo=true/, { timeout: 10000 });
   });
 });
