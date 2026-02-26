@@ -266,21 +266,14 @@ function AuthCallbackContent() {
 
       console.log('Password set successfully!');
       
-      // Check for subscription_id OR price in URL - redirect to agreement if either exists
+      // Check for subscription_id OR price in URL - redirect to agreement page if either exists
       const subscriptionId = searchParams.get('subscription_id');
       const price = searchParams.get('price');
-      const coupon = searchParams.get('coupon');
-      
-      // Build redirect URL with agreement params
-      const redirectParams = new URLSearchParams();
-      if (subscriptionId) redirectParams.set('subscription_id', subscriptionId);
-      if (price) redirectParams.set('price', price);
-      if (coupon) redirectParams.set('coupon', coupon);
       
       if (subscriptionId || price) {
-        redirectParams.set('agreement', 'pending');
-        console.log('Redirecting to agreement with params:', redirectParams.toString());
-        router.push(`/?${redirectParams.toString()}`);
+        // Redirect directly to /agreement page
+        console.log('Redirecting to agreement page');
+        router.push('/agreement');
       } else {
         // Normal redirect
         router.push('/');
