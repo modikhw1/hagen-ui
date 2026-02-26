@@ -4,10 +4,13 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-export async function PATCH(request: NextRequest) {
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json({ error: 'Profile ID is required' }, { status: 400 });
@@ -94,10 +97,9 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { searchParams } = new URL(request.url);
-    const id = searchParams.get('id');
+    const { id } = await params;
 
     if (!id) {
       return NextResponse.json({ error: 'Profile ID is required' }, { status: 400 });

@@ -120,10 +120,11 @@ export default function AdminPage() {
     if (!confirm(`Send invite to ${profile.contact_email}?`)) return;
 
     try {
-      const res = await fetch(`/api/admin/customers/${profile.id}?action=send_invite`, {
+      const res = await fetch(`/api/admin/customers/${profile.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'send_invite',
           contact_email: profile.contact_email,
           business_name: profile.business_name,
         }),
@@ -289,22 +290,24 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#1A1612] mb-1">Startdatum</label>
-                  <input
-                    type="date"
-                    value={formData.price_start_date}
-                    onChange={(e) => setFormData({ ...formData, price_start_date: e.target.value })}
-                    className="w-full p-3 border border-[#E5E0DA] rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1A1612] mb-1">Slutdatum</label>
-                  <input
-                    type="date"
-                    value={formData.price_end_date}
-                    onChange={(e) => setFormData({ ...formData, price_end_date: e.target.value })}
-                    className="w-full p-3 border border-[#E5E0DA] rounded-lg"
-                  />
+                  <label className="block text-sm font-medium text-[#1A1612] mb-1">Betalingsperiod</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={formData.price_start_date}
+                      onChange={(e) => setFormData({ ...formData, price_start_date: e.target.value })}
+                      className="flex-1 p-3 border border-[#E5E0DA] rounded-lg"
+                    />
+                    <span className="self-center text-[#5D4D3D]">-</span>
+                    <input
+                      type="date"
+                      value={formData.price_end_date}
+                      onChange={(e) => setFormData({ ...formData, price_end_date: e.target.value })}
+                      className="flex-1 p-3 border border-[#E5E0DA] rounded-lg"
+                      placeholder="Tills vidare"
+                    />
+                  </div>
+                  <p className="text-xs text-[#5D4D3D] mt-1">Lämna tomt för "tills vidare"</p>
                 </div>
               </div>
 
