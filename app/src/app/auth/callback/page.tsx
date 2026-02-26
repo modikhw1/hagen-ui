@@ -264,8 +264,19 @@ function AuthCallbackContent() {
         return;
       }
 
-      console.log('Password set successfully! Redirecting...');
-      router.push('/');
+      console.log('Password set successfully!');
+      
+      // Check for subscription_id in URL - redirect to payment if exists
+      const subscriptionId = searchParams.get('subscription_id');
+      
+      if (subscriptionId) {
+        console.log('Redirecting to payment for subscription:', subscriptionId);
+        // Redirect to pending agreement page
+        router.push(`/?subscription_id=${subscriptionId}&agreement=pending`);
+      } else {
+        // Normal redirect
+        router.push('/');
+      }
     } catch (err) {
       console.error('Password update error:', err);
       updateState({ error: 'Kunde inte uppdatera lösenord', isSubmitting: false });
