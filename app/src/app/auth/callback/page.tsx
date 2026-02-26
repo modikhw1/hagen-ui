@@ -266,6 +266,25 @@ function AuthCallbackContent() {
 
       console.log('Password set successfully!');
       
+      // Get the customer profile ID from user metadata
+      const customerProfileId = userData.user?.user_metadata?.customer_profile_id;
+      
+      // If there's a customer profile, update it to "active" when user completes registration
+      if (customerProfileId && supabase) {
+        try {
+          await supabase
+            .from('customer_profiles')
+            .update({ 
+              status: 'active',
+              agreed_at: new Date().toISOString()
+            })
+            .eq('id', customerProfileId);
+          console.log('Customer profile activated:', customerProfileId);
+        } catch (e) {
+          console.error('Failed to update customer profile:', e);
+        }
+      }
+      
       // Check for subscription_id OR price in URL - redirect to agreement page if either exists
       const subscriptionId = searchParams.get('subscription_id');
       const price = searchParams.get('price');

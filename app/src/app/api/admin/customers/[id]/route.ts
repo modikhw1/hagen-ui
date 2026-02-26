@@ -23,28 +23,24 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (body.action === 'send_invite') {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
       
-      // Use Supabase's built-in invite functionality
-      const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'invite',
-        email: body.contact_email,
-        options: {
+      // Use Supabase's inviteUserByEmail - this actually sends the email!
+      const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+        body.contact_email,
+        {
           data: {
             business_name: body.business_name,
             customer_profile_id: id,
           },
           redirectTo: `${appUrl}/auth/callback`,
-        },
-      });
+        }
+      );
 
       if (inviteError) {
         console.error('Invite error:', inviteError);
         return NextResponse.json({ error: inviteError.message }, { status: 500 });
       }
 
-      // Get the confirmation link from the response
-      const confirmLink = inviteData?.properties?.href;
-      
-      console.log('Generated invite link:', confirmLink);
+      console.log('Invited user:', inviteData);
 
       // Update profile status
       const { data: profile, error: updateError } = await supabaseAdmin
@@ -63,8 +59,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
       return NextResponse.json({ 
         profile, 
-        confirmLink,
-        message: confirmLink ? 'Invitation generated!' : 'Failed to generate link'
+        message: 'Invitation email sent!'
       });
     }
 
