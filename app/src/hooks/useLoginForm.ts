@@ -107,14 +107,7 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
     e.preventDefault()
     clearMessages()
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      setError('Ange en giltig e-postadress')
-      return
-    }
-
-    // Demo mode: demo/demo
+    // Demo mode FIRST - before email validation (so "demo" works)
     if (email === 'demo' && password === 'demo') {
       router.push(demoRedirect)
       return
@@ -126,6 +119,13 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
         router.push(cred.redirect)
         return
       }
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError('Ange en giltig e-postadress')
+      return
     }
 
     setLocalLoading(true)
