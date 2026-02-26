@@ -41,6 +41,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: inviteError.message }, { status: 500 });
       }
 
+      // Get the confirmation link from the response
+      const confirmLink = inviteData?.properties?.href;
+      
+      console.log('Generated invite link:', confirmLink);
+
       // Update profile status
       const { data: profile, error: updateError } = await supabaseAdmin
         .from('customer_profiles')
@@ -56,10 +61,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: updateError.message }, { status: 500 });
       }
 
-      // Supabase automatically sends the email via Resend
       return NextResponse.json({ 
         profile, 
-        message: 'Invitation sent via email!' 
+        confirmLink,
+        message: confirmLink ? 'Invitation generated!' : 'Failed to generate link'
       });
     }
 
