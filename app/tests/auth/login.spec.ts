@@ -62,7 +62,7 @@ test.describe('Demo Login', () => {
     await page.fill('input[type="password"]', 'demo');
     await page.getByRole('button', { name: 'Logga in' }).click();
     
-    // Demo should redirect to /?demo=true
-    await expect(page).toHaveURL(/\/app\/?|\/\?demo=true/, { timeout: 10000 });
+    // Demo should redirect - desktop goes to /?demo=true, mobile to /m
+    await expect(page).toHaveURL(/\/app\/?|\/\?demo=true|\/m(\?.*)?$/, { timeout: 10000 });
   });
 });
