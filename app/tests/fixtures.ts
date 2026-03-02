@@ -37,13 +37,13 @@ export async function cleanupTestUser(email: string) {
 
 // Extended test fixture with auth helpers
 export const test = base.extend<{
-  createTestUser: () => Promise<{ email: string; password: string }>;
+  createTestUser: { email: string; password: string; businessName: string };
   loginAs: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }>({
   createTestUser: async ({ page }, use) => {
     const user = generateTestUser();
-    
+
     // Create user via the registration UI
     await page.goto('/login');
     await page.click('text=Skapa ett här');
@@ -51,7 +51,7 @@ export const test = base.extend<{
     await page.fill('input[placeholder*="din@email.se"]', user.email);
     await page.fill('input[type="password"]', user.password);
     await page.click('text=Skapa konto');
-    
+
     await use(user);
     
     // Cleanup after test

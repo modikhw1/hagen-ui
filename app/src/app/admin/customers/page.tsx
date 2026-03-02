@@ -119,6 +119,7 @@ export default function AdminPage() {
   const handleSendInvite = async (profile: CustomerProfile) => {
     if (!confirm(`Send invite to ${profile.contact_email}?`)) return;
 
+    setLoading(true);
     try {
       const res = await fetch(`/api/admin/customers/${profile.id}`, {
         method: 'PATCH',
@@ -137,18 +138,25 @@ export default function AdminPage() {
         return;
       }
 
-      alert(`Invite sent! Link: ${data.inviteLink}`);
-      fetchProfiles();
+      alert(`Inbjudan skickad till ${profile.contact_email}! Kunden kommer få ett email via Resend.`);
+      await fetchProfiles();
     } catch (err) {
       console.error('Error sending invite:', err);
       alert('Failed to send invite');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleActivate = async (profile: CustomerProfile) => {
+    if (!confirm(`Aktivera ${profile.business_name}?`)) return;
+
+    setLoading(true);
     try {
-      const res = await fetch(`/api/admin/customers/${profile.id}?action=activate`, {
+      const res = await fetch(`/api/admin/customers/${profile.id}`, {
         method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'activate' }),
       });
 
       if (!res.ok) {
@@ -157,11 +165,13 @@ export default function AdminPage() {
         return;
       }
 
-      alert('Profile activated!');
-      fetchProfiles();
+      alert('Profil aktiverad!');
+      await fetchProfiles();
     } catch (err) {
       console.error('Error activating profile:', err);
       alert('Failed to activate profile');
+    } finally {
+      setLoading(false);
     }
   };
 

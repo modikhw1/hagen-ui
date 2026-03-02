@@ -28,6 +28,7 @@ function AuthCallbackContent() {
   });
   const processedRef = useRef(false);
   const statusRef = useRef<AuthStatus>('loading');
+  const sessionRef = useRef<any>(null); // Store session for reuse in handleSetPassword
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -39,30 +40,26 @@ function AuthCallbackContent() {
   }, []);
 
   const handleSessionEstablished = useCallback(async (session: any, isInviteFlow: boolean) => {
-    console.log('Session established for:', session.user.email);
+    console.log('[SESSION] Session established for:', session.user.email);
+    console.log('[SESSION] isInviteFlow:', isInviteFlow);
+    console.log('[SESSION] invited_at:', session.user.invited_at);
 
-    // Fetch profile to get business name
-    let fetchedBusinessName: string | null = null;
-    try {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('business_name')
-        .eq('id', session.user.id)
-        .single();
+    // Store session for later use in handleSetPassword
+    sessionRef.current = session;
 
-      if (profileData?.business_name) {
-        fetchedBusinessName = profileData.business_name;
-      }
-    } catch (e) {
-      console.log('Could not fetch profile:', e);
-    }
+    // Get business name directly from user metadata (faster and more reliable)
+    const fetchedBusinessName = session.user.user_metadata?.business_name || null;
+    console.log('[SESSION] Business name from metadata:', fetchedBusinessName);
 
-    console.log('Flow:', { isInviteFlow, hasInvitedAt: !!session.user.invited_at });
+    console.log('[SESSION] Flow check:', { isInviteFlow, hasInvitedAt: !!session.user.invited_at, fetchedBusinessName });
 
     if (isInviteFlow || session.user.invited_at) {
+      console.log('[SESSION] Calling updateState with set-password');
       updateState({ status: 'set-password', businessName: fetchedBusinessName });
+      console.log('[SESSION] updateState called, new state should render');
     } else {
       // Normal login - redirect
+      console.log('[SESSION] Setting status to success, redirecting');
       updateState({ status: 'success' });
       router.push('/');
     }
@@ -185,16 +182,24 @@ function AuthCallbackContent() {
 
     // Also listen for auth state changes as backup
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event, 'Session:', !!session);
+      console.log('Auth event:', event, 'Session:', !!session, 'Current status:', statusRef.current);
 
-      // Skip if we've already handled this
-      if (statusRef.current !== 'loading') return;
-
+      // Handle USER_UPDATED specially - check if we're in password flow
       if (event === 'USER_UPDATED' && session) {
-        console.log('User updated, redirecting...');
-        router.push('/');
+        if (statusRef.current === 'set-password') {
+          console.log('User updated but in set-password flow, ignoring redirect');
+          return;
+        }
+        // Only redirect if we're in loading state (not yet handled)
+        if (statusRef.current === 'loading') {
+          console.log('User updated, redirecting...');
+          router.push('/');
+        }
         return;
       }
+
+      // Skip other events if we've already handled auth
+      if (statusRef.current !== 'loading') return;
 
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
         const flowParam = searchParams.get('flow');
@@ -214,7 +219,7 @@ function AuthCallbackContent() {
         console.log('Timeout - no session established');
         updateState({ status: 'error', error: 'Verifieringen tog för lång tid. Försök igen eller begär en ny länk.' });
       }
-    }, 20000);
+    }, 30000);
 
     return () => {
       subscription.unsubscribe();
@@ -224,8 +229,10 @@ function AuthCallbackContent() {
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Setting password...');
+    console.log('[PASSWORD] ========== handleSetPassword CALLED ==========');
+    console.log('[PASSWORD] Form submitted');
     updateState({ error: null, isSubmitting: true });
+    console.log('[PASSWORD] State updated to isSubmitting: true');
 
     const pwd = state.password;
     const confirmPwd = state.confirmPassword;
@@ -241,65 +248,110 @@ function AuthCallbackContent() {
     }
 
     try {
-      console.log('Calling updateUser...');
-      const { data, error: updateError } = await supabase.auth.updateUser({
-        password: pwd,
+      // Use cached session first (it was valid when handleSessionEstablished ran)
+      let session = sessionRef.current;
+      console.log('[PASSWORD] Checking cached session...');
+
+      if (!session) {
+        console.log('[PASSWORD] No cached session, this should not happen!');
+        updateState({ error: 'Sessionen har gått ut. Klicka på inbjudningslänken igen.', isSubmitting: false });
+        return;
+      }
+
+      console.log('[PASSWORD] Using session for:', session.user?.email);
+      console.log('[PASSWORD] Setting password via direct API call...');
+
+      // Make direct API call to Supabase Auth to bypass client issues
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+        },
+        body: JSON.stringify({ password: pwd }),
       });
 
-      if (updateError) {
-        console.error('Update error:', updateError);
-        
+      console.log('[PASSWORD] API response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Update error:', errorData);
+        const errorMessage = errorData.message || errorData.error_description || 'Kunde inte uppdatera lösenord';
+
         // Handle specific password errors
-        if (updateError.message.includes('different from the old') || updateError.message.includes('same password')) {
+        if (errorMessage.includes('different from the old') || errorMessage.includes('same password')) {
           updateState({ error: 'Detta lösenord har redan använts. Välj ett annat.', isSubmitting: false });
           return;
         }
-        
-        if (updateError.message.includes('weak') || updateError.message.includes('strength')) {
+
+        if (errorMessage.includes('weak') || errorMessage.includes('strength')) {
           updateState({ error: 'Lösenordet är för svagt. Använd minst 6 tecken.', isSubmitting: false });
           return;
         }
-        
-        updateState({ error: updateError.message || 'Kunde inte uppdatera lösenord', isSubmitting: false });
+
+        updateState({ error: errorMessage, isSubmitting: false });
         return;
       }
 
       console.log('Password set successfully!');
-      
-      // Get the customer profile ID from user metadata
-      const customerProfileId = userData.user?.user_metadata?.customer_profile_id;
-      
-      // If there's a customer profile, update it to "active" when user completes registration
-      if (customerProfileId && supabase) {
-        try {
-          await supabase
-            .from('customer_profiles')
-            .update({ 
-              status: 'active',
-              agreed_at: new Date().toISOString()
-            })
-            .eq('id', customerProfileId);
-          console.log('Customer profile activated:', customerProfileId);
-        } catch (e) {
-          console.error('Failed to update customer profile:', e);
-        }
-      }
-      
+
       // Check for subscription_id OR price in URL - redirect to agreement page if either exists
       const subscriptionId = searchParams.get('subscription_id');
       const price = searchParams.get('price');
-      
-      if (subscriptionId || price) {
-        // Redirect directly to /agreement page
-        console.log('Redirecting to agreement page');
-        router.push('/agreement');
-      } else {
-        // Normal redirect
-        router.push('/');
+      const redirectPath = (subscriptionId || price) ? '/agreement' : '/';
+
+      console.log('[PASSWORD] Redirecting to:', redirectPath);
+
+      // Get the customer profile ID from user metadata
+      const customerProfileId = session.user.user_metadata?.customer_profile_id;
+      const userId = session.user.id;
+      const userEmail = session.user.email;
+      const businessName = session.user.user_metadata?.business_name || 'Mitt företag';
+
+      // Fire-and-forget: Update customer_profiles and create profiles row via API
+      // Don't await - let redirect happen immediately
+      if (customerProfileId) {
+        fetch('/api/admin/profiles/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            userEmail,
+            businessName,
+            customerProfileId,
+          }),
+        }).catch(e => console.error('Background profile setup failed:', e));
       }
+
+      // Store session directly in localStorage (bypass Supabase client which hangs)
+      console.log('[PASSWORD] Storing session in localStorage...');
+      const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+      const storageKey = `sb-${new URL(sbUrl).hostname.split('.')[0]}-auth-token`;
+
+      const sessionData = {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_in: session.expires_in,
+        expires_at: session.expires_at,
+        token_type: 'bearer',
+        user: session.user,
+      };
+
+      localStorage.setItem(storageKey, JSON.stringify(sessionData));
+      console.log('[PASSWORD] Session stored with key:', storageKey);
+
+      // Hard redirect to force full page reload
+      window.location.href = redirectPath;
+
     } catch (err) {
-      console.error('Password update error:', err);
-      updateState({ error: 'Kunde inte uppdatera lösenord', isSubmitting: false });
+      console.error('[PASSWORD] Error in handleSetPassword:', err);
+      // Show the actual error message if available
+      const errorMessage = err instanceof Error ? err.message : 'Kunde inte uppdatera lösenord';
+      updateState({ error: errorMessage, isSubmitting: false });
+      // Explicit return - NO redirect on error
+      return;
     }
   };
 
