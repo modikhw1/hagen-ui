@@ -532,7 +532,7 @@ function LeTrendAppContent() {
                       overflow: 'hidden'
                     }}>
                       {[
-                        { label: 'Fakturering', onClick: () => { console.log('Billing'); setShowProfileMenu(false); } },
+                        { label: 'Fakturering', onClick: () => { router.push('/billing'); setShowProfileMenu(false); } },
                         { label: 'Inställningar', onClick: () => { console.log('Settings'); setShowProfileMenu(false); } },
                         { label: 'Logga ut', onClick: () => { handleLogout(); setShowProfileMenu(false); }, danger: true }
                       ].map((item, index) => (

@@ -43,8 +43,41 @@ function AuthCallbackContent() {
     console.log('[SESSION] Session established for:', session.user.email);
     console.log('[SESSION] isInviteFlow:', isInviteFlow);
     console.log('[SESSION] invited_at:', session.user.invited_at);
+    console.log('[SESSION] email_confirmed_at:', session.user.email_confirmed_at);
 
-    // Store session for later use in handleSetPassword
+    // Check if user already completed onboarding (has a profile)
+    try {
+      const profileRes = await fetch(`/api/admin/profiles/check?userId=${session.user.id}`);
+      const profileData = await profileRes.json();
+      
+      if (profileData.hasProfile) {
+        // User already has a profile - redirect to dashboard
+        console.log('[SESSION] User already has profile, redirecting to dashboard');
+        router.push('/?already_registered=true');
+        return;
+      }
+    } catch (e) {
+      console.error('[SESSION] Error checking profile:', e);
+    }
+
+    // Check if this is a new invite (should go to set password)
+    // invited_at is set when user is invited but hasn't set password yet
+    const hasInvitedAt = !!session.user.invited_at;
+    
+    if (hasInvitedAt) {
+      // New invite - go to set password first
+      console.log('[SESSION] New invite, going to set password');
+      
+      // Store session for set password flow
+      sessionRef.current = session;
+      const fetchedBusinessName = session.user.user_metadata?.business_name || null;
+      updateState({ status: 'set-password', businessName: fetchedBusinessName });
+      return;
+    }
+
+    // No invite flag - user might be logging in normally
+    // Store session and check password status
+    console.log('[SESSION] No invite flag, checking password status');
     sessionRef.current = session;
 
     // Get business name directly from user metadata (faster and more reliable)
@@ -297,18 +330,34 @@ function AuthCallbackContent() {
 
       console.log('Password set successfully!');
 
-      // Check for subscription_id OR price in URL - redirect to agreement page if either exists
+      // Check for subscription in URL params OR in user metadata
       const subscriptionId = searchParams.get('subscription_id');
       const price = searchParams.get('price');
-      const redirectPath = (subscriptionId || price) ? '/agreement' : '/';
-
-      console.log('[PASSWORD] Redirecting to:', redirectPath);
-
-      // Get the customer profile ID from user metadata
       const customerProfileId = session.user.user_metadata?.customer_profile_id;
+      const stripeSubscriptionId = session.user.user_metadata?.stripe_subscription_id;
+
+      // Get user data for onboarding
       const userId = session.user.id;
       const userEmail = session.user.email;
       const businessName = session.user.user_metadata?.business_name || 'Mitt företag';
+
+      // Determine redirect path - go to welcome first
+      let redirectPath = '/welcome';
+      
+      // Store onboarding data
+      localStorage.setItem('pending_agreement_email', userEmail);
+      localStorage.setItem('onboarding_business_name', businessName);
+      localStorage.setItem('onboarding_price', price || '0');
+      localStorage.setItem('onboarding_interval', 'month');
+      localStorage.setItem('onboarding_customer_profile_id', customerProfileId || '');
+      
+      // If there's a Stripe subscription, we'll fetch the actual price from agreement page
+      if (stripeSubscriptionId || customerProfileId) {
+        // Will be handled by /onboarding → /agreement flow
+        console.log('[PASSWORD] Has Stripe subscription, going to onboarding');
+      }
+
+      console.log('[PASSWORD] Redirecting to:', redirectPath);
 
       // Fire-and-forget: Update customer_profiles and create profiles row via API
       // Don't await - let redirect happen immediately

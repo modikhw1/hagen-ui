@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { withAuth } from '@/lib/auth/api-auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-export async function POST(request: NextRequest) {
+export const POST = withAuth(async (request: NextRequest, user) => {
   try {
     const { userId, userEmail, businessName, customerProfileId } = await request.json();
 
@@ -89,4 +90,4 @@ export async function POST(request: NextRequest) {
     console.error('Profile setup error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
+}, ['admin', 'content_manager', 'customer', 'user']); // Allow all authenticated users to set up their profile

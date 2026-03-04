@@ -167,26 +167,23 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      // Skip fetching on admin/studio routes - ProfileContext not needed there
+      if (typeof window !== 'undefined') {
+        const pathname = window.location.pathname
+        if (pathname.startsWith('/admin') || pathname.startsWith('/studio')) {
+          setUserClips([])
+          return
+        }
+      }
+
       setClipsLoading(true)
       try {
-        const { data, error } = await supabase
-          .from('user_clips')
-          .select('clip_id')
-          .eq('user_id', user.id)
+        // NOTE: user_clips table was deprecated in Phase 3 migration
+        // Now using customer_concepts table for customer-assigned concepts
+        // For now, just use default concepts for logged-in customers
+        // TODO: Fetch from customer_concepts if this user is linked to a customer_profile
 
-        if (error) {
-          console.error('Error fetching user_clips:', error)
-          setUserClips([])
-        } else if (data && data.length > 0) {
-          // Convert to concept format
-          setUserClips(data.map((row: { clip_id: string }) => ({
-            clipId: row.clip_id,
-            matchOverride: 90 // Default match score for assigned clips
-          })))
-        } else {
-          // No clips assigned - use defaults
-          setUserClips(DEFAULT_USER_CONCEPTS)
-        }
+        setUserClips(DEFAULT_USER_CONCEPTS)
       } catch (err) {
         console.error('Error fetching user_clips:', err)
         setUserClips([])

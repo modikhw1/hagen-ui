@@ -17,6 +17,7 @@ interface Profile {
   has_paid: boolean;
   has_concepts: boolean;
   is_admin: boolean;
+  role: 'admin' | 'content_manager' | 'customer' | 'user';
 }
 
 interface AuthState {
@@ -50,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, role')
         .eq('id', userId)
         .single();
 
@@ -63,7 +64,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      return data as Profile;
+      // Ensure role has a fallback value
+      const profile = data as Profile;
+      if (!profile.role) {
+        profile.role = profile.is_admin ? 'admin' : 'user';
+      }
+
+      return profile;
     } catch (err) {
       console.error('Profile fetch error:', err);
       return null;

@@ -1,28 +1,18 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 import type { Database } from '@/types/database'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
-// Create a mock client for build time when env vars aren't available
-const createSupabaseClient = (): SupabaseClient<Database> => {
+// Create client using @supabase/ssr for proper cookie handling
+const createSupabaseClient = () => {
   if (!supabaseUrl || !supabaseAnonKey) {
-    // Return a mock client that will be replaced at runtime
     console.warn('Supabase env vars not set - using placeholder client')
-    return createClient('https://placeholder.supabase.co', 'placeholder-key')
+    // Fallback for build time
+    return createBrowserClient('https://placeholder.supabase.co', 'placeholder-key')
   }
-  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      // Disable Web Locks API to avoid "signal is aborted" errors
-      lock: async (name: string, acquireTimeout: number, fn: () => Promise<any>) => {
-        return await fn()
-      },
-      // Ensure we detect session from URL
-      detectSessionInUrl: true,
-      // Flow type for PKCE
-      flowType: 'pkce',
-    }
-  })
+
+  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
 }
 
 export const supabase = createSupabaseClient()
