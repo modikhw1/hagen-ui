@@ -3,8 +3,10 @@
 import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import type { Session } from '@supabase/supabase-js';
 
 type AuthStatus = 'loading' | 'set-password' | 'error' | 'success';
+const INVITE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface AuthState {
   status: AuthStatus;
@@ -13,6 +15,39 @@ interface AuthState {
   confirmPassword: string;
   businessName: string | null;
   isSubmitting: boolean;
+}
+
+function parseMetadataDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
+async function resolveRoleDestination(userId: string): Promise<string> {
+  const { data: profileData } = await supabase
+    .from('profiles')
+    .select('is_admin, role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileData?.is_admin || profileData?.role === 'admin') {
+    return '/admin';
+  }
+
+  if (profileData?.role === 'content_manager') {
+    return '/studio';
+  }
+
+  if (profileData?.role === 'customer') {
+    return '/';
+  }
+
+  return '/';
 }
 
 function AuthCallbackContent() {
@@ -28,7 +63,7 @@ function AuthCallbackContent() {
   });
   const processedRef = useRef(false);
   const statusRef = useRef<AuthStatus>('loading');
-  const sessionRef = useRef<any>(null); // Store session for reuse in handleSetPassword
+  const sessionRef = useRef<Session | null>(null); // Store session for reuse in handleSetPassword
 
   // Keep ref in sync with state
   useEffect(() => {
@@ -39,54 +74,75 @@ function AuthCallbackContent() {
     setState(prev => ({ ...prev, ...updates }));
   }, []);
 
-  const handleSessionEstablished = useCallback(async (session: any, isInviteFlow: boolean) => {
+  const handleSessionEstablished = useCallback(async (session: Session, isInviteFlow: boolean) => {
     console.log('[SESSION] Session established for:', session.user.email);
     console.log('[SESSION] isInviteFlow:', isInviteFlow);
-    console.log('[SESSION] invited_at:', session.user.invited_at);
+    console.log('[SESSION] user_metadata.invited_at:', session.user.user_metadata?.invited_at);
     console.log('[SESSION] email_confirmed_at:', session.user.email_confirmed_at);
 
-    // Check if user already completed onboarding (has a profile)
+    // Check invite markers first to keep set-password flow deterministic.
+    const metadataInvitedAt = parseMetadataDate(session.user.user_metadata?.invited_at);
+    const sessionInvitedAt = parseMetadataDate(session.user.invited_at);
+    const hasInviteMarker = Boolean(metadataInvitedAt || sessionInvitedAt);
+
+    if (hasInviteMarker) {
+      const invitedAt = metadataInvitedAt || sessionInvitedAt;
+      const explicitExpiry = parseMetadataDate(session.user.user_metadata?.invite_expires_at);
+      const fallbackExpiry = invitedAt ? new Date(invitedAt.getTime() + INVITE_LINK_TTL_MS) : null;
+      const effectiveExpiry = explicitExpiry || fallbackExpiry;
+
+      if (effectiveExpiry && Date.now() > effectiveExpiry.getTime()) {
+        await supabase.auth.signOut();
+        updateState({ status: 'error', error: 'Inbjudningslanken har gatt ut. Be om en ny inbjudan.' });
+        return;
+      }
+
+      // New invite - go to set password first (regardless of profile status)
+      console.log('[SESSION] New invite detected, going to set password');
+
+      // Store session for set password flow
+      sessionRef.current = session;
+      const fetchedBusinessName = session.user.user_metadata?.business_name || session.user.user_metadata?.name || null;
+      updateState({ status: 'set-password', businessName: fetchedBusinessName });
+      return;
+    }
+
+    if (isInviteFlow) {
+      // Recovery/invite links can be valid even without custom invited_at metadata.
+      sessionRef.current = session;
+      const fetchedBusinessName = session.user.user_metadata?.business_name || session.user.user_metadata?.name || null;
+      updateState({ status: 'set-password', businessName: fetchedBusinessName });
+      return;
+    }
+
+    // Not an invite - check if user already completed onboarding (has a profile)
     try {
       const profileRes = await fetch(`/api/admin/profiles/check?userId=${session.user.id}`);
       const profileData = await profileRes.json();
-      
+
       if (profileData.hasProfile) {
-        // User already has a profile - redirect to dashboard
+        // User already has a profile and no invite flag - they're returning
         console.log('[SESSION] User already has profile, redirecting to dashboard');
-        router.push('/?already_registered=true');
+        const destination = await resolveRoleDestination(session.user.id);
+        const joiner = destination.includes('?') ? '&' : '?';
+        router.replace(`${destination}${joiner}already_registered=true`);
         return;
       }
     } catch (e) {
       console.error('[SESSION] Error checking profile:', e);
     }
 
-    // Check if this is a new invite (should go to set password)
-    // invited_at is set when user is invited but hasn't set password yet
-    const hasInvitedAt = !!session.user.invited_at;
-    
-    if (hasInvitedAt) {
-      // New invite - go to set password first
-      console.log('[SESSION] New invite, going to set password');
-      
-      // Store session for set password flow
-      sessionRef.current = session;
-      const fetchedBusinessName = session.user.user_metadata?.business_name || null;
-      updateState({ status: 'set-password', businessName: fetchedBusinessName });
-      return;
-    }
-
-    // No invite flag - user might be logging in normally
-    // Store session and check password status
-    console.log('[SESSION] No invite flag, checking password status');
+    // No invite flag and no profile - check if this is part of invite flow
+    console.log('[SESSION] No invite flag, checking flow params');
     sessionRef.current = session;
 
     // Get business name directly from user metadata (faster and more reliable)
-    const fetchedBusinessName = session.user.user_metadata?.business_name || null;
+    const fetchedBusinessName = session.user.user_metadata?.business_name || session.user.user_metadata?.name || null;
     console.log('[SESSION] Business name from metadata:', fetchedBusinessName);
 
-    console.log('[SESSION] Flow check:', { isInviteFlow, hasInvitedAt: !!session.user.invited_at, fetchedBusinessName });
+    console.log('[SESSION] Flow check:', { isInviteFlow, hasInviteMarker, fetchedBusinessName });
 
-    if (isInviteFlow || session.user.invited_at) {
+    if (isInviteFlow) {
       console.log('[SESSION] Calling updateState with set-password');
       updateState({ status: 'set-password', businessName: fetchedBusinessName });
       console.log('[SESSION] updateState called, new state should render');
@@ -94,7 +150,8 @@ function AuthCallbackContent() {
       // Normal login - redirect
       console.log('[SESSION] Setting status to success, redirecting');
       updateState({ status: 'success' });
-      router.push('/');
+      const destination = await resolveRoleDestination(session.user.id);
+      router.replace(destination);
     }
   }, [router, updateState]);
 
@@ -226,7 +283,8 @@ function AuthCallbackContent() {
         // Only redirect if we're in loading state (not yet handled)
         if (statusRef.current === 'loading') {
           console.log('User updated, redirecting...');
-          router.push('/');
+          const destination = await resolveRoleDestination(session.user.id);
+          router.replace(destination);
         }
         return;
       }
@@ -282,7 +340,7 @@ function AuthCallbackContent() {
 
     try {
       // Use cached session first (it was valid when handleSessionEstablished ran)
-      let session = sessionRef.current;
+      const session = sessionRef.current;
       console.log('[PASSWORD] Checking cached session...');
 
       if (!session) {
@@ -296,15 +354,33 @@ function AuthCallbackContent() {
 
       // Make direct API call to Supabase Auth to bypass client issues
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-        },
-        body: JSON.stringify({ password: pwd }),
-      });
+
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      let response: Response;
+      try {
+        response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+          },
+          body: JSON.stringify({ password: pwd }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError: unknown) {
+        clearTimeout(timeoutId);
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          console.error('[PASSWORD] Request timed out');
+          updateState({ error: 'Begäran tog för lång tid. Försök igen.', isSubmitting: false });
+          return;
+        }
+        throw fetchError;
+      }
 
       console.log('[PASSWORD] API response status:', response.status);
 
@@ -330,69 +406,114 @@ function AuthCallbackContent() {
 
       console.log('Password set successfully!');
 
+      // Clear invited_at from user metadata to prevent re-triggering password set flow
+      try {
+        await fetch(`${supabaseUrl}/auth/v1/user`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+          },
+          body: JSON.stringify({
+            data: {
+              ...session.user.user_metadata,
+              invited_at: null, // Clear the invite flag
+            }
+          }),
+        });
+        console.log('[PASSWORD] Cleared invited_at flag');
+      } catch (err) {
+        console.error('[PASSWORD] Failed to clear invited_at:', err);
+        // Continue anyway - not critical
+      }
+
       // Check for subscription in URL params OR in user metadata
-      const subscriptionId = searchParams.get('subscription_id');
       const price = searchParams.get('price');
       const customerProfileId = session.user.user_metadata?.customer_profile_id;
       const stripeSubscriptionId = session.user.user_metadata?.stripe_subscription_id;
 
       // Get user data for onboarding
       const userId = session.user.id;
-      const userEmail = session.user.email;
+      const userEmail = session.user.email || '';
       const businessName = session.user.user_metadata?.business_name || 'Mitt företag';
 
-      // Determine redirect path - go to welcome first
-      let redirectPath = '/welcome';
-      
-      // Store onboarding data
-      localStorage.setItem('pending_agreement_email', userEmail);
-      localStorage.setItem('onboarding_business_name', businessName);
-      localStorage.setItem('onboarding_price', price || '0');
-      localStorage.setItem('onboarding_interval', 'month');
-      localStorage.setItem('onboarding_customer_profile_id', customerProfileId || '');
-      
-      // If there's a Stripe subscription, we'll fetch the actual price from agreement page
-      if (stripeSubscriptionId || customerProfileId) {
-        // Will be handled by /onboarding → /agreement flow
-        console.log('[PASSWORD] Has Stripe subscription, going to onboarding');
-      }
+      // Check if this is a team member invite
+      const isTeamInvite = session.user.user_metadata?.invited_as === 'team_member' || searchParams.get('flow') === 'team_invite';
 
-      console.log('[PASSWORD] Redirecting to:', redirectPath);
+      // Determine redirect path
+      const redirectPath = isTeamInvite ? '/studio' : '/welcome';
 
-      // Fire-and-forget: Update customer_profiles and create profiles row via API
-      // Don't await - let redirect happen immediately
-      if (customerProfileId) {
-        fetch('/api/admin/profiles/setup', {
+      // Ensure profile setup completes before redirect so onboarding APIs can authenticate reliably.
+      if (isTeamInvite) {
+        console.log('[PASSWORD] Ensuring team-member profile is created before redirect');
+        const teamRole = session.user.user_metadata?.role || 'content_manager';
+
+        const setupResponse = await fetch('/api/admin/profiles/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            userEmail,
+            businessName: session.user.user_metadata?.name || businessName,
+            isTeamMember: true,
+            role: teamRole,
+          }),
+        });
+
+        if (!setupResponse.ok) {
+          const setupPayload = await setupResponse.json().catch(() => ({} as Record<string, unknown>));
+          const setupError = typeof setupPayload.error === 'string'
+            ? setupPayload.error
+            : 'Kunde inte skapa teamprofil.';
+          updateState({ error: setupError, isSubmitting: false });
+          return;
+        }
+      } else {
+        // Store onboarding data for customer flow only
+        localStorage.setItem('pending_agreement_email', userEmail);
+        localStorage.setItem('onboarding_business_name', businessName);
+        localStorage.setItem('onboarding_interval', 'month');
+        localStorage.setItem('onboarding_customer_profile_id', customerProfileId || '');
+        if (price && Number(price) > 0) {
+          localStorage.setItem('onboarding_price', price);
+        } else {
+          localStorage.removeItem('onboarding_price');
+        }
+
+        // If there's a Stripe subscription, we'll fetch the actual price from agreement page
+        if (stripeSubscriptionId || customerProfileId) {
+          // Will be handled by /onboarding → /agreement flow
+          console.log('[PASSWORD] Has Stripe subscription, going to onboarding');
+        }
+
+        const setupResponse = await fetch('/api/admin/profiles/setup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             userId,
             userEmail,
             businessName,
-            customerProfileId,
+            customerProfileId: customerProfileId || undefined,
           }),
-        }).catch(e => console.error('Background profile setup failed:', e));
+        });
+
+        if (!setupResponse.ok) {
+          const setupPayload = await setupResponse.json().catch(() => ({} as Record<string, unknown>));
+          const setupError = typeof setupPayload.error === 'string'
+            ? setupPayload.error
+            : 'Kunde inte skapa kundprofil.';
+          updateState({ error: setupError, isSubmitting: false });
+          return;
+        }
       }
 
-      // Store session directly in localStorage (bypass Supabase client which hangs)
-      console.log('[PASSWORD] Storing session in localStorage...');
-      const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-      const storageKey = `sb-${new URL(sbUrl).hostname.split('.')[0]}-auth-token`;
+      console.log('[PASSWORD] Redirecting to:', redirectPath, isTeamInvite ? '(team member)' : '(customer)');
 
-      const sessionData = {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-        expires_in: session.expires_in,
-        expires_at: session.expires_at,
-        token_type: 'bearer',
-        user: session.user,
-      };
-
-      localStorage.setItem(storageKey, JSON.stringify(sessionData));
-      console.log('[PASSWORD] Session stored with key:', storageKey);
-
-      // Hard redirect to force full page reload
-      window.location.href = redirectPath;
+      // Single client-side transition keeps auth/navigation flow predictable.
+      console.log('[PASSWORD] Redirecting to:', redirectPath);
+      router.replace(redirectPath);
+      router.refresh();
 
     } catch (err) {
       console.error('[PASSWORD] Error in handleSetPassword:', err);

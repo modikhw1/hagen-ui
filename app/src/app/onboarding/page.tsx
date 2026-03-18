@@ -10,6 +10,11 @@ interface OnboardingData {
   scopeItems: string[];
   invoiceText?: string;
   customerProfileId?: string;
+  billingDayOfMonth?: number;
+  contractStartDate?: string;
+  firstInvoiceBehavior?: 'prorated' | 'full' | 'free_until_anchor';
+  firstInvoiceAmount?: number;
+  firstInvoiceText?: string;
 }
 
 export default function OnboardingPage() {
@@ -19,71 +24,226 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Get onboarding data from localStorage (set by auth callback)
     const storedData = localStorage.getItem('onboarding_data');
-    
+    let parsedData: Partial<OnboardingData> | null = null;
+
     if (storedData) {
       try {
-        const parsed = JSON.parse(storedData);
-        setData(parsed);
+        parsedData = JSON.parse(storedData) as Partial<OnboardingData>;
       } catch (e) {
         console.error('Failed to parse onboarding data:', e);
-        setError('Kunde inte läsa inbjudningsdata');
-      }
-    } else {
-      // Try to get from URL params as fallback
-      const businessName = localStorage.getItem('onboarding_business_name');
-      const price = localStorage.getItem('onboarding_price');
-      const interval = localStorage.getItem('onboarding_interval');
-      const scopeItems = localStorage.getItem('onboarding_scope_items');
-      const customerProfileId = localStorage.getItem('onboarding_customer_profile_id');
-      
-      // Always fetch from customer profile if we have an ID - ensures we get correct price
-      if (customerProfileId) {
-        fetchCustomerProfile(customerProfileId);
-        return;
-      }
-      
-      // Fallback to localStorage values
-      if (businessName && price && parseInt(price) > 0) {
-        setData({
-          businessName,
-          pricePerMonth: parseInt(price) || 0,
-          interval: interval || 'month',
-          scopeItems: scopeItems ? JSON.parse(scopeItems) : [],
-          customerProfileId: customerProfileId || undefined,
-        });
-      } else {
-        setError('Ingen inbjudningsdata hittades');
       }
     }
+
+    const businessName = parsedData?.businessName || localStorage.getItem('onboarding_business_name') || '';
+    const price = Number(parsedData?.pricePerMonth || localStorage.getItem('onboarding_price') || 0);
+    const interval = parsedData?.interval || localStorage.getItem('onboarding_interval') || 'month';
+    const scopeItemsRaw = parsedData?.scopeItems || localStorage.getItem('onboarding_scope_items');
+    const customerProfileId = parsedData?.customerProfileId || localStorage.getItem('onboarding_customer_profile_id') || undefined;
+    const firstInvoiceBehavior = (parsedData?.firstInvoiceBehavior || localStorage.getItem('onboarding_first_invoice_behavior') || 'prorated') as 'prorated' | 'full' | 'free_until_anchor';
+    const contractStartDate = parsedData?.contractStartDate || localStorage.getItem('onboarding_contract_start_date') || undefined;
+    const billingDayOfMonth = Number(parsedData?.billingDayOfMonth || localStorage.getItem('onboarding_billing_day_of_month') || 25);
+
+    if (customerProfileId) {
+      if (businessName) {
+        const fallbackPreview = buildFirstInvoicePreview(price, contractStartDate, billingDayOfMonth, firstInvoiceBehavior);
+        setData({
+          businessName,
+          pricePerMonth: price,
+          interval,
+          scopeItems: Array.isArray(scopeItemsRaw)
+            ? scopeItemsRaw
+            : scopeItemsRaw
+              ? JSON.parse(scopeItemsRaw as string)
+              : [],
+          customerProfileId,
+          firstInvoiceBehavior,
+          contractStartDate,
+          billingDayOfMonth,
+          firstInvoiceAmount: fallbackPreview.amount,
+          firstInvoiceText: fallbackPreview.text,
+        });
+      }
+
+      void fetchCustomerProfile(customerProfileId);
+      return;
+    }
+
+    if (businessName && price > 0) {
+      const fallbackPreview = buildFirstInvoicePreview(price, contractStartDate, billingDayOfMonth, firstInvoiceBehavior);
+      setData({
+        businessName,
+        pricePerMonth: price,
+        interval,
+        scopeItems: Array.isArray(scopeItemsRaw)
+          ? scopeItemsRaw
+          : scopeItemsRaw
+            ? JSON.parse(scopeItemsRaw as string)
+            : [],
+        customerProfileId,
+        firstInvoiceBehavior,
+        contractStartDate,
+        billingDayOfMonth,
+        firstInvoiceAmount: fallbackPreview.amount,
+        firstInvoiceText: fallbackPreview.text,
+      });
+    } else {
+      setError('Ingen inbjudningsdata hittades');
+    }
+
     setLoading(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const buildFirstInvoicePreview = (
+    pricePerMonth: number,
+    contractStartDate?: string,
+    billingDayOfMonth = 25,
+    behavior: 'prorated' | 'full' | 'free_until_anchor' = 'prorated'
+  ) => {
+    if (!pricePerMonth || pricePerMonth <= 0) {
+      return { amount: 0, text: 'Pris saknas. FÃ¶rsta faktura berÃ¤knas nÃ¤r pris Ã¤r satt.' };
+    }
+
+    if (behavior === 'full') {
+      return { amount: pricePerMonth, text: 'FÃ¶rsta faktura debiteras som full mÃ¥nadsavgift.' };
+    }
+
+    if (behavior === 'free_until_anchor') {
+      return { amount: 0, text: 'FÃ¶rsta delperioden Ã¤r kostnadsfri fram till nÃ¤sta faktureringsdag.' };
+    }
+
+    const start = contractStartDate ? new Date(`${contractStartDate}T00:00:00`) : new Date();
+    const billingDay = Math.max(1, Math.min(28, Number(billingDayOfMonth) || 25));
+    let anchorDate = new Date(start.getFullYear(), start.getMonth(), billingDay);
+    if (anchorDate.getTime() <= start.getTime()) {
+      anchorDate = new Date(start.getFullYear(), start.getMonth() + 1, billingDay);
+    }
+
+    const previousAnchor = new Date(anchorDate);
+    previousAnchor.setMonth(previousAnchor.getMonth() - 1);
+    const msPerDay = 1000 * 60 * 60 * 24;
+    const cycleDays = Math.max(Math.round((anchorDate.getTime() - previousAnchor.getTime()) / msPerDay), 1);
+    const billableDays = Math.max(Math.round((anchorDate.getTime() - start.getTime()) / msPerDay), 1);
+    const amount = Math.round((pricePerMonth * billableDays) / cycleDays);
+
+    return {
+      amount,
+      text: `FÃ¶rsta faktura prorateras till dag ${billingDay}: ${billableDays}/${cycleDays} av mÃ¥nadspriset.`
+    };
+  };
 
   const fetchCustomerProfile = async (profileId: string) => {
     try {
       const res = await fetch(`/api/admin/customers/${profileId}`);
       const result = await res.json();
-      if (result.profile) {
-        setData({
-          businessName: result.profile.business_name,
-          pricePerMonth: result.profile.monthly_price || 0,
-          interval: result.profile.subscription_interval || 'month',
-          scopeItems: result.profile.scope_items || [],
-          invoiceText: result.profile.invoice_text,
-          customerProfileId: profileId,
-        });
-      } else {
-        setError('Kundprofil hittades inte');
+      if (!res.ok) {
+        throw new Error(result.error || 'Failed to fetch customer profile');
       }
+
+      if (!result.profile) {
+        throw new Error('Kundprofil hittades inte');
+      }
+
+      const behavior = result.profile.first_invoice_behavior || 'prorated';
+      const firstPreview = buildFirstInvoicePreview(
+        result.profile.monthly_price || 0,
+        result.profile.contract_start_date || undefined,
+        result.profile.billing_day_of_month || 25,
+        behavior
+      );
+
+      setData({
+        businessName: result.profile.business_name,
+        pricePerMonth: result.profile.monthly_price || 0,
+        interval: result.profile.subscription_interval || 'month',
+        scopeItems: result.profile.scope_items || [],
+        invoiceText: result.profile.invoice_text,
+        customerProfileId: profileId,
+        billingDayOfMonth: result.profile.billing_day_of_month || 25,
+        contractStartDate: result.profile.contract_start_date || undefined,
+        firstInvoiceBehavior: behavior,
+        firstInvoiceAmount: firstPreview.amount,
+        firstInvoiceText: firstPreview.text,
+      });
     } catch (e) {
       console.error('Failed to fetch customer profile:', e);
-      setError('Kunde inte läsa inbjudningsdata');
+
+      const businessName = localStorage.getItem('onboarding_business_name');
+      const price = Number(localStorage.getItem('onboarding_price') || 0);
+      const interval = localStorage.getItem('onboarding_interval') || 'month';
+      const email = localStorage.getItem('pending_agreement_email') || '';
+
+      if ((!price || price <= 0) && email) {
+        try {
+          const agreementRes = await fetch(`/api/stripe/pending-agreement?email=${encodeURIComponent(email)}`);
+          const agreementResult = await agreementRes.json();
+          const agreement = agreementResult?.agreement as {
+            customerName?: string;
+            pricePerMonth?: number;
+            scopeItems?: string[] | null;
+            profileId?: string;
+            contract_start_date?: string;
+            billing_day_of_month?: number;
+            first_invoice_behavior?: 'prorated' | 'full' | 'free_until_anchor';
+          } | null;
+          const agreementPrice = Number(agreement?.pricePerMonth || 0) / 100;
+
+          if (agreement && agreementPrice > 0) {
+            const behavior = agreement.first_invoice_behavior || 'prorated';
+            const billingDay = agreement.billing_day_of_month || 25;
+            const contractStartDate = agreement.contract_start_date || undefined;
+            const firstPreview = buildFirstInvoicePreview(agreementPrice, contractStartDate, billingDay, behavior);
+            const resolvedProfileId = agreement.profileId || profileId;
+
+            if (agreement.profileId) {
+              localStorage.setItem('onboarding_customer_profile_id', agreement.profileId);
+            }
+            localStorage.setItem('onboarding_price', String(agreementPrice));
+
+            setData({
+              businessName: agreement.customerName || businessName || 'Mitt foretag',
+              pricePerMonth: agreementPrice,
+              interval,
+              scopeItems: Array.isArray(agreement.scopeItems) ? agreement.scopeItems : [],
+              customerProfileId: resolvedProfileId,
+              firstInvoiceBehavior: behavior,
+              contractStartDate,
+              billingDayOfMonth: billingDay,
+              firstInvoiceAmount: firstPreview.amount,
+              firstInvoiceText: firstPreview.text,
+            });
+            return;
+          }
+        } catch (agreementError) {
+          console.error('Failed to recover onboarding data via pending agreement:', agreementError);
+        }
+      }
+
+      if (businessName && price > 0) {
+        const behavior = (localStorage.getItem('onboarding_first_invoice_behavior') || 'prorated') as 'prorated' | 'full' | 'free_until_anchor';
+        const contractStartDate = localStorage.getItem('onboarding_contract_start_date') || undefined;
+        const billingDay = Number(localStorage.getItem('onboarding_billing_day_of_month') || 25);
+        const firstPreview = buildFirstInvoicePreview(price, contractStartDate, billingDay, behavior);
+        setData({
+          businessName,
+          pricePerMonth: price,
+          interval,
+          scopeItems: [],
+          customerProfileId: profileId,
+          firstInvoiceBehavior: behavior,
+          contractStartDate,
+          billingDayOfMonth: billingDay,
+          firstInvoiceAmount: firstPreview.amount,
+          firstInvoiceText: firstPreview.text,
+        });
+      } else {
+        setError('Kunde inte lasa inbjudningsdata');
+      }
     } finally {
       setLoading(false);
     }
   };
-
   const handleGoToPayment = async () => {
     // Ensure all checkout data is in localStorage
     if (data) {
@@ -93,8 +253,20 @@ export default function OnboardingPage() {
       if (data.scopeItems) {
         localStorage.setItem('onboarding_scope_items', JSON.stringify(data.scopeItems));
       }
+      if (data.invoiceText) {
+        localStorage.setItem('onboarding_invoice_text', data.invoiceText);
+      }
       if (data.customerProfileId) {
         localStorage.setItem('onboarding_customer_profile_id', data.customerProfileId);
+      }
+      if (data.firstInvoiceBehavior) {
+        localStorage.setItem('onboarding_first_invoice_behavior', data.firstInvoiceBehavior);
+      }
+      if (data.contractStartDate) {
+        localStorage.setItem('onboarding_contract_start_date', data.contractStartDate);
+      }
+      if (typeof data.billingDayOfMonth === 'number') {
+        localStorage.setItem('onboarding_billing_day_of_month', String(data.billingDayOfMonth));
       }
     }
 
@@ -128,6 +300,9 @@ export default function OnboardingPage() {
     localStorage.removeItem('onboarding_interval');
     localStorage.removeItem('onboarding_scope_items');
     localStorage.removeItem('onboarding_customer_profile_id');
+    localStorage.removeItem('onboarding_first_invoice_behavior');
+    localStorage.removeItem('onboarding_contract_start_date');
+    localStorage.removeItem('onboarding_billing_day_of_month');
     localStorage.removeItem('pending_agreement_email');
     router.push('/?onboarding=complete');
   };
@@ -172,7 +347,7 @@ export default function OnboardingPage() {
           textAlign: 'center',
           maxWidth: '400px',
         }}>
-          <p style={{ color: '#DC2626', marginBottom: '16px' }}>{error || 'Något gick fel'}</p>
+          <p style={{ color: '#DC2626', marginBottom: '16px' }}>{error || 'NÃ¥got gick fel'}</p>
           <button
             onClick={handleGoToDashboard}
             style={{
@@ -184,7 +359,7 @@ export default function OnboardingPage() {
               cursor: 'pointer',
             }}
           >
-            Gå till startsidan
+            GÃ¥ till startsidan
           </button>
         </div>
       </div>
@@ -213,7 +388,15 @@ export default function OnboardingPage() {
     minimumFractionDigits: 0,
   }).format(total);
 
-  const intervalText = data.interval === 'month' ? 'månad' : data.interval === 'quarter' ? 'kvartal' : 'år';
+  const intervalText = data.interval === 'month' ? 'mÃ¥nad' : data.interval === 'quarter' ? 'kvartal' : 'Ã¥r';
+  const firstInvoiceAmount = typeof data.firstInvoiceAmount === 'number' ? data.firstInvoiceAmount : null;
+  const firstInvoiceAmountDisplay = firstInvoiceAmount !== null
+    ? new Intl.NumberFormat('sv-SE', {
+      style: 'currency',
+      currency: 'SEK',
+      minimumFractionDigits: 0,
+    }).format(firstInvoiceAmount)
+    : null;
 
   return (
     <div style={{
@@ -237,7 +420,7 @@ export default function OnboardingPage() {
             padding: '8px 0',
           }}
         >
-          <span>←</span> Tillbaka
+          <span>â†</span> Tillbaka
         </button>
       </div>
 
@@ -264,10 +447,10 @@ export default function OnboardingPage() {
             <span style={{ color: '#FAF8F5', fontSize: '28px', fontWeight: 'bold' }}>Le</span>
           </div>
           <h1 style={{ fontSize: '28px', color: '#1A1612', marginBottom: '8px', fontWeight: '700' }}>
-            Välkommen till LeTrend!
+            VÃ¤lkommen till LeTrend!
           </h1>
           <p style={{ color: '#5D4D3D', fontSize: '16px' }}>
-            Här är en sammanfattning av ditt avtal
+            HÃ¤r Ã¤r en sammanfattning av ditt avtal
           </p>
         </div>
 
@@ -283,7 +466,7 @@ export default function OnboardingPage() {
           </h2>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ color: '#5D4D3D' }}>Företag</span>
+            <span style={{ color: '#5D4D3D' }}>FÃ¶retag</span>
             <span style={{ color: '#1A1612', fontWeight: '600' }}>{data.businessName}</span>
           </div>
 
@@ -295,7 +478,7 @@ export default function OnboardingPage() {
           {/* Scope Items */}
           {data.scopeItems && data.scopeItems.length > 0 && (
             <div style={{ marginBottom: '16px' }}>
-              <span style={{ color: '#5D4D3D', display: 'block', marginBottom: '8px' }}>Vad som ingår:</span>
+              <span style={{ color: '#5D4D3D', display: 'block', marginBottom: '8px' }}>Vad som ingÃ¥r:</span>
               <ul style={{ margin: 0, paddingLeft: '16px' }}>
                 {data.scopeItems.map((item, index) => (
                   <li key={index} style={{ color: '#1A1612', fontSize: '14px', marginBottom: '4px' }}>
@@ -337,6 +520,25 @@ export default function OnboardingPage() {
               <span style={{ color: '#6B4423', fontWeight: '700', fontSize: '20px' }}>{totalDisplay}</span>
             </div>
           </div>
+
+          {(data.firstInvoiceText || firstInvoiceAmountDisplay) && (
+            <div style={{
+              marginTop: '12px',
+              padding: '10px 12px',
+              background: 'white',
+              borderRadius: '8px',
+              border: '1px solid #E5E0DA',
+            }}>
+              <div style={{ color: '#5D4D3D', fontSize: '12px', marginBottom: '4px' }}>
+                {data.firstInvoiceText || 'FÃ¶rsta faktura berÃ¤knas enligt avtalet.'}
+              </div>
+              {firstInvoiceAmountDisplay && (
+                <div style={{ color: '#1A1612', fontSize: '14px', fontWeight: 600 }}>
+                  FÃ¶rsta dragning (ex moms): {firstInvoiceAmountDisplay}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Note */}
@@ -347,7 +549,7 @@ export default function OnboardingPage() {
           marginBottom: '24px',
         }}>
           <p style={{ color: '#92400E', fontSize: '13px', margin: 0 }}>
-            💡 Du kan betala nu eller när du vill från din dashboard. Din tillgång aktiveras när betalningen är registrerad.
+            ðŸ’¡ Du kan betala nu eller nÃ¤r du vill frÃ¥n din dashboard. Din tillgÃ¥ng aktiveras nÃ¤r betalningen Ã¤r registrerad.
           </p>
         </div>
 
@@ -367,7 +569,7 @@ export default function OnboardingPage() {
               fontWeight: '600',
             }}
           >
-            Gå till betalning
+            GÃ¥ till betalning
           </button>
           
           <button
@@ -384,10 +586,11 @@ export default function OnboardingPage() {
               fontWeight: '500',
             }}
           >
-            Gå till dashboard (betala senare)
+            GÃ¥ till dashboard (betala senare)
           </button>
         </div>
       </div>
     </div>
   );
 }
+

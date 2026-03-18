@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
 
 function LoadingFallback() {
   return (
@@ -38,24 +39,62 @@ function CheckoutCompleteContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [customerName, setCustomerName] = useState('');
+  const [dashboardPath, setDashboardPath] = useState('/');
 
   useEffect(() => {
-    const sessionId = searchParams.get('session_id');
+    const resolveDashboardPath = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return '/login';
 
-    if (!sessionId) {
-      setStatus('error');
-      return;
-    }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin, role')
+        .eq('id', session.user.id)
+        .maybeSingle();
 
-    // Verify the session and get details
+      if (profile?.is_admin || profile?.role === 'admin') return '/admin';
+      if (profile?.role === 'content_manager') return '/studio';
+      if (profile?.role === 'customer') return '/';
+      return '/welcome';
+    };
+
+    const ensureCustomerProfileSetup = async (resolvedName: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const storedProfileId = localStorage.getItem('onboarding_customer_profile_id') || undefined;
+
+      await fetch('/api/admin/profiles/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: session.user.id,
+          userEmail: session.user.email || '',
+          businessName: resolvedName || localStorage.getItem('onboarding_business_name') || 'Mitt företag',
+          customerProfileId: storedProfileId,
+        }),
+      });
+    };
+
     const verifySession = async () => {
+      const sessionId = searchParams.get('session_id');
+      if (!sessionId) {
+        setStatus('error');
+        return;
+      }
+
       try {
         const res = await fetch(`/api/stripe/verify-checkout-session?session_id=${sessionId}`);
         const data = await res.json();
 
         if (data.status === 'complete' || data.status === 'paid') {
+          const resolvedName = data.customerName || localStorage.getItem('onboarding_business_name') || '';
+          await ensureCustomerProfileSetup(resolvedName);
+          const resolvedDashboardPath = await resolveDashboardPath();
+          setDashboardPath(resolvedDashboardPath);
+
           setStatus('success');
-          setCustomerName(data.customerName || localStorage.getItem('onboarding_business_name') || '');
+          setCustomerName(resolvedName);
 
           // Clean up localStorage
           localStorage.removeItem('onboarding_data');
@@ -64,6 +103,9 @@ function CheckoutCompleteContent() {
           localStorage.removeItem('onboarding_interval');
           localStorage.removeItem('onboarding_scope_items');
           localStorage.removeItem('onboarding_customer_profile_id');
+          localStorage.removeItem('onboarding_first_invoice_behavior');
+          localStorage.removeItem('onboarding_contract_start_date');
+          localStorage.removeItem('onboarding_billing_day_of_month');
           localStorage.removeItem('pending_agreement_email');
           localStorage.removeItem('agreement_accepted');
           localStorage.removeItem('agreement_subscription_id');
@@ -74,12 +116,16 @@ function CheckoutCompleteContent() {
       } catch (err) {
         console.error('Error verifying session:', err);
         // Even if verification fails, if we have a session_id we can assume success
+        const resolvedDashboardPath = await resolveDashboardPath();
+        setDashboardPath(resolvedDashboardPath);
         setStatus('success');
         setCustomerName(localStorage.getItem('onboarding_business_name') || '');
       }
     };
 
-    verifySession();
+    queueMicrotask(() => {
+      void verifySession();
+    });
   }, [searchParams]);
 
   if (status === 'loading') {
@@ -248,7 +294,7 @@ function CheckoutCompleteContent() {
         </div>
 
         <button
-          onClick={() => router.push('/')}
+          onClick={() => router.push(dashboardPath)}
           style={{
             width: '100%',
             padding: '16px',

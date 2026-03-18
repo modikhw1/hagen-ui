@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase/client'
 
@@ -41,6 +42,41 @@ interface UseLoginFormOptions {
   extraDemoCredentials?: { email: string; password: string; redirect: string }[]
 }
 
+const ALLOWED_REDIRECT_PREFIXES = ['/', '/admin', '/studio-v2', '/studio', '/customer', '/m/customer']
+
+function normalizeStudioPath(path: string): string {
+  if (path === '/studio-v2' || path.startsWith('/studio-v2/')) {
+    return `/studio${path.slice('/studio-v2'.length)}`
+  }
+
+  return path
+}
+
+function customerDestinationForPath(pathname: string): string {
+  return pathname === '/m/login' ? '/m/customer/feed' : '/'
+}
+
+function getSafeRedirectPath(candidate: string | null): string | null {
+  if (!candidate) return null
+  if (!candidate.startsWith('/') || candidate.startsWith('//')) return null
+
+  const [path] = candidate.split('?')
+  if (!path) return null
+  if (path === '/' || path === '/login' || path === '/m/login') return null
+
+  const normalizedPath = normalizeStudioPath(path)
+  const allowed = ALLOWED_REDIRECT_PREFIXES.some((prefix) => {
+    if (prefix === '/') return path === '/'
+    return path === prefix || path.startsWith(`${prefix}/`)
+  })
+
+  if (!allowed) return null
+
+  const queryIndex = candidate.indexOf('?')
+  const querySuffix = queryIndex === -1 ? '' : candidate.slice(queryIndex)
+  return `${normalizedPath}${querySuffix}`
+}
+
 export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
   const { loginRedirect, demoRedirect, resetRedirectUrl, extraDemoCredentials = [] } = options
 
@@ -53,10 +89,12 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
   const [localLoading, setLocalLoading] = useState(false)
 
   const router = useRouter()
-  const { signIn, signUp, loading: authLoading } = useAuth()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const { signIn, signUp, authLoading, profileLoading, user, profile } = useAuth()
 
   // Combined loading state
-  const loading = localLoading || authLoading
+  const loading = localLoading || authLoading || profileLoading
 
   // Compute password strength
   const passwordStrength: PasswordStrength = mode === 'register' && password
@@ -68,35 +106,104 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
     setSuccess('')
   }
 
+  const resolvePostLoginDestination = useCallback(async (): Promise<string | null> => {
+    const requestedRedirect = getSafeRedirectPath(searchParams.get('redirect'))
+    if (requestedRedirect) {
+      return requestedRedirect
+    }
+
+    if (pathname === '/login' || pathname === '/m/login') {
+      // Check from context first
+      if (profile?.is_admin || profile?.role === 'admin') {
+        return '/admin'
+      }
+      if (profile?.role === 'content_manager') {
+        return '/studio'
+      }
+      if (profile?.role === 'customer') {
+        return customerDestinationForPath(pathname)
+      }
+
+      // If profile not loaded yet, fetch from DB
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (session?.user?.id) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('is_admin, role')
+          .eq('id', session.user.id)
+          .maybeSingle()
+
+        if (profileData?.is_admin || profileData?.role === 'admin') {
+          return '/admin'
+        }
+        if (profileData?.role === 'content_manager') {
+          return '/studio'
+        }
+        if (profileData?.role === 'customer') {
+          return customerDestinationForPath(pathname)
+        }
+      }
+    }
+
+    if (pathname === '/login' || pathname === '/m/login') {
+      // Authenticated user without mapped role still lands on main dashboard.
+      return pathname === '/m/login' ? '/m' : '/'
+    }
+
+    return loginRedirect
+  }, [searchParams, pathname, profile, loginRedirect])
+
+  useEffect(() => {
+    if (authLoading || !user) return
+
+    let cancelled = false
+
+    const run = async () => {
+      const destination = await resolvePostLoginDestination()
+      if (!cancelled && destination && destination !== pathname) {
+        router.replace(destination)
+      }
+    }
+
+    void run()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authLoading, user, resolvePostLoginDestination, router, pathname])
+
   // Handle network errors gracefully
   const handleAuthError = (err: unknown, fallbackMessage: string): string => {
     if (err instanceof Error) {
       // Network errors
       if (err.message.includes('fetch') || err.message.includes('network')) {
-        return 'Nätverksfel. Kontrollera din internetanslutning.'
+        return 'NÃ¤tverksfel. Kontrollera din internetanslutning.'
       }
       // Timeout errors
       if (err.message.includes('timeout') || err.message.includes('timed out')) {
-        return 'Förfrågan tog för lång tid. Försök igen.'
+        return 'FÃ¶rfrÃ¥gan tog fÃ¶r lÃ¥ng tid. FÃ¶rsÃ¶k igen.'
       }
       // Supabase-specific errors
       if (err.message.includes('Invalid login')) {
         return 'Fel e-post eller lösenord'
       }
       if (err.message.includes('Email not confirmed')) {
-        return 'Du behöver bekräfta din e-post först. Kolla din inkorg.'
+        return 'Du behÃ¶ver bekrÃ¤fta din e-post fÃ¶rst. Kolla din inkorg.'
       }
       if (err.message.includes('already registered') || err.message.includes('already been registered')) {
-        return 'E-postadressen är redan registrerad. Prova logga in istället!'
+        return 'E-postadressen Ã¤r redan registrerad. Prova logga in istÃ¤llet!'
       }
       if (err.message.includes('invalid') && err.message.includes('email')) {
         return 'Ogiltig e-postadress'
       }
       if (err.message.includes('password') && err.message.includes('weak')) {
-        return 'Lösenordet är för svagt. Använd minst 6 tecken.'
+        return 'LÃ¶senordet Ã¤r fÃ¶r svagt. AnvÃ¤nd minst 6 tecken.'
       }
       if (err.message.includes('rate limit') || err.message.includes('too many requests')) {
-        return 'För många försök. Vänta en stund och försök igen.'
+        return 'FÃ¶r mÃ¥nga fÃ¶rsÃ¶k. VÃ¤nta en stund och fÃ¶rsÃ¶k igen.'
       }
       return err.message
     }
@@ -109,14 +216,14 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
 
     // Demo mode FIRST - before email validation (so "demo" works)
     if (email === 'demo' && password === 'demo') {
-      router.push(demoRedirect)
+      router.replace(demoRedirect)
       return
     }
 
     // Check extra demo credentials
     for (const cred of extraDemoCredentials) {
       if (email === cred.email && password === cred.password) {
-        router.push(cred.redirect)
+        router.replace(cred.redirect)
         return
       }
     }
@@ -137,9 +244,9 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
         })
         
         if (error) {
-          setError(handleAuthError(error, 'Kunde inte skicka återställningslänk'))
+          setError(handleAuthError(error, 'Kunde inte skicka Ã¥terstÃ¤llningslÃ¤nk'))
         } else {
-          setSuccess('Kolla din e-post för återställningslänk!')
+          setSuccess('Kolla din e-post fÃ¶r Ã¥terstÃ¤llningslÃ¤nk!')
         }
         setLocalLoading(false)
         return
@@ -153,20 +260,19 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
           setLocalLoading(false)
           return
         }
-        
-        // Wait a moment for auth state to propagate, then redirect
         setSuccess('Inloggningen lyckades! Omdirigerar...')
-        setTimeout(() => router.push(loginRedirect), 500)
+        setLocalLoading(false)
+        return
       } else {
         // Register
         if (!businessName.trim()) {
-          setError('Ange ditt företagsnamn')
+          setError('Ange ditt fÃ¶retagsnamn')
           setLocalLoading(false)
           return
         }
 
         if (password.length < 6) {
-          setError('Lösenordet måste vara minst 6 tecken')
+          setError('LÃ¶senordet mÃ¥ste vara minst 6 tecken')
           setLocalLoading(false)
           return
         }
@@ -180,16 +286,17 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
         }
 
         if (needsConfirmation) {
-          setSuccess('Konto skapat! Kolla din e-post för att bekräfta.')
+          setSuccess('Konto skapat! Kolla din e-post fÃ¶r att bekrÃ¤fta.')
           setLocalLoading(false)
           return
         }
 
-        setSuccess('Välkommen! Omdirigerar...')
-        setTimeout(() => router.push(loginRedirect), 1000)
+        setSuccess('Valkommen! Omdirigerar...')
+        setLocalLoading(false)
+        return
       }
     } catch (err) {
-      setError(handleAuthError(err, 'Något gick fel. Försök igen.'))
+      setError(handleAuthError(err, 'NÃ¥got gick fel. FÃ¶rsÃ¶k igen.'))
     }
 
     setLocalLoading(false)
