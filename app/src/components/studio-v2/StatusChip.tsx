@@ -1,0 +1,40 @@
+'use client';
+
+type ConceptStatus = 'draft' | 'sent' | 'produced' | 'archived';
+
+interface StatusChipProps {
+  status: ConceptStatus;
+  editable?: boolean;
+  onClick?: () => void;
+}
+
+const STATUS_STYLES: Record<ConceptStatus, { label: string; bg: string; color: string; border: string }> = {
+  draft: { label: 'Draft', bg: 'rgba(245, 158, 11, 0.12)', color: '#b45309', border: '#f59e0b' },
+  sent: { label: 'Sent', bg: 'rgba(59, 130, 246, 0.12)', color: '#1d4ed8', border: '#3b82f6' },
+  produced: { label: 'Produced', bg: 'rgba(16, 185, 129, 0.12)', color: '#047857', border: '#10b981' },
+  archived: { label: 'Archived', bg: 'rgba(107, 114, 128, 0.12)', color: '#4b5563', border: '#9ca3af' },
+};
+
+export function StatusChip({ status, editable = false, onClick }: StatusChipProps) {
+  const style = STATUS_STYLES[status];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!editable}
+      style={{
+        border: `1px solid ${style.border}`,
+        background: style.bg,
+        color: style.color,
+        padding: '4px 9px',
+        borderRadius: 999,
+        fontSize: 11,
+        fontWeight: 700,
+        cursor: editable ? 'pointer' : 'default',
+      }}
+    >
+      {style.label}
+    </button>
+  );
+}

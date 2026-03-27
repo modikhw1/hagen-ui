@@ -1,0 +1,47 @@
+import { z } from 'zod';
+
+const firstInvoiceBehaviorSchema = z.enum(['prorated', 'full', 'free_until_anchor']);
+const discountTypeSchema = z.enum(['none', 'percent', 'amount', 'free_months']);
+const pricingStatusSchema = z.enum(['fixed', 'unknown']);
+const subscriptionIntervalSchema = z.enum(['month', 'quarter', 'year']);
+
+const nullableDateSchema = z.string().trim().optional().nullable();
+
+export const customerInviteSchema = z.object({
+  business_name: z.string().trim().min(1, 'Företagsnamn krävs').max(200),
+  contact_email: z.string().trim().email('Ogiltig e-postadress').max(255),
+  customer_contact_name: z.string().trim().max(200).optional().nullable(),
+  account_manager: z.string().trim().max(200).optional().nullable(),
+  monthly_price: z.number().min(0).default(0),
+  pricing_status: pricingStatusSchema.default('fixed'),
+  contract_start_date: nullableDateSchema,
+  billing_day_of_month: z.number().min(1).max(28).default(25),
+  first_invoice_behavior: firstInvoiceBehaviorSchema.default('prorated'),
+  discount_type: discountTypeSchema.default('none'),
+  discount_value: z.number().min(0).default(0),
+  discount_duration_months: z.number().min(1).default(1),
+  discount_start_date: nullableDateSchema,
+  discount_end_date: nullableDateSchema,
+  upcoming_monthly_price: z.number().min(0).optional().nullable(),
+  upcoming_price_effective_date: nullableDateSchema,
+  subscription_interval: subscriptionIntervalSchema.default('month'),
+  invoice_text: z.string().max(2000).optional().nullable(),
+  scope_items: z.array(z.string()).optional().default([]),
+}).strict();
+
+export const sendInviteActionSchema = customerInviteSchema.extend({
+  action: z.literal('send_invite'),
+}).strict();
+
+export const createCustomerSchema = customerInviteSchema.extend({
+  price_start_date: nullableDateSchema,
+  price_end_date: nullableDateSchema,
+  contacts: z.array(z.unknown()).optional().default([]),
+  profile_data: z.record(z.string(), z.unknown()).optional().default({}),
+  game_plan: z.record(z.string(), z.unknown()).optional().default({}),
+  concepts: z.array(z.unknown()).optional().default([]),
+  send_invite: z.boolean().optional().default(false),
+}).strict();
+
+export type CustomerInvitePayload = z.infer<typeof customerInviteSchema>;
+export type CreateCustomerPayload = z.infer<typeof createCustomerSchema>;
