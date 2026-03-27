@@ -2,7 +2,7 @@
 
 import { Node } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { normalizeHref } from '../utils/link-helpers';
 
 function clampWidth(value: unknown): number {
@@ -11,30 +11,75 @@ function clampWidth(value: unknown): number {
   return Math.min(100, Math.max(10, Math.round(numberValue)));
 }
 
-function ImageFigureView({ node, updateAttributes }: NodeViewProps) {
+function ImageFigureView({ node, updateAttributes, selected }: NodeViewProps) {
   const src = normalizeHref(String(node.attrs.src || ''));
   const caption = String(node.attrs.caption || '');
   const width = clampWidth(node.attrs.width);
   const [isEditingCaption, setIsEditingCaption] = useState(false);
+  const containerRef = useRef<HTMLElement>(null);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(100);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent, side: 'left' | 'right') => {
+    e.preventDefault();
+    e.stopPropagation();
+    startXRef.current = e.clientX;
+    startWidthRef.current = width;
+    const parentWidth = containerRef.current?.parentElement?.getBoundingClientRect().width || 600;
+
+    const handleMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startXRef.current;
+      const deltaPercent = (deltaX / parentWidth) * 100;
+      const newWidth = side === 'right'
+        ? startWidthRef.current + deltaPercent
+        : startWidthRef.current - deltaPercent;
+      updateAttributes({ width: clampWidth(newWidth) });
+    };
+
+    const handleUp = () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  }, [width, updateAttributes]);
 
   if (!src) return null;
 
   return (
     <NodeViewWrapper as="div" className="gp-image-node" draggable data-drag-handle>
-      <figure className="gp-image" style={{ width: `${width}%` }}>
+      <figure
+        ref={containerRef as React.RefObject<HTMLElement>}
+        className={`gp-image${selected ? ' gp-image--selected' : ''}`}
+        style={{ width: `${width}%`, position: 'relative', margin: '0 auto' }}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={caption || 'Game Plan image'}
-          style={{ width: '100%', borderRadius: 8 }}
+          style={{ width: '100%', borderRadius: 8, display: 'block' }}
           contentEditable={false}
           loading="lazy"
         />
+        {selected && (
+          <>
+            <div
+              className="gp-resize-handle gp-resize-handle--left"
+              onMouseDown={(e) => handleResizeStart(e, 'left')}
+            />
+            <div
+              className="gp-resize-handle gp-resize-handle--right"
+              onMouseDown={(e) => handleResizeStart(e, 'right')}
+            />
+          </>
+        )}
         {isEditingCaption ? (
           <input
             autoFocus
             defaultValue={caption}
-            placeholder="Lagg till bildtext..."
+            placeholder="Lägg till bildtext..."
+            className="gp-image-caption-input"
             onBlur={(event) => {
               updateAttributes({ caption: event.target.value });
               setIsEditingCaption(false);
@@ -48,31 +93,13 @@ function ImageFigureView({ node, updateAttributes }: NodeViewProps) {
                 setIsEditingCaption(false);
               }
             }}
-            style={{
-              width: '100%',
-              marginTop: 6,
-              border: 'none',
-              borderBottom: '1px solid rgba(74,47,24,0.15)',
-              fontSize: 12,
-              color: '#7D6E5D',
-              fontStyle: 'italic',
-              outline: 'none',
-              background: 'transparent',
-            }}
           />
         ) : (
           <figcaption
             onClick={() => setIsEditingCaption(true)}
-            style={{
-              marginTop: 6,
-              fontSize: 12,
-              color: '#7D6E5D',
-              fontStyle: 'italic',
-              cursor: 'text',
-              minHeight: 18,
-            }}
+            className="gp-image-caption"
           >
-            {caption || 'Klicka for att lagga till bildtext...'}
+            {caption || 'Klicka för att lägga till bildtext...'}
           </figcaption>
         )}
       </figure>

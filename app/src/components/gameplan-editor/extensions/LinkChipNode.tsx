@@ -117,7 +117,13 @@ function LinkChipView({ node }: NodeViewProps) {
   const label = resolveLabel(href, node.attrs.label);
 
   return (
-    <NodeViewWrapper as="span" className="gp-link-chip-wrapper" draggable data-drag-handle>
+    <NodeViewWrapper
+      as="span"
+      className="gp-link-chip-wrapper"
+      contentEditable={false}
+      suppressContentEditableWarning
+      style={{ display: 'inline' }}
+    >
       <a
         href={href || undefined}
         target="_blank"
@@ -125,6 +131,7 @@ function LinkChipView({ node }: NodeViewProps) {
         className={`gp-link-chip gp-link-chip--${platform}`}
         style={{ color: PLATFORM_COLORS[platform] }}
         contentEditable={false}
+        suppressContentEditableWarning
         data-gp-chip="1"
         data-label={label}
         data-platform={platform}
@@ -144,6 +151,7 @@ export const LinkChipNode = Node.create({
   group: 'inline',
   inline: true,
   atom: true,
+  selectable: true,
   draggable: true,
 
   addAttributes() {
@@ -156,6 +164,14 @@ export const LinkChipNode = Node.create({
 
   parseHTML() {
     return [
+      {
+        tag: 'span[data-type="linkChip"]',
+        getAttrs: (el) => {
+          const anchor = (el as HTMLElement).querySelector('a[data-gp-chip]') || (el as HTMLElement).querySelector('a.gp-link-chip');
+          if (!anchor) return false;
+          return readLinkChipAttrs(anchor as HTMLElement);
+        },
+      },
       {
         tag: 'a[data-gp-chip]',
         getAttrs: (el) => readLinkChipAttrs(el as HTMLElement),
@@ -177,19 +193,24 @@ export const LinkChipNode = Node.create({
       target: '_blank',
       rel: 'noopener noreferrer',
       'data-gp-chip': '1',
-      platform,
-      label,
+      'data-platform': platform,
+      'data-label': label,
       'aria-label': getLinkPlatformLabel(platform),
     };
     if (href) {
       baseAttrs.href = href;
     }
 
+    // Icons are rendered only by ReactNodeView; renderHTML is for serialization/clipboard.
+    // Wrap in span so parseHTML can find the anchor inside it.
     return [
-      'a',
-      mergeAttributes(baseAttrs, HTMLAttributes),
-      ['span', { class: 'gp-link-chip__icon', 'aria-hidden': 'true' }, renderIconSpec(platform)],
-      ['span', { class: 'gp-link-chip__label' }, label],
+      'span',
+      { 'data-type': 'linkChip', style: 'display:inline;' },
+      [
+        'a',
+        mergeAttributes(baseAttrs, HTMLAttributes),
+        ['span', { class: 'gp-link-chip__label' }, label],
+      ],
     ];
   },
 

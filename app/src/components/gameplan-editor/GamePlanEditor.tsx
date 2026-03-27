@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
@@ -8,6 +8,8 @@ import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Youtube from '@tiptap/extension-youtube';
+import Gapcursor from '@tiptap/extension-gapcursor';
+import Dropcursor from '@tiptap/extension-dropcursor';
 import { LinkChipNode } from './extensions/LinkChipNode';
 import { ImageFigureNode } from './extensions/ImageFigureNode';
 import { ImageGalleryNode } from './extensions/ImageGalleryNode';
@@ -22,6 +24,23 @@ interface GamePlanEditorProps {
 
 export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: GamePlanEditorProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestHtmlRef = useRef(initialHtml);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const flushPendingChanges = useCallback((editorInstance: ReturnType<typeof useEditor>) => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    if (editorInstance) {
+      const html = sanitizeRichTextHtml(editorInstance.getHTML());
+      if (html !== latestHtmlRef.current) {
+        latestHtmlRef.current = html;
+        onChangeRef.current(html);
+      }
+    }
+  }, []);
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -31,6 +50,12 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
         blockquote: false,
         codeBlock: false,
         horizontalRule: false,
+        // bulletList, orderedList, listItem included automatically
+      }),
+      Gapcursor,
+      Dropcursor.configure({
+        color: '#6B4423',
+        width: 2,
       }),
       Underline,
       Link.configure({
@@ -41,7 +66,7 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
         },
       }),
       Placeholder.configure({
-        placeholder: 'Skriv din Game Plan har...',
+        placeholder: 'Skriv din Game Plan här...',
       }),
       Youtube.configure({
         inline: false,
@@ -58,6 +83,7 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
         const html = sanitizeRichTextHtml(instance.getHTML());
+        latestHtmlRef.current = html;
         onChange(html);
       }, 300);
     },
@@ -86,10 +112,25 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
     }
   }, [editor, initialHtml]);
 
+  // Flush on blur so save-button clicks get the latest content
+  useEffect(() => {
+    if (!editor) return;
+    const handleBlur = () => flushPendingChanges(editor);
+    editor.on('blur', handleBlur);
+    return () => { editor.off('blur', handleBlur); };
+  }, [editor, flushPendingChanges]);
+
+  // Flush on unmount
   useEffect(() => {
     return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+        // Final save — editor may already be destroyed here, so use latestHtmlRef
+        onChangeRef.current(latestHtmlRef.current);
+      }
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!editor) return null;
