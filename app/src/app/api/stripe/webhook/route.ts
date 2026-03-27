@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe, stripeWebhookSecret } from '@/lib/stripe/dynamic-config';
 import { createClient } from '@supabase/supabase-js';
+import Stripe from 'stripe';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function getSupabaseAdmin() {
   return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+// Handles new Stripe API shape: invoice.parent.subscription_details.subscription
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const parent = (invoice as unknown as { parent?: { type?: string; subscription_details?: { subscription?: string | { id: string } } } }).parent;
+  if (parent?.type === 'subscription_details') {
+    const sub = parent.subscription_details?.subscription;
+    if (sub) return typeof sub === 'string' ? sub : sub.id;
+  }
+  // Fallback for older API shape
+  return (invoice as unknown as { subscription?: string | null }).subscription ?? null;
 }
 
 // Email sending with Resend
@@ -148,7 +160,7 @@ export async function POST(request: NextRequest) {
     .from('stripe_sync_log')
     .select('id, status')
     .eq('stripe_event_id', event.id)
-    .single();
+    .maybeSingle();
 
   if (existingLog) {
     console.log(`Event ${event.id} already processed with status: ${existingLog.status}`);
@@ -160,11 +172,12 @@ export async function POST(request: NextRequest) {
       // PHASE 2.1: Invoice lifecycle events
       case 'invoice.created': {
         const invoice = event.data.object;
+        const subscriptionId = getInvoiceSubscriptionId(invoice);
         console.log(`Processing invoice.created: ${invoice.id}`);
 
         await supabase.from('invoices').insert({
           stripe_invoice_id: invoice.id,
-          stripe_subscription_id: invoice.subscription as string || null,
+          stripe_subscription_id: subscriptionId,
           stripe_customer_id: invoice.customer as string,
           amount_due: invoice.amount_due,
           amount_paid: 0,
@@ -209,7 +222,7 @@ export async function POST(request: NextRequest) {
 
       case 'invoice.paid': {
         const invoice = event.data.object;
-        const subscriptionId = invoice.subscription as string | null;
+        const subscriptionId = getInvoiceSubscriptionId(invoice);
         console.log(`Processing invoice.paid: ${invoice.id}`);
 
         // Update invoice status in database
@@ -269,7 +282,7 @@ export async function POST(request: NextRequest) {
 
       case 'invoice.payment_failed': {
         const invoice = event.data.object;
-        const subscriptionId = invoice.subscription as string | null;
+        const subscriptionId = getInvoiceSubscriptionId(invoice);
         console.log(`Processing invoice.payment_failed: ${invoice.id}`);
 
         // Update invoice status
