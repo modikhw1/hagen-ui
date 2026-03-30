@@ -78,7 +78,7 @@ export default function StudioDashboard() {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const hours = Math.floor(diff / 3600000);
-    
+
     if (hours < 1) return 'För less än en timme sedan';
     if (hours < 24) return `För ${hours} timmar sedan`;
     return date.toLocaleDateString('sv-SE');
@@ -109,15 +109,15 @@ export default function StudioDashboard() {
       </h1>
 
       {/* Stats Grid */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
         gap: '16px',
         marginBottom: '32px'
       }}>
-        <div style={{ 
-          background: '#fff', 
-          borderRadius: '12px', 
+        <div style={{
+          background: '#fff',
+          borderRadius: '12px',
           padding: '20px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
         }}>
@@ -125,9 +125,9 @@ export default function StudioDashboard() {
           <div style={{ fontSize: '32px', fontWeight: 700, color: '#1a1a2e' }}>{stats.totalConcepts}</div>
         </div>
 
-        <div style={{ 
-          background: '#fff', 
-          borderRadius: '12px', 
+        <div style={{
+          background: '#fff',
+          borderRadius: '12px',
           padding: '20px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
         }}>
@@ -135,9 +135,9 @@ export default function StudioDashboard() {
           <div style={{ fontSize: '32px', fontWeight: 700, color: '#1a1a2e' }}>{stats.totalCustomers}</div>
         </div>
 
-        <div style={{ 
-          background: '#fff', 
-          borderRadius: '12px', 
+        <div style={{
+          background: '#fff',
+          borderRadius: '12px',
           padding: '20px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
         }}>
@@ -145,9 +145,9 @@ export default function StudioDashboard() {
           <div style={{ fontSize: '32px', fontWeight: 700, color: '#f59e0b' }}>{stats.pendingInvites}</div>
         </div>
 
-        <div style={{ 
-          background: '#fff', 
-          borderRadius: '12px', 
+        <div style={{
+          background: '#fff',
+          borderRadius: '12px',
           padding: '20px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
         }}>
@@ -162,7 +162,7 @@ export default function StudioDashboard() {
           Snabba åtgärder
         </h2>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <a 
+          <a
             href="/studio/upload"
             style={{
               background: '#4f46e5',
@@ -178,7 +178,7 @@ export default function StudioDashboard() {
           >
             📹 Ladda upp video
           </a>
-          <a 
+          <a
             href="/studio/concepts"
             style={{
               background: '#fff',
@@ -195,7 +195,7 @@ export default function StudioDashboard() {
           >
             🎬 Visa concepts
           </a>
-          <a 
+          <a
             href="/studio/customers"
             style={{
               background: '#fff',
@@ -220,9 +220,9 @@ export default function StudioDashboard() {
         <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px', color: '#1a1a2e' }}>
           Senaste aktiviteter
         </h2>
-        <div style={{ 
-          background: '#fff', 
-          borderRadius: '12px', 
+        <div style={{
+          background: '#fff',
+          borderRadius: '12px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           overflow: 'hidden'
         }}>
@@ -232,7 +232,7 @@ export default function StudioDashboard() {
             </div>
           ) : (
             activities.map((activity, index) => (
-              <div 
+              <div
                 key={activity.id}
                 style={{
                   padding: '16px 20px',
