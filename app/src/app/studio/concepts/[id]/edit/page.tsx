@@ -84,7 +84,7 @@ export default function StudioConceptEditPage() {
   const [saved, setSaved] = useState(false);
   
   // Form state
-  const [form, setForm] = useState<ConceptData>({});
+  const [form, setForm] = useState<ConceptData>({ id: '', url: '' });
   const [activeTab, setActiveTab] = useState<'basic' | 'analysis' | 'scenes' | 'translations'>('basic');
 
   useEffect(() => {
@@ -104,12 +104,12 @@ export default function StudioConceptEditPage() {
           audience_signals: (found as any).audienceSignals || {},
           scene_breakdown: (found as any).sceneBreakdown || [],
           replicability_analysis: (found as any).replicabilityAnalysis,
-          origin_country: found.originCountry,
+          origin_country: (found as any).originCountry,
           headline: found.headline,
           headline_sv: found.headline_sv,
-          description: found.description,
-          description_sv: (found as any).description_sv,
-          whyItWorks: found.whyItWorks,
+          description: (found as any).description,
+          description_sv: found.description_sv,
+          whyItWorks: (found as any).whyItWorks,
           whyItWorks_sv: found.whyItWorks_sv,
           script_sv: (found as any).script_sv,
           productionNotes_sv: (found as any).productionNotes_sv,

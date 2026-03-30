@@ -46,13 +46,13 @@ export default function StudioConceptEditPage() {
         setFormData({
           headline_sv: found.headline_sv || found.headline,
           difficulty: found.difficulty,
-          origin_country: found.originCountry,
+          origin_country: (found as any).originCountry || '',
           trend_level: found.trendLevel,
           film_time: found.filmTime,
           people_needed: found.peopleNeeded,
-          why_it_works: found.whyItWorks_sv || found.whyItWorks || '',
-          target_audience: found.targetAudience_sv || found.targetAudience || '',
-          scene_breakdown: JSON.stringify(found.sceneBreakdown, null, 2),
+          why_it_works: found.whyItWorks_sv || (found as any).whyItWorks || '',
+          target_audience: (found as any).targetAudience_sv || (found as any).targetAudience || '',
+          scene_breakdown: JSON.stringify((found as any).sceneBreakdown, null, 2),
         });
       }
     }
@@ -302,7 +302,7 @@ export default function StudioConceptEditPage() {
             {/* Original URL */}
             <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '16px' }}>
               <a 
-                href={concept.url} 
+                href={(concept as any).url || concept.sourceUrl}
                 target="_blank" 
                 rel="noopener noreferrer"
                 style={{ color: '#4f46e5', fontSize: '14px', textDecoration: 'none' }}

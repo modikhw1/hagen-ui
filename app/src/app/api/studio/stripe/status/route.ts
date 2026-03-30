@@ -12,7 +12,7 @@ const SECRET_KEY = ENV === 'test'
   ? process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
   : process.env.STRIPE_SECRET_KEY_LIVE;
 
-const stripe = SECRET_KEY ? new Stripe(SECRET_KEY, { apiVersion: '2024-12-18.acacia' }) : null;
+const stripe = SECRET_KEY ? new Stripe(SECRET_KEY, { apiVersion: '2025-12-15.clover' }) : null;
 
 /**
  * POST /api/studio/stripe/status

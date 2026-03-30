@@ -72,7 +72,7 @@ export default function AdminTeamPage() {
   };
 
   const toggleSelectAll = () => {
-    setSelectedCustomers(prev.length === filteredCustomers.length ? [] : filteredCustomers.map(c => c.id));
+    setSelectedCustomers(prev => prev.length === filteredCustomers.length ? [] : filteredCustomers.map(c => c.id));
   };
 
   const handleReassign = async () => {

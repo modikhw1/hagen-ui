@@ -110,3 +110,6 @@ export function loadDashboardData(): {
 // Pre-loaded exports
 export const concepts = loadConcepts()
 export const dashboardRows = generateDashboardRows(concepts)
+
+// Re-export types for consumers
+export type { TranslatedConcept, BackendClip, ClipOverride, ClipDefaults } from './translator'

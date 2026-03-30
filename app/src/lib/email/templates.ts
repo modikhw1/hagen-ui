@@ -3,7 +3,7 @@
  * LeTrend design language: warm brown/beige, serif headings, elegant
  */
 
-import { TranslatedConcept } from './conceptLoader';
+import type { TranslatedConcept } from '../conceptLoader';
 
 export type EmailType = 'new_concept' | 'new_concepts' | 'gameplan_updated' | 'weekly_summary';
 

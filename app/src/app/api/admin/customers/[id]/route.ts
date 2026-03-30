@@ -312,7 +312,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       sanitizedBody.upcoming_price_effective_date = null;
     }
     if (Object.prototype.hasOwnProperty.call(sanitizedBody, 'account_manager')) {
-      const assignment = await resolveAccountManagerAssignment(supabaseAdmin, sanitizedBody.account_manager);
+      const assignment = await resolveAccountManagerAssignment(supabaseAdmin, sanitizedBody.account_manager as string | null | undefined);
       sanitizedBody.account_manager = assignment.accountManager;
       sanitizedBody.account_manager_profile_id = assignment.accountManagerProfileId;
     }

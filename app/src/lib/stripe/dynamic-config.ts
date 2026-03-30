@@ -49,7 +49,7 @@ if (!WEBHOOK_SECRET) {
 // Initialize Stripe client (or null if key missing)
 export const stripe = SECRET_KEY
   ? new Stripe(SECRET_KEY, {
-      apiVersion: '2024-12-18.acacia',
+      apiVersion: '2025-12-15.clover',
       typescript: true,
       appInfo: {
         name: 'LeTrend',

@@ -279,7 +279,7 @@ export async function POST(req: NextRequest) {
         .eq('id', user.id)
         .maybeSingle();
 
-      const matchingData = profileLink?.matching_data as Record<string, unknown> | undefined;
+      const matchingData = (profileLink as Record<string, unknown> | null)?.matching_data as Record<string, unknown> | undefined;
       const linkedProfileId = typeof matchingData?.customer_profile_id === 'string'
         ? matchingData.customer_profile_id
         : null;
@@ -314,7 +314,8 @@ export async function POST(req: NextRequest) {
 
     // Promote upcoming price if it has become effective
     if (profileId && contractProfile && priceResolution.shouldPromoteUpcoming && supabaseAdmin) {
-      await supabaseAdmin
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabaseAdmin as any)
         .from('customer_profiles')
         .update({
           monthly_price: priceResolution.effectivePrice,

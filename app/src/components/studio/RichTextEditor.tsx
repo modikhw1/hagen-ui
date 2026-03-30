@@ -44,7 +44,7 @@ export function RichTextEditor({ notes, onChange, isFullscreen = false }: RichTe
         let node = range.commonAncestorContainer;
         while (node && node !== editorRef.current) {
           if (node.nodeType === Node.ELEMENT_NODE) {
-            const el = node as Element;
+            const el = node as HTMLElement;
             const weight = el.style.fontWeight || window.getComputedStyle(el).fontWeight;
             if (weight) {
               isCurrentlyBold = parseInt(weight) >= 700;
@@ -244,7 +244,7 @@ export function RichTextEditor({ notes, onChange, isFullscreen = false }: RichTe
       if (el.tagName === 'A') {
         newNotes.push({
           type: 'link',
-          url: el.href,
+          url: (el as HTMLAnchorElement).href,
           label: el.textContent || '',
           linkType: el.getAttribute('data-type') || 'external'
         });
@@ -295,10 +295,10 @@ export function RichTextEditor({ notes, onChange, isFullscreen = false }: RichTe
                      note.linkType === 'article' ? '📄' : '🔗';
         
         const link = document.createElement('a');
-        link.href = note.url;
+        link.href = note.url || '';
         link.target = '_blank';
         link.rel = 'noopener';
-        link.setAttribute('data-type', note.linkType);
+        link.setAttribute('data-type', note.linkType || 'external');
         link.style.color = '#4f46e5';
         link.style.textDecoration = 'underline';
         link.style.marginRight = '8px';

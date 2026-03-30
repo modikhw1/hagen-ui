@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
         const { error } = await supabaseAdmin.from('invoices').upsert(
           {
             stripe_invoice_id: invoice.id,
-            stripe_subscription_id: invoice.subscription as string || null,
+            stripe_subscription_id: (invoice as unknown as Record<string, unknown>).subscription as string || null,
             stripe_customer_id: invoice.customer as string,
             customer_profile_id: customerProfileId,
             user_profile_id: userProfileId,

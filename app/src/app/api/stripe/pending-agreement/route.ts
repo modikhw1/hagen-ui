@@ -32,8 +32,9 @@ type ContractTerms = {
   discount_duration_months?: number | null;
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getContractTerms(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   stripeCustomerId: string
 ): Promise<ContractTerms> {
   const { data } = await supabase

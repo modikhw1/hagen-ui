@@ -125,7 +125,7 @@ export const POST = withAuth(
       
       const { data } = await supabase
         .from('customer_profiles')
-        .select('business_name, contact_email, customer_contact_name, id')
+        .select('business_name, contact_email, customer_contact_name, contact_name, id')
         .eq('id', customer_id)
         .single();
       

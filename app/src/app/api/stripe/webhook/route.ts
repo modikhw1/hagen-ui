@@ -355,7 +355,8 @@ export async function POST(request: NextRequest) {
           .single();
 
         // Extract subscription price info
-        const firstItem = subscription.items?.data[0];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const firstItem = subscription.items?.data[0] as any;
         const amount = firstItem?.price?.unit_amount || 0;
         const interval = firstItem?.price?.recurring?.interval || 'month';
         const intervalCount = firstItem?.price?.recurring?.interval_count || 1;
@@ -373,11 +374,11 @@ export async function POST(request: NextRequest) {
             amount,
             interval,
             interval_count: intervalCount,
-            current_period_start: subscription.current_period_start
-              ? new Date(subscription.current_period_start * 1000).toISOString()
+            current_period_start: firstItem?.period?.start
+              ? new Date(firstItem.period.start * 1000).toISOString()
               : null,
-            current_period_end: subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
+            current_period_end: firstItem?.period?.end
+              ? new Date(firstItem.period.end * 1000).toISOString()
               : null,
             trial_start: subscription.trial_start
               ? new Date(subscription.trial_start * 1000).toISOString()
@@ -416,8 +417,8 @@ export async function POST(request: NextRequest) {
           .update({
             subscription_id: subscription.id,
             subscription_status: subscription.status as string,
-            current_period_end: subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
+            current_period_end: firstItem?.period?.end
+              ? new Date(firstItem.period.end * 1000).toISOString()
               : null,
           })
           .eq('stripe_customer_id', subscription.customer as string);
