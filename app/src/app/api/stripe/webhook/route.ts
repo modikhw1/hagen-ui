@@ -504,8 +504,9 @@ export async function POST(request: NextRequest) {
           status: 'success',
         });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`Error processing webhook ${event.type}:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // Log failed sync
     await supabase.from('stripe_sync_log').insert({
@@ -515,7 +516,7 @@ export async function POST(request: NextRequest) {
       object_id: null,
       sync_direction: 'stripe_to_supabase',
       status: 'failed',
-      error_message: error.message || 'Unknown error',
+      error_message: errorMessage,
     });
 
     // Return 500 so Stripe retries
