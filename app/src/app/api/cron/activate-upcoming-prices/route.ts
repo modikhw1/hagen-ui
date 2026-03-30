@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
+import { applyPriceToSubscription } from '@/lib/stripe/subscription-pricing';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -84,9 +85,13 @@ async function runPriceActivationJob(): Promise<ApplyPriceResult> {
     try {
       // Update Stripe subscription if exists
       if (profile.stripe_subscription_id) {
-        // Note: applyPriceToSubscription would need to be implemented
-        // For now, we just update the local record
-        console.log(`[activate-upcoming-prices] Would update subscription ${profile.stripe_subscription_id} to price ${nextPrice}`);
+        await applyPriceToSubscription({
+          stripeClient: stripe,
+          subscriptionId: profile.stripe_subscription_id,
+          monthlyPriceSek: nextPrice,
+          source: 'scheduled_upcoming',
+          supabaseAdmin,
+        });
         result.applied += 1;
       } else {
         result.promoted_without_subscription += 1;

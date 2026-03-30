@@ -93,6 +93,8 @@ function withContractTerms(base: Record<string, unknown>, terms: ContractTerms) 
 
 export async function GET(request: NextRequest) {
   try {
+    const authUser = await import('@/lib/auth/api-auth').then(m => m.validateApiRequest(request));
+
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
@@ -102,6 +104,11 @@ export async function GET(request: NextRequest) {
 
     if (!email) {
       return NextResponse.json({ error: 'Email required' }, { status: 400 });
+    }
+
+    // Users can only query their own email unless admin
+    if (authUser.email !== email && !authUser.is_admin && authUser.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);

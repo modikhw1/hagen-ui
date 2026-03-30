@@ -126,9 +126,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const pathname = usePathname();
   const hasVerifiedRef = useRef(false);
 
-  const metadataRole = typeof user?.user_metadata?.role === 'string' ? user.user_metadata.role : null;
-  const metadataIsAdmin = metadataRole === 'admin' || user?.user_metadata?.is_admin === true;
-  const hasAccess = !!user && (profile?.is_admin || profile?.role === 'admin' || (!profile && metadataIsAdmin));
+  const hasAccess = !!user && (profile?.is_admin || profile?.role === 'admin');
   const loading = authLoading || profileLoading;
 
   if (!loading && hasAccess) {

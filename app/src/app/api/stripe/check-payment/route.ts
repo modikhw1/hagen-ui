@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { createClient } from '@supabase/supabase-js';
+import { validateApiRequest } from '@/lib/auth/api-auth';
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -14,11 +15,18 @@ function getSupabaseAdmin() {
 // POST - Check and sync payment status for a subscription
 export async function POST(request: NextRequest) {
   try {
+    const authUser = await validateApiRequest(request);
+
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
 
     const { subscriptionId, userId, email } = await request.json();
+
+    // Users can only update their own profile
+    if (userId && userId !== authUser.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     if (!subscriptionId && !email) {
       return NextResponse.json({ error: 'subscriptionId or email required' }, { status: 400 });

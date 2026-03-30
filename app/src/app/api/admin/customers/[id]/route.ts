@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import Stripe from 'stripe';
 import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
+import { stripe } from '@/lib/stripe/dynamic-config';
 import { logCustomerInvited } from '@/lib/activity/logger';
 import { applyPriceToSubscription } from '@/lib/stripe/subscription-pricing';
 import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';
@@ -9,9 +9,6 @@ import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, { typescript: true })
-  : null;
 
 interface RouteParams {
   params: Promise<{ id: string }>;

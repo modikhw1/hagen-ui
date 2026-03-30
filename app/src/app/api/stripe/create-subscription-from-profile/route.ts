@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { stripe } from '@/lib/stripe/dynamic-config';
+import { validateApiRequest } from '@/lib/auth/api-auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -8,6 +9,11 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 // POST - Create Stripe subscription from customer profile
 export async function POST(request: NextRequest) {
   try {
+    const authUser = await validateApiRequest(request);
+    if (!authUser.is_admin && authUser.role !== 'admin') {
+      return NextResponse.json({ error: 'Admin required' }, { status: 403 });
+    }
+
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }

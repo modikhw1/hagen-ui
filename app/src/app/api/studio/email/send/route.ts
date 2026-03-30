@@ -135,7 +135,7 @@ export const POST = withAuth(
     }
 
     // Determine the correct URL based on environment
-    const isProduction = process.env.NEXT_PUBLIC_ENV === 'production' || !process.env.NEXT_PUBLIC_ENV;
+    const isProduction = process.env.NEXT_PUBLIC_ENV === 'live' || process.env.NEXT_PUBLIC_ENV === 'production';
     const dashboardUrl = isProduction 
       ? `https://letrend.se?customer=${customer.id}`
       : `http://localhost:3000?customer=${customer.id}`;

@@ -25,8 +25,13 @@ export default function StudioUploadPage() {
     setProgress('Laddar upp video till hagen-main...');
 
     try {
+      const hagenApiUrl = process.env.NEXT_PUBLIC_HAGEN_API_URL;
+      if (!hagenApiUrl) {
+        throw new Error('Video-tjänsten är inte tillgänglig ännu. Kontakta admin.');
+      }
+
       // Step 1: Upload video
-      const uploadRes = await fetch('http://localhost:3001/api/videos/upload', {
+      const uploadRes = await fetch(`${hagenApiUrl}/api/videos/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ videoUrl }),
@@ -41,7 +46,7 @@ export default function StudioUploadPage() {
       setProgress('Video uppladdad. Startar analys...');
 
       // Step 2: Analyze video (using hagen-main API)
-      const analyzeRes = await fetch('http://localhost:3001/api/videos/analyze/main', {
+      const analyzeRes = await fetch(`${hagenApiUrl}/api/videos/analyze/main`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

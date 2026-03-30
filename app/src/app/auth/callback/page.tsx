@@ -117,7 +117,7 @@ function AuthCallbackContent() {
 
     // Not an invite - check if user already completed onboarding (has a profile)
     try {
-      const profileRes = await fetch(`/api/admin/profiles/check?userId=${session.user.id}`);
+      const profileRes = await fetch(`/api/admin/profiles/check?userId=${session.user.id}`, { headers: { Authorization: `Bearer ${session.access_token}` } });
       const profileData = await profileRes.json();
 
       if (profileData.hasProfile) {
