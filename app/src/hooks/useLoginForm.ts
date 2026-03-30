@@ -180,30 +180,30 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
     if (err instanceof Error) {
       // Network errors
       if (err.message.includes('fetch') || err.message.includes('network')) {
-        return 'NÃ¤tverksfel. Kontrollera din internetanslutning.'
+        return 'Nätverksfel. Kontrollera din internetanslutning.'
       }
       // Timeout errors
       if (err.message.includes('timeout') || err.message.includes('timed out')) {
-        return 'FÃ¶rfrÃ¥gan tog fÃ¶r lÃ¥ng tid. FÃ¶rsÃ¶k igen.'
+        return 'Förfrågan tog för lång tid. Försök igen.'
       }
       // Supabase-specific errors
       if (err.message.includes('Invalid login')) {
         return 'Fel e-post eller lösenord'
       }
       if (err.message.includes('Email not confirmed')) {
-        return 'Du behÃ¶ver bekrÃ¤fta din e-post fÃ¶rst. Kolla din inkorg.'
+        return 'Du behöver bekräfta din e-post först. Kolla din inkorg.'
       }
       if (err.message.includes('already registered') || err.message.includes('already been registered')) {
-        return 'E-postadressen Ã¤r redan registrerad. Prova logga in istÃ¤llet!'
+        return 'E-postadressen är redan registrerad. Prova logga in istället!'
       }
       if (err.message.includes('invalid') && err.message.includes('email')) {
         return 'Ogiltig e-postadress'
       }
       if (err.message.includes('password') && err.message.includes('weak')) {
-        return 'LÃ¶senordet Ã¤r fÃ¶r svagt. AnvÃ¤nd minst 6 tecken.'
+        return 'Lösenordet är för svagt. Använd minst 6 tecken.'
       }
       if (err.message.includes('rate limit') || err.message.includes('too many requests')) {
-        return 'FÃ¶r mÃ¥nga fÃ¶rsÃ¶k. VÃ¤nta en stund och fÃ¶rsÃ¶k igen.'
+        return 'För många försök. Vänta en stund och försök igen.'
       }
       return err.message
     }
@@ -244,9 +244,9 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
         })
         
         if (error) {
-          setError(handleAuthError(error, 'Kunde inte skicka Ã¥terstÃ¤llningslÃ¤nk'))
+          setError(handleAuthError(error, 'Kunde inte skicka återställningslänk'))
         } else {
-          setSuccess('Kolla din e-post fÃ¶r Ã¥terstÃ¤llningslÃ¤nk!')
+          setSuccess('Kolla din e-post för återställningslänk!')
         }
         setLocalLoading(false)
         return
@@ -266,13 +266,13 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
       } else {
         // Register
         if (!businessName.trim()) {
-          setError('Ange ditt fÃ¶retagsnamn')
+          setError('Ange ditt företagsnamn')
           setLocalLoading(false)
           return
         }
 
         if (password.length < 6) {
-          setError('LÃ¶senordet mÃ¥ste vara minst 6 tecken')
+          setError('Lösenordet måste vara minst 6 tecken')
           setLocalLoading(false)
           return
         }
@@ -286,7 +286,7 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
         }
 
         if (needsConfirmation) {
-          setSuccess('Konto skapat! Kolla din e-post fÃ¶r att bekrÃ¤fta.')
+          setSuccess('Konto skapat! Kolla din e-post för att bekräfta.')
           setLocalLoading(false)
           return
         }
@@ -296,7 +296,7 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
         return
       }
     } catch (err) {
-      setError(handleAuthError(err, 'NÃ¥got gick fel. FÃ¶rsÃ¶k igen.'))
+      setError(handleAuthError(err, 'Något gick fel. Försök igen.'))
     }
 
     setLocalLoading(false)

@@ -102,15 +102,15 @@ export default function OnboardingPage() {
     behavior: 'prorated' | 'full' | 'free_until_anchor' = 'prorated'
   ) => {
     if (!pricePerMonth || pricePerMonth <= 0) {
-      return { amount: 0, text: 'Pris saknas. FÃ¶rsta faktura berÃ¤knas nÃ¤r pris Ã¤r satt.' };
+      return { amount: 0, text: 'Pris saknas. Första faktura beräknas när pris är satt.' };
     }
 
     if (behavior === 'full') {
-      return { amount: pricePerMonth, text: 'FÃ¶rsta faktura debiteras som full mÃ¥nadsavgift.' };
+      return { amount: pricePerMonth, text: 'Första faktura debiteras som full månadsavgift.' };
     }
 
     if (behavior === 'free_until_anchor') {
-      return { amount: 0, text: 'FÃ¶rsta delperioden Ã¤r kostnadsfri fram till nÃ¤sta faktureringsdag.' };
+      return { amount: 0, text: 'Första delperioden är kostnadsfri fram till nästa faktureringsdag.' };
     }
 
     const start = contractStartDate ? new Date(`${contractStartDate}T00:00:00`) : new Date();
@@ -129,7 +129,7 @@ export default function OnboardingPage() {
 
     return {
       amount,
-      text: `FÃ¶rsta faktura prorateras till dag ${billingDay}: ${billableDays}/${cycleDays} av mÃ¥nadspriset.`
+      text: `Första faktura prorateras till dag ${billingDay}: ${billableDays}/${cycleDays} av månadspriset.`
     };
   };
 
@@ -347,7 +347,7 @@ export default function OnboardingPage() {
           textAlign: 'center',
           maxWidth: '400px',
         }}>
-          <p style={{ color: '#DC2626', marginBottom: '16px' }}>{error || 'NÃ¥got gick fel'}</p>
+          <p style={{ color: '#DC2626', marginBottom: '16px' }}>{error || 'Något gick fel'}</p>
           <button
             onClick={handleGoToDashboard}
             style={{
@@ -359,7 +359,7 @@ export default function OnboardingPage() {
               cursor: 'pointer',
             }}
           >
-            GÃ¥ till startsidan
+            Gå till startsidan
           </button>
         </div>
       </div>
@@ -388,7 +388,7 @@ export default function OnboardingPage() {
     minimumFractionDigits: 0,
   }).format(total);
 
-  const intervalText = data.interval === 'month' ? 'mÃ¥nad' : data.interval === 'quarter' ? 'kvartal' : 'Ã¥r';
+  const intervalText = data.interval === 'month' ? 'månad' : data.interval === 'quarter' ? 'kvartal' : 'år';
   const firstInvoiceAmount = typeof data.firstInvoiceAmount === 'number' ? data.firstInvoiceAmount : null;
   const firstInvoiceAmountDisplay = firstInvoiceAmount !== null
     ? new Intl.NumberFormat('sv-SE', {
@@ -447,10 +447,10 @@ export default function OnboardingPage() {
             <span style={{ color: '#FAF8F5', fontSize: '28px', fontWeight: 'bold' }}>Le</span>
           </div>
           <h1 style={{ fontSize: '28px', color: '#1A1612', marginBottom: '8px', fontWeight: '700' }}>
-            VÃ¤lkommen till LeTrend!
+            Välkommen till LeTrend!
           </h1>
           <p style={{ color: '#5D4D3D', fontSize: '16px' }}>
-            HÃ¤r Ã¤r en sammanfattning av ditt avtal
+            Här är en sammanfattning av ditt avtal
           </p>
         </div>
 
@@ -466,7 +466,7 @@ export default function OnboardingPage() {
           </h2>
           
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ color: '#5D4D3D' }}>FÃ¶retag</span>
+            <span style={{ color: '#5D4D3D' }}>Företag</span>
             <span style={{ color: '#1A1612', fontWeight: '600' }}>{data.businessName}</span>
           </div>
 
@@ -478,7 +478,7 @@ export default function OnboardingPage() {
           {/* Scope Items */}
           {data.scopeItems && data.scopeItems.length > 0 && (
             <div style={{ marginBottom: '16px' }}>
-              <span style={{ color: '#5D4D3D', display: 'block', marginBottom: '8px' }}>Vad som ingÃ¥r:</span>
+              <span style={{ color: '#5D4D3D', display: 'block', marginBottom: '8px' }}>Vad som ingår:</span>
               <ul style={{ margin: 0, paddingLeft: '16px' }}>
                 {data.scopeItems.map((item, index) => (
                   <li key={index} style={{ color: '#1A1612', fontSize: '14px', marginBottom: '4px' }}>
@@ -530,11 +530,11 @@ export default function OnboardingPage() {
               border: '1px solid #E5E0DA',
             }}>
               <div style={{ color: '#5D4D3D', fontSize: '12px', marginBottom: '4px' }}>
-                {data.firstInvoiceText || 'FÃ¶rsta faktura berÃ¤knas enligt avtalet.'}
+                {data.firstInvoiceText || 'Första faktura beräknas enligt avtalet.'}
               </div>
               {firstInvoiceAmountDisplay && (
                 <div style={{ color: '#1A1612', fontSize: '14px', fontWeight: 600 }}>
-                  FÃ¶rsta dragning (ex moms): {firstInvoiceAmountDisplay}
+                  Första dragning (ex moms): {firstInvoiceAmountDisplay}
                 </div>
               )}
             </div>
@@ -549,7 +549,7 @@ export default function OnboardingPage() {
           marginBottom: '24px',
         }}>
           <p style={{ color: '#92400E', fontSize: '13px', margin: 0 }}>
-            ðŸ’¡ Du kan betala nu eller nÃ¤r du vill frÃ¥n din dashboard. Din tillgÃ¥ng aktiveras nÃ¤r betalningen Ã¤r registrerad.
+            💡 Du kan betala nu eller när du vill från din dashboard. Din tillgång aktiveras när betalningen är registrerad.
           </p>
         </div>
 
@@ -569,7 +569,7 @@ export default function OnboardingPage() {
               fontWeight: '600',
             }}
           >
-            GÃ¥ till betalning
+            Gå till betalning
           </button>
           
           <button
@@ -586,7 +586,7 @@ export default function OnboardingPage() {
               fontWeight: '500',
             }}
           >
-            GÃ¥ till dashboard (betala senare)
+            Gå till dashboard (betala senare)
           </button>
         </div>
       </div>

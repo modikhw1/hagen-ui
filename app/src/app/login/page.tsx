@@ -1,7 +1,12 @@
 'use client'
 
+import { Suspense } from 'react'
 import { LoginDesktop } from '@/components/features/Login'
 
 export default function LoginPage() {
-  return <LoginDesktop />
+  return (
+    <Suspense>
+      <LoginDesktop />
+    </Suspense>
+  )
 }
