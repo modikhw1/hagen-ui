@@ -14,10 +14,8 @@ interface FeedSlot {
   match_percentage: number;
   source_url: string | null;
   tiktok_url: string | null;
-  tiktok_views: number | null;
-  tiktok_thumbnail_url: string | null;
-  planned_publish_at: string | null;
-  published_at: string | null;
+  sent_at: string | null;
+  produced_at: string | null;
   cm_note: string | null;
 }
 
@@ -158,11 +156,11 @@ function SlotCard({ slot, highlight = false, dimmed = false }: { slot: FeedSlot;
       )}
 
       <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', fontSize: '12px', color: '#9ca3af' }}>
-        {slot.planned_publish_at && (
-          <span>📅 {new Date(slot.planned_publish_at).toLocaleDateString('sv-SE')}</span>
+        {slot.produced_at && (
+          <span>Filmad {new Date(slot.produced_at).toLocaleDateString('sv-SE')}</span>
         )}
-        {slot.tiktok_views != null && (
-          <span>👁 {slot.tiktok_views.toLocaleString('sv-SE')} visningar</span>
+        {slot.sent_at && !slot.produced_at && (
+          <span>Skickad {new Date(slot.sent_at).toLocaleDateString('sv-SE')}</span>
         )}
         {slot.tiktok_url && (
           <a href={slot.tiktok_url} target="_blank" rel="noopener noreferrer" style={{ color: '#4f46e5', textDecoration: 'none' }}>

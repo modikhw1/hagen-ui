@@ -47,11 +47,7 @@ export const GET = withAuth(async (_request, user) => {
       added_at,
       sent_at,
       produced_at,
-      planned_publish_at,
-      published_at,
       tiktok_url,
-      tiktok_thumbnail_url,
-      tiktok_views,
       cm_note,
       concepts (
         id,
@@ -92,11 +88,7 @@ export const GET = withAuth(async (_request, user) => {
       added_at: row.added_at,
       sent_at: row.sent_at,
       produced_at: row.produced_at,
-      planned_publish_at: row.planned_publish_at,
-      published_at: row.published_at,
       tiktok_url: row.tiktok_url,
-      tiktok_thumbnail_url: row.tiktok_thumbnail_url,
-      tiktok_views: row.tiktok_views,
       cm_note: row.cm_note,
     };
   });
