@@ -129,8 +129,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [isDemo, setIsDemo] = useState(false)
   const [activeDemoIndex, setActiveDemoIndex] = useState(0)
 
-  // User clips from database
-  const [userClips, setUserClips] = useState<{ clipId: string; matchOverride?: number }[]>([])
+  // Concepts fetched from database (TranslatedConcept[] for logged-in customers)
+  const [userConcepts, setUserConcepts] = useState<TranslatedConcept[]>([])
   const [clipsLoading, setClipsLoading] = useState(false)
 
   // Load demo profiles from JSON
@@ -161,9 +161,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
   // Fetch assigned concepts from /api/customer/concepts for logged-in customers
   useEffect(() => {
-    async function fetchUserClips() {
+    async function fetchUserConcepts() {
       if (!user || isDemo) {
-        setUserClips([])
+        setUserConcepts([])
         return
       }
 
@@ -171,7 +171,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       if (typeof window !== 'undefined') {
         const pathname = window.location.pathname
         if (pathname.startsWith('/admin') || pathname.startsWith('/studio')) {
-          setUserClips([])
+          setUserConcepts([])
           return
         }
       }
@@ -181,29 +181,20 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         const res = await fetch('/api/customer/concepts')
         if (!res.ok) {
           console.warn('Could not fetch customer concepts, status:', res.status)
-          setUserClips([])
+          setUserConcepts([])
           return
         }
-        const json = await res.json() as { concepts: Array<{ id: string; match_percentage: number }> }
-        const fetched = json.concepts ?? []
-
-        if (fetched.length > 0) {
-          setUserClips(
-            fetched.map((c) => ({ clipId: c.id, matchOverride: c.match_percentage }))
-          )
-        } else {
-          // No concepts assigned yet – show empty state (not demo fallback)
-          setUserClips([])
-        }
+        const json = await res.json() as { concepts: TranslatedConcept[] }
+        setUserConcepts(json.concepts ?? [])
       } catch (err) {
         console.error('Error fetching customer concepts:', err)
-        setUserClips([])
+        setUserConcepts([])
       } finally {
         setClipsLoading(false)
       }
     }
 
-    fetchUserClips()
+    fetchUserConcepts()
   }, [user, isDemo])
 
   // Convert auth profile to our Profile type
@@ -244,19 +235,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       }
 
   // Concepts for active profile:
-  // - Demo: use demo profile concepts from JSON
-  // - Logged-in customer: use concepts fetched from /api/customer/concepts (may be empty)
-  const conceptSource = isDemo
-    ? activeDemoProfile.concepts
-    : userClips
-
-  const concepts: ConceptWithMatch[] = conceptSource.reduce<ConceptWithMatch[]>((acc, c) => {
-    const concept = loadConceptById(c.clipId)
-    if (concept) {
-      acc.push({ concept, matchOverride: c.matchOverride })
-    }
-    return acc
-  }, [])
+  // - Demo: load from JSON by clipId
+  // - Logged-in customer: use TranslatedConcept[] returned by API (includes CM customizations)
+  const concepts: ConceptWithMatch[] = isDemo
+    ? activeDemoProfile.concepts.reduce<ConceptWithMatch[]>((acc, c) => {
+        const concept = loadConceptById(c.clipId)
+        if (concept) acc.push({ concept, matchOverride: c.matchOverride })
+        return acc
+      }, [])
+    : userConcepts.map((c) => ({ concept: c, matchOverride: c.matchPercentage }))
 
   const newConcepts = concepts.filter(c => c.concept.isNew)
 

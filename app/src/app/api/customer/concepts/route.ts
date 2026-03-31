@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import { translateClipToConcept } from '@/lib/translator';
+import type { BackendClip, ClipOverride } from '@/lib/translator';
 
 /**
  * GET /api/customer/concepts
  *
- * Returns concepts assigned to the currently logged-in customer.
- * Authenticates via Supabase session, resolves the customer_profile_id
- * from profiles.matching_data, then returns customer_concepts JOIN concepts
- * WHERE status != 'archived', sorted by feed_order ASC.
+ * Returns TranslatedConcept[] for the currently logged-in customer.
+ * Customer-specific overrides (custom_headline, custom_script, etc.) take
+ * priority over the base concept's overrides stored in concepts.overrides.
  */
 export const GET = withAuth(async (_request, user) => {
   const supabase = createSupabaseAdmin();
@@ -31,7 +32,7 @@ export const GET = withAuth(async (_request, user) => {
     return NextResponse.json({ concepts: [] });
   }
 
-  // Fetch assigned concepts (JOIN with concepts table for base data)
+  // Fetch assigned concepts with base concept data
   const { data: rows, error } = await supabase
     .from('customer_concepts')
     .select(`
@@ -65,37 +66,40 @@ export const GET = withAuth(async (_request, user) => {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Merge customer-specific overrides on top of base concept data
   const concepts = (rows ?? []).map((row) => {
-    const base = row.concepts as unknown as Record<string, unknown> | null;
-    const backendData = (base?.backend_data ?? {}) as Record<string, unknown>;
-    const baseOverrides = (base?.overrides ?? {}) as Record<string, unknown>;
+    const base = row.concepts as unknown as {
+      backend_data: BackendClip;
+      overrides: ClipOverride;
+    } | null;
 
+    const backendData: BackendClip = (base?.backend_data ?? { id: row.concept_id, url: '' }) as BackendClip;
+    const baseOverrides: ClipOverride = (base?.overrides ?? {}) as ClipOverride;
+
+    // Customer-specific overrides take priority over base overrides
+    const mergedOverride: ClipOverride = {
+      ...baseOverrides,
+      ...(row.custom_headline ? { headline_sv: row.custom_headline } : {}),
+      ...(row.custom_description ? { description_sv: row.custom_description } : {}),
+      ...(row.custom_why_it_works ? { whyItWorks_sv: row.custom_why_it_works } : {}),
+      ...(row.custom_script ? { script_sv: row.custom_script } : {}),
+      ...(row.custom_production_notes ? { productionNotes_sv: row.custom_production_notes } : {}),
+      ...(row.match_percentage != null ? { matchPercentage: row.match_percentage } : {}),
+    };
+
+    // Translate to TranslatedConcept using the shared translator
+    const translated = translateClipToConcept(backendData, mergedOverride);
+
+    // Attach assignment metadata
     return {
-      id: row.concept_id,
+      ...translated,
       customer_concept_id: row.id,
-      // Base concept data
-      source_url: (backendData.url as string) ?? null,
-      // Overrides: customer-specific takes priority, then base overrides
-      headline_sv: row.custom_headline ?? (baseOverrides.headline_sv as string) ?? null,
-      description_sv: row.custom_description ?? (baseOverrides.description_sv as string) ?? null,
-      why_it_works_sv: row.custom_why_it_works ?? (baseOverrides.whyItWorks_sv as string) ?? null,
-      script_sv: row.custom_script ?? (baseOverrides.script_sv as string) ?? null,
-      production_notes_sv:
-        row.custom_production_notes ??
-        (baseOverrides.productionNotes_sv as string[] | null) ??
-        null,
-      why_it_fits_sv: baseOverrides.whyItFits_sv ?? null,
-      match_percentage: row.match_percentage ?? (baseOverrides.matchPercentage as number) ?? 85,
-      is_new: (baseOverrides.isNew as boolean) ?? false,
-      // Customer assignment fields
       status: row.status,
       feed_order: row.feed_order,
-      notes: row.notes,
+      cm_note: row.notes,
       added_at: row.added_at,
-      // Full backend data for further processing
-      backend_data: backendData,
-      overrides: baseOverrides,
+      // Customer-specific extras not in TranslatedConcept
+      custom_instructions: row.custom_instructions ?? null,
+      custom_target_audience: row.custom_target_audience ?? null,
     };
   });
 
