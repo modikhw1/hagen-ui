@@ -12,7 +12,7 @@ const ADMIN_API = /^\/api\/admin/
 const STUDIO_API = /^\/api\/studio/
 const CUSTOMER_API = /^\/api\/customer/
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID()
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-request-id', requestId)
