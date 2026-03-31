@@ -159,7 +159,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
   }, [user])
 
-  // Fetch user_clips from database for logged-in users
+  // Fetch assigned concepts from /api/customer/concepts for logged-in customers
   useEffect(() => {
     async function fetchUserClips() {
       if (!user || isDemo) {
@@ -178,14 +178,25 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       setClipsLoading(true)
       try {
-        // NOTE: user_clips table was deprecated in Phase 3 migration
-        // Now using customer_concepts table for customer-assigned concepts
-        // For now, just use default concepts for logged-in customers
-        // TODO: Fetch from customer_concepts if this user is linked to a customer_profile
+        const res = await fetch('/api/customer/concepts')
+        if (!res.ok) {
+          console.warn('Could not fetch customer concepts, status:', res.status)
+          setUserClips([])
+          return
+        }
+        const json = await res.json() as { concepts: Array<{ id: string; match_percentage: number }> }
+        const fetched = json.concepts ?? []
 
-        setUserClips(DEFAULT_USER_CONCEPTS)
+        if (fetched.length > 0) {
+          setUserClips(
+            fetched.map((c) => ({ clipId: c.id, matchOverride: c.match_percentage }))
+          )
+        } else {
+          // No concepts assigned yet – show empty state (not demo fallback)
+          setUserClips([])
+        }
       } catch (err) {
-        console.error('Error fetching user_clips:', err)
+        console.error('Error fetching customer concepts:', err)
         setUserClips([])
       } finally {
         setClipsLoading(false)
@@ -232,10 +243,12 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         recentHits: DEFAULT_USER_PROFILE_META.recentHits,
       }
 
-  // Concepts for active profile - use user_clips from DB for logged-in users
+  // Concepts for active profile:
+  // - Demo: use demo profile concepts from JSON
+  // - Logged-in customer: use concepts fetched from /api/customer/concepts (may be empty)
   const conceptSource = isDemo
     ? activeDemoProfile.concepts
-    : (userClips.length > 0 ? userClips : DEFAULT_USER_CONCEPTS)
+    : userClips
 
   const concepts: ConceptWithMatch[] = conceptSource.reduce<ConceptWithMatch[]>((acc, c) => {
     const concept = loadConceptById(c.clipId)

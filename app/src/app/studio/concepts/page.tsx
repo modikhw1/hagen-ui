@@ -71,32 +71,22 @@ export default function StudioConceptsPage() {
 
   const handleAssignToCustomer = async () => {
     if (!selectedConcept || !selectedCustomer) return;
-    
+
     try {
-      // Get current customer concepts
-      const { data: customer, error: fetchError } = await supabase
-        .from('customer_profiles')
-        .select('concepts')
-        .eq('id', selectedCustomer)
-        .single();
+      const response = await fetch(
+        `/api/studio-v2/customers/${selectedCustomer}/concepts`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ concept_id: selectedConcept.id }),
+        }
+      );
 
-      if (fetchError) throw fetchError;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
 
-      const currentConcepts = customer?.concepts || [];
-      const newConcept = {
-        concept_id: selectedConcept.id,
-        added_at: new Date().toISOString(),
-        match_percentage: 85,
-        status: 'active'
-      };
-
-      const { error: updateError } = await supabase
-        .from('customer_profiles')
-        .update({ concepts: [...currentConcepts, newConcept] })
-        .eq('id', selectedCustomer);
-
-      if (updateError) throw updateError;
-      
       alert(`Konceptet har lagts till på kundens lista!`);
       setShowAssignModal(false);
       setSelectedConcept(null);

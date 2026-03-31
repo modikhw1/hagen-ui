@@ -3,12 +3,13 @@
 import Image from 'next/image'
 import { useLoginForm } from '@/hooks/useLoginForm'
 import { colors, fontFamily, pageContainer, scrollContainer, buttonBase, primaryButton } from '@/styles/mobile-design'
+import { getAuthCallbackUrl } from '@/lib/url/public'
 
 export function LoginMobile() {
   const form = useLoginForm({
     loginRedirect: '/m',
     demoRedirect: '/m?demo=true',
-    resetRedirectUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/m`,
+    resetRedirectUrl: getAuthCallbackUrl('recovery'),
     extraDemoCredentials: [
       { email: 'auth1', password: 'auth1', redirect: '/m?auth=true' }
     ]

@@ -1,6 +1,6 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Container,
@@ -17,6 +17,7 @@ import {
   ThemeIcon,
   Progress,
   Card,
+  Alert,
 } from "@mantine/core";
 import {
   IconCheck,
@@ -26,9 +27,22 @@ import {
   IconArrowLeft,
   IconShoppingCart,
   IconSparkles,
+  IconNote,
 } from "@tabler/icons-react";
 import { loadConcepts, loadConceptById } from "@/lib/conceptLoader";
 import { display } from "@/lib/display";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface CustomerConceptData {
+  headline_sv?: string | null;
+  description_sv?: string | null;
+  why_it_works_sv?: string | null;
+  script_sv?: string | null;
+  production_notes_sv?: string[] | null;
+  match_percentage?: number;
+  notes?: string | null;
+  status?: string;
+}
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -49,10 +63,39 @@ function TrendIndicator({ level }: { level: number }) {
 export default function ConceptDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const router = useRouter();
+  const { user } = useAuth();
 
   // Find concept from JSON data
   const concepts = loadConcepts();
   const concept = loadConceptById(id) || concepts[0];
+
+  // Customer-specific overrides from the database
+  const [customerConcept, setCustomerConcept] = useState<CustomerConceptData | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch(`/api/customer/concepts/${id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.concept) {
+          setCustomerConcept(data.concept as CustomerConceptData);
+        }
+      })
+      .catch(err => console.warn("Could not fetch customer concept:", err));
+  }, [id, user]);
+
+  // Customer-specific overrides take priority
+  const headline =
+    customerConcept?.headline_sv ?? concept.headline_sv ?? concept.headline;
+  const description =
+    customerConcept?.description_sv ?? concept.description_sv ?? null;
+  const whyItWorks =
+    customerConcept?.why_it_works_sv ?? concept.whyItWorks_sv ?? null;
+  const script =
+    customerConcept?.script_sv ?? concept.script_sv ?? null;
+  const productionNotes =
+    customerConcept?.production_notes_sv ?? concept.productionNotes_sv ?? [];
+  const cmNote = customerConcept?.notes ?? null;
 
   const handlePurchase = () => {
     // TODO: Navigate to checkout
@@ -88,8 +131,15 @@ export default function ConceptDetailPage({ params }: PageProps) {
           </Group>
 
           <Title order={1} size="h2" mb="md">
-            {concept.headline}
+            {headline}
           </Title>
+
+          {/* CM note */}
+          {cmNote && (
+            <Alert icon={<IconNote size={16} />} color="yellow" title="Notering från content manager" mb="md">
+              {cmNote}
+            </Alert>
+          )}
 
           {/* Trend indicator */}
           <Group gap="md">

@@ -128,12 +128,21 @@ export default function AdminTeamPage() {
     if (!reassignTarget || selectedCustomers.length === 0) return;
     setReassignLoading(true);
     try {
-      for (const id of selectedCustomers) {
-        await supabase
-          .from('customer_profiles')
-          .update({ account_manager: reassignTarget })
-          .eq('id', id);
-      }
+      const { data: { session } } = await supabase.auth.getSession();
+      // Update each customer via the PATCH API to ensure both account_manager
+      // (name) and account_manager_profile_id (UUID) are updated atomically.
+      await Promise.all(
+        selectedCustomers.map(id =>
+          fetch(`/api/admin/customers/${id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token}`,
+            },
+            body: JSON.stringify({ account_manager: reassignTarget }),
+          })
+        )
+      );
       showToast('success', `${selectedCustomers.length} kund${selectedCustomers.length > 1 ? 'er' : ''} omdelade till ${reassignTarget}`);
       setSelectedCustomers([]);
       setReassignMode(false);
@@ -151,8 +160,8 @@ export default function AdminTeamPage() {
       showToast('error', 'Namn krävs');
       return;
     }
-    if (newCM.sendInvite && !newCM.email.trim()) {
-      showToast('error', 'E-post krävs för att skicka inbjudan');
+    if (!newCM.email.trim()) {
+      showToast('error', 'E-post är obligatoriskt');
       return;
     }
 
@@ -230,12 +239,21 @@ export default function AdminTeamPage() {
           setDeleteLoading(false);
           return;
         }
-        for (const customer of assignedCustomers) {
-          await supabase
-            .from('customer_profiles')
-            .update({ account_manager: deleteReassignTarget })
-            .eq('id', customer.id);
-        }
+        const { data: { session } } = await supabase.auth.getSession();
+        // Use the PATCH API to atomically update both account_manager and
+        // account_manager_profile_id for all reassigned customers.
+        await Promise.all(
+          assignedCustomers.map(customer =>
+            fetch(`/api/admin/customers/${customer.id}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${session?.access_token}`,
+              },
+              body: JSON.stringify({ account_manager: deleteReassignTarget }),
+            })
+          )
+        );
       }
 
       await deleteCM(cmToDelete.id);
@@ -635,7 +653,7 @@ export default function AdminTeamPage() {
             </div>
 
             <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '13px', color: LeTrendColors.textSecondary, fontWeight: 600, marginBottom: '6px' }}>E-post{newCM.sendInvite ? ' *' : ''}</label>
+              <label style={{ display: 'block', fontSize: '13px', color: LeTrendColors.textSecondary, fontWeight: 600, marginBottom: '6px' }}>E-post *</label>
               <input
                 value={newCM.email}
                 onChange={e => setNewCM({ ...newCM, email: e.target.value })}
@@ -701,7 +719,7 @@ export default function AdminTeamPage() {
               </button>
               <button
                 onClick={handleAddCM}
-                disabled={!newCM.name.trim() || addLoading}
+                disabled={!newCM.name.trim() || !newCM.email.trim() || addLoading}
                 style={{
                   padding: '10px 22px',
                   borderRadius: LeTrendRadius.md,

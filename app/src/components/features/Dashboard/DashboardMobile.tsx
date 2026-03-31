@@ -306,6 +306,7 @@ function DashboardMobileContent() {
               {(isDemo ? [
                 { label: 'Avsluta demo', onClick: () => { handleLogout(); setShowMenu(false); }, danger: true }
               ] : [
+                { label: 'Min plan', onClick: () => { router.push('/m/feed'); setShowMenu(false); } },
                 { label: 'Fakturering', onClick: () => { console.log('Billing'); setShowMenu(false); } },
                 { label: 'Inställningar', onClick: () => { console.log('Settings'); setShowMenu(false); } },
                 { label: 'Logga ut', onClick: () => { handleLogout(); setShowMenu(false); }, danger: true }
@@ -395,19 +396,31 @@ function DashboardMobileContent() {
             </>
           )}
 
-          {/* If no concepts for this category, show all */}
+          {/* Empty state: demo shows sample concepts, logged-in shows message */}
           {conceptsForCategory.length === 0 && (
-            <>
-              <p style={sectionLabel}>Alla koncept</p>
-              {allConcepts.slice(0, 6).map((concept) => (
-                <ConceptCard
-                  key={concept.id}
-                  concept={concept}
-                  isNew={concept.isNew}
-                  onClick={() => handleConceptClick(concept.id, true)}
-                />
-              ))}
-            </>
+            isDemo ? (
+              <>
+                <p style={sectionLabel}>Alla koncept</p>
+                {allConcepts.slice(0, 6).map((concept) => (
+                  <ConceptCard
+                    key={concept.id}
+                    concept={concept}
+                    isNew={concept.isNew}
+                    onClick={() => handleConceptClick(concept.id, true)}
+                  />
+                ))}
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '48px 24px', color: '#9ca3af' }}>
+                <div style={{ fontSize: '40px', marginBottom: '12px' }}>🎬</div>
+                <div style={{ fontSize: '16px', fontWeight: 600, color: '#6b7280', marginBottom: '8px' }}>
+                  Inga koncept tilldelade ännu
+                </div>
+                <div style={{ fontSize: '14px', lineHeight: 1.5 }}>
+                  Din content manager kommer snart tilldela koncept till dig.
+                </div>
+              </div>
+            )
           )}
 
         </div>

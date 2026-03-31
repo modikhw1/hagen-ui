@@ -19,11 +19,25 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     return NextResponse.json({ error: 'Namn krävs' }, { status: 400 });
   }
 
-  if (sendInvite && !email?.trim()) {
-    return NextResponse.json({ error: 'E-post krävs för att skicka inbjudan' }, { status: 400 });
+  if (!email?.trim()) {
+    return NextResponse.json({ error: 'E-post är obligatoriskt' }, { status: 400 });
   }
 
   const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Duplicate check: 409 if email already exists
+  const { data: existingMember } = await supabaseAdmin
+    .from('team_members')
+    .select('id, name')
+    .ilike('email', email.trim())
+    .maybeSingle();
+
+  if (existingMember) {
+    return NextResponse.json(
+      { error: `E-postadressen används redan av ${existingMember.name}` },
+      { status: 409 }
+    );
+  }
 
   // Pick color based on current team size
   const { count } = await supabaseAdmin

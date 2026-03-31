@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { supabase } from '@/lib/supabase/client';
 
 interface UploadResult {
   success: boolean;
@@ -61,13 +62,59 @@ export default function StudioUploadPage() {
         throw new Error(analyzeData.error || 'Analysis failed');
       }
 
-      setProgress('Analys klar! Skapar concept...');
+      setProgress('Analys klar! Sparar concept till databasen...');
 
-      // Step 3: Create concept from analysis (mock for now)
-      // In production, this would save to database and convert to concept format
+      // Step 3: Save concept to database via /api/admin/concepts
+      // Extract a readable headline from the analysis result
+      const headline =
+        analyzeData?.headline ||
+        analyzeData?.title ||
+        analyzeData?.humor_analysis?.mechanism ||
+        'Nytt TikTok-koncept';
+
+      // Build a unique concept ID from the video URL
+      const urlSegments = videoUrl.split('/').filter(Boolean);
+      const videoIdSegment = urlSegments[urlSegments.length - 1]?.replace(/[^0-9]/g, '') || Date.now().toString();
+      const conceptId = `clip-${videoIdSegment}`;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const saveRes = await fetch('/api/admin/concepts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          id: conceptId,
+          backend_data: {
+            ...analyzeData,
+            url: videoUrl,
+            source_url: videoUrl,
+            gcs_uri: uploadData.gcsUri,
+            platform: 'tiktok',
+          },
+          overrides: {
+            headline_sv: headline,
+          },
+        }),
+      });
+
+      const saveData = await saveRes.json();
+
+      if (!saveRes.ok) {
+        // Still show success for the analysis, but note the save issue
+        setResult({
+          success: true,
+          message: `Video analyserad, men sparning misslyckades: ${saveData.error}`,
+          gcsUri: uploadData.gcsUri,
+        });
+        return;
+      }
+
       setResult({
         success: true,
-        message: 'Video analyserad och concept skapad!',
+        message: 'Video analyserad och concept sparat!',
+        conceptId: saveData.concept?.id || conceptId,
         gcsUri: uploadData.gcsUri,
       });
 
@@ -184,12 +231,20 @@ export default function StudioUploadPage() {
           </div>
           
           {result.success && (
-            <div style={{ paddingLeft: '36px' }}>
-              <a 
+            <div style={{ paddingLeft: '36px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {result.conceptId && (
+                <a
+                  href={`/studio/concepts/${result.conceptId}/edit`}
+                  style={{ color: '#4f46e5', fontSize: '14px', textDecoration: 'none' }}
+                >
+                  → Redigera nytt concept ({result.conceptId})
+                </a>
+              )}
+              <a
                 href="/studio/concepts"
                 style={{ color: '#4f46e5', fontSize: '14px', textDecoration: 'none' }}
               >
-                → Visa i concepts
+                → Visa alla concepts
               </a>
             </div>
           )}

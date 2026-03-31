@@ -6,6 +6,19 @@ import { loadConceptById } from '@/lib/conceptLoader'
 import { display } from '@/lib/display'
 import { colors, fontFamily, pageContainer, scrollContainer, buttonBase, sectionLabel, primaryButton, tagStyle } from '@/styles/mobile-design'
 import { useVideoSignedUrl } from '@/hooks/useVideoSignedUrl'
+import { useAuth } from '@/contexts/AuthContext'
+
+interface CustomerConceptData {
+  headline_sv?: string | null
+  description_sv?: string | null
+  why_it_works_sv?: string | null
+  script_sv?: string | null
+  production_notes_sv?: string[] | null
+  why_it_fits_sv?: unknown
+  match_percentage?: number
+  notes?: string | null
+  status?: string
+}
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -16,6 +29,7 @@ export default function MobileConceptDetail({ params }: PageProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const isDemo = searchParams.get('demo') === 'true'
+  const { user } = useAuth()
 
   const concept = loadConceptById(id)
 
@@ -27,6 +41,21 @@ export default function MobileConceptDetail({ params }: PageProps) {
   const [videoLink, setVideoLink] = useState('')
   const [linkSubmitted, setLinkSubmitted] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+
+  // Customer-specific overrides fetched from the API
+  const [customerConcept, setCustomerConcept] = useState<CustomerConceptData | null>(null)
+
+  useEffect(() => {
+    if (!user || isDemo) return
+    fetch(`/api/customer/concepts/${id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.concept) {
+          setCustomerConcept(data.concept as CustomerConceptData)
+        }
+      })
+      .catch(err => console.warn('Could not fetch customer concept:', err))
+  }, [id, user, isDemo])
 
   // Use shared hook for video signed URL fetching
   const { signedUrl, isLoading: videoLoading, error: videoError } = useVideoSignedUrl({
@@ -81,12 +110,25 @@ export default function MobileConceptDetail({ params }: PageProps) {
     )
   }
 
-  const headline = concept.headline_sv || concept.headline
-  const description = concept.description_sv || 'Ett beprövat format som fungerar för din typ av verksamhet.'
-  const whyItWorks = concept.whyItWorks_sv || 'Konceptet följer beprövade humormekanismer.'
-  const script = concept.script_sv || '[Manus genereras...]'
-  const productionNotes = concept.productionNotes_sv || ['Se originalvideo för referens', 'Anpassa till din miljö']
-  const whyItFits = concept.whyItFits_sv || ['Beprövat format', 'Anpassningsbart']
+  // Customer-specific overrides take priority over base concept data
+  const headline =
+    customerConcept?.headline_sv ?? concept.headline_sv ?? concept.headline
+  const description =
+    customerConcept?.description_sv ??
+    concept.description_sv ??
+    'Ett beprövat format som fungerar för din typ av verksamhet.'
+  const whyItWorks =
+    customerConcept?.why_it_works_sv ??
+    concept.whyItWorks_sv ??
+    'Konceptet följer beprövade humormekanismer.'
+  const script =
+    customerConcept?.script_sv ?? concept.script_sv ?? '[Manus genereras...]'
+  const productionNotes =
+    customerConcept?.production_notes_sv ??
+    concept.productionNotes_sv ??
+    ['Se originalvideo för referens', 'Anpassa till din miljö']
+  const whyItFits = concept.whyItFits_sv ?? ['Beprövat format', 'Anpassningsbart']
+  const cmNote = customerConcept?.notes ?? null
 
   const handleBack = () => {
     const demoParam = isDemo ? '?demo=true' : ''
@@ -273,6 +315,14 @@ export default function MobileConceptDetail({ params }: PageProps) {
             </div>
 
             <div style={{ padding: 24 }}>
+              {/* CM note - shown when available */}
+              {cmNote && (
+                <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: '12px 16px', marginBottom: 20 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: '#92400e', marginBottom: 4, fontFamily }}>NOTERING FRÅN CONTENT MANAGER</p>
+                  <p style={{ fontSize: 14, color: '#78350f', lineHeight: 1.5, fontFamily }}>{cmNote}</p>
+                </div>
+              )}
+
               {/* MANUS TAB */}
               {tab === 'manus' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

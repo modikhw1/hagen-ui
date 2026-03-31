@@ -8,13 +8,16 @@ interface StudioStats {
   totalCustomers: number;
   pendingInvites: number;
   recentUploads: number;
+  myCustomersCount: number;
 }
 
-interface RecentActivity {
+interface CustomerRow {
   id: string;
-  type: 'concept_created' | 'customer_added' | 'invite_sent' | 'video_uploaded';
-  description: string;
-  timestamp: string;
+  business_name: string;
+  contact_email: string;
+  status: string;
+  created_at: string;
+  monthly_price: number;
 }
 
 export default function StudioDashboard() {
@@ -23,8 +26,9 @@ export default function StudioDashboard() {
     totalCustomers: 0,
     pendingInvites: 0,
     recentUploads: 0,
+    myCustomersCount: 0,
   });
-  const [activities, setActivities] = useState<RecentActivity[]>([]);
+  const [myCustomers, setMyCustomers] = useState<CustomerRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,39 +37,18 @@ export default function StudioDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // Fetch customer count
-      const { count: customerCount } = await supabase
-        .from('customer_profiles')
-        .select('*', { count: 'exact', head: true });
-
-      // Fetch pending invites
-      const { count: pendingCount } = await supabase
-        .from('customer_profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      setStats({
-        totalConcepts: 19, // TODO: Move to database
-        totalCustomers: customerCount || 0,
-        pendingInvites: pendingCount || 0,
-        recentUploads: 0, // TODO: Track uploads
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/studio-v2/dashboard', {
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {},
       });
 
-      // Mock activities for now
-      setActivities([
-        {
-          id: '1',
-          type: 'customer_added',
-          description: 'Ny kund lades till: Café Månsson',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-        },
-        {
-          id: '2',
-          type: 'invite_sent',
-          description: 'Inbjudan skickad till restaurang@email.se',
-          timestamp: new Date(Date.now() - 7200000).toISOString(),
-        },
-      ]);
+      if (res.ok) {
+        const data = await res.json() as { stats: StudioStats; myCustomers: CustomerRow[] };
+        setStats(data.stats);
+        setMyCustomers(data.myCustomers ?? []);
+      }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -73,25 +56,19 @@ export default function StudioDashboard() {
     }
   };
 
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const hours = Math.floor(diff / 3600000);
-
-    if (hours < 1) return 'För less än en timme sedan';
-    if (hours < 24) return `För ${hours} timmar sedan`;
-    return date.toLocaleDateString('sv-SE');
-  };
-
-  const getActivityIcon = (type: RecentActivity['type']) => {
-    switch (type) {
-      case 'concept_created': return '🎬';
-      case 'customer_added': return '👤';
-      case 'invite_sent': return '📧';
-      case 'video_uploaded': return '📹';
-      default: return '📌';
-    }
+  const getStatusBadge = (status: string) => {
+    const colors: Record<string, { bg: string; text: string }> = {
+      active: { bg: '#d1fae5', text: '#065f46' },
+      invited: { bg: '#dbeafe', text: '#1d4ed8' },
+      pending: { bg: '#fef3c7', text: '#b45309' },
+      agreed: { bg: '#ede9fe', text: '#5b21b6' },
+    };
+    const c = colors[status] || { bg: '#f3f4f6', text: '#6b7280' };
+    return (
+      <span style={{ background: c.bg, color: c.text, padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>
+        {status}
+      </span>
+    );
   };
 
   if (loading) {
@@ -115,44 +92,24 @@ export default function StudioDashboard() {
         gap: '16px',
         marginBottom: '32px'
       }}>
-        <div style={{
-          background: '#fff',
-          borderRadius: '12px',
-          padding: '20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
+        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
           <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>Concepts</div>
           <div style={{ fontSize: '32px', fontWeight: 700, color: '#1a1a2e' }}>{stats.totalConcepts}</div>
         </div>
 
-        <div style={{
-          background: '#fff',
-          borderRadius: '12px',
-          padding: '20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>Kunder</div>
+        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>Totalt kunder</div>
           <div style={{ fontSize: '32px', fontWeight: 700, color: '#1a1a2e' }}>{stats.totalCustomers}</div>
         </div>
 
-        <div style={{
-          background: '#fff',
-          borderRadius: '12px',
-          padding: '20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>Väntande inbjudningar</div>
-          <div style={{ fontSize: '32px', fontWeight: 700, color: '#f59e0b' }}>{stats.pendingInvites}</div>
+        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>Mina kunder</div>
+          <div style={{ fontSize: '32px', fontWeight: 700, color: '#4f46e5' }}>{stats.myCustomersCount}</div>
         </div>
 
-        <div style={{
-          background: '#fff',
-          borderRadius: '12px',
-          padding: '20px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>Nya uploads</div>
-          <div style={{ fontSize: '32px', fontWeight: 700, color: '#10b981' }}>{stats.recentUploads}</div>
+        <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+          <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '8px' }}>Väntande inbjudningar</div>
+          <div style={{ fontSize: '32px', fontWeight: 700, color: '#f59e0b' }}>{stats.pendingInvites}</div>
         </div>
       </div>
 
@@ -215,37 +172,46 @@ export default function StudioDashboard() {
         </div>
       </div>
 
-      {/* Recent Activity */}
+      {/* Mina kunder */}
       <div>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '16px', color: '#1a1a2e' }}>
-          Senaste aktiviteter
-        </h2>
-        <div style={{
-          background: '#fff',
-          borderRadius: '12px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
-        }}>
-          {activities.length === 0 ? (
-            <div style={{ padding: '20px', color: '#6b7280', textAlign: 'center' }}>
-              Ingen aktivitet ännu
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#1a1a2e', margin: 0 }}>
+            Mina kunder
+          </h2>
+          <a href="/studio/customers" style={{ color: '#4f46e5', fontSize: '14px', textDecoration: 'none' }}>
+            Visa alla →
+          </a>
+        </div>
+        <div style={{ background: '#fff', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+          {myCustomers.length === 0 ? (
+            <div style={{ padding: '32px', color: '#9ca3af', textAlign: 'center' }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>👤</div>
+              <div>Inga kunder tilldelade ännu</div>
             </div>
           ) : (
-            activities.map((activity, index) => (
+            myCustomers.map((customer, index) => (
               <div
-                key={activity.id}
+                key={customer.id}
                 style={{
-                  padding: '16px 20px',
-                  borderBottom: index < activities.length - 1 ? '1px solid #f3f4f6' : 'none',
+                  padding: '14px 20px',
+                  borderBottom: index < myCustomers.length - 1 ? '1px solid #f3f4f6' : 'none',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px'
+                  justifyContent: 'space-between',
                 }}
               >
-                <span style={{ fontSize: '20px' }}>{getActivityIcon(activity.type)}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ color: '#1a1a2e', fontSize: '14px' }}>{activity.description}</div>
-                  <div style={{ color: '#9ca3af', fontSize: '12px' }}>{formatTime(activity.timestamp)}</div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#1a1a2e' }}>{customer.business_name}</div>
+                  <div style={{ fontSize: '12px', color: '#9ca3af' }}>{customer.contact_email}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {getStatusBadge(customer.status)}
+                  <a
+                    href={`/studio/customers/${customer.id}`}
+                    style={{ color: '#4f46e5', fontSize: '12px', textDecoration: 'none' }}
+                  >
+                    Öppna →
+                  </a>
                 </div>
               </div>
             ))

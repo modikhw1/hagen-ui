@@ -2,12 +2,13 @@
 
 import Image from 'next/image'
 import { useLoginForm } from '@/hooks/useLoginForm'
+import { getAuthCallbackUrl } from '@/lib/url/public'
 
 export function LoginDesktop() {
   const form = useLoginForm({
-    loginRedirect: '/app',
+    loginRedirect: '/',
     demoRedirect: '/?demo=true',
-    resetRedirectUrl: `${typeof window !== 'undefined' ? window.location.origin : ''}/app`,
+    resetRedirectUrl: getAuthCallbackUrl('recovery'),
   })
 
   return (
