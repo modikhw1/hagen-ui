@@ -6,6 +6,24 @@
 -- Idempotent: uses ON CONFLICT (customer_profile_id, concept_id) DO NOTHING
 -- =====================================================
 
+-- Ensure the UNIQUE constraint exists (may be missing if table was created before migration 007)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'customer_concepts'::regclass
+      AND contype = 'u'
+      AND conname LIKE '%customer_profile_id%concept_id%'
+  ) THEN
+    ALTER TABLE customer_concepts
+      ADD CONSTRAINT customer_concepts_customer_profile_id_concept_id_key
+      UNIQUE (customer_profile_id, concept_id);
+    RAISE NOTICE 'Added UNIQUE constraint on customer_concepts(customer_profile_id, concept_id)';
+  ELSE
+    RAISE NOTICE 'UNIQUE constraint already exists on customer_concepts, skipping';
+  END IF;
+END $$;
+
 DO $$
 DECLARE
   profile_row RECORD;
@@ -58,7 +76,7 @@ BEGIN
         added_at,
         base_concept_version
       )
-      VALUES (
+      SELECT
         profile_row.id,
         v_concept_id,
         concept_entry->>'custom_headline',
@@ -80,8 +98,11 @@ BEGIN
           NOW()
         ),
         1
-      )
-      ON CONFLICT (customer_profile_id, concept_id) DO NOTHING;
+      WHERE NOT EXISTS (
+        SELECT 1 FROM customer_concepts
+        WHERE customer_profile_id = profile_row.id
+          AND concept_id = v_concept_id
+      );
 
     END LOOP;
   END LOOP;
