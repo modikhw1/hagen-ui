@@ -724,9 +724,9 @@ export default function AdminTeamPage() {
                   padding: '10px 22px',
                   borderRadius: LeTrendRadius.md,
                   border: 'none',
-                  background: newCM.name.trim() && !addLoading ? LeTrendColors.brownDark : '#9ca3af',
+                  background: newCM.name.trim() && newCM.email.trim() && !addLoading ? LeTrendColors.brownDark : '#9ca3af',
                   color: '#fff',
-                  cursor: newCM.name.trim() && !addLoading ? 'pointer' : 'not-allowed',
+                  cursor: newCM.name.trim() && newCM.email.trim() && !addLoading ? 'pointer' : 'not-allowed',
                   fontSize: '14px',
                   fontWeight: 600,
                 }}

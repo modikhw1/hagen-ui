@@ -6,9 +6,11 @@ const MOBILE_REGEX = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera M
 
 const ADMIN_ROUTES = /^\/admin/
 const STUDIO_ROUTES = /^\/studio/
-const CUSTOMER_ROUTES = /^\/customer/
+const CUSTOMER_ROUTES = /^\/(customer|feed)/
+const MOBILE_CUSTOMER_ROUTES = /^\/m\/(feed|customer|concept)/
 const ADMIN_API = /^\/api\/admin/
 const STUDIO_API = /^\/api\/studio/
+const CUSTOMER_API = /^\/api\/customer/
 
 export async function proxy(request: NextRequest) {
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID()
@@ -49,14 +51,24 @@ export async function proxy(request: NextRequest) {
 
   const isAdminApi = ADMIN_API.test(pathname)
   const isStudioApi = STUDIO_API.test(pathname)
-  const isApiRoute = isAdminApi || isStudioApi
+  const isCustomerApi = CUSTOMER_API.test(pathname)
+  const isApiRoute = isAdminApi || isStudioApi || isCustomerApi
   const isAdminPage = ADMIN_ROUTES.test(pathname)
   const isStudioPage = STUDIO_ROUTES.test(pathname)
   const isCustomerPage = CUSTOMER_ROUTES.test(pathname)
-  const isProtectedRoute = isAdminPage || isStudioPage || isCustomerPage || isApiRoute
+  const isMobileCustomerPage = MOBILE_CUSTOMER_ROUTES.test(pathname)
+  const isProtectedRoute = isAdminPage || isStudioPage || isCustomerPage || isMobileCustomerPage || isApiRoute
+
+  // Public mobile routes (exact matches or specific prefixes only)
+  const isMobilePublic =
+    pathname === '/m' ||
+    pathname === '/m/login' ||
+    pathname === '/m/register' ||
+    pathname.startsWith('/m/login/') ||
+    pathname.startsWith('/m/register/')
 
   const skipAuthCheck =
-    pathname.startsWith('/m') ||
+    isMobilePublic ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/auth/callback') ||
     pathname.startsWith('/api/stripe/webhook') ||
@@ -113,7 +125,10 @@ export async function proxy(request: NextRequest) {
       }
 
       const url = request.nextUrl.clone()
-      if (isMobile && isCustomerPage) {
+      if (isMobileCustomerPage) {
+        url.pathname = '/m/login'
+        url.searchParams.set('redirect', pathname)
+      } else if (isMobile && isCustomerPage) {
         url.pathname = '/m/login'
         url.searchParams.set('redirect', `/m${pathname}`)
       } else {
@@ -168,7 +183,7 @@ export async function proxy(request: NextRequest) {
       }
     }
 
-    if (isCustomerPage) {
+    if (isCustomerPage || isMobileCustomerPage) {
       if (userRole !== 'customer') {
         const url = request.nextUrl.clone()
         if (profile.is_admin || userRole === 'admin') {
@@ -176,13 +191,14 @@ export async function proxy(request: NextRequest) {
         } else if (userRole === 'content_manager') {
           url.pathname = '/studio'
         } else {
-          url.pathname = '/login'
+          url.pathname = isMobileCustomerPage ? '/m/login' : '/login'
           url.searchParams.set('error', 'access_denied')
         }
         return withRequestId(NextResponse.redirect(url))
       }
 
-      if (isMobile) {
+      // Desktop customer visiting /feed or /customer/* → redirect to mobile equivalent
+      if (!isMobileCustomerPage && isMobile) {
         const url = request.nextUrl.clone()
         url.pathname = `/m${pathname}`
         return withRequestId(NextResponse.redirect(url))
