@@ -91,7 +91,18 @@ BEGIN
           ELSE NULL
         END,
         COALESCE((concept_entry->>'match_percentage')::INTEGER, 85),
-        COALESCE(concept_entry->>'status', 'active'),
+        -- Map old status values ('active','paused','completed') to production enum
+        -- Production constraint: ('draft','sent','produced','archived')
+        CASE COALESCE(concept_entry->>'status', 'active')
+          WHEN 'active'    THEN 'draft'
+          WHEN 'paused'    THEN 'draft'
+          WHEN 'completed' THEN 'produced'
+          WHEN 'draft'     THEN 'draft'
+          WHEN 'sent'      THEN 'sent'
+          WHEN 'produced'  THEN 'produced'
+          WHEN 'archived'  THEN 'archived'
+          ELSE 'draft'
+        END,
         concept_entry->>'notes',
         COALESCE(
           (concept_entry->>'added_at')::TIMESTAMPTZ,
