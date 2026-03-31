@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import { translateClipToConcept } from '@/lib/translator';
+import type { BackendClip, ClipOverride } from '@/lib/translator';
 
 /**
  * GET /api/customer/concepts/[conceptId]
  *
- * Returns merged concept data (base concept + customer-specific overrides)
- * for the currently logged-in customer.
+ * Returns a TranslatedConcept with customer-specific overrides applied,
+ * plus raw assignment metadata (status, feed_order, cm_note).
  */
 export const GET = withAuth(
   async (_request, user, { params }: { params: Promise<{ conceptId: string }> }) => {
@@ -27,8 +29,15 @@ export const GET = withAuth(
     const customerProfileId = (profile.matching_data as Record<string, unknown>)
       ?.customer_profile_id as string | undefined;
 
+    // Helper: translate a raw concepts row to TranslatedConcept
+    const translateBaseOnly = (concept: Record<string, unknown>) => {
+      const backendData = (concept.backend_data ?? { id: conceptId, url: '' }) as BackendClip;
+      const overrides = (concept.overrides ?? {}) as ClipOverride;
+      return translateClipToConcept(backendData, overrides);
+    };
+
     if (!customerProfileId) {
-      // No customer profile linked – return base concept only
+      // No customer profile – return base concept without customizations
       const { data: concept, error: conceptError } = await supabase
         .from('concepts')
         .select('*')
@@ -40,7 +49,10 @@ export const GET = withAuth(
         return NextResponse.json({ error: 'Concept not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ concept, customer_concept: null });
+      return NextResponse.json({
+        concept: translateBaseOnly(concept as Record<string, unknown>),
+        customer_concept: null,
+      });
     }
 
     // Fetch customer_concept JOIN concept
@@ -66,10 +78,7 @@ export const GET = withAuth(
           backend_data,
           overrides,
           is_active,
-          source,
-          created_at,
-          updated_at,
-          version
+          source
         )
       `)
       .eq('customer_profile_id', customerProfileId)
@@ -77,7 +86,7 @@ export const GET = withAuth(
       .single();
 
     if (error || !row) {
-      // Concept not assigned to this customer – try returning base concept
+      // Not assigned to this customer – return base concept without customizations
       const { data: concept, error: conceptError } = await supabase
         .from('concepts')
         .select('*')
@@ -89,41 +98,46 @@ export const GET = withAuth(
         return NextResponse.json({ error: 'Concept not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ concept, customer_concept: null });
+      return NextResponse.json({
+        concept: translateBaseOnly(concept as Record<string, unknown>),
+        customer_concept: null,
+      });
     }
 
-    const base = row.concepts as unknown as Record<string, unknown> | null;
-    const backendData = (base?.backend_data ?? {}) as Record<string, unknown>;
-    const baseOverrides = (base?.overrides ?? {}) as Record<string, unknown>;
+    const base = row.concepts as unknown as { backend_data: BackendClip; overrides: ClipOverride } | null;
+    const backendData: BackendClip = (base?.backend_data ?? { id: row.concept_id, url: '' }) as BackendClip;
+    const baseOverrides: ClipOverride = (base?.overrides ?? {}) as ClipOverride;
 
-    // Merged concept: customer-specific fields override base overrides
-    const merged = {
-      id: row.concept_id,
-      customer_concept_id: row.id,
-      source_url: (backendData.url as string) ?? null,
-      headline_sv: row.custom_headline ?? (baseOverrides.headline_sv as string) ?? null,
-      description_sv: row.custom_description ?? (baseOverrides.description_sv as string) ?? null,
-      why_it_works_sv:
-        row.custom_why_it_works ?? (baseOverrides.whyItWorks_sv as string) ?? null,
-      script_sv: row.custom_script ?? (baseOverrides.script_sv as string) ?? null,
-      production_notes_sv:
-        row.custom_production_notes ??
-        (baseOverrides.productionNotes_sv as string[] | null) ??
-        null,
-      why_it_fits_sv: baseOverrides.whyItFits_sv ?? null,
-      target_audience:
-        row.custom_target_audience ?? (backendData.humor_analysis as Record<string, unknown>)?.target_audience ?? null,
-      match_percentage: row.match_percentage ?? (baseOverrides.matchPercentage as number) ?? 85,
-      is_new: (baseOverrides.isNew as boolean) ?? false,
-      status: row.status,
-      feed_order: row.feed_order,
-      notes: row.notes,
-      added_at: row.added_at,
-      backend_data: backendData,
-      overrides: baseOverrides,
+    // Customer-specific overrides take priority
+    const mergedOverride: ClipOverride = {
+      ...baseOverrides,
+      ...(row.custom_headline ? { headline_sv: row.custom_headline } : {}),
+      ...(row.custom_description ? { description_sv: row.custom_description } : {}),
+      ...(row.custom_why_it_works ? { whyItWorks_sv: row.custom_why_it_works } : {}),
+      ...(row.custom_script ? { script_sv: row.custom_script } : {}),
+      ...(row.custom_production_notes ? { productionNotes_sv: row.custom_production_notes } : {}),
+      ...(row.match_percentage != null ? { matchPercentage: row.match_percentage } : {}),
     };
 
-    return NextResponse.json({ concept: merged, customer_concept: row });
+    const translated = translateClipToConcept(backendData, mergedOverride);
+
+    return NextResponse.json({
+      concept: {
+        ...translated,
+        customer_concept_id: row.id,
+        status: row.status,
+        feed_order: row.feed_order,
+        cm_note: row.notes,
+        added_at: row.added_at,
+        custom_instructions: row.custom_instructions ?? null,
+        custom_target_audience: row.custom_target_audience ?? null,
+      },
+      customer_concept: {
+        id: row.id,
+        status: row.status,
+        feed_order: row.feed_order,
+      },
+    });
   },
   ['customer', 'admin', 'content_manager']
 );
