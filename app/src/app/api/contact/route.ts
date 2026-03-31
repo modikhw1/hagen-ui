@@ -82,6 +82,24 @@ export async function OPTIONS(request: NextRequest) {
   })
 }
 
+export async function GET(request: NextRequest) {
+  return NextResponse.json(
+    {
+      ok: true,
+      service: 'contact',
+      accepts: ['POST', 'OPTIONS'],
+      resendConfigured: Boolean(process.env.RESEND_API_KEY),
+    },
+    {
+      status: 200,
+      headers: {
+        ...buildCorsHeaders(request),
+        'Cache-Control': 'no-store',
+      },
+    }
+  )
+}
+
 export async function POST(request: NextRequest) {
   const corsHeaders = buildCorsHeaders(request)
 
