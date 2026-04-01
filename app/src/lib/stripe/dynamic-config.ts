@@ -19,18 +19,18 @@ const isTestMode = ENV === 'test';
 
 console.log(`[Stripe Config] Running in ${ENV} mode (test=${isTestMode})`);
 
-// Select appropriate keys based on environment
+// Select appropriate keys based on environment (always fall back to unsuffixed key)
 const SECRET_KEY = isTestMode
   ? process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
-  : process.env.STRIPE_SECRET_KEY_LIVE;
+  : process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY;
 
 const PUBLISHABLE_KEY = isTestMode
   ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE;
+  : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
 const WEBHOOK_SECRET = isTestMode
   ? process.env.STRIPE_WEBHOOK_SECRET_TEST || process.env.STRIPE_WEBHOOK_SECRET
-  : process.env.STRIPE_WEBHOOK_SECRET_LIVE;
+  : process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET;
 
 // Validate configuration
 if (!SECRET_KEY) {
