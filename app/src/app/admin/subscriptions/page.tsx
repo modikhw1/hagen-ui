@@ -8,16 +8,20 @@ import { supabase } from '@/lib/supabase/client';
 interface Subscription {
   id: string;
   stripe_subscription_id: string;
-  customer_profile_id: string;
+  stripe_customer_id: string;
+  customer_profile_id: string | null;
   status: string;
+  amount: number;
+  interval: string | null;
+  interval_count: number;
   current_period_start: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
+  created: string;
   customer_name?: string;
-  monthly_price?: number;
 }
 
-const ADMIN_SUBSCRIPTIONS_CACHE_KEY = 'admin:subscriptions:v1';
+const ADMIN_SUBSCRIPTIONS_CACHE_KEY = 'admin:subscriptions:v2';
 const ADMIN_SUBSCRIPTIONS_CACHE_TTL_MS = 2 * 60_000;
 const ADMIN_SUBSCRIPTIONS_CACHE_MAX_STALE_MS = 10 * 60_000;
 
@@ -25,7 +29,7 @@ export default function AdminSubscriptionsPage() {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>('active');
+  const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
@@ -37,7 +41,7 @@ export default function AdminSubscriptionsPage() {
       const res = await fetch('/api/studio/stripe/sync-subscriptions', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Sync failed');
-      setSyncResult(`Synkat ${data.synced} abonnemang från Stripe`);
+      setSyncResult(`Synkat ${data.synced} abonnemang från Stripe (${data.mode})`);
       void fetchSubscriptions(true);
     } catch (err: unknown) {
       setSyncResult(err instanceof Error ? err.message : 'Kunde inte synka');
@@ -70,16 +74,26 @@ export default function AdminSubscriptionsPage() {
         async () => {
           const [{ data: subs, error: subsErr }, { data: customers }] = await Promise.all([
             supabase.from('subscriptions').select('*').order('created', { ascending: false }),
-            supabase.from('customer_profiles').select('id, business_name, monthly_price'),
+            supabase.from('customer_profiles').select('id, business_name, stripe_customer_id'),
           ]);
 
           if (subsErr) throw new Error(subsErr.message);
 
-          const customerMap = new Map(customers?.map(c => [c.id, c]) ?? []);
+          // Build lookup maps: by profile id AND by stripe_customer_id
+          const byProfileId = new Map<string, string>();
+          const byStripeCustomerId = new Map<string, string>();
+          for (const c of customers ?? []) {
+            if (c.id && c.business_name) byProfileId.set(c.id, c.business_name);
+            if (c.stripe_customer_id && c.business_name) byStripeCustomerId.set(c.stripe_customer_id, c.business_name);
+          }
+
           return (subs || []).map(s => ({
             ...s,
-            customer_name: customerMap.get(s.customer_profile_id)?.business_name || 'Okänd',
-            monthly_price: customerMap.get(s.customer_profile_id)?.monthly_price || 0,
+            customer_name:
+              (s.customer_profile_id && byProfileId.get(s.customer_profile_id)) ||
+              byStripeCustomerId.get(s.stripe_customer_id) ||
+              s.stripe_customer_id?.slice(0, 18) ||
+              'Okänd',
           }));
         },
         ADMIN_SUBSCRIPTIONS_CACHE_TTL_MS,
@@ -99,6 +113,15 @@ export default function AdminSubscriptionsPage() {
   const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 
+  const formatAmount = (amountOre: number, interval?: string | null, intervalCount?: number) => {
+    const kr = amountOre / 100;
+    const formatted = kr.toLocaleString('sv-SE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    const suffix = interval === 'year' ? '/år'
+      : intervalCount === 3 ? '/kvartal'
+      : '/mån';
+    return `${formatted} kr${suffix}`;
+  };
+
   const getDaysUntilExpiry = (endDate: string | null) => {
     if (!endDate) return null;
     return Math.ceil((new Date(endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -115,8 +138,17 @@ export default function AdminSubscriptionsPage() {
     return true;
   });
 
+  // MRR: normalize to monthly amount
+  const toMonthly = (s: Subscription) => {
+    const amount = s.amount || 0;
+    if (s.interval === 'year') return amount / 12;
+    if (s.interval_count === 3) return amount / 3;
+    return amount;
+  };
   const activeCount = subscriptions.filter(s => s.status === 'active' && !s.cancel_at_period_end).length;
-  const mrr = subscriptions.filter(s => s.status === 'active').reduce((sum, s) => sum + (s.monthly_price || 0), 0);
+  const mrr = subscriptions
+    .filter(s => s.status === 'active')
+    .reduce((sum, s) => sum + toMonthly(s), 0);
   const expiringCount = subscriptions.filter(s => s.cancel_at_period_end).length;
 
   if (loading) {
@@ -175,7 +207,7 @@ export default function AdminSubscriptionsPage() {
         <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
           <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '4px' }}>MRR</div>
           <div style={{ fontSize: '28px', fontWeight: 700, color: LeTrendColors.brownDark }}>
-            {mrr.toLocaleString('sv-SE', { style: 'currency', currency: 'SEK', minimumFractionDigits: 0 })}
+            {(mrr / 100).toLocaleString('sv-SE', { style: 'currency', currency: 'SEK', minimumFractionDigits: 0 })}
           </div>
         </div>
         <div style={{ background: '#fff', borderRadius: '12px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -207,11 +239,11 @@ export default function AdminSubscriptionsPage() {
         />
         <div style={{ display: 'flex', gap: '6px' }}>
           {[
+            { key: 'all', label: 'Alla' },
             { key: 'active', label: 'Aktiva' },
             { key: 'expiring', label: 'Avslutas' },
             { key: 'trialing', label: 'Prov' },
             { key: 'canceled', label: 'Avslutade' },
-            { key: 'all', label: 'Alla' },
           ].map(f => (
             <button
               key={f.key}
@@ -279,14 +311,18 @@ export default function AdminSubscriptionsPage() {
           textTransform: 'uppercase',
         }}>
           <div>Kund</div>
-          <div>Pris/mån</div>
-          <div>Periodens start</div>
-          <div>Nästa betalning</div>
+          <div>Pris</div>
+          <div>Startad</div>
+          <div>Nästa period</div>
           <div>Status</div>
         </div>
 
         {filtered.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Inga abonnemang</div>
+          <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
+            {subscriptions.length === 0
+              ? 'Inga abonnemang hittades. Tryck "Synka från Stripe" för att hämta.'
+              : 'Inga abonnemang matchar filtret'}
+          </div>
         ) : (
           filtered.map((sub, i) => {
             const daysLeft = getDaysUntilExpiry(sub.current_period_end);
@@ -296,11 +332,18 @@ export default function AdminSubscriptionsPage() {
                 ? { bg: '#d1fae5', text: '#065f46', label: 'Aktiv' }
                 : sub.status === 'trialing'
                   ? { bg: '#dbeafe', text: '#1e40af', label: 'Prov' }
-                  : { bg: '#f3f4f6', text: '#6b7280', label: sub.status };
+                  : sub.status === 'canceled'
+                    ? { bg: '#f3f4f6', text: '#6b7280', label: 'Avslutad' }
+                    : sub.status === 'past_due'
+                      ? { bg: '#fef2f2', text: '#dc2626', label: 'Förfallen' }
+                      : { bg: '#f3f4f6', text: '#6b7280', label: sub.status };
 
             return (
-              <div
+              <a
                 key={sub.id}
+                href={`https://dashboard.stripe.com/subscriptions/${sub.stripe_subscription_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '2fr 1fr 1fr 1fr 100px',
@@ -308,7 +351,12 @@ export default function AdminSubscriptionsPage() {
                   padding: '16px 20px',
                   borderBottom: i < filtered.length - 1 ? '1px solid #f3f4f6' : 'none',
                   alignItems: 'center',
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  transition: 'background 0.15s',
                 }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
                 <div>
                   <div style={{ fontWeight: 600, color: '#1a1a2e', fontSize: '15px' }}>{sub.customer_name}</div>
@@ -319,9 +367,9 @@ export default function AdminSubscriptionsPage() {
                   )}
                 </div>
                 <div style={{ fontWeight: 600, color: '#1a1a2e' }}>
-                  {(sub.monthly_price || 0).toLocaleString('sv-SE')} kr
+                  {formatAmount(sub.amount, sub.interval, sub.interval_count)}
                 </div>
-                <div style={{ fontSize: '14px', color: '#6b7280' }}>{formatDate(sub.current_period_start)}</div>
+                <div style={{ fontSize: '14px', color: '#6b7280' }}>{formatDate(sub.created)}</div>
                 <div style={{ fontSize: '14px', color: '#6b7280' }}>{formatDate(sub.current_period_end)}</div>
                 <span style={{
                   padding: '4px 10px',
@@ -334,7 +382,7 @@ export default function AdminSubscriptionsPage() {
                 }}>
                   {sc.label}
                 </span>
-              </div>
+              </a>
             );
           })
         )}
