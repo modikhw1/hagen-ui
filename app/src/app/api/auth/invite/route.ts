@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getAppUrl } from '@/lib/url/public';
 
 // Admin client for creating users
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest) {
       inviteParams.set('coupon', couponCode);
     }
     
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = getAppUrl();
     const inviteLink = `${appUrl}/auth/callback?${inviteParams.toString()}`;
 
     // Return response

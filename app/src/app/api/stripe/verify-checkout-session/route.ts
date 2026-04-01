@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { createClient } from '@supabase/supabase-js';
+import { getAppUrl } from '@/lib/url/public';
 
 // Email sending with Resend
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'LeTrend <onboarding@resend.dev>';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const APP_URL = getAppUrl();
 
 async function sendPaymentConfirmation(email: string, customerName: string, amount: number) {
   if (!RESEND_API_KEY) {

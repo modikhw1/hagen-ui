@@ -5,6 +5,7 @@ import { stripe } from '@/lib/stripe/dynamic-config';
 import { logCustomerInvited } from '@/lib/activity/logger';
 import { applyPriceToSubscription } from '@/lib/stripe/subscription-pricing';
 import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';
+import { getAppUrl } from '@/lib/url/public';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -72,7 +73,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // --- Action: send_invite ---
     if (body.action === 'send_invite') {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      const appUrl = getAppUrl();
 
       let stripeCustomerId = null;
       let stripeSubscriptionId = null;

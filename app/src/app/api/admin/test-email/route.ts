@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
+import { getAppUrl } from '@/lib/url/public';
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'LeTrend <onboarding@resend.dev>';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const APP_URL = getAppUrl();
 const CONTACT_EMAIL = 'hej@letrend.se';
 
 // POST - Send test email or payment confirmation

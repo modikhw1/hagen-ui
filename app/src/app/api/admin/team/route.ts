@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { withAuth } from '@/lib/auth/api-auth';
+import { getAppUrl } from '@/lib/url/public';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -67,7 +68,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
 
   // Optionally send invite email
   if (sendInvite && email?.trim()) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = getAppUrl();
 
     const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email.trim(),
