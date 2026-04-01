@@ -28,6 +28,24 @@ export default function AdminInvoicesPage() {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('open');
   const [searchQuery, setSearchQuery] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const syncFromStripe = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch('/api/studio/stripe/sync-invoices', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed');
+      setSyncResult(`Synkat ${data.synced} fakturor från Stripe`);
+      void fetchInvoices(true);
+    } catch (err: unknown) {
+      setSyncResult(err instanceof Error ? err.message : 'Kunde inte synka');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     const cached = readClientCache<Invoice[]>(ADMIN_INVOICES_CACHE_KEY, {
@@ -127,7 +145,7 @@ export default function AdminInvoicesPage() {
 
   return (
     <div style={{ maxWidth: '1200px' }}>
-      <div style={{ marginBottom: '24px' }}>
+      <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{
           fontSize: '24px',
           fontWeight: 700,
@@ -137,7 +155,36 @@ export default function AdminInvoicesPage() {
         }}>
           Fakturor
         </h1>
+        <button
+          onClick={syncFromStripe}
+          disabled={syncing}
+          style={{
+            padding: '8px 16px',
+            borderRadius: LeTrendRadius.md,
+            border: `1px solid ${LeTrendColors.border}`,
+            background: '#fff',
+            color: LeTrendColors.brownDark,
+            fontWeight: 500,
+            cursor: syncing ? 'wait' : 'pointer',
+            fontSize: '13px',
+            opacity: syncing ? 0.6 : 1,
+          }}
+        >
+          {syncing ? 'Synkar...' : 'Synka från Stripe'}
+        </button>
       </div>
+      {syncResult && (
+        <div style={{
+          marginBottom: '16px',
+          padding: '10px 12px',
+          borderRadius: LeTrendRadius.md,
+          background: syncResult.startsWith('Synkat') ? '#f0fdf4' : '#fef2f2',
+          color: syncResult.startsWith('Synkat') ? '#065f46' : LeTrendColors.error,
+          fontSize: '13px',
+        }}>
+          {syncResult}
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
