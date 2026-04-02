@@ -7,7 +7,7 @@ import { getAuthCallbackUrl } from '@/lib/url/public'
 export function LoginDesktop() {
   const form = useLoginForm({
     loginRedirect: '/',
-    demoRedirect: '/?demo=true',
+    demoRedirect: '/m/legacy-demo',
     resetRedirectUrl: getAuthCallbackUrl('recovery'),
   })
 

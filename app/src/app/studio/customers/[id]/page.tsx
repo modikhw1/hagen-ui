@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { Suspense, useState, useEffect } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
@@ -15,13 +15,12 @@ import { SidePanel } from '@/components/studio-v2/SidePanel';
 import { ConceptEditWizard } from '@/components/studio-v2/ConceptEditWizard';
 import { GamePlanEditor } from '@/components/gameplan-editor/GamePlanEditor';
 import { GamePlanDisplay } from '@/components/gameplan-editor/GamePlanDisplay';
-import { gamePlanNotesToHtml, type RawGamePlanNote } from '@/components/gameplan-editor/utils/legacy-converter';
-import { sanitizeRichTextHtml } from '@/components/gameplan-editor/utils/sanitize';
 import { clearClientCache, fetchAndCacheClient, readClientCache, writeClientCache } from '@/lib/client-cache';
 import type {
   CustomerProfile,
   CustomerBrief,
   CustomerConcept,
+  CustomerGamePlanSummary,
   CustomerNote,
   EmailLogEntry,
   EmailJobEntry,
@@ -32,7 +31,12 @@ import type {
   FeedSpan
 } from '@/types/studio-v2';
 import { DEFAULT_GRID_CONFIG, SPAN_COLOR_PALETTE } from '@/types/studio-v2';
-import { buildSlotMap, hasMoreHistory } from '@/lib/feed-planner-utils';
+import { buildSlotMap } from '@/lib/feed-planner-utils';
+import {
+  getCustomerConceptPlacementLabel,
+  getNextCustomerConceptAssignmentStatus,
+} from '@/lib/customer-concept-lifecycle';
+import { getStudioCustomerStatusMeta } from '@/lib/studio/customer-status';
 import { resolveConceptContent, type ConceptSectionKey } from '@/lib/studio-v2-concept-content';
 import {
   calculateSlotCenters,
@@ -41,10 +45,18 @@ import {
   buildGradients,
   updateGradientPositions
 } from '@/lib/eel-renderer';
-import { createSpanHandlers, fracToY as spanFracToY, yToFrac as spanYToFrac } from '@/components/studio-v2/SpanHandlers';
+import { createSpanHandlers, fracToY as spanFracToY } from '@/components/studio-v2/SpanHandlers';
 import type { SpanHandlerRefs } from '@/components/studio-v2/SpanHandlers';
 import { SlotPopupModal } from '@/features/studio/customer-workspace/components/SlotPopupModal';
 import { TagManager } from '@/features/studio/customer-workspace/components/TagManager';
+import { FeedTimeline } from '@/components/studio/FeedTimeline';
+import {
+  buildStudioWorkspaceHref,
+  getStudioWorkspaceSection,
+  getStudioWorkspaceSectionMeta,
+  STUDIO_WORKSPACE_SECTIONS,
+} from '@/lib/studio/navigation';
+import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle';
 
 type PositionedEelGradient = ReturnType<typeof updateGradientPositions>[number];
 
@@ -73,11 +85,13 @@ interface EmailTemplate {
   outro: string;
 }
 
+interface WorkspaceGamePlanResponse {
+  game_plan: CustomerGamePlanSummary;
+  has_game_plan: boolean;
+}
+
 type WorkspaceCustomerProfile = CustomerProfile & {
-  game_plan?: {
-    notes?: RawGamePlanNote[];
-    html?: string;
-  } | null;
+  game_plan?: unknown;
 };
 
 const EMAIL_TEMPLATES: EmailTemplate[] = [
@@ -122,8 +136,17 @@ const WORKSPACE_CACHE_TTL_MS = 45_000;
 const WORKSPACE_CACHE_MAX_STALE_MS = 5 * 60_000;
 
 export default function CustomerWorkspacePage() {
+  return (
+    <Suspense fallback={<WorkspacePageFallback />}>
+      <CustomerWorkspacePageContent />
+    </Suspense>
+  );
+}
+
+function CustomerWorkspacePageContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { } = useAuth();
   const customerId = params?.id as string;
 
@@ -135,13 +158,19 @@ export default function CustomerWorkspacePage() {
   const [emailLog, setEmailLog] = useState<EmailLogEntry[]>([]);
   const [allConcepts, setAllConcepts] = useState<TranslatedConcept[]>([]);
   const [gamePlanHtml, setGamePlanHtml] = useState('');
+  const [gamePlanSummary, setGamePlanSummary] = useState<CustomerGamePlanSummary | null>(null);
 
   // UI state
-  const [activeSection, setActiveSection] = useState<Section>('gameplan');
+  const [activeSection, setActiveSection] = useState<Section>(
+    () => getStudioWorkspaceSection(searchParams.get('section'))
+  );
   const [loading, setLoading] = useState(true);
   const [editingBrief, setEditingBrief] = useState(false);
   const [editingGamePlan, setEditingGamePlan] = useState(false);
+  const [loadingGamePlan, setLoadingGamePlan] = useState(false);
   const [savingGamePlan, setSavingGamePlan] = useState(false);
+  const [gamePlanError, setGamePlanError] = useState<string | null>(null);
+  const [gamePlanSaveMessage, setGamePlanSaveMessage] = useState<string | null>(null);
   const [expandedConceptId, setExpandedConceptId] = useState<string | null>(null);
   const [editingConceptId, setEditingConceptId] = useState<string | null>(null);
   const [editorInitialSections, setEditorInitialSections] = useState<ConceptSectionKey[]>([
@@ -177,7 +206,14 @@ export default function CustomerWorkspacePage() {
   const [emailJobs, setEmailJobs] = useState<EmailJobEntry[]>([]);
   const [retryingEmailJobId, setRetryingEmailJobId] = useState<string | null>(null);
 
+  // Demo state
+  const [showImportHistoryModal, setShowImportHistoryModal] = useState(false);
+  const [importHistoryJson, setImportHistoryJson] = useState('');
+  const [importingHistory, setImportingHistory] = useState(false);
+  const [importHistoryError, setImportHistoryError] = useState<string | null>(null);
+
   const customerCacheKey = `studio-v2:workspace:${customerId}:customer`;
+  const gamePlanCacheKey = `studio-v2:workspace:${customerId}:game-plan`;
   const conceptsCacheKey = `studio-v2:workspace:${customerId}:concepts`;
   const notesCacheKey = `studio-v2:workspace:${customerId}:notes`;
   const emailLogCacheKey = `studio-v2:workspace:${customerId}:email-log`;
@@ -186,20 +222,11 @@ export default function CustomerWorkspacePage() {
   const applyCustomerState = (profile: WorkspaceCustomerProfile) => {
     setCustomer(profile);
     setBrief(profile.brief || { tone: '', constraints: '', current_focus: '' });
-    const html = typeof profile.game_plan?.html === 'string' ? sanitizeRichTextHtml(profile.game_plan.html) : '';
-    if (html.trim()) {
-      setGamePlanHtml(html);
-      return;
-    }
-
-    const legacyNotes = (profile.game_plan?.notes || []) as RawGamePlanNote[];
-    if (legacyNotes.length > 0) {
-      setGamePlanHtml(gamePlanNotesToHtml(legacyNotes));
-      return;
-    }
-
-    setGamePlanHtml('');
   };
+
+  useEffect(() => {
+    setActiveSection(getStudioWorkspaceSection(searchParams.get('section')));
+  }, [searchParams]);
 
   // Auto-populate email fields when template changes
   useEffect(() => {
@@ -263,6 +290,15 @@ export default function CustomerWorkspacePage() {
         if (isMounted) applyCustomerState(cachedCustomer.value);
       }
 
+      const cachedGamePlan = readClientCache<WorkspaceGamePlanResponse>(gamePlanCacheKey, cacheOptions);
+      if (cachedGamePlan?.value) {
+        hasCachedState = true;
+        if (isMounted) {
+          setGamePlanSummary(cachedGamePlan.value.game_plan ?? null);
+          setGamePlanHtml(cachedGamePlan.value.game_plan?.html || '');
+        }
+      }
+
       const cachedConcepts = readClientCache<CustomerConcept[]>(conceptsCacheKey, cacheOptions);
       if (cachedConcepts?.value) {
         hasCachedState = true;
@@ -297,6 +333,7 @@ export default function CustomerWorkspacePage() {
       try {
         await Promise.allSettled([
           fetchCustomer(hasCachedState),
+          fetchGamePlan(hasCachedState),
           fetchConcepts(hasCachedState),
           fetchNotes(hasCachedState),
           fetchEmailLog(hasCachedState),
@@ -433,6 +470,36 @@ export default function CustomerWorkspacePage() {
       applyCustomerState(data);
     } catch (err) {
       console.error('Error fetching customer:', err);
+    }
+  };
+
+  const fetchGamePlan = async (force = false) => {
+    setLoadingGamePlan(true);
+    setGamePlanError(null);
+    try {
+      const data = await fetchAndCacheClient<WorkspaceGamePlanResponse>(
+        gamePlanCacheKey,
+        async () => {
+          const response = await fetch(`/api/studio-v2/customers/${customerId}/game-plan`);
+          const payload = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(payload.error || `Failed to fetch game plan (${response.status})`);
+          }
+
+          return payload as WorkspaceGamePlanResponse;
+        },
+        WORKSPACE_CACHE_TTL_MS,
+        { force }
+      );
+
+      setGamePlanSummary(data.game_plan ?? null);
+      setGamePlanHtml(data.game_plan?.html || '');
+    } catch (err) {
+      console.error('Error fetching game plan:', err);
+      setGamePlanError('Kunde inte ladda Game Plan. Visar senaste kända version om den finns.');
+    } finally {
+      setLoadingGamePlan(false);
     }
   };
 
@@ -662,7 +729,10 @@ export default function CustomerWorkspacePage() {
     }
   };
 
-  const handleChangeStatus = async (conceptId: string, newStatus: 'draft' | 'sent' | 'produced' | 'archived') => {
+  const handleChangeStatus = async (
+    conceptId: string,
+    newStatus: CustomerConceptAssignmentStatus
+  ) => {
     if (newStatus === 'produced') {
       const tiktokUrl = prompt('Ange TikTok URL:');
       await handleUpdateConcept(conceptId, {
@@ -723,13 +793,18 @@ export default function CustomerWorkspacePage() {
     await handleUpdateConcept(conceptId, { tiktok_url: url.trim() || null });
   };
 
+  const setWorkspaceSection = (section: Section) => {
+    setActiveSection(section);
+    router.replace(buildStudioWorkspaceHref(customerId, section));
+  };
+
   const openConceptEditor = (
     conceptId: string,
     sections: ConceptSectionKey[] = ['script', 'instructions', 'fit']
   ) => {
     setEditorInitialSections(sections);
     setEditingConceptId(conceptId);
-    setActiveSection('koncept');
+    setWorkspaceSection('koncept');
     setExpandedConceptId(conceptId);
   };
 
@@ -880,35 +955,81 @@ export default function CustomerWorkspacePage() {
     }
   };
 
+  // Demo handlers
+  const handleImportHistory = async (replace: boolean) => {
+    if (!customerId || importingHistory) return;
+    setImportHistoryError(null);
+
+    let clips: unknown[];
+    try {
+      clips = JSON.parse(importHistoryJson);
+      if (!Array.isArray(clips)) throw new Error('Måste vara en JSON-array');
+    } catch (e) {
+      setImportHistoryError(`Ogiltig JSON: ${(e as Error).message}`);
+      return;
+    }
+
+    setImportingHistory(true);
+    try {
+      const res = await fetch('/api/demo/import-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId, clips, replace }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Import misslyckades');
+
+      await fetchConcepts(true);
+      setShowImportHistoryModal(false);
+      setImportHistoryJson('');
+    } catch (err) {
+      setImportHistoryError((err as Error).message);
+    } finally {
+      setImportingHistory(false);
+    }
+  };
+
   // Game Plan handlers
   const handleSaveGamePlan = async () => {
     if (!customer) return;
 
     setSavingGamePlan(true);
+    setGamePlanError(null);
+    setGamePlanSaveMessage(null);
     try {
-      const sanitizedHtml = sanitizeRichTextHtml(gamePlanHtml);
-      const { error } = await supabase
-        .from('customer_profiles')
-        .update({
-          game_plan: {
-            html: sanitizedHtml,
-            version: 2,
-            updated_at: new Date().toISOString()
-          }
-        })
-        .eq('id', customerId);
+      const response = await fetch(`/api/studio-v2/customers/${customerId}/game-plan`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html: gamePlanHtml }),
+      });
+      const data = await response.json().catch(() => ({}));
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save game plan');
+      }
 
-      await fetchCustomer(true);
+      const nextGamePlan = data as WorkspaceGamePlanResponse;
+      setGamePlanSummary(nextGamePlan.game_plan ?? null);
+      setGamePlanHtml(nextGamePlan.game_plan?.html || '');
+      writeClientCache(gamePlanCacheKey, nextGamePlan, WORKSPACE_CACHE_TTL_MS);
       setEditingGamePlan(false);
+      setGamePlanSaveMessage('Game Plan sparad.');
     } catch (err) {
       console.error('Error saving game plan:', err);
-      alert('Kunde inte spara Game Plan');
+      setGamePlanError('Kunde inte spara Game Plan. Forsok igen.');
     } finally {
       setSavingGamePlan(false);
     }
   };
+
+  const handleCancelGamePlanEdit = () => {
+    setGamePlanHtml(gamePlanSummary?.html || '');
+    setGamePlanError(null);
+    setGamePlanSaveMessage(null);
+    setEditingGamePlan(false);
+  };
+
+  const hasUnsavedGamePlanChanges = gamePlanHtml !== (gamePlanSummary?.html || '');
 
   // Helper functions
   const getConceptDetails = (conceptId: string): TranslatedConcept | undefined => {
@@ -999,7 +1120,7 @@ export default function CustomerWorkspacePage() {
           Kund hittades inte
         </div>
         <button
-          onClick={() => router.push('/studio')}
+          onClick={() => router.push('/studio/customers')}
           style={{
             marginTop: 16,
             padding: '10px 20px',
@@ -1020,13 +1141,15 @@ export default function CustomerWorkspacePage() {
   const editingConcept = editingConceptId ? concepts.find((concept) => concept.id === editingConceptId) ?? null : null;
   const editingConceptDetails = editingConcept ? getConceptDetails(editingConcept.concept_id) : undefined;
   const latestEmailJob = emailJobs[0] || null;
+  const activeSectionMeta = getStudioWorkspaceSectionMeta(activeSection);
+  const customerStatusMeta = getStudioCustomerStatusMeta(customer.status);
 
   return (
     <div>
       {/* Back button */}
       <div style={{ marginBottom: 16 }}>
         <Link
-          href="/studio"
+          href="/studio/customers"
           style={{
             color: LeTrendColors.textSecondary,
             fontSize: 14,
@@ -1036,7 +1159,7 @@ export default function CustomerWorkspacePage() {
             gap: 4
           }}
         >
-          Tillbaka till kunder
+          Till kundarbete
         </Link>
       </div>
 
@@ -1106,12 +1229,12 @@ export default function CustomerWorkspacePage() {
               borderRadius: LeTrendRadius.md,
               fontSize: 12,
               fontWeight: 600,
-              background: customer.status === 'active' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(156, 163, 175, 0.1)',
-              color: customer.status === 'active' ? '#10b981' : '#9ca3af',
-              border: `1px solid ${customer.status === 'active' ? '#10b981' : '#9ca3af'}`,
+              background: customerStatusMeta.bg,
+              color: customerStatusMeta.text,
+              border: `1px solid ${customerStatusMeta.border}`,
               display: 'inline-block'
             }}>
-              {customer.status === 'active' ? 'Aktiv' : customer.status}
+              {customerStatusMeta.label}
             </div>
 
           </div>
@@ -1218,15 +1341,16 @@ export default function CustomerWorkspacePage() {
             flexDirection: 'column',
             gap: 4
           }}>
-            {[
-              { key: 'gameplan' as Section, label: 'Game Plan', icon: '[GP]', badge: notes.length },
-              { key: 'koncept' as Section, label: 'Koncept', icon: '[K]', badge: draftCount },
-              { key: 'feed' as Section, label: 'Feed-planerare', icon: '[F]' },
-              { key: 'kommunikation' as Section, label: 'Kommunikation', icon: '[M]' }
-            ].map(({ key, label, icon, badge }) => (
+            {STUDIO_WORKSPACE_SECTIONS.map(({ key, short_label, description }) => {
+              const badge =
+                key === 'gameplan' ? notes.length :
+                key === 'koncept' ? draftCount :
+                undefined;
+
+              return (
               <button
                 key={key}
-                onClick={() => setActiveSection(key)}
+                onClick={() => setWorkspaceSection(key)}
                 style={{
                   background: activeSection === key ? LeTrendColors.surface : 'transparent',
                   border: 'none',
@@ -1243,9 +1367,11 @@ export default function CustomerWorkspacePage() {
                   alignItems: 'center'
                 }}
               >
-                <span>
-                  <span style={{ marginRight: 8 }}>{icon}</span>
-                  {label}
+                <span style={{ display: 'grid', gap: 2 }}>
+                  <span>{short_label}</span>
+                  <span style={{ fontSize: 11, fontWeight: 400, color: LeTrendColors.textMuted }}>
+                    {description}
+                  </span>
                 </span>
                 {badge !== undefined && badge > 0 && (
                   <span style={{
@@ -1262,22 +1388,48 @@ export default function CustomerWorkspacePage() {
                   </span>
                 )}
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* RIGHT COLUMN - Flexible content */}
         <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: LeTrendRadius.lg,
+            padding: 20,
+            marginBottom: 16,
+            border: `1px solid ${LeTrendColors.border}`
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: LeTrendColors.textMuted, marginBottom: 6 }}>
+              Aktiv del
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: LeTrendColors.brownDark, marginBottom: 6 }}>
+              {activeSectionMeta.label}
+            </div>
+            <div style={{ fontSize: 14, color: LeTrendColors.textSecondary, lineHeight: 1.6 }}>
+              {activeSectionMeta.description}
+            </div>
+          </div>
+
           {/* Section content will be rendered here based on activeSection */}
           {activeSection === 'gameplan' && (
             <GamePlanSection
               notes={notes}
               gamePlanHtml={gamePlanHtml}
+              gamePlanSummary={gamePlanSummary}
               setGamePlanHtml={setGamePlanHtml}
               editingGamePlan={editingGamePlan}
               setEditingGamePlan={setEditingGamePlan}
+              loadingGamePlan={loadingGamePlan}
               savingGamePlan={savingGamePlan}
+              gamePlanError={gamePlanError}
+              gamePlanSaveMessage={gamePlanSaveMessage}
+              hasUnsavedGamePlanChanges={hasUnsavedGamePlanChanges}
+              handleReloadGamePlan={fetchGamePlan}
               handleSaveGamePlan={handleSaveGamePlan}
+              handleCancelGamePlanEdit={handleCancelGamePlanEdit}
               newNoteContent={newNoteContent}
               setNewNoteContent={setNewNoteContent}
               addingNote={addingNote}
@@ -1357,6 +1509,140 @@ export default function CustomerWorkspacePage() {
               formatDateTime={formatDateTime}
             />
           )}
+
+          {activeSection === 'demo' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {/* Header row */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+              }}>
+                <div>
+                  <h2 style={{
+                    fontSize: 18,
+                    fontWeight: 600,
+                    color: LeTrendColors.brownDark,
+                    margin: 0,
+                  }}>
+                    Demo-förberedelse
+                  </h2>
+                  <p style={{ fontSize: 13, color: LeTrendColors.textSecondary, margin: '4px 0 0' }}>
+                    Pre-seeda feedplanen och förbered kundanpassad demo-sida.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setShowImportHistoryModal(true)}
+                    style={{
+                      padding: '8px 14px',
+                      background: LeTrendColors.surface,
+                      border: `1px solid ${LeTrendColors.borderMedium}`,
+                      borderRadius: LeTrendRadius.md,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: LeTrendColors.textPrimary,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    + Importera TikTok-historik
+                  </button>
+                  <a
+                    href={`/demo/${customerId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      padding: '8px 14px',
+                      background: LeTrendColors.brownLight,
+                      border: 'none',
+                      borderRadius: LeTrendRadius.md,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: LeTrendColors.cream,
+                      cursor: 'pointer',
+                      textDecoration: 'none',
+                      display: 'inline-block',
+                    }}
+                  >
+                    Öppna demo-sida ↗
+                  </a>
+                </div>
+              </div>
+
+              {/* Feed Timeline */}
+              <div style={{
+                background: '#fff',
+                borderRadius: LeTrendRadius.lg,
+                border: `1px solid ${LeTrendColors.border}`,
+                padding: '20px 20px 16px',
+              }}>
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: LeTrendColors.textSecondary,
+                  marginBottom: 16,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>
+                  Feed-tidslinje
+                </div>
+                <FeedTimeline
+                  concepts={concepts.filter(c => c.feed_order !== null)}
+                  onAddHistory={() => setShowImportHistoryModal(true)}
+                />
+              </div>
+
+              {/* Demo URL */}
+              <div style={{
+                background: '#fff',
+                borderRadius: LeTrendRadius.lg,
+                border: `1px solid ${LeTrendColors.border}`,
+                padding: '16px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: LeTrendColors.textMuted, letterSpacing: '0.06em', marginBottom: 4 }}>
+                    PUBLIK DEMO-URL
+                  </div>
+                  <code style={{
+                    fontSize: 13,
+                    color: LeTrendColors.textPrimary,
+                    background: LeTrendColors.surface,
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    display: 'block',
+                    wordBreak: 'break-all',
+                  }}>
+                    {typeof window !== 'undefined' ? window.location.origin : ''}/demo/{customerId}
+                  </code>
+                </div>
+                <button
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      void navigator.clipboard.writeText(`${window.location.origin}/demo/${customerId}`);
+                    }
+                  }}
+                  style={{
+                    padding: '8px 14px',
+                    background: LeTrendColors.surface,
+                    border: `1px solid ${LeTrendColors.borderMedium}`,
+                    borderRadius: LeTrendRadius.md,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: LeTrendColors.textSecondary,
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  Kopiera
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1429,7 +1715,7 @@ export default function CustomerWorkspacePage() {
       >
         {selectedFeedSlot !== null && (
           <p style={{ margin: '0 0 12px', fontSize: 12, color: LeTrendColors.textSecondary }}>
-            {selectedFeedSlot > 0 ? 'Planerad video' : selectedFeedSlot === 0 ? 'Nuvarande video' : 'Historik'}
+            {getCustomerConceptPlacementLabel(selectedFeedSlot, 'studio') ?? 'Planen'}
           </p>
         )}
         {getDraftConcepts().length === 0 ? (
@@ -1487,6 +1773,143 @@ export default function CustomerWorkspacePage() {
           }}
         />
       )}
+
+      {/* Import TikTok History Modal */}
+      {showImportHistoryModal && (
+        <div
+          onClick={e => { if (e.target === e.currentTarget) setShowImportHistoryModal(false); }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+          }}
+        >
+          <div style={{
+            background: '#fff',
+            borderRadius: LeTrendRadius.lg,
+            padding: 28,
+            width: '100%',
+            maxWidth: 560,
+            maxHeight: '85vh',
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 16,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: LeTrendColors.brownDark, margin: 0 }}>
+                  Importera TikTok-historik
+                </h3>
+                <p style={{ fontSize: 13, color: LeTrendColors.textSecondary, margin: '4px 0 0' }}>
+                  Klistra in en JSON-array med klipp. Nyaste klipp = slot #6 (feed_order -1).
+                </p>
+              </div>
+              <button
+                onClick={() => setShowImportHistoryModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: LeTrendColors.textMuted, padding: '0 4px' }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* JSON format hint */}
+            <div style={{
+              background: LeTrendColors.surface,
+              borderRadius: LeTrendRadius.md,
+              padding: '10px 14px',
+              fontSize: 11,
+              color: LeTrendColors.textSecondary,
+              fontFamily: 'monospace',
+              lineHeight: 1.6,
+            }}>
+              {'['}<br />
+              {'  { "tiktok_url": "https://tiktok.com/@...", "tiktok_thumbnail_url": "...",'}
+              <br />
+              {'    "tiktok_views": 12000, "tiktok_likes": 500, "tiktok_comments": 30,'}
+              <br />
+              {'    "description": "Klippbeskrivning", "published_at": "2025-03-15" }'}
+              <br />
+              {']'}
+            </div>
+
+            <textarea
+              value={importHistoryJson}
+              onChange={e => {
+                setImportHistoryJson(e.target.value);
+                setImportHistoryError(null);
+              }}
+              placeholder='[{ "tiktok_url": "...", "tiktok_views": 12000, ... }]'
+              rows={10}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: LeTrendRadius.md,
+                border: `1px solid ${importHistoryError ? LeTrendColors.error : LeTrendColors.borderMedium}`,
+                fontSize: 12,
+                fontFamily: 'monospace',
+                resize: 'vertical',
+                color: LeTrendColors.textPrimary,
+                boxSizing: 'border-box',
+              }}
+            />
+
+            {importHistoryError && (
+              <div style={{ fontSize: 12, color: LeTrendColors.error }}>
+                {importHistoryError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => void handleImportHistory(true)}
+                disabled={importingHistory || !importHistoryJson.trim()}
+                style={{
+                  padding: '9px 16px',
+                  background: LeTrendColors.surface,
+                  border: `1px solid ${LeTrendColors.borderMedium}`,
+                  borderRadius: LeTrendRadius.md,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: LeTrendColors.textSecondary,
+                  cursor: importingHistory ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Ersätt historik
+              </button>
+              <button
+                onClick={() => void handleImportHistory(false)}
+                disabled={importingHistory || !importHistoryJson.trim()}
+                style={{
+                  padding: '9px 16px',
+                  background: LeTrendColors.brownLight,
+                  border: 'none',
+                  borderRadius: LeTrendRadius.md,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: LeTrendColors.cream,
+                  cursor: importingHistory ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {importingHistory ? 'Importerar...' : 'Lägg till historik'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkspacePageFallback() {
+  return (
+    <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+      Laddar kundarbetsyta...
     </div>
   );
 }
@@ -1496,11 +1919,18 @@ export default function CustomerWorkspacePage() {
 interface GamePlanSectionProps {
   notes: CustomerNote[];
   gamePlanHtml: string;
+  gamePlanSummary: CustomerGamePlanSummary | null;
   setGamePlanHtml: (html: string) => void;
   editingGamePlan: boolean;
   setEditingGamePlan: (editing: boolean) => void;
+  loadingGamePlan: boolean;
   savingGamePlan: boolean;
+  gamePlanError: string | null;
+  gamePlanSaveMessage: string | null;
+  hasUnsavedGamePlanChanges: boolean;
+  handleReloadGamePlan: (force?: boolean) => Promise<void>;
   handleSaveGamePlan: () => Promise<void>;
+  handleCancelGamePlanEdit: () => void;
   newNoteContent: string;
   setNewNoteContent: (value: string) => void;
   addingNote: boolean;
@@ -1508,18 +1938,6 @@ interface GamePlanSectionProps {
   handleDeleteNote: (noteId: string) => Promise<void>;
   parseMarkdownLinks: (text: string) => React.ReactNode[] | string;
   formatDateTime: (dateStr: string) => string;
-}
-
-interface KonceptSectionProps {
-  concepts: CustomerConcept[];
-  expandedConceptId: string | null;
-  setExpandedConceptId: (conceptId: string | null) => void;
-  handleDeleteConcept: (conceptId: string) => Promise<void>;
-  handleChangeStatus: (conceptId: string, newStatus: 'draft' | 'sent' | 'produced' | 'archived') => Promise<void>;
-  openConceptEditor: (conceptId: string, sections?: ConceptSectionKey[]) => void;
-  setShowAddConceptPanel: (show: boolean) => void;
-  formatDate: (dateStr: string) => string;
-  getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
 }
 
 interface FeedPlannerSectionProps {
@@ -1590,11 +2008,18 @@ interface KommunikationSectionProps {
 function GamePlanSection({
   notes,
   gamePlanHtml,
+  gamePlanSummary,
   setGamePlanHtml,
   editingGamePlan,
   setEditingGamePlan,
+  loadingGamePlan,
   savingGamePlan,
+  gamePlanError,
+  gamePlanSaveMessage,
+  hasUnsavedGamePlanChanges,
+  handleReloadGamePlan,
   handleSaveGamePlan,
+  handleCancelGamePlanEdit,
   newNoteContent,
   setNewNoteContent,
   addingNote,
@@ -1603,6 +2028,13 @@ function GamePlanSection({
   parseMarkdownLinks,
   formatDateTime,
 }: GamePlanSectionProps) {
+  const sourceLabel =
+    gamePlanSummary?.source === 'customer_game_plans'
+      ? 'Primar lagring'
+      : gamePlanSummary?.source === 'legacy_customer_profiles'
+        ? 'Legacy-spegel'
+        : 'Tomt dokument';
+
   return (
     <div style={{
       background: '#fff',
@@ -1625,7 +2057,9 @@ function GamePlanSection({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 16
+          gap: 12,
+          marginBottom: 16,
+          flexWrap: 'wrap'
         }}>
           <h3 style={{
             fontSize: 16,
@@ -1635,6 +2069,25 @@ function GamePlanSection({
           }}>
             Strategiskt innehåll
           </h3>
+          {!editingGamePlan && (
+            <button
+              onClick={() => void handleReloadGamePlan(true)}
+              disabled={loadingGamePlan}
+              style={{
+                padding: '6px 12px',
+                background: '#fff',
+                color: LeTrendColors.brownDark,
+                border: `1px solid ${LeTrendColors.border}`,
+                borderRadius: LeTrendRadius.md,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: loadingGamePlan ? 'not-allowed' : 'pointer',
+                marginRight: 8
+              }}
+            >
+              {loadingGamePlan ? 'Laddar...' : 'Ladda om'}
+            </button>
+          )}
           {!editingGamePlan && (
             <button
               onClick={() => setEditingGamePlan(true)}
@@ -1654,6 +2107,97 @@ function GamePlanSection({
           )}
         </div>
 
+        <div style={{
+          fontSize: 12,
+          color: LeTrendColors.textMuted,
+          marginBottom: 12
+        }}>
+          Sparas via den nya Game Plan-boundaryn och speglas tillbaka till legacy-faltet bara for kompatibilitet.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+          <span style={{
+            padding: '6px 10px',
+            borderRadius: 999,
+            background: '#F7F2EC',
+            color: LeTrendColors.brownDark,
+            fontSize: 12,
+            fontWeight: 600
+          }}>
+            {sourceLabel}
+          </span>
+          {gamePlanSummary?.updated_at && (
+            <span style={{
+              padding: '6px 10px',
+              borderRadius: 999,
+              background: '#F7F2EC',
+              color: LeTrendColors.textSecondary,
+              fontSize: 12,
+              fontWeight: 600
+            }}>
+              Senast sparad {formatDateTime(gamePlanSummary.updated_at)}
+            </span>
+          )}
+          {hasUnsavedGamePlanChanges && (
+            <span style={{
+              padding: '6px 10px',
+              borderRadius: 999,
+              background: 'rgba(245, 158, 11, 0.14)',
+              color: '#92400e',
+              fontSize: 12,
+              fontWeight: 700
+            }}>
+              Ej sparade andringar
+            </span>
+          )}
+        </div>
+
+        {gamePlanSummary?.source === 'legacy_customer_profiles' && !editingGamePlan && (
+          <div style={{
+            marginBottom: 12,
+            padding: '12px 14px',
+            borderRadius: LeTrendRadius.md,
+            background: 'rgba(245, 158, 11, 0.08)',
+            border: '1px solid rgba(245, 158, 11, 0.2)',
+            color: '#92400e',
+            fontSize: 13,
+            lineHeight: 1.6
+          }}>
+            Dokumentet lases just nu fran legacy-spegeln i kundprofilen. Nasta sparning skriver till `customer_game_plans`
+            och fortsatter bara spegla tillbaka for kompatibilitet.
+          </div>
+        )}
+
+        {gamePlanError && (
+          <div style={{
+            marginBottom: 12,
+            padding: '12px 14px',
+            borderRadius: LeTrendRadius.md,
+            background: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.2)',
+            color: '#b91c1c',
+            fontSize: 13,
+            lineHeight: 1.6
+          }}>
+            {gamePlanError}
+          </div>
+        )}
+
+        {!editingGamePlan && gamePlanSaveMessage && !gamePlanError && (
+          <div style={{
+            marginBottom: 12,
+            padding: '12px 14px',
+            borderRadius: LeTrendRadius.md,
+            background: 'rgba(16, 185, 129, 0.08)',
+            border: '1px solid rgba(16, 185, 129, 0.2)',
+            color: '#047857',
+            fontSize: 13,
+            lineHeight: 1.6
+          }}>
+            {gamePlanSaveMessage}
+          </div>
+        )}
+
         {editingGamePlan ? (
           <div>
             <GamePlanEditor
@@ -1664,22 +2208,24 @@ function GamePlanSection({
             <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
               <button
                 onClick={handleSaveGamePlan}
-                disabled={savingGamePlan}
+                disabled={savingGamePlan || !hasUnsavedGamePlanChanges}
                 style={{
                   padding: '10px 16px',
-                  background: savingGamePlan ? LeTrendColors.textMuted : LeTrendColors.success,
+                  background: savingGamePlan || !hasUnsavedGamePlanChanges
+                    ? LeTrendColors.textMuted
+                    : LeTrendColors.success,
                   color: '#fff',
                   border: 'none',
                   borderRadius: LeTrendRadius.md,
                   fontSize: 13,
                   fontWeight: 600,
-                  cursor: savingGamePlan ? 'not-allowed' : 'pointer'
+                  cursor: savingGamePlan || !hasUnsavedGamePlanChanges ? 'not-allowed' : 'pointer'
                 }}
               >
-                {savingGamePlan ? 'Sparar...' : 'Spara'}
+                {savingGamePlan ? 'Sparar...' : hasUnsavedGamePlanChanges ? 'Spara andringar' : 'Inga andringar'}
               </button>
               <button
-                onClick={() => setEditingGamePlan(false)}
+                onClick={handleCancelGamePlanEdit}
                 disabled={savingGamePlan}
                 style={{
                   padding: '10px 16px',
@@ -1820,7 +2366,20 @@ function KonceptSection({
   setShowAddConceptPanel,
   formatDate,
   getConceptDetails
-}: KonceptSectionProps) {
+}: {
+  concepts: CustomerConcept[];
+  expandedConceptId: string | null;
+  setExpandedConceptId: (conceptId: string | null) => void;
+  handleDeleteConcept: (conceptId: string) => Promise<void>;
+  handleChangeStatus: (
+    conceptId: string,
+    newStatus: CustomerConceptAssignmentStatus
+  ) => Promise<void>;
+  openConceptEditor: (conceptId: string, sections?: ConceptSectionKey[]) => void;
+  setShowAddConceptPanel: (show: boolean) => void;
+  formatDate: (dateStr: string) => string;
+  getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
+}) {
   return (
     <div style={{
       background: '#fff',
@@ -1910,19 +2469,11 @@ function KonceptSection({
                       <StatusChip
                         status={concept.status}
                         onClick={() => {
-                          if (concept.status === 'archived') {
-                            return;
-                          }
-                          const nextStatus = concept.status === 'draft'
-                            ? 'sent'
-                            : concept.status === 'sent'
-                              ? 'produced'
-                              : concept.status === 'produced'
-                                ? 'archived'
-                                : 'archived';
-                          handleChangeStatus(concept.id, nextStatus);
+                          const nextStatus = getNextCustomerConceptAssignmentStatus(concept.status);
+                          if (!nextStatus) return;
+                          void handleChangeStatus(concept.id, nextStatus);
                         }}
-                        editable={concept.status !== 'archived'}
+                        editable={Boolean(getNextCustomerConceptAssignmentStatus(concept.status))}
                       />
                       <span style={{ color: LeTrendColors.textMuted }}>
                         Tillagd: {formatDate(concept.added_at)}
@@ -2091,12 +2642,6 @@ function FeedPlannerSection({
     ),
     [concepts, gridConfig, historyOffset]
   );
-  const canShowMoreHistory = hasMoreHistory(
-    concepts.filter(c => c.feed_order !== null),
-    gridConfig,
-    historyOffset
-  ) && historyOffset < maxExtraHistorySlots;
-
   /**
    * Position-based slot selection.
    *
@@ -3377,7 +3922,6 @@ function FeedPlannerSection({
 function FeedSlot({
   slot,
   tags,
-  config,
   spanCoverage = 0,
   spanColor = null,
   showSpanCoverageLabels = true,
@@ -3408,8 +3952,6 @@ function FeedSlot({
 
   const { concept, type } = slot;
   const details = concept ? (getConceptDetails(concept.concept_id) ?? null) : null;
-  const isFutureSlot = slot.feedOrder > 0;
-  const isCurrentSlot = slot.feedOrder === 0;
   const isPastSlot = slot.feedOrder < 0;
   const canAddConcept = type === 'empty' && !isPastSlot;
   const hasUnreadUpload = hasUnreadUploadMarker(concept);
@@ -4401,7 +4943,7 @@ function KommunikationSection({
   const getEmailJobStatusLabel = (status: EmailJobEntry['status']) => {
     switch (status) {
       case 'queued':
-        return 'I kö';
+        return 'I ko';
       case 'processing':
         return 'Bearbetas';
       case 'sent':
@@ -4529,7 +5071,7 @@ function KommunikationSection({
                 cursor: retryingEmailJobId === latestEmailJob.id ? 'not-allowed' : 'pointer'
               }}
             >
-              {retryingEmailJobId === latestEmailJob.id ? 'Köar om...' : 'Retry'}
+              {retryingEmailJobId === latestEmailJob.id ? 'Koar om...' : 'Forsok igen'}
             </button>
           )}
         </div>
@@ -4836,6 +5378,3 @@ function KommunikationSection({
     </div>
   );
 }
-
-
-

@@ -1,6 +1,39 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+
+const EMPTY_BRIEF = { tone: '', constraints: '', current_focus: '' };
+
+function extractBriefPatch(body: Record<string, unknown>) {
+  const directKeys = ['tone', 'constraints', 'current_focus'] as const;
+  const briefSource = body.brief && typeof body.brief === 'object' && !Array.isArray(body.brief)
+    ? body.brief as Record<string, unknown>
+    : body;
+
+  const patch = Object.fromEntries(
+    directKeys.flatMap((key) => {
+      const value = briefSource[key];
+      if (typeof value !== 'string') {
+        return [];
+      }
+
+      return [[key, value]];
+    })
+  );
+
+  if (Object.keys(patch).length > 0) {
+    return patch;
+  }
+
+  if (typeof body.field === 'string') {
+    const field = body.field;
+    if (directKeys.includes(field as typeof directKeys[number]) && typeof body.value === 'string') {
+      return { [field]: body.value };
+    }
+  }
+
+  return null;
+}
 
 export const GET = withAuth(async (_request, _user, { params }: { params: Promise<{ customerId: string }> }) => {
   const { customerId } = await params;
@@ -15,17 +48,21 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ brief: data?.brief || { tone: '', constraints: '', current_focus: '' } });
+  return NextResponse.json({ brief: data?.brief || EMPTY_BRIEF });
 }, ['admin', 'content_manager']);
 
 export const PATCH = withAuth(async (request, _user, { params }: { params: Promise<{ customerId: string }> }) => {
   const { customerId } = await params;
-  const body = await request.json();
+  const body = await request.json().catch(() => ({}));
   const supabase = createSupabaseAdmin();
+  const payload = extractBriefPatch(body as Record<string, unknown>);
 
-  const payload = body?.brief ? body.brief : {
-    [body?.field]: body?.value,
-  };
+  if (!payload) {
+    return NextResponse.json(
+      { error: 'Provide tone, constraints, current_focus or a brief object' },
+      { status: 400 }
+    );
+  }
 
   const { data: existing, error: existingError } = await supabase
     .from('customer_profiles')
@@ -38,9 +75,7 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
   }
 
   const nextBrief = {
-    tone: '',
-    constraints: '',
-    current_focus: '',
+    ...EMPTY_BRIEF,
     ...(existing?.brief || {}),
     ...(payload || {}),
   };

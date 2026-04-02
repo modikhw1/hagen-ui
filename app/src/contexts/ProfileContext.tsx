@@ -140,8 +140,10 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   // Determine demo mode from URL or session
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const pathname = window.location.pathname
       const urlParams = new URLSearchParams(window.location.search)
       const urlDemo = urlParams.get('demo') === 'true'
+      const legacyDemoRoute = pathname.startsWith('/m/legacy-demo')
 
       // Logged in user takes priority - clear demo mode
       if (user) {
@@ -152,7 +154,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
 
       // Not logged in - check for demo mode
       const storedDemo = sessionStorage.getItem('demo-mode') === 'true'
-      if (urlDemo || storedDemo) {
+      if (legacyDemoRoute || urlDemo || storedDemo) {
         sessionStorage.setItem('demo-mode', 'true')
         setIsDemo(true)
       }

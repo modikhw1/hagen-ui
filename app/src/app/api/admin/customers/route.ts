@@ -5,8 +5,22 @@ import { withAuth } from '@/lib/auth/api-auth';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
+function buildCustomerListPayload(data: unknown[]) {
+  return {
+    customers: data,
+    profiles: data,
+  };
+}
+
+function buildCustomerPayload(profile: unknown) {
+  return {
+    customer: profile,
+    profile,
+  };
+}
+
 export const GET = withAuth(
-  async (request: NextRequest, user) => {
+  async () => {
     try {
       const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -19,8 +33,8 @@ export const GET = withAuth(
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      return NextResponse.json({ profiles: data });
-    } catch (error) {
+      return NextResponse.json(buildCustomerListPayload(data ?? []));
+    } catch {
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },
@@ -28,7 +42,7 @@ export const GET = withAuth(
 );
 
 export const POST = withAuth(
-  async (request: NextRequest, user) => {
+  async (request: NextRequest) => {
     try {
       const body = await request.json();
 
@@ -81,8 +95,11 @@ export const POST = withAuth(
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      return NextResponse.json({ profile: data });
-    } catch (error) {
+      return NextResponse.json(
+        buildCustomerPayload(data),
+        { status: 201 }
+      );
+    } catch {
       return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
   },

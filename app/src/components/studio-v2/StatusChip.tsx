@@ -1,18 +1,19 @@
 'use client';
 
-type ConceptStatus = 'draft' | 'sent' | 'produced' | 'archived';
+import { getStudioAssignmentStatusLabel } from '@/lib/customer-concept-lifecycle';
+import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle';
 
 interface StatusChipProps {
-  status: ConceptStatus;
+  status: CustomerConceptAssignmentStatus;
   editable?: boolean;
   onClick?: () => void;
 }
 
-const STATUS_STYLES: Record<ConceptStatus, { label: string; bg: string; color: string; border: string }> = {
-  draft: { label: 'Draft', bg: 'rgba(245, 158, 11, 0.12)', color: '#b45309', border: '#f59e0b' },
-  sent: { label: 'Sent', bg: 'rgba(59, 130, 246, 0.12)', color: '#1d4ed8', border: '#3b82f6' },
-  produced: { label: 'Produced', bg: 'rgba(16, 185, 129, 0.12)', color: '#047857', border: '#10b981' },
-  archived: { label: 'Archived', bg: 'rgba(107, 114, 128, 0.12)', color: '#4b5563', border: '#9ca3af' },
+const STATUS_STYLES: Record<CustomerConceptAssignmentStatus, { bg: string; color: string; border: string }> = {
+  draft: { bg: 'rgba(245, 158, 11, 0.12)', color: '#b45309', border: '#f59e0b' },
+  sent: { bg: 'rgba(59, 130, 246, 0.12)', color: '#1d4ed8', border: '#3b82f6' },
+  produced: { bg: 'rgba(16, 185, 129, 0.12)', color: '#047857', border: '#10b981' },
+  archived: { bg: 'rgba(107, 114, 128, 0.12)', color: '#4b5563', border: '#9ca3af' },
 };
 
 export function StatusChip({ status, editable = false, onClick }: StatusChipProps) {
@@ -34,7 +35,7 @@ export function StatusChip({ status, editable = false, onClick }: StatusChipProp
         cursor: editable ? 'pointer' : 'default',
       }}
     >
-      {style.label}
+      {getStudioAssignmentStatusLabel(status)}
     </button>
   );
 }

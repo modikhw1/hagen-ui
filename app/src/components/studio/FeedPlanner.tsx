@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { LeTrendColors, LeTrendTypography, LeTrendRadius, LeTrendShadows } from '@/styles/letrend-design-system';
+import React, { useMemo, useState } from 'react';
+import { getCustomerConceptPlacementLabel } from '@/lib/customer-concept-lifecycle';
+import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import type { FeedSlot, FeedCustomerConcept, GridConfig, CmTag } from '@/lib/studio/feed-planner-types';
 import { DEFAULT_GRID_CONFIG, getSlotType } from '@/lib/studio/feed-planner-types';
 
@@ -16,26 +17,22 @@ interface FeedPlannerProps {
 }
 
 export function FeedPlanner({
-  customerId,
   concepts,
   tags,
   onConceptClick,
-  onSlotUpdate,
   onAddConcept,
   gridConfig = DEFAULT_GRID_CONFIG,
 }: FeedPlannerProps) {
-  const [slots, setSlots] = useState<FeedSlot[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
 
-  // Build slots from concepts
-  useEffect(() => {
+  const slots = useMemo(() => {
     const totalSlots = gridConfig.columns * gridConfig.rows;
     const builtSlots: FeedSlot[] = [];
 
     for (let i = 0; i < totalSlots; i++) {
       const feedOrder = i - gridConfig.currentSlotIndex;
       const concept = concepts.find(c => c.feed_order === feedOrder) || null;
-      const type = getSlotType(feedOrder, gridConfig.currentSlotIndex);
+      const type = getSlotType(feedOrder);
 
       builtSlots.push({
         slotIndex: i,
@@ -45,7 +42,7 @@ export function FeedPlanner({
       });
     }
 
-    setSlots(builtSlots);
+    return builtSlots;
   }, [concepts, gridConfig]);
 
   const getSlotColor = (type: FeedSlot['type']) => {
@@ -95,14 +92,14 @@ export function FeedPlanner({
             color: LeTrendColors.textPrimary,
             margin: 0,
           }}>
-            Feed Planner
+            Feedplan
           </h3>
           <p style={{
             fontSize: '13px',
             color: LeTrendColors.textSecondary,
             margin: '4px 0 0 0',
           }}>
-            Drag concepts to plan your content calendar
+            Placera koncept i den ordning kunden kommer att möta dem.
           </p>
         </div>
         {onAddConcept && (
@@ -256,7 +253,7 @@ export function FeedPlanner({
                 color: LeTrendColors.textPlaceholder,
                 fontSize: '12px',
               }}>
-                {slot.type === 'current' ? 'Nuvarande' : slot.feedOrder > 0 ? 'Planerat' : 'Ledig'}
+                {getCustomerConceptPlacementLabel(slot.feedOrder, 'studio') ?? 'Planen'}
               </div>
             )}
           </div>
@@ -278,7 +275,7 @@ export function FeedPlanner({
             borderRadius: '50%',
             background: LeTrendColors.success,
           }} />
-          <span style={{ fontSize: '12px', color: LeTrendColors.textSecondary }}>Nu</span>
+          <span style={{ fontSize: '12px', color: LeTrendColors.textSecondary }}>Nu i planen</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{
@@ -287,7 +284,7 @@ export function FeedPlanner({
             borderRadius: '50%',
             background: LeTrendColors.info,
           }} />
-          <span style={{ fontSize: '12px', color: LeTrendColors.textSecondary }}>Planerat</span>
+          <span style={{ fontSize: '12px', color: LeTrendColors.textSecondary }}>Kommande i planen</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           <div style={{
@@ -296,7 +293,7 @@ export function FeedPlanner({
             borderRadius: '50%',
             background: LeTrendColors.textMuted,
           }} />
-          <span style={{ fontSize: '12px', color: LeTrendColors.textSecondary }}>Historik</span>
+          <span style={{ fontSize: '12px', color: LeTrendColors.textSecondary }}>Tidigare i planen</span>
         </div>
       </div>
     </div>

@@ -5,6 +5,14 @@ test.describe('Login Flow', () => {
     await page.goto('/login');
   });
 
+  test('redirects mobile users from /login to /m/login', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile-only redirect check');
+
+    await page.goto('/login');
+
+    await expect(page).toHaveURL(/\/m\/login(?:\?|$)/);
+  });
+
   test('shows login form by default', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Välkommen tillbaka' })).toBeVisible();
     await expect(page.locator('input[placeholder*="din@email.se"]')).toBeVisible();
@@ -57,8 +65,23 @@ test.describe('Login Flow', () => {
     await page.fill('input[type="password"]', 'demo');
     await page.getByRole('button', { name: 'Logga in' }).click();
     
-    // Desktop: /app or /?demo=true, Mobile: /m or /m?demo=true
-    await expect(page).toHaveURL(/\/app\/?|\/\?demo=true|\/m\/?|\/m\?demo=true/, { timeout: 10000 });
+    await expect(page).toHaveURL(/\/m\/legacy-demo(?:\?|$)/, { timeout: 10000 });
+  });
+
+  test('preserves full protected customer path when redirecting to login', async ({ page }) => {
+    await page.goto('/concept/test-assignment?from=notes');
+
+    await expect(page).toHaveURL(/\/login\?redirect=%2Fconcept%2Ftest-assignment%3Ffrom%3Dnotes(?:&|$)/, {
+      timeout: 10000,
+    });
+  });
+
+  test('preserves full protected studio path when redirecting to login', async ({ page }) => {
+    await page.goto('/studio/customers?section=feed');
+
+    await expect(page).toHaveURL(/\/login\?redirect=%2Fstudio%2Fcustomers%3Fsection%3Dfeed(?:&|$)/, {
+      timeout: 10000,
+    });
   });
 });
 

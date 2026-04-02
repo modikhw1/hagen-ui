@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       auto_edit_sessions: {
@@ -461,7 +436,9 @@ export type Database = {
           cm_id: string | null
           cm_note: string | null
           collection_id: string | null
-          concept_id: string
+          concept_id: string | null
+          content_loaded_at: string | null
+          content_loaded_seen_at: string | null
           content_overrides: Json | null
           custom_description: string | null
           custom_headline: string | null
@@ -478,11 +455,19 @@ export type Database = {
           id: string
           match_percentage: number | null
           notes: string | null
+          planned_publish_at: string | null
           produced_at: string | null
+          published_at: string | null
           sent_at: string | null
           status: string | null
           tags: string[] | null
+          tiktok_comments: number | null
+          tiktok_last_synced_at: string | null
+          tiktok_likes: number | null
+          tiktok_thumbnail_url: string | null
           tiktok_url: string | null
+          tiktok_views: number | null
+          tiktok_watch_time_seconds: number | null
           updated_at: string | null
           why_it_fits: string | null
         }
@@ -492,7 +477,9 @@ export type Database = {
           cm_id?: string | null
           cm_note?: string | null
           collection_id?: string | null
-          concept_id: string
+          concept_id?: string | null
+          content_loaded_at?: string | null
+          content_loaded_seen_at?: string | null
           content_overrides?: Json | null
           custom_description?: string | null
           custom_headline?: string | null
@@ -509,11 +496,19 @@ export type Database = {
           id?: string
           match_percentage?: number | null
           notes?: string | null
+          planned_publish_at?: string | null
           produced_at?: string | null
+          published_at?: string | null
           sent_at?: string | null
           status?: string | null
           tags?: string[] | null
+          tiktok_comments?: number | null
+          tiktok_last_synced_at?: string | null
+          tiktok_likes?: number | null
+          tiktok_thumbnail_url?: string | null
           tiktok_url?: string | null
+          tiktok_views?: number | null
+          tiktok_watch_time_seconds?: number | null
           updated_at?: string | null
           why_it_fits?: string | null
         }
@@ -523,7 +518,9 @@ export type Database = {
           cm_id?: string | null
           cm_note?: string | null
           collection_id?: string | null
-          concept_id?: string
+          concept_id?: string | null
+          content_loaded_at?: string | null
+          content_loaded_seen_at?: string | null
           content_overrides?: Json | null
           custom_description?: string | null
           custom_headline?: string | null
@@ -540,11 +537,19 @@ export type Database = {
           id?: string
           match_percentage?: number | null
           notes?: string | null
+          planned_publish_at?: string | null
           produced_at?: string | null
+          published_at?: string | null
           sent_at?: string | null
           status?: string | null
           tags?: string[] | null
+          tiktok_comments?: number | null
+          tiktok_last_synced_at?: string | null
+          tiktok_likes?: number | null
+          tiktok_thumbnail_url?: string | null
           tiktok_url?: string | null
+          tiktok_views?: number | null
+          tiktok_watch_time_seconds?: number | null
           updated_at?: string | null
           why_it_fits?: string | null
         }
@@ -624,27 +629,93 @@ export type Database = {
           },
         ]
       }
+      customer_game_plans: {
+        Row: {
+          created_at: string
+          customer_id: string
+          editor_version: number
+          html: string
+          id: string
+          plain_text: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          editor_version?: number
+          html?: string
+          id?: string
+          plain_text?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          editor_version?: number
+          html?: string
+          id?: string
+          plain_text?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_game_plans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: true
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_game_plans_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customer_notes: {
         Row: {
+          attachments: Json
           cm_id: string
           content: string
+          content_html: string | null
           created_at: string | null
           customer_id: string
           id: string
+          note_type: string
+          primary_customer_concept_id: string | null
+          references: Json
+          updated_at: string
         }
         Insert: {
+          attachments?: Json
           cm_id: string
           content: string
+          content_html?: string | null
           created_at?: string | null
           customer_id: string
           id?: string
+          note_type?: string
+          primary_customer_concept_id?: string | null
+          references?: Json
+          updated_at?: string
         }
         Update: {
+          attachments?: Json
           cm_id?: string
           content?: string
+          content_html?: string | null
           created_at?: string | null
           customer_id?: string
           id?: string
+          note_type?: string
+          primary_customer_concept_id?: string | null
+          references?: Json
+          updated_at?: string
         }
         Relationships: [
           {
@@ -659,6 +730,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_notes_primary_customer_concept_id_fkey"
+            columns: ["primary_customer_concept_id"]
+            isOneToOne: false
+            referencedRelation: "customer_concepts"
             referencedColumns: ["id"]
           },
         ]
@@ -1673,7 +1751,7 @@ export type Database = {
           avatar_url: string | null
           color: string
           created_at: string | null
-          email: string | null
+          email: string
           id: string
           is_active: boolean | null
           name: string
@@ -1688,7 +1766,7 @@ export type Database = {
           avatar_url?: string | null
           color?: string
           created_at?: string | null
-          email?: string | null
+          email: string
           id?: string
           is_active?: boolean | null
           name: string
@@ -1703,7 +1781,7 @@ export type Database = {
           avatar_url?: string | null
           color?: string
           created_at?: string | null
-          email?: string | null
+          email?: string
           id?: string
           is_active?: boolean | null
           name?: string
@@ -1973,9 +2051,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       app_role: ["admin", "content_manager", "customer", "user"],

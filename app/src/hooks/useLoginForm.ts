@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { getPrimaryRouteForRole, getRoleAuthorizedRedirect, normalizeRedirectCandidate } from '@/lib/auth/navigation'
 import { supabase } from '@/lib/supabase/client'
 
 export type LoginMode = 'login' | 'register' | 'forgot'
@@ -42,18 +43,14 @@ interface UseLoginFormOptions {
   extraDemoCredentials?: { email: string; password: string; redirect: string }[]
 }
 
-const ALLOWED_REDIRECT_PREFIXES = ['/', '/admin', '/studio-v2', '/studio', '/customer', '/m/customer']
+const ALLOWED_REDIRECT_PREFIXES = ['/', '/admin', '/studio-v2', '/studio', '/customer', '/feed', '/concept', '/m/customer', '/m/feed', '/m/concept', '/m/legacy-demo', '/billing', '/invoice', '/welcome', '/onboarding', '/agreement', '/checkout']
 
 function normalizeStudioPath(path: string): string {
-  if (path === '/studio-v2' || path.startsWith('/studio-v2/')) {
-    return `/studio${path.slice('/studio-v2'.length)}`
-  }
-
-  return path
+  return normalizeRedirectCandidate(path)
 }
 
 function customerDestinationForPath(pathname: string): string {
-  return pathname === '/m/login' ? '/m/customer/feed' : '/'
+  return pathname === '/m/login' ? '/m/feed' : '/feed'
 }
 
 function getSafeRedirectPath(candidate: string | null): string | null {
@@ -108,20 +105,21 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
 
   const resolvePostLoginDestination = useCallback(async (): Promise<string | null> => {
     const requestedRedirect = getSafeRedirectPath(searchParams.get('redirect'))
-    if (requestedRedirect) {
-      return requestedRedirect
-    }
 
     if (pathname === '/login' || pathname === '/m/login') {
+      const surface = pathname === '/m/login' ? 'mobile' : 'desktop'
+
       // Check from context first
-      if (profile?.is_admin || profile?.role === 'admin') {
-        return '/admin'
-      }
-      if (profile?.role === 'content_manager') {
-        return '/studio'
-      }
-      if (profile?.role === 'customer') {
-        return customerDestinationForPath(pathname)
+      if (profile) {
+        const authorizedRedirect = getRoleAuthorizedRedirect(requestedRedirect, profile)
+        if (authorizedRedirect) {
+          return authorizedRedirect
+        }
+
+        return getPrimaryRouteForRole(profile, {
+          surface,
+          fallback: customerDestinationForPath(pathname),
+        })
       }
 
       // If profile not loaded yet, fetch from DB
@@ -136,14 +134,16 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
           .eq('id', session.user.id)
           .maybeSingle()
 
-        if (profileData?.is_admin || profileData?.role === 'admin') {
-          return '/admin'
-        }
-        if (profileData?.role === 'content_manager') {
-          return '/studio'
-        }
-        if (profileData?.role === 'customer') {
-          return customerDestinationForPath(pathname)
+        if (profileData) {
+          const authorizedRedirect = getRoleAuthorizedRedirect(requestedRedirect, profileData)
+          if (authorizedRedirect) {
+            return authorizedRedirect
+          }
+
+          return getPrimaryRouteForRole(profileData, {
+            surface,
+            fallback: customerDestinationForPath(pathname),
+          })
         }
       }
     }
@@ -153,7 +153,7 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
       return pathname === '/m/login' ? '/m' : '/'
     }
 
-    return loginRedirect
+    return requestedRedirect ?? loginRedirect
   }, [searchParams, pathname, profile, loginRedirect])
 
   useEffect(() => {

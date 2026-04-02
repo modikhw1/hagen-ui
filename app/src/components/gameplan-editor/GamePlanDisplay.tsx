@@ -5,16 +5,21 @@ import { sanitizeRichTextHtml } from './utils/sanitize';
 interface GamePlanDisplayProps {
   html: string;
   hasChanges?: boolean;
+  emptyLabel?: string;
 }
 
-export function GamePlanDisplay({ html, hasChanges = false }: GamePlanDisplayProps) {
+export function GamePlanDisplay({
+  html,
+  hasChanges = false,
+  emptyLabel = 'Ingen Game Plan än.',
+}: GamePlanDisplayProps) {
   const safeHtml = sanitizeRichTextHtml(html || '');
 
   return (
     <div style={{ fontSize: '14px', lineHeight: 1.7, position: 'relative' }}>
       {hasChanges && (
         <div
-          title="New updates in the game plan"
+          title="Nya uppdateringar i Game Plan"
           style={{
             position: 'absolute',
             top: '-4px',
@@ -31,7 +36,7 @@ export function GamePlanDisplay({ html, hasChanges = false }: GamePlanDisplayPro
       {safeHtml.trim() ? (
         <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
       ) : (
-        <div style={{ color: '#9ca3af' }}>No game plan yet.</div>
+        <div style={{ color: '#9ca3af' }}>{emptyLabel}</div>
       )}
     </div>
   );

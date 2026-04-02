@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getPrimaryRouteForRole } from '@/lib/auth/navigation';
 import { supabase } from '@/lib/supabase/client';
 import type { Session } from '@supabase/supabase-js';
 
@@ -35,19 +36,7 @@ async function resolveRoleDestination(userId: string): Promise<string> {
     .eq('id', userId)
     .maybeSingle();
 
-  if (profileData?.is_admin || profileData?.role === 'admin') {
-    return '/admin';
-  }
-
-  if (profileData?.role === 'content_manager') {
-    return '/studio';
-  }
-
-  if (profileData?.role === 'customer') {
-    return '/';
-  }
-
-  return '/';
+  return getPrimaryRouteForRole(profileData, { fallback: '/feed' });
 }
 
 function AuthCallbackContent() {
@@ -442,7 +431,7 @@ function AuthCallbackContent() {
       const isTeamInvite = session.user.user_metadata?.invited_as === 'team_member' || searchParams.get('flow') === 'team_invite';
 
       // Determine redirect path
-      const redirectPath = isTeamInvite ? '/studio' : '/welcome';
+      const redirectPath = isTeamInvite ? '/studio/customers' : '/welcome';
 
       // Ensure profile setup completes before redirect so onboarding APIs can authenticate reliably.
       if (isTeamInvite) {

@@ -29,7 +29,7 @@ Appen kor pa `http://localhost:3000`.
 - `/login` -> desktop login
 - `/m/login` -> mobil login
 - lyckad login skickar till:
-  - customer: `/` (desktop) eller `/m/customer/feed` (mobil)
+  - customer: `/feed` (desktop) eller `/m/feed` (mobil)
   - content_manager: `/studio`
   - admin: `/admin`
 
@@ -52,11 +52,14 @@ Appen kor pa `http://localhost:3000`.
 
 ### 4) Customer day-to-day
 
-- `/` -> huvudvy/dashboard (concept + gameplan-flode)
+- `/feed` -> huvudvy for kundens plan
+- `/` -> legacy dashboard-shell
 - `/concept/[id]` -> concept detail
 - `/billing` -> fakturor/betalningshistorik
 - `/invoice/[id]` -> enskild faktura
-- `/customer/feed` och `/customer/concept/[id]` -> customer-feed flode (parallellt med `/`)
+- legacy aliaser pekar om:
+  - `/customer/feed` -> `/feed`
+  - `/customer/concept/[id]` -> `/concept/[id]`
 
 ### 5) Studio och Admin
 
@@ -69,14 +72,18 @@ Appen kor pa `http://localhost:3000`.
 ### 6) Mobil
 
 - `/m` -> mobil root, skickar vidare beroende pa auth/roll
-- `/m/customer/feed`, `/m/customer/concept/[id]`, `/m/concept/[id]`
+- `/m/feed` -> mobil huvudvy for kundens plan
+- `/m/concept/[id]` -> mobil concept detail
+- legacy aliaser pekar om:
+  - `/m/customer/feed` -> `/m/feed`
+  - `/m/customer/concept/[id]` -> `/m/concept/[id]`
 
 ## Routing och guardrails
 
-- `app/src/proxy.ts` hanterar:
+- `app/src/middleware.ts` hanterar:
   - role-based route protection
   - redirect mellan desktop/mobil
-  - legacy redirects (`/register`, `/signup`, `/studio-v2` -> `/studio`)
+  - legacy redirects (`/register`, `/signup`, `/studio-v2` -> `/studio`, gamla customer-feed-paths -> nya feed-paths)
 
 ## Viktiga kataloger
 

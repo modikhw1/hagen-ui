@@ -8,10 +8,10 @@ import { getAuthCallbackUrl } from '@/lib/url/public'
 export function LoginMobile() {
   const form = useLoginForm({
     loginRedirect: '/m',
-    demoRedirect: '/m?demo=true',
+    demoRedirect: '/m/legacy-demo',
     resetRedirectUrl: getAuthCallbackUrl('recovery'),
     extraDemoCredentials: [
-      { email: 'auth1', password: 'auth1', redirect: '/m?auth=true' }
+      { email: 'auth1', password: 'auth1', redirect: '/m/legacy-demo?auth=true' }
     ]
   })
 

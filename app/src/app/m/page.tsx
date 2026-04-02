@@ -1,7 +1,21 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { DashboardMobile } from '@/components/features/Dashboard'
+export default async function MobileEntryPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams
+  const isLegacyDemo = params.demo === 'true' || params.auth === 'true'
 
-export default function MobileDashboardPage() {
-  return <DashboardMobile />
+  if (isLegacyDemo) {
+    const next = new URLSearchParams()
+    if (params.auth === 'true') {
+      next.set('auth', 'true')
+    }
+    const suffix = next.size > 0 ? `?${next.toString()}` : ''
+    redirect(`/m/legacy-demo${suffix}`)
+  }
+
+  redirect('/m/feed')
 }

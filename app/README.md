@@ -42,21 +42,23 @@ npm run migrate:concepts
 
 ## Nuvarande routingmodell
 
-- `/` ar customer huvuddashboard (desktop)
+- `/feed` ar customer huvudvy (desktop)
+- `/` ar legacy customer-shell
 - `/login` och `/m/login` ar inloggningssidor
 - `/m` ar mobil root som routar vidare beroende pa auth/roll
 - `/auth/callback` hanterar invite/recovery + password setup
 - onboarding/betalning: `/welcome` -> `/onboarding` -> `/checkout` -> `/checkout/complete`
 - customer feed finns i separat flode:
-  - `/customer/feed`
-  - `/customer/concept/[id]`
-  - mobil: `/m/customer/feed`, `/m/customer/concept/[id]`
+  - `/feed`
+  - `/concept/[id]`
+  - mobil: `/m/feed`, `/m/concept/[id]`
+  - legacy aliaser pekar om gamla `/customer/*`-paths till dessa
 - content manager: `/studio/*`
 - admin: `/admin/*`
 
 ## Hur routes binds ihop
 
-- `src/proxy.ts` gor role-based route protection och mobil/desktop redirects.
+- `src/middleware.ts` gor role-based route protection och mobil/desktop redirects.
 - `src/hooks/useLoginForm.ts` avgor post-login destination per roll.
 - `src/app/auth/callback/page.tsx` avgor destination efter invite/password setup.
 - `src/app/api/admin/profiles/setup/route.ts` kopplar profile <-> customer_profile.

@@ -15,6 +15,13 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
+function buildCustomerPayload(profile: unknown) {
+  return {
+    customer: profile,
+    profile,
+  };
+}
+
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const user = await validateApiRequest(request, ['admin', 'customer', 'content_manager']);
@@ -45,7 +52,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    return NextResponse.json({ profile });
+    return NextResponse.json(buildCustomerPayload(profile));
   } catch (error: unknown) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
@@ -225,7 +232,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       await logCustomerInvited(user.id, user.email || 'unknown', id, body.business_name, body.contact_email);
 
       return NextResponse.json({
-        profile,
+        ...buildCustomerPayload(profile),
         message: 'Invitation email sent!',
         stripe_customer_id: stripeCustomerId,
         stripe_subscription_id: stripeSubscriptionId,
@@ -242,7 +249,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .single();
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json({ profile: data });
+      return NextResponse.json(buildCustomerPayload(data));
     }
 
     // --- Action: send_reminder ---
@@ -362,7 +369,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ profile: data });
+    return NextResponse.json(buildCustomerPayload(data));
   } catch (error: unknown) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
@@ -391,7 +398,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    return NextResponse.json({ message: 'Profile deleted successfully' });
+    return NextResponse.json({ success: true, message: 'Profile deleted successfully' });
   } catch (error: unknown) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });

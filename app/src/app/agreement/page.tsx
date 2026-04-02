@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
 
 interface AgreementData {
   status: string;
@@ -59,6 +60,21 @@ function AgreementContent() {
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
+
+  useEffect(() => {
+    const requireAuth = async () => {
+      const customerId = searchParams.get('customerId');
+      if (customerId) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) return;
+
+      const redirectTarget = `/agreement${window.location.search}`;
+      router.replace(`/login?redirect=${encodeURIComponent(redirectTarget)}`);
+    };
+
+    void requireAuth();
+  }, [router, searchParams]);
 
   // Auto-check payment status every 3 seconds when accepted
   useEffect(() => {

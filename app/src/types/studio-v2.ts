@@ -6,6 +6,7 @@
  */
 
 import type { TranslatedConcept } from '@/lib/conceptLoader';
+import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle';
 
 // =====================================================
 // Concept Content Overrides
@@ -17,6 +18,7 @@ import type { TranslatedConcept } from '@/lib/conceptLoader';
  */
 export interface ConceptContentOverrides {
   headline?: string;
+  summary?: string;
   script?: string;
   target_audience?: string;
   call_to_action?: string;
@@ -39,8 +41,8 @@ export interface CustomerConcept {
   concept_id: string;
   cm_id: string | null;
 
-  // Status workflow
-  status: 'draft' | 'sent' | 'produced' | 'archived';
+  // Assignment workflow
+  status: CustomerConceptAssignmentStatus;
 
   // Customization fields
   custom_script: string | null;
@@ -74,14 +76,62 @@ export interface CustomerConcept {
 
 /**
  * customer_notes table
- * Chronological notes in Game Plan
+ * Chronological customer touchpoints, separate from the Game Plan document
  */
+export type CustomerNoteType = 'update' | 'reference' | 'feedback' | 'milestone';
+
+export interface CustomerNoteReference {
+  kind: string;
+  label?: string;
+  url?: string;
+  platform?: string;
+  customer_concept_id?: string;
+}
+
+export interface CustomerNoteAttachment {
+  kind: string;
+  url?: string;
+  caption?: string;
+  storage_path?: string;
+  file_name?: string;
+  mime_type?: string;
+}
+
 export interface CustomerNote {
   id: string;
   customer_id: string;
   cm_id: string;
   content: string;
+  content_html?: string | null;
+  note_type?: CustomerNoteType;
+  primary_customer_concept_id?: string | null;
+  references?: CustomerNoteReference[];
+  attachments?: CustomerNoteAttachment[];
   created_at: string;
+  updated_at?: string | null;
+}
+
+/**
+ * customer_game_plans table
+ * Dedicated strategic document per customer
+ */
+export interface CustomerGamePlanDocument {
+  id: string;
+  customer_id: string;
+  html: string;
+  plain_text: string;
+  editor_version: number;
+  updated_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CustomerGamePlanSummary {
+  html: string;
+  plain_text: string;
+  editor_version: number;
+  updated_at: string | null;
+  source: 'customer_game_plans' | 'legacy_customer_profiles' | 'empty';
 }
 
 /**
@@ -219,7 +269,7 @@ export interface OldFeedSlot {
 /**
  * Section navigation
  */
-export type Section = 'gameplan' | 'koncept' | 'feed' | 'kommunikation';
+export type Section = 'gameplan' | 'koncept' | 'feed' | 'kommunikation' | 'demo';
 
 // =====================================================
 // API Request/Response Types
@@ -267,7 +317,7 @@ export interface UpdateConceptRequest {
   tiktok_comments?: number | null;
   tiktok_watch_time_seconds?: number | null;
   tiktok_last_synced_at?: string | null;
-  status?: 'draft' | 'sent' | 'produced' | 'archived';
+  status?: CustomerConceptAssignmentStatus;
   feed_order?: number | null;
   feed_slot?: number | null;
   tags?: string[];
@@ -288,6 +338,11 @@ export interface UpdateConceptRequest {
 export interface AddNoteRequest {
   customer_id: string;
   content: string;
+  content_html?: string | null;
+  note_type?: CustomerNoteType;
+  primary_customer_concept_id?: string | null;
+  references?: CustomerNoteReference[];
+  attachments?: CustomerNoteAttachment[];
 }
 
 /**
@@ -320,9 +375,9 @@ export interface OldCustomerConcept {
 /**
  * Status mapping from old to new system
  */
-export const StatusMapping: Record<string, 'draft' | 'sent' | 'produced' | 'archived'> = {
+export const StatusMapping: Record<string, CustomerConceptAssignmentStatus> = {
   'active': 'draft',
-  'paused': 'draft',
+  'paused': 'sent',
   'completed': 'produced'
 };
 

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { getPrimaryRouteForRole, resolveAppRole } from '@/lib/auth/navigation'
 
 const MOBILE_REGEX = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i
 
 const ADMIN_ROUTES = /^\/admin/
 const STUDIO_ROUTES = /^\/studio/
-const CUSTOMER_ROUTES = /^\/(customer|feed)/
-const MOBILE_CUSTOMER_ROUTES = /^\/m\/(feed|customer|concept)/
+const CUSTOMER_ROUTES = /^\/(customer|feed|concept)(\/|$)/
+const MOBILE_CUSTOMER_ROUTES = /^\/m\/(feed|customer|concept)(\/|$)/
 const ADMIN_API = /^\/api\/admin/
 const STUDIO_API = /^\/api\/studio/
 const CUSTOMER_API = /^\/api\/customer/
@@ -22,6 +23,7 @@ export async function middleware(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl
+  const requestedPath = `${request.nextUrl.pathname}${request.nextUrl.search}`
   const userAgent = request.headers.get('user-agent') || ''
   const isMobile = MOBILE_REGEX.test(userAgent)
 
@@ -30,6 +32,32 @@ export async function middleware(request: NextRequest) {
     '/signup': '/login',
     '/auth': '/login',
     '/app': '/',
+    '/customer': '/feed',
+    '/customer/feed': '/feed',
+    '/m/customer': '/m/feed',
+    '/m/customer/feed': '/m/feed',
+  }
+
+  if (pathname === '/' && request.nextUrl.searchParams.get('demo') === 'true') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/m/legacy-demo'
+    url.search = ''
+    return withRequestId(NextResponse.redirect(url))
+  }
+
+  if (pathname === '/m') {
+    const isLegacyDemo = request.nextUrl.searchParams.get('demo') === 'true'
+    const isLegacyAuthDemo = request.nextUrl.searchParams.get('auth') === 'true'
+
+    if (isLegacyDemo || isLegacyAuthDemo) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/m/legacy-demo'
+      url.search = ''
+      if (isLegacyAuthDemo) {
+        url.searchParams.set('auth', 'true')
+      }
+      return withRequestId(NextResponse.redirect(url))
+    }
   }
 
   if (legacyRedirects[pathname]) {
@@ -49,6 +77,18 @@ export async function middleware(request: NextRequest) {
     return withRequestId(NextResponse.redirect(url))
   }
 
+  if (pathname.startsWith('/customer/concept/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = pathname.replace('/customer/concept', '/concept')
+    return withRequestId(NextResponse.redirect(url))
+  }
+
+  if (pathname.startsWith('/m/customer/concept/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = pathname.replace('/m/customer/concept', '/m/concept')
+    return withRequestId(NextResponse.redirect(url))
+  }
+
   const isAdminApi = ADMIN_API.test(pathname)
   const isStudioApi = STUDIO_API.test(pathname)
   const isCustomerApi = CUSTOMER_API.test(pathname)
@@ -62,21 +102,21 @@ export async function middleware(request: NextRequest) {
   // Public mobile routes (exact matches or specific prefixes only)
   const isMobilePublic =
     pathname === '/m' ||
+    pathname === '/m/legacy-demo' ||
     pathname === '/m/login' ||
     pathname === '/m/register' ||
     pathname.startsWith('/m/login/') ||
     pathname.startsWith('/m/register/')
 
-  const skipAuthCheck =
+  const bypassMiddleware =
     isMobilePublic ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/auth/callback') ||
     pathname.startsWith('/api/stripe/webhook') ||
     pathname.startsWith('/api/auth') ||
-    pathname === '/login' ||
     pathname.includes('.')
 
-  if (!isProtectedRoute && skipAuthCheck) {
+  if (!isProtectedRoute && bypassMiddleware) {
     return withRequestId(NextResponse.next({
       request: {
         headers: requestHeaders,
@@ -125,15 +165,16 @@ export async function middleware(request: NextRequest) {
       }
 
       const url = request.nextUrl.clone()
+      url.search = ''
       if (isMobileCustomerPage) {
         url.pathname = '/m/login'
-        url.searchParams.set('redirect', pathname)
+        url.searchParams.set('redirect', requestedPath)
       } else if (isMobile && isCustomerPage) {
         url.pathname = '/m/login'
-        url.searchParams.set('redirect', `/m${pathname}`)
+        url.searchParams.set('redirect', `/m${requestedPath}`)
       } else {
         url.pathname = '/login'
-        url.searchParams.set('redirect', pathname)
+        url.searchParams.set('redirect', requestedPath)
       }
       return withRequestId(NextResponse.redirect(url))
     }
@@ -150,21 +191,26 @@ export async function middleware(request: NextRequest) {
 
     if (!profile) {
       const url = request.nextUrl.clone()
+      url.search = ''
       url.pathname = '/login'
+      url.searchParams.set('redirect', requestedPath)
+      url.searchParams.set('error', 'profile_not_ready')
       return withRequestId(NextResponse.redirect(url))
     }
 
-    const userRole = profile.role || (profile.is_admin ? 'admin' : 'user')
+    const userRole = resolveAppRole(profile)
 
     if (isAdminPage && !profile.is_admin && userRole !== 'admin') {
       const url = request.nextUrl.clone()
-      if (userRole === 'content_manager') {
-        url.pathname = '/studio'
-      } else if (userRole === 'customer') {
-        url.pathname = isMobile ? '/m/customer/feed' : '/'
-      } else {
+      url.search = ''
+      if (userRole === 'user') {
         url.pathname = '/'
         url.searchParams.set('error', 'admin_required')
+      } else {
+        url.pathname = getPrimaryRouteForRole(userRole, {
+          surface: isMobile ? 'mobile' : 'desktop',
+          fallback: '/feed',
+        })
       }
       return withRequestId(NextResponse.redirect(url))
     }
@@ -173,8 +219,12 @@ export async function middleware(request: NextRequest) {
       const allowedRoles = ['admin', 'content_manager']
       if (!profile.is_admin && !allowedRoles.includes(userRole)) {
         const url = request.nextUrl.clone()
+        url.search = ''
         if (userRole === 'customer') {
-          url.pathname = isMobile ? '/m/customer/feed' : '/'
+          url.pathname = getPrimaryRouteForRole(userRole, {
+            surface: isMobile ? 'mobile' : 'desktop',
+            fallback: '/feed',
+          })
         } else {
           url.pathname = '/login'
           url.searchParams.set('error', 'access_denied')
@@ -186,13 +236,15 @@ export async function middleware(request: NextRequest) {
     if (isCustomerPage || isMobileCustomerPage) {
       if (userRole !== 'customer') {
         const url = request.nextUrl.clone()
-        if (profile.is_admin || userRole === 'admin') {
-          url.pathname = '/admin'
-        } else if (userRole === 'content_manager') {
-          url.pathname = '/studio'
-        } else {
+        url.search = ''
+        if (userRole === 'user') {
           url.pathname = isMobileCustomerPage ? '/m/login' : '/login'
           url.searchParams.set('error', 'access_denied')
+        } else {
+          url.pathname = getPrimaryRouteForRole(userRole, {
+            surface: isMobile ? 'mobile' : 'desktop',
+            fallback: '/feed',
+          })
         }
         return withRequestId(NextResponse.redirect(url))
       }
@@ -218,7 +270,11 @@ export async function middleware(request: NextRequest) {
     } else if (pathname.startsWith('/concept/')) {
       url.pathname = `/m${pathname}`
     } else {
-      url.pathname = `/m${pathname}`
+      return withRequestId(NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      }))
     }
 
     return withRequestId(NextResponse.redirect(url))

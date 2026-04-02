@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getPrimaryRouteForRole } from '@/lib/auth/navigation';
 import { supabase } from '@/lib/supabase/client';
 
 function LoadingFallback() {
@@ -39,7 +40,7 @@ function CheckoutCompleteContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [customerName, setCustomerName] = useState('');
-  const [dashboardPath, setDashboardPath] = useState('/');
+  const [dashboardPath, setDashboardPath] = useState('/feed');
 
   useEffect(() => {
     const resolveDashboardPath = async () => {
@@ -52,10 +53,7 @@ function CheckoutCompleteContent() {
         .eq('id', session.user.id)
         .maybeSingle();
 
-      if (profile?.is_admin || profile?.role === 'admin') return '/admin';
-      if (profile?.role === 'content_manager') return '/studio';
-      if (profile?.role === 'customer') return '/';
-      return '/welcome';
+      return getPrimaryRouteForRole(profile, { fallback: '/welcome' });
     };
 
     const ensureCustomerProfileSetup = async (resolvedName: string) => {

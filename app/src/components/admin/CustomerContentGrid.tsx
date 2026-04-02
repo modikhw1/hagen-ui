@@ -11,7 +11,7 @@ interface CustomerProfile {
   status: string;
   contact_email: string;
   concepts?: Array<{ concept_id: string; match_percentage: number }>;
-  game_plan?: { notes: Array<any> };
+  game_plan?: { notes?: Array<unknown>; html?: string };
   created_at: string;
 }
 
@@ -62,6 +62,10 @@ export function CustomerContentGrid({ limit = 12, statusFilter = ['active', 'agr
   };
 
   const getGamePlanCompletion = (customer: CustomerProfile): number => {
+    if (typeof customer.game_plan?.html === 'string' && customer.game_plan.html.trim()) {
+      return 100;
+    }
+
     const notes = customer.game_plan?.notes || [];
     if (notes.length === 0) return 0;
 

@@ -1,6 +1,24 @@
 import { test, expect } from '../fixtures';
 
 test.describe('Agreement Page', () => {
+  test('keeps public onboarding routes off missing /m/* pages on mobile', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'Mobile Chrome', 'Mobile-only redirect check');
+
+    const routes = [
+      '/welcome',
+      '/agreement?price=49900',
+      '/checkout',
+      '/checkout/complete',
+    ];
+
+    for (const route of routes) {
+      await page.goto(route);
+      await page.waitForLoadState('domcontentloaded');
+
+      expect(page.url()).not.toMatch(/\/m\/(welcome|agreement|checkout)(\/|$|\?)/);
+    }
+  });
+
   test('requires authentication', async ({ page }) => {
     // Try to access agreement page without login
     await page.goto('/agreement?price=49900');

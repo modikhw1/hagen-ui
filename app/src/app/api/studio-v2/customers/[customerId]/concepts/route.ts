@@ -1,52 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-
-function normalizeConcept(row: Record<string, unknown>) {
-  const rawStatus = String(row.status || 'draft');
-  const status =
-    rawStatus === 'active' ? 'draft' :
-    rawStatus === 'paused' ? 'sent' :
-    rawStatus === 'completed' ? 'produced' :
-    rawStatus;
-
-  return {
-    id: row.id,
-    customer_id: row.customer_id || row.customer_profile_id,
-    concept_id: row.concept_id,
-    cm_id: row.cm_id ?? null,
-    status,
-    custom_script: row.custom_script ?? null,
-    why_it_fits: row.why_it_fits ?? row.custom_why_it_works ?? null,
-    filming_instructions: row.filming_instructions ?? row.custom_instructions ?? null,
-    tiktok_url: row.tiktok_url ?? null,
-    tiktok_thumbnail_url: row.tiktok_thumbnail_url ?? null,
-    tiktok_views: row.tiktok_views ?? null,
-    tiktok_likes: row.tiktok_likes ?? null,
-    tiktok_comments: row.tiktok_comments ?? null,
-    tiktok_watch_time_seconds: row.tiktok_watch_time_seconds ?? null,
-    tiktok_last_synced_at: row.tiktok_last_synced_at ?? null,
-    content_overrides: row.content_overrides ?? {
-      headline: row.custom_headline ?? null,
-      script: row.custom_script ?? null,
-      why_it_fits: row.custom_why_it_works ?? null,
-      filming_instructions: row.custom_instructions ?? null,
-      target_audience: row.custom_target_audience ?? null,
-    },
-    feed_order: row.feed_order ?? null,
-    feed_slot: row.feed_slot ?? null,
-    tags: row.tags ?? [],
-    collection_id: row.collection_id ?? null,
-    cm_note: row.cm_note ?? row.notes ?? null,
-    added_at: row.added_at,
-    sent_at: row.sent_at ?? null,
-    produced_at: row.produced_at ?? null,
-    planned_publish_at: row.planned_publish_at ?? null,
-    content_loaded_at: row.content_loaded_at ?? null,
-    content_loaded_seen_at: row.content_loaded_seen_at ?? null,
-    published_at: row.published_at ?? null,
-  };
-}
+import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
 
 export const GET = withAuth(async (_request, _user, { params }: { params: Promise<{ customerId: string }> }) => {
   const { customerId } = await params;
@@ -61,18 +16,75 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ concepts: (data || []).map((row) => normalizeConcept(row)) });
+  return NextResponse.json({ concepts: (data || []).map((row) => normalizeStudioCustomerConcept(row)) });
 }, ['admin', 'content_manager']);
 
 export const POST = withAuth(async (request, user, { params }: { params: Promise<{ customerId: string }> }) => {
   const { customerId } = await params;
-  const body = await request.json();
+  const body = await request.json().catch(() => ({}));
   const supabase = createSupabaseAdmin();
+  const conceptId = typeof body?.concept_id === 'string' ? body.concept_id.trim() : '';
+
+  if (!conceptId) {
+    return NextResponse.json({ error: 'concept_id is required' }, { status: 400 });
+  }
+
+  const [{ data: customerProfile, error: customerError }, { data: concept, error: conceptError }] = await Promise.all([
+    supabase
+      .from('customer_profiles')
+      .select('id')
+      .eq('id', customerId)
+      .maybeSingle(),
+    supabase
+      .from('concepts')
+      .select('id, is_active')
+      .eq('id', conceptId)
+      .maybeSingle(),
+  ]);
+
+  if (customerError) {
+    return NextResponse.json({ error: customerError.message }, { status: 500 });
+  }
+
+  if (!customerProfile) {
+    return NextResponse.json({ error: 'Customer profile not found' }, { status: 404 });
+  }
+
+  if (conceptError) {
+    return NextResponse.json({ error: conceptError.message }, { status: 500 });
+  }
+
+  if (!concept) {
+    return NextResponse.json({ error: 'Concept not found' }, { status: 404 });
+  }
+
+  const { data: existingAssignment, error: existingError } = await supabase
+    .from('customer_concepts')
+    .select('id')
+    .eq('customer_profile_id', customerId)
+    .eq('concept_id', conceptId)
+    .neq('status', 'archived')
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  }
+
+  if (existingAssignment) {
+    return NextResponse.json(
+      {
+        error: 'Concept already assigned to customer',
+        concept: { id: existingAssignment.id },
+      },
+      { status: 409 }
+    );
+  }
 
   const insertPayload = {
     customer_profile_id: customerId,
     customer_id: customerId,
-    concept_id: body?.concept_id,
+    concept_id: conceptId,
     cm_id: user.id,
     status: 'draft',
     feed_order: null,
@@ -90,7 +102,10 @@ export const POST = withAuth(async (request, user, { params }: { params: Promise
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ concept: normalizeConcept(data) });
+  return NextResponse.json(
+    { concept: normalizeStudioCustomerConcept(data) },
+    { status: 201 }
+  );
 }, ['admin', 'content_manager']);
 
 export const DELETE = withAuth(async (request, _user, { params }: { params: Promise<{ customerId: string }> }) => {

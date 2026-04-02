@@ -1,21 +1,20 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
+import { buildCustomerConceptDetailResponse } from '@/lib/customer-concept-detail';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { translateClipToConcept } from '@/lib/translator';
-import type { BackendClip, ClipOverride } from '@/lib/translator';
 
 /**
  * GET /api/customer/concepts/[conceptId]
  *
- * Returns a TranslatedConcept with customer-specific overrides applied,
- * plus raw assignment metadata (status, feed_order, cm_note).
+ * Returns a small customer-facing detail contract for the logged-in customer's
+ * assigned concept. The route resolves strictly by assignment id so customer
+ * surfaces stay assignment-first and do not fall back to source concepts.
  */
 export const GET = withAuth(
   async (_request, user, { params }: { params: Promise<{ conceptId: string }> }) => {
-    const { conceptId } = await params;
+    const { conceptId: customerConceptId } = await params;
     const supabase = createSupabaseAdmin();
 
-    // Resolve customer_profile_id
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('matching_data')
@@ -29,115 +28,58 @@ export const GET = withAuth(
     const customerProfileId = (profile.matching_data as Record<string, unknown>)
       ?.customer_profile_id as string | undefined;
 
-    // Helper: translate a raw concepts row to TranslatedConcept
-    const translateBaseOnly = (concept: Record<string, unknown>) => {
-      const backendData = (concept.backend_data ?? { id: conceptId, url: '' }) as BackendClip;
-      const overrides = (concept.overrides ?? {}) as ClipOverride;
-      return translateClipToConcept(backendData, overrides);
-    };
-
     if (!customerProfileId) {
-      // No customer profile – return base concept without customizations
-      const { data: concept, error: conceptError } = await supabase
-        .from('concepts')
-        .select('*')
-        .eq('id', conceptId)
-        .eq('is_active', true)
-        .single();
-
-      if (conceptError || !concept) {
-        return NextResponse.json({ error: 'Concept not found' }, { status: 404 });
-      }
-
-      return NextResponse.json({
-        concept: translateBaseOnly(concept as Record<string, unknown>),
-        customer_concept: null,
-      });
+      return NextResponse.json({ error: 'Customer profile not found' }, { status: 404 });
     }
 
-    // Fetch customer_concept JOIN concept
+    const selectClause = `
+      id,
+      concept_id,
+      custom_headline,
+      custom_description,
+      custom_why_it_works,
+      custom_instructions,
+      custom_script,
+      custom_production_notes,
+      content_overrides,
+      why_it_fits,
+      filming_instructions,
+      match_percentage,
+      status,
+      tags,
+      cm_note,
+      notes,
+      tiktok_url,
+      feed_order,
+      added_at,
+      sent_at,
+      produced_at,
+      published_at,
+      concepts (
+        id,
+        backend_data,
+        overrides,
+        is_active,
+        source
+      )
+    `;
+
     const { data: row, error } = await supabase
       .from('customer_concepts')
-      .select(`
-        id,
-        concept_id,
-        custom_headline,
-        custom_description,
-        custom_why_it_works,
-        custom_instructions,
-        custom_target_audience,
-        custom_script,
-        custom_production_notes,
-        match_percentage,
-        status,
-        notes,
-        feed_order,
-        added_at,
-        concepts (
-          id,
-          backend_data,
-          overrides,
-          is_active,
-          source
-        )
-      `)
+      .select(selectClause)
       .eq('customer_profile_id', customerProfileId)
-      .eq('concept_id', conceptId)
-      .single();
+      .eq('id', customerConceptId)
+      .neq('status', 'archived')
+      .maybeSingle();
 
     if (error || !row) {
-      // Not assigned to this customer – return base concept without customizations
-      const { data: concept, error: conceptError } = await supabase
-        .from('concepts')
-        .select('*')
-        .eq('id', conceptId)
-        .eq('is_active', true)
-        .single();
-
-      if (conceptError || !concept) {
-        return NextResponse.json({ error: 'Concept not found' }, { status: 404 });
-      }
-
-      return NextResponse.json({
-        concept: translateBaseOnly(concept as Record<string, unknown>),
-        customer_concept: null,
-      });
+      return NextResponse.json(
+        { error: 'Concept not assigned to customer' },
+        { status: 404 }
+      );
     }
 
-    const base = row.concepts as unknown as { backend_data: BackendClip; overrides: ClipOverride } | null;
-    const backendData: BackendClip = (base?.backend_data ?? { id: row.concept_id, url: '' }) as BackendClip;
-    const baseOverrides: ClipOverride = (base?.overrides ?? {}) as ClipOverride;
-
-    // Customer-specific overrides take priority
-    const mergedOverride: ClipOverride = {
-      ...baseOverrides,
-      ...(row.custom_headline ? { headline_sv: row.custom_headline } : {}),
-      ...(row.custom_description ? { description_sv: row.custom_description } : {}),
-      ...(row.custom_why_it_works ? { whyItWorks_sv: row.custom_why_it_works } : {}),
-      ...(row.custom_script ? { script_sv: row.custom_script } : {}),
-      ...(row.custom_production_notes ? { productionNotes_sv: row.custom_production_notes } : {}),
-      ...(row.match_percentage != null ? { matchPercentage: row.match_percentage } : {}),
-    };
-
-    const translated = translateClipToConcept(backendData, mergedOverride);
-
-    return NextResponse.json({
-      concept: {
-        ...translated,
-        customer_concept_id: row.id,
-        status: row.status,
-        feed_order: row.feed_order,
-        cm_note: row.notes,
-        added_at: row.added_at,
-        custom_instructions: row.custom_instructions ?? null,
-        custom_target_audience: row.custom_target_audience ?? null,
-      },
-      customer_concept: {
-        id: row.id,
-        status: row.status,
-        feed_order: row.feed_order,
-      },
-    });
+    return NextResponse.json(buildCustomerConceptDetailResponse(row));
   },
   ['customer', 'admin', 'content_manager']
 );
