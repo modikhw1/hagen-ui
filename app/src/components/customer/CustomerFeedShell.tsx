@@ -186,7 +186,7 @@ export function CustomerFeedShell() {
             <Logo size={34} />
             <div>
               <div style={{ fontSize: 12, color: '#8E7E6B', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Kundyta
+                LeTrend
               </div>
               <div style={{ fontSize: 18, fontWeight: 600, color: '#1A1612' }}>{businessName}</div>
             </div>
@@ -328,7 +328,7 @@ export function CustomerFeedShell() {
                 </p>
               </div>
 
-              {gamePlan?.brief && (
+              {gamePlan?.brief && (gamePlan.brief.tone?.trim() || gamePlan.brief.current_focus?.trim() || gamePlan.brief.constraints?.trim()) && (
                 <div style={{ display: 'grid', gap: 10 }}>
                   <BriefItem label="Ton" value={gamePlan.brief.tone} />
                   <BriefItem label="Nuvarande fokus" value={gamePlan.brief.current_focus} />

@@ -60,7 +60,8 @@ export const POST = withAuth(
         contacts = [],
         profile_data = {},
         game_plan = {},
-        concepts = []
+        concepts = [],
+        brief,
       } = body;
 
       if (!business_name) {
@@ -86,6 +87,7 @@ export const POST = withAuth(
           profile_data,
           game_plan,
           concepts,
+          ...(brief && typeof brief === 'object' ? { brief } : {}),
           status: 'pending'
         })
         .select()

@@ -313,7 +313,13 @@ function CustomerWorkspacePageContent() {
   };
 
   useEffect(() => {
-    setActiveSection(getStudioWorkspaceSection(searchParams.get('section')));
+    // Only sync from URL when a section param is explicitly present.
+    // Without this guard, the effect would fire on mount with no param and
+    // overwrite whatever the lazy initializer just restored from sessionStorage.
+    const urlSection = searchParams.get('section');
+    if (urlSection) {
+      setActiveSection(getStudioWorkspaceSection(urlSection));
+    }
   }, [searchParams]);
 
   // Auto-populate email fields when template changes
@@ -1371,6 +1377,20 @@ function CustomerWorkspacePageContent() {
               {customerStatusMeta.label}
             </div>
 
+            {concepts.length > 0 && (
+              <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, marginTop: 10 }}>
+                {concepts.length} koncept{draftCount > 0 ? ` · ${draftCount} utkast` : ''}
+              </div>
+            )}
+
+            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
+              {formatLastEmailSent(emailLog[0]?.sent_at)}
+            </div>
+
+            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+              {gamePlanHtml.length > 50 ? 'Game Plan: skrivet' : 'Game Plan: ej påbörjat'}
+            </div>
+
           </div>
 
           {/* Brief */}
@@ -1422,7 +1442,7 @@ function CustomerWorkspacePageContent() {
                     onChange={(val) => setBrief({ ...brief, tone: val })}
                     onSave={(val) => handleSaveBrief('tone', val)}
                     rows={2}
-                    placeholder="Vem är kunden? Vilken röst ska vi ha?"
+                    placeholder='T.ex. "Humor, relatable, livsstilsinspirerat — inte för säljigt"'
                   />
                 </div>
                 <div>
@@ -1434,7 +1454,7 @@ function CustomerWorkspacePageContent() {
                     onChange={(val) => setBrief({ ...brief, constraints: val })}
                     onSave={(val) => handleSaveBrief('constraints', val)}
                     rows={2}
-                    placeholder="Vad ska alltid finnas med i innehållet?"
+                    placeholder='T.ex. "Alltid produktplacering, aldrig pris i bild"'
                   />
                 </div>
                 <div>
@@ -1446,14 +1466,38 @@ function CustomerWorkspacePageContent() {
                     onChange={(val) => setBrief({ ...brief, current_focus: val })}
                     onSave={(val) => handleSaveBrief('current_focus', val)}
                     rows={2}
-                    placeholder="Strategisk prioritet?"
+                    placeholder='T.ex. "Sommarsäsong — lyfta friluftslinjen"'
                   />
                 </div>
               </div>
             ) : (
               <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, lineHeight: 1.6 }}>
                 {!brief.tone && !brief.constraints && !brief.current_focus ? (
-                  <em>Ingen brief ifylld än</em>
+                  <>
+                    <em>Ingen brief ifylld än</em>
+                    {gamePlanHtml.length > 200 && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ marginBottom: 6, fontSize: 11, color: LeTrendColors.textMuted, lineHeight: 1.5 }}>
+                          Du har ett Game Plan — fyll i kundbriefen för bättre konceptpassning.
+                        </div>
+                        <button
+                          onClick={() => setEditingBrief(true)}
+                          style={{
+                            background: 'none',
+                            border: `1px solid ${LeTrendColors.brownLight}`,
+                            borderRadius: LeTrendRadius.md,
+                            color: LeTrendColors.brownLight,
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: '4px 10px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Fyll i brief
+                        </button>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <>
                     {brief.tone && <div style={{ marginBottom: 8 }}><strong>Känsla och ton:</strong> {brief.tone}</div>}
@@ -1822,12 +1866,16 @@ function CustomerWorkspacePageContent() {
         onClose={() => { setShowAddConceptPanel(false); setAddConceptSearch(''); }}
         title="Lägg till koncept"
       >
-        {(brief.tone || brief.current_focus) && (
-          <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: LeTrendRadius.md, background: LeTrendColors.surface, border: `1px solid ${LeTrendColors.border}`, fontSize: 12, color: LeTrendColors.textSecondary, lineHeight: 1.5 }}>
-            <strong style={{ color: LeTrendColors.brownDark }}>Kundbrief:</strong>{' '}
-            {[brief.tone, brief.current_focus].filter(Boolean).join(' · ')}
-          </div>
-        )}
+        <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: LeTrendRadius.md, background: LeTrendColors.surface, border: `1px solid ${LeTrendColors.border}`, fontSize: 12, lineHeight: 1.5 }}>
+          {(brief.tone || brief.current_focus) ? (
+            <span style={{ color: LeTrendColors.textSecondary }}>
+              <strong style={{ color: LeTrendColors.brownDark }}>Kundbrief:</strong>{' '}
+              {[brief.tone, brief.current_focus].filter(Boolean).join(' · ')}
+            </span>
+          ) : (
+            <em style={{ color: LeTrendColors.textMuted }}>Brief saknas — fyll i kundbriefen i sidopanelen för bättre konceptpassning.</em>
+          )}
+        </div>
         <input
           type="text"
           value={addConceptSearch}
@@ -2313,7 +2361,12 @@ function GamePlanSection({
           )}
           {!editingGamePlan && (
             <button
-              onClick={() => setEditingGamePlan(true)}
+              onClick={() => {
+                if (!gamePlanHtml.trim()) {
+                  setGamePlanHtml(GAME_PLAN_STARTER_TEMPLATE);
+                }
+                setEditingGamePlan(true);
+              }}
               style={{
                 padding: '6px 12px',
                 background: LeTrendColors.brownLight,
@@ -2325,7 +2378,7 @@ function GamePlanSection({
                 cursor: 'pointer'
               }}
             >
-              Redigera
+              {gamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
             </button>
           )}
         </div>
@@ -2482,7 +2535,7 @@ function GamePlanSection({
                   lineHeight: 1.6,
                 }}
               >
-                Ingen Game Plan sparad än. Nästa steg är att skriva den strategiska planen och spara den innan kunden ska få någon ny riktning.
+                Ingen Game Plan skriven än. Klicka "Starta Game Plan" ovan — du får en mall med Kundprofil, Ton, Begränsningar och Fokus att fylla i direkt.
               </div>
             )}
           </div>
@@ -2696,12 +2749,16 @@ function KonceptSection({
         Varje rad är ett kunduppdrag i CM-flödet, inte bara ett bibliotekskoncept. Du redigerar kundens kopia, ser om den är delad eller placerad, och kan avgöra nästa steg direkt här.
       </div>
 
-      {(brief.tone || brief.current_focus) && (
-        <div style={{ marginBottom: 16, fontSize: 12, color: LeTrendColors.textSecondary, lineHeight: 1.5 }}>
-          <strong style={{ color: LeTrendColors.brownDark }}>Kundbrief:</strong>{' '}
-          {[brief.tone, brief.current_focus].filter(Boolean).join(' · ')}
-        </div>
-      )}
+      <div style={{ marginBottom: 16, fontSize: 12, lineHeight: 1.5 }}>
+        {(brief.tone || brief.current_focus) ? (
+          <span style={{ color: LeTrendColors.textSecondary }}>
+            <strong style={{ color: LeTrendColors.brownDark }}>Kundbrief:</strong>{' '}
+            {[brief.tone, brief.current_focus].filter(Boolean).join(' · ')}
+          </span>
+        ) : (
+          <em style={{ color: LeTrendColors.textMuted }}>Brief saknas — fyll i kundbriefen i sidopanelen för bättre konceptpassning.</em>
+        )}
+      </div>
 
       {concepts.length === 0 ? (
         <div style={{
@@ -5881,4 +5938,31 @@ function KommunikationSection({
 
     </div>
   );
+}
+
+// Game Plan starter template — pre-fills the editor when a CM opens an empty GP for the first time.
+// The four sections mirror the brief fields (tone → constraints → current_focus) plus a brand overview.
+// Cancel discards it; Save persists it. CMs can freely edit or delete any section.
+const GAME_PLAN_STARTER_TEMPLATE = [
+  '<h3>Kundprofil</h3>',
+  '<p>[Beskriv kunden, deras nisch, målgrupp och plattformshistorik på TikTok.]</p>',
+  '<h3>Ton och röst</h3>',
+  '<p>[Vilken känsla ska innehållet ha? Vad ska det INTE vara? T.ex. "Humor, relatable — inte för säljigt."]</p>',
+  '<h3>Begränsningar</h3>',
+  '<p>[Vad ska alltid eller aldrig finnas med? T.ex. "Alltid produktplacering, aldrig pris i bild."]</p>',
+  '<h3>Fokus just nu</h3>',
+  '<p>[Vad är den strategiska prioriteten den här perioden? T.ex. "Sommarsäsong — lyfta friluftslinjen."]</p>',
+].join('');
+
+const MONTHS_SV_WS = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+function formatLastEmailSent(isoString: string | undefined): string {
+  if (!isoString) return 'Ingen mailhistorik';
+  const sent = new Date(isoString);
+  const now = new Date();
+  const daysDiff = Math.floor((now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysDiff === 0) return 'Senaste mail: idag';
+  if (daysDiff === 1) return 'Senaste mail: igår';
+  if (daysDiff < 14) return `Senaste mail: ${daysDiff} dagar sedan`;
+  return `Senaste mail: ${sent.getDate()} ${MONTHS_SV_WS[sent.getMonth()]}`;
 }

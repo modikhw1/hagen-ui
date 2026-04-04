@@ -51,6 +51,8 @@ interface InviteFormState {
   discount_duration_months: number;
   discount_start_date: string;
   discount_end_date: string;
+  brief_tone: string;
+  brief_focus: string;
 }
 
 interface ContractEditState {
@@ -116,6 +118,8 @@ const buildDefaultInviteForm = (): InviteFormState => ({
   discount_duration_months: 1,
   discount_start_date: todayYmd(),
   discount_end_date: '',
+  brief_tone: '',
+  brief_focus: '',
 });
 
 const buildContractEditForm = (customer: CustomerProfile): ContractEditState => ({
@@ -455,10 +459,14 @@ export default function AdminDashboard() {
     }
     setInviteLoading(true);
     try {
+      const briefPayload = (inviteForm.brief_tone.trim() || inviteForm.brief_focus.trim())
+        ? { tone: inviteForm.brief_tone.trim(), constraints: '', current_focus: inviteForm.brief_focus.trim() }
+        : undefined;
       const payload = {
         ...inviteForm,
         monthly_price: inviteForm.pricing_status === 'fixed' ? inviteForm.monthly_price : 0,
         discount_end_date: inviteForm.discount_end_date || null,
+        brief: briefPayload,
       };
 
       const createResponse = await fetch('/api/admin/customers', {
@@ -838,6 +846,29 @@ export default function AdminDashboard() {
                   <option value="fixed">Fast pris</option>
                   <option value="unknown">Pris ej satt ännu</option>
                 </select>
+              </div>
+            </div>
+
+            {/* Brief pre-fill (optional) */}
+            <div style={{ marginBottom: '16px', padding: '12px', borderRadius: LeTrendRadius.md, border: `1px solid ${LeTrendColors.border}`, background: LeTrendColors.surface }}>
+              <div style={{ fontSize: '12px', fontWeight: 600, color: LeTrendColors.textMuted, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Brief — valfri</div>
+              <div style={{ marginBottom: '10px' }}>
+                <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: LeTrendColors.textSecondary }}>Ton</label>
+                <input
+                  value={inviteForm.brief_tone}
+                  onChange={e => setInviteForm({ ...inviteForm, brief_tone: e.target.value })}
+                  placeholder='T.ex. "Humor, relatable, livsstilsinspirerat — inte för säljigt"'
+                  style={{ width: '100%', padding: '10px', borderRadius: LeTrendRadius.md, border: `1px solid ${LeTrendColors.border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', marginBottom: '4px', color: LeTrendColors.textSecondary }}>Fokus just nu</label>
+                <input
+                  value={inviteForm.brief_focus}
+                  onChange={e => setInviteForm({ ...inviteForm, brief_focus: e.target.value })}
+                  placeholder='T.ex. "Sommarsäsong — lyfta friluftslinjen"'
+                  style={{ width: '100%', padding: '10px', borderRadius: LeTrendRadius.md, border: `1px solid ${LeTrendColors.border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
+                />
               </div>
             </div>
 
