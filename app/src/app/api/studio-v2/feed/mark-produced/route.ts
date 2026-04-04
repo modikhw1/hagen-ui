@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
-import { serializeCustomerConceptAssignmentStatus } from '@/lib/customer-concept-lifecycle';
+import { buildMarkProducedPayload } from '@/lib/customer-concept-lifecycle';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
 
@@ -19,18 +19,41 @@ export const POST = withAuth(async (request) => {
     return NextResponse.json({ error: 'customer_id is required' }, { status: 400 });
   }
 
+  // result boundary write: sets produced/published timestamps, TikTok URL,
+  // and clears placement (feed_order: null — removes concept from active plan)
   const { data, error } = await supabase
     .from('customer_concepts')
-    .update({
-      status: serializeCustomerConceptAssignmentStatus('produced'),
-      produced_at: now,
-      published_at: body?.tiktok_url ? now : null,
-      tiktok_url: body?.tiktok_url || null,
-      feed_order: null,
-    })
+    .update(buildMarkProducedPayload({ tiktok_url: body?.tiktok_url, now }))
     .eq('id', conceptId)
     .eq('customer_profile_id', customerId)
-    .select()
+    .select(`
+      id,
+      customer_profile_id,
+      customer_id,
+      concept_id,
+      status,
+      content_overrides,
+      cm_id,
+      cm_note,
+      match_percentage,
+      feed_order,
+      tags,
+      collection_id,
+      added_at,
+      sent_at,
+      produced_at,
+      planned_publish_at,
+      content_loaded_at,
+      content_loaded_seen_at,
+      published_at,
+      tiktok_url,
+      tiktok_thumbnail_url,
+      tiktok_views,
+      tiktok_likes,
+      tiktok_comments,
+      tiktok_watch_time_seconds,
+      tiktok_last_synced_at
+    `)
     .maybeSingle();
 
   if (error) {

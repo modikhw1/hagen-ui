@@ -23,6 +23,12 @@ interface CustomerProfile {
 
 type CustomerStatusFilter = 'all' | CustomerProfile['status'];
 
+interface ConceptStats {
+  draft: number;
+  sent: number;
+  produced: number;
+}
+
 const CUSTOMER_STATUS_FILTERS: CustomerStatusFilter[] = [
   'all',
   'active',
@@ -34,12 +40,16 @@ const CUSTOMER_STATUS_FILTERS: CustomerStatusFilter[] = [
 
 export default function StudioCustomersPage() {
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
+  const [conceptStats, setConceptStats] = useState<Record<string, ConceptStats>>({});
+  const [lastEmailDates, setLastEmailDates] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CustomerStatusFilter>('all');
   const [cmFilter, setCmFilter] = useState<string>('all');
 
   useEffect(() => {
     void fetchCustomers();
+    void fetchConceptStats();
+    void fetchLastEmailDates();
   }, []);
 
   const fetchCustomers = async () => {
@@ -58,10 +68,72 @@ export default function StudioCustomersPage() {
     }
   };
 
-  const filteredCustomers = customers.filter((customer) =>
-    (filter === 'all' || customer.status === filter) &&
-    (cmFilter === 'all' || customer.account_manager === cmFilter)
-  );
+  const fetchConceptStats = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('customer_concepts')
+        .select('customer_profile_id, status')
+        .neq('status', 'archived');
+
+      if (error || !data) return;
+
+      const stats: Record<string, ConceptStats> = {};
+      for (const row of data) {
+        const id = row.customer_profile_id as string;
+        if (!stats[id]) stats[id] = { draft: 0, sent: 0, produced: 0 };
+        const s = row.status as string;
+        if (s === 'draft' || s === 'active') stats[id].draft++;
+        else if (s === 'sent' || s === 'paused') stats[id].sent++;
+        else if (s === 'produced' || s === 'completed') stats[id].produced++;
+      }
+      setConceptStats(stats);
+    } catch (err) {
+      console.error('Error fetching concept stats:', err);
+    }
+  };
+
+  const fetchLastEmailDates = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('email_log')
+        .select('customer_id, sent_at')
+        .not('sent_at', 'is', null);
+
+      if (error || !data) return;
+
+      const dates: Record<string, string> = {};
+      for (const row of data) {
+        const id = row.customer_id as string;
+        const sentAt = row.sent_at as string;
+        if (!dates[id] || sentAt > dates[id]) {
+          dates[id] = sentAt;
+        }
+      }
+      setLastEmailDates(dates);
+    } catch (err) {
+      console.error('Error fetching email dates:', err);
+    }
+  };
+
+  const filteredCustomers = customers
+    .filter((customer) =>
+      (filter === 'all' || customer.status === filter) &&
+      (cmFilter === 'all' || customer.account_manager === cmFilter)
+    )
+    .sort((a, b) => {
+      const sa = conceptStats[a.id] ?? { draft: 0, sent: 0, produced: 0 };
+      const sb = conceptStats[b.id] ?? { draft: 0, sent: 0, produced: 0 };
+      // 1. draft > 0 before all others; within group sort by draft count desc
+      if (sa.draft > 0 && sb.draft === 0) return -1;
+      if (sb.draft > 0 && sa.draft === 0) return 1;
+      if (sa.draft > 0 && sb.draft > 0) return sb.draft - sa.draft;
+      // 2. sent > 0 before remaining; within group sort by sent count desc
+      if (sa.sent > 0 && sb.sent === 0) return -1;
+      if (sb.sent > 0 && sa.sent === 0) return 1;
+      if (sa.sent > 0 && sb.sent > 0) return sb.sent - sa.sent;
+      // 3. stable fallback: business name ascending
+      return a.business_name.localeCompare(b.business_name, 'sv');
+    });
 
   const accountManagers = [
     'all',
@@ -84,7 +156,7 @@ export default function StudioCustomersPage() {
         <div>
           <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#1a1a2e', margin: 0 }}>Kundarbete</h1>
           <p style={{ margin: '8px 0 0', fontSize: '14px', color: '#6b7280', maxWidth: '720px' }}>
-            Oppna ratt kundarbetsyta och hoppa direkt till Game Plan, konceptarbete, feedplan eller kommunikation.
+            Öppna rätt kundarbetsyta och hoppa direkt till Game Plan, konceptarbete, feedplan eller kommunikation.
           </p>
         </div>
 
@@ -138,7 +210,7 @@ export default function StudioCustomersPage() {
       </div>
 
       <div style={{ marginBottom: '24px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '14px', color: '#6b7280', marginRight: '8px' }}>Filtrera pa CM:</span>
+        <span style={{ fontSize: '14px', color: '#6b7280', marginRight: '8px' }}>Filtrera på CM:</span>
         {accountManagers.map((cm) => (
           <button
             key={cm}
@@ -181,7 +253,7 @@ export default function StudioCustomersPage() {
             textTransform: 'uppercase',
           }}
         >
-          <div>Foretag</div>
+          <div>Företag</div>
           <div>Kontakt</div>
           <div>Account Manager</div>
           <div>Status</div>
@@ -195,6 +267,8 @@ export default function StudioCustomersPage() {
         ) : (
           filteredCustomers.map((customer, index) => {
             const statusMeta = getStudioCustomerStatusMeta(customer.status);
+            const stats = conceptStats[customer.id];
+            const lastEmail = lastEmailDates[customer.id];
 
             return (
               <div
@@ -222,6 +296,7 @@ export default function StudioCustomersPage() {
                       {customer.monthly_price > 0 ? `${customer.monthly_price} kr/man` : 'Pris ej satt'}
                     </div>
                   )}
+                  <ConceptStatBadges stats={stats} />
                 </div>
 
                 <div>
@@ -229,6 +304,9 @@ export default function StudioCustomersPage() {
                   {customer.customer_contact_name && (
                     <div style={{ fontSize: '12px', color: '#9ca3af' }}>{customer.customer_contact_name}</div>
                   )}
+                  <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '3px' }}>
+                    {formatLastEmail(lastEmail)}
+                  </div>
                 </div>
 
                 <div style={{ fontSize: '14px', color: '#6b7280' }}>
@@ -264,6 +342,57 @@ export default function StudioCustomersPage() {
       </div>
     </div>
   );
+}
+
+function ConceptStatBadges({ stats }: { stats?: ConceptStats }) {
+  if (!stats) return null;
+  const { draft, sent, produced } = stats;
+  if (draft + sent + produced === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', gap: '5px', marginTop: '5px', flexWrap: 'wrap' }}>
+      {draft > 0 && (
+        <span style={{
+          fontSize: '11px', fontWeight: 600,
+          color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a',
+          borderRadius: '999px', padding: '1px 7px',
+        }}>
+          {draft} utkast
+        </span>
+      )}
+      {sent > 0 && (
+        <span style={{
+          fontSize: '11px', fontWeight: 600,
+          color: '#1e40af', background: '#dbeafe', border: '1px solid #bfdbfe',
+          borderRadius: '999px', padding: '1px 7px',
+        }}>
+          {sent} skickad{sent > 1 ? 'e' : ''}
+        </span>
+      )}
+      {produced > 0 && (
+        <span style={{
+          fontSize: '11px', fontWeight: 600,
+          color: '#166534', background: '#dcfce7', border: '1px solid #bbf7d0',
+          borderRadius: '999px', padding: '1px 7px',
+        }}>
+          {produced} producerad{produced > 1 ? 'e' : ''}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const MONTHS_SV = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+
+function formatLastEmail(isoString: string | undefined): string {
+  if (!isoString) return 'Ingen mailhistorik';
+  const sent = new Date(isoString);
+  const now = new Date();
+  const daysDiff = Math.floor((now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24));
+  if (daysDiff === 0) return 'Senaste mail: idag';
+  if (daysDiff === 1) return 'Senaste mail: igår';
+  if (daysDiff < 14) return `Senaste mail: ${daysDiff} dagar sedan`;
+  return `Senaste mail: ${sent.getDate()} ${MONTHS_SV[sent.getMonth()]}`;
 }
 
 function WorkspaceLink({ href, label }: { href: string; label: string }) {

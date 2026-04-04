@@ -43,7 +43,7 @@ export default async function DemoPage({
   // Fetch feed concepts (all feed_order values, including history)
   const { data: concepts } = await supabase
     .from('customer_concepts')
-    .select('id, custom_script, why_it_fits, cm_note, tags, tiktok_thumbnail_url, tiktok_views, tiktok_likes, feed_order, published_at')
+    .select('id, cm_note, tags, tiktok_thumbnail_url, tiktok_views, tiktok_likes, feed_order, published_at')
     .eq('customer_profile_id', customerId)
     .not('feed_order', 'is', null)
     .order('feed_order', { ascending: false });
@@ -51,8 +51,6 @@ export default async function DemoPage({
   const timelineConcepts: TimelineConcept[] = (concepts ?? []).map(c => ({
     id: String(c.id),
     feed_order: c.feed_order ?? null,
-    custom_script: c.custom_script ?? null,
-    why_it_fits: c.why_it_fits ?? null,
     cm_note: c.cm_note ?? null,
     tags: (c.tags as string[]) ?? [],
     tiktok_thumbnail_url: c.tiktok_thumbnail_url ?? null,

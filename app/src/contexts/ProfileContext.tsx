@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client'
 import demoProfilesData from '@/data/demo-profiles.json'
 import { loadConceptById } from '@/lib/conceptLoader'
 import type { TranslatedConcept } from '@/lib/translator'
+import type { CustomerConceptListItem } from '@/types/customer-concept'
 
 // ============================================
 // TYPES
@@ -44,14 +45,6 @@ const DEFAULT_USER_PROFILE_META = {
   recentHits: [] as { title: string; views: string }[],
 }
 
-// Default concepts for new users (curated selection)
-const DEFAULT_USER_CONCEPTS = [
-  { clipId: 'clip-45435414', matchOverride: 92 },
-  { clipId: 'clip-84559877', matchOverride: 88 },
-  { clipId: 'clip-44893709', matchOverride: 85 },
-  { clipId: 'clip-14943766', matchOverride: 82 },
-]
-
 export interface DemoProfile {
   id: string
   icon: string
@@ -71,9 +64,17 @@ export interface DemoProfile {
   concepts: { clipId: string; matchOverride?: number }[]
 }
 
-export interface ConceptWithMatch {
+export interface DemoConceptWithMatch {
   concept: TranslatedConcept
   matchOverride?: number
+}
+
+export interface DashboardConceptCardViewModel {
+  conceptId: string
+  title: string
+  matchPercent: number | null
+  difficultyLabel: string
+  isNew: boolean
 }
 
 export interface ProfileMeta {
@@ -108,8 +109,9 @@ interface ProfileContextType {
   activeProfileMeta: ProfileMeta
 
   // Concepts for active profile
-  concepts: ConceptWithMatch[]
-  newConcepts: ConceptWithMatch[]
+  demoConcepts: DemoConceptWithMatch[]
+  customerConceptCards: DashboardConceptCardViewModel[]
+  newCustomerConceptCards: DashboardConceptCardViewModel[]
 
   // CRUD operations (real profiles only)
   updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>
@@ -129,9 +131,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [isDemo, setIsDemo] = useState(false)
   const [activeDemoIndex, setActiveDemoIndex] = useState(0)
 
-  // Concepts fetched from database (TranslatedConcept[] for logged-in customers)
-  const [userConcepts, setUserConcepts] = useState<TranslatedConcept[]>([])
-  const [clipsLoading, setClipsLoading] = useState(false)
+  // Concepts fetched from database for logged-in customers
+  const [userConcepts, setUserConcepts] = useState<CustomerConceptListItem[]>([])
 
   // Load demo profiles from JSON
   const demoProfiles = demoProfilesData.profiles as DemoProfile[]
@@ -148,7 +149,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       // Logged in user takes priority - clear demo mode
       if (user) {
         sessionStorage.removeItem('demo-mode')
-        setIsDemo(false)
+        window.setTimeout(() => setIsDemo(false), 0)
         return
       }
 
@@ -156,7 +157,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       const storedDemo = sessionStorage.getItem('demo-mode') === 'true'
       if (legacyDemoRoute || urlDemo || storedDemo) {
         sessionStorage.setItem('demo-mode', 'true')
-        setIsDemo(true)
+        window.setTimeout(() => setIsDemo(true), 0)
       }
     }
   }, [user])
@@ -178,7 +179,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      setClipsLoading(true)
       try {
         const res = await fetch('/api/customer/concepts')
         if (!res.ok) {
@@ -186,13 +186,11 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
           setUserConcepts([])
           return
         }
-        const json = await res.json() as { concepts: TranslatedConcept[] }
+        const json = await res.json() as { concepts: CustomerConceptListItem[] }
         setUserConcepts(json.concepts ?? [])
       } catch (err) {
         console.error('Error fetching customer concepts:', err)
         setUserConcepts([])
-      } finally {
-        setClipsLoading(false)
       }
     }
 
@@ -237,17 +235,27 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       }
 
   // Concepts for active profile:
-  // - Demo: load from JSON by clipId
-  // - Logged-in customer: use TranslatedConcept[] returned by API (includes CM customizations)
-  const concepts: ConceptWithMatch[] = isDemo
-    ? activeDemoProfile.concepts.reduce<ConceptWithMatch[]>((acc, c) => {
+  // - Demo: keep raw TranslatedConcept objects local to demo path
+  // - Logged-in customer: normalize into an explicit dashboard card shape
+  const demoConcepts: DemoConceptWithMatch[] = isDemo
+    ? activeDemoProfile.concepts.reduce<DemoConceptWithMatch[]>((acc, c) => {
         const concept = loadConceptById(c.clipId)
         if (concept) acc.push({ concept, matchOverride: c.matchOverride })
         return acc
       }, [])
-    : userConcepts.map((c) => ({ concept: c, matchOverride: c.matchPercentage }))
+    : []
 
-  const newConcepts = concepts.filter(c => c.concept.isNew)
+  const customerConceptCards = isDemo
+    ? []
+    : userConcepts.map((concept) => ({
+        conceptId: concept.assignment.id,
+        title: concept.metadata.title,
+        matchPercent: concept.assignment.match_percentage ?? null,
+        difficultyLabel: concept.difficulty_label,
+        isNew: concept.is_new,
+      }))
+
+  const newCustomerConceptCards = customerConceptCards.filter((concept) => concept.isNew)
 
   // Update profile (optimistic + sync)
   const updateProfile = useCallback(async (updates: Partial<Profile>): Promise<{ error: Error | null }> => {
@@ -294,8 +302,9 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
         activeDemoProfile,
         activeDisplayName,
         activeProfileMeta,
-        concepts,
-        newConcepts,
+        demoConcepts,
+        customerConceptCards,
+        newCustomerConceptCards,
         updateProfile,
         refreshProfile,
       }}

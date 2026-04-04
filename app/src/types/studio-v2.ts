@@ -6,7 +6,10 @@
  */
 
 import type { TranslatedConcept } from '@/lib/conceptLoader';
-import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle';
+import type {
+  CustomerConceptAssignmentStatus,
+  CustomerConceptPlacementBucket,
+} from '@/types/customer-lifecycle';
 
 // =====================================================
 // Concept Content Overrides
@@ -31,15 +34,63 @@ export interface ConceptContentOverrides {
 // Database Tables
 // =====================================================
 
+export type CustomerConceptRowKind = 'assignment' | 'imported_history';
+
+export interface CustomerConceptAssignmentBoundary {
+  customer_concept_id: string;
+  customer_id: string;
+  cm_id: string | null;
+  source_concept_id: string | null;
+  has_source_concept: boolean;
+  status: CustomerConceptAssignmentStatus;
+  added_at: string | null;
+}
+
+export interface CustomerConceptContentBoundary {
+  custom_script: string | null;
+  why_it_fits: string | null;
+  filming_instructions: string | null;
+  content_overrides: ConceptContentOverrides | null;
+}
+
+export interface CustomerConceptPlacementBoundary {
+  feed_order: number | null;
+  bucket: CustomerConceptPlacementBucket | null;
+}
+
+export interface CustomerConceptResultBoundary {
+  sent_at: string | null;
+  produced_at: string | null;
+  planned_publish_at: string | null;
+  content_loaded_at: string | null;
+  content_loaded_seen_at: string | null;
+  published_at: string | null;
+  tiktok_url: string | null;
+  tiktok_thumbnail_url: string | null;
+  tiktok_views: number | null;
+  tiktok_likes: number | null;
+  tiktok_comments: number | null;
+  tiktok_watch_time_seconds: number | null;
+  tiktok_last_synced_at: string | null;
+}
+
+export interface CustomerConceptMarkerBoundary {
+  tags: string[];
+  collection_id: string | null;
+  assignment_note: string | null;
+  shared_at: string | null;
+}
+
 /**
  * customer_concepts table
- * Normalized representation of concepts assigned to customers
+ * App-level normalized representation of an assignment row or imported-history row
  */
-export interface CustomerConcept {
+interface CustomerConceptBase {
   id: string;
   customer_id: string;
-  concept_id: string;
+  concept_id: string | null;
   cm_id: string | null;
+  row_kind: CustomerConceptRowKind;
 
   // Assignment workflow
   status: CustomerConceptAssignmentStatus;
@@ -59,7 +110,6 @@ export interface CustomerConcept {
 
   // Feed planner
   feed_order: number | null;  // 0-centered: >0=future, 0=now, <0=history
-  feed_slot: number | null;   // @deprecated - kept for backwards compatibility
   tags: string[];             // Array of tag names
   collection_id: string | null;
   cm_note: string | null;
@@ -72,7 +122,33 @@ export interface CustomerConcept {
   content_loaded_at: string | null;
   content_loaded_seen_at: string | null;
   published_at: string | null;
+
+  assignment: CustomerConceptAssignmentBoundary;
+  content: CustomerConceptContentBoundary;
+  placement: CustomerConceptPlacementBoundary;
+  result: CustomerConceptResultBoundary;
+  markers: CustomerConceptMarkerBoundary;
 }
+
+export interface AssignedCustomerConcept extends CustomerConceptBase {
+  row_kind: 'assignment';
+  concept_id: string;
+  assignment: CustomerConceptAssignmentBoundary & {
+    source_concept_id: string;
+    has_source_concept: true;
+  };
+}
+
+export interface ImportedHistoryCustomerConcept extends CustomerConceptBase {
+  row_kind: 'imported_history';
+  concept_id: null;
+  assignment: CustomerConceptAssignmentBoundary & {
+    source_concept_id: null;
+    has_source_concept: false;
+  };
+}
+
+export type CustomerConcept = AssignedCustomerConcept | ImportedHistoryCustomerConcept;
 
 /**
  * customer_notes table
@@ -319,7 +395,6 @@ export interface UpdateConceptRequest {
   tiktok_last_synced_at?: string | null;
   status?: CustomerConceptAssignmentStatus;
   feed_order?: number | null;
-  feed_slot?: number | null;
   tags?: string[];
   collection_id?: string | null;
   cm_note?: string | null;
@@ -358,21 +433,6 @@ export interface UpdateBriefRequest {
 // =====================================================
 
 /**
- * Old customer_profiles.concepts JSON structure
- */
-export interface OldCustomerConcept {
-  concept_id: string;
-  added_at: string;
-  match_percentage: number;
-  notes?: string;
-  status: 'active' | 'paused' | 'completed';
-  custom_headline?: string;
-  custom_why_it_works?: string;
-  custom_instructions?: string;
-  custom_target_audience?: string;
-}
-
-/**
  * Status mapping from old to new system
  */
 export const StatusMapping: Record<string, CustomerConceptAssignmentStatus> = {
@@ -393,8 +453,8 @@ export interface GridConfig {
 
 export const DEFAULT_GRID_CONFIG: GridConfig = {
   columns: 3,
-  rows: 2,
-  currentSlotIndex: 3,
+  rows: 3,
+  currentSlotIndex: 2,
 };
 
 export interface CmTag {

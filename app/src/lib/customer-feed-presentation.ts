@@ -15,13 +15,13 @@ export const CUSTOMER_FEED_STATUS_STYLES: Record<CustomerFeedStatus, FeedStatusS
 
 export function getCustomerFeedMetaLabel(slot: Pick<
   CustomerFeedSlot,
-  'bucket' | 'publishedAt' | 'producedAt' | 'sharedAt'
+  'placement' | 'result'
 >): string {
-  if (slot.publishedAt) return `Publicerad ${formatLifecycleDate(slot.publishedAt)}`;
-  if (slot.producedAt) return `Producerad ${formatLifecycleDate(slot.producedAt)}`;
-  if (slot.sharedAt) return `Delad ${formatLifecycleDate(slot.sharedAt)}`;
+  if (slot.result.publishedAt) return `Publicerad ${formatLifecycleDate(slot.result.publishedAt)}`;
+  if (slot.result.producedAt) return `Producerad ${formatLifecycleDate(slot.result.producedAt)}`;
+  if (slot.result.sharedAt) return `Delad ${formatLifecycleDate(slot.result.sharedAt)}`;
 
-  return getCustomerConceptPlacementBucketLabel(slot.bucket, 'customer') ?? 'Planerad';
+  return getCustomerConceptPlacementBucketLabel(slot.placement.bucket, 'customer') ?? 'Planerad';
 }
 
 export function getCustomerOriginalReferenceLabel(): string {

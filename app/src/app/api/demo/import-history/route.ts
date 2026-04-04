@@ -83,10 +83,9 @@ export const POST = withAuth(async (request: NextRequest) => {
     tiktok_views: clip.tiktok_views ?? null,
     tiktok_likes: clip.tiktok_likes ?? null,
     tiktok_comments: clip.tiktok_comments ?? null,
-    custom_script: clip.description ?? null,
     published_at: clip.published_at ?? null,
     tags: [],
-    content_overrides: {},
+    content_overrides: clip.description ? { script: clip.description } : {},
   }));
 
   const { data, error } = await supabase

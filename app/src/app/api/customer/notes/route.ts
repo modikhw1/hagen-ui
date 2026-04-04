@@ -22,14 +22,6 @@ type CustomerNoteRow = {
 type ConceptLookupRow = {
   id: string;
   concept_id: string;
-  custom_headline: string | null;
-  custom_description: string | null;
-  custom_script: string | null;
-  custom_why_it_works: string | null;
-  custom_instructions: string | null;
-  custom_target_audience: string | null;
-  why_it_fits: string | null;
-  filming_instructions: string | null;
   content_overrides: Record<string, unknown> | null;
   concepts:
     | {
@@ -96,14 +88,6 @@ export const GET = withAuth(async (request: NextRequest, user) => {
       .select(`
         id,
         concept_id,
-        custom_headline,
-        custom_description,
-        custom_script,
-        custom_why_it_works,
-        custom_instructions,
-        custom_target_audience,
-        why_it_fits,
-        filming_instructions,
         content_overrides,
         concepts (
           backend_data,

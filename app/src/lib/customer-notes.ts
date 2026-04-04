@@ -1,24 +1,8 @@
 import { normalizeHref } from '@/components/gameplan-editor/utils/link-helpers';
 import { sanitizeRichTextHtml } from '@/components/gameplan-editor/utils/sanitize';
+import type { CustomerNoteAttachment, CustomerNoteReference, CustomerNoteType } from '@/types/customer-notes';
 
-export type CustomerNoteType = 'update' | 'reference' | 'feedback' | 'milestone';
-
-export interface CustomerNoteReference {
-  kind: string;
-  label?: string;
-  url?: string;
-  platform?: string;
-  customer_concept_id?: string;
-}
-
-export interface CustomerNoteAttachment {
-  kind: string;
-  url?: string;
-  caption?: string;
-  storage_path?: string;
-  file_name?: string;
-  mime_type?: string;
-}
+export type { CustomerNoteType, CustomerNoteReference, CustomerNoteAttachment };
 
 const NOTE_TYPES: CustomerNoteType[] = ['update', 'reference', 'feedback', 'milestone'];
 

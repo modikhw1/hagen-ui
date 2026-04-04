@@ -3,7 +3,12 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { useDashboardData, DemoProfile, ConceptWithMatch } from '@/hooks/useDashboardData'
+import {
+  useDashboardData,
+  DashboardConceptCardViewModel,
+  DemoConceptWithMatch,
+  DemoProfile,
+} from '@/hooks/useDashboardData'
 import { useAuth } from '@/contexts/AuthContext'
 import { display } from '@/lib/display'
 import type { TranslatedConcept } from '@/lib/translator'
@@ -88,19 +93,18 @@ function CategoryPicker({
 }
 
 function ConceptCard({
-  concept,
+  title,
   isNew,
-  matchOverride,
+  matchPercent,
+  difficultyLabel,
   onClick
 }: {
-  concept: TranslatedConcept
+  title: string
   isNew?: boolean
-  matchOverride?: number
+  matchPercent?: number | null
+  difficultyLabel: string
   onClick: () => void
 }) {
-  const matchPercent = matchOverride ?? concept.matchPercentage
-  const headline = concept.headline_sv || concept.headline
-
   return (
     <button
       onClick={onClick}
@@ -145,16 +149,36 @@ function ConceptCard({
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
           }}>
-            {headline}
+            {title}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <span style={tagStyle}>{matchPercent}% match</span>
-            <span style={tagStyle}>{display.difficulty(concept.difficulty).label}</span>
+            <span style={tagStyle}>{difficultyLabel}</span>
           </div>
         </div>
       </div>
     </button>
   )
+}
+
+function toDemoConceptCardViewModel(entry: DemoConceptWithMatch): DashboardConceptCardViewModel {
+  return {
+    conceptId: entry.concept.id,
+    title: entry.concept.headline_sv || entry.concept.headline,
+    matchPercent: entry.matchOverride ?? entry.concept.matchPercentage,
+    difficultyLabel: display.difficulty(entry.concept.difficulty).label,
+    isNew: entry.concept.isNew ?? false,
+  }
+}
+
+function toDemoLibraryCardViewModel(concept: TranslatedConcept): DashboardConceptCardViewModel {
+  return {
+    conceptId: concept.id,
+    title: concept.headline_sv || concept.headline,
+    matchPercent: concept.matchPercentage,
+    difficultyLabel: display.difficulty(concept.difficulty).label,
+    isNew: concept.isNew ?? false,
+  }
 }
 
 function LoadingScreen() {
@@ -176,22 +200,34 @@ function DashboardMobileContent() {
     user,
     loading,
     isDemo,
-    activeDisplayName,
     activeProfileMeta,
     categories,
     categoryIndex,
     setCategoryIndex,
     currentCategory,
     allConcepts,
-    conceptsForCategory,
-    newConcepts,
-    olderConcepts,
+    demoConceptsForCategory,
+    customerConceptCards,
+    newCustomerConceptCards,
+    olderCustomerConceptCards,
     handleConceptClick,
   } = useDashboardData()
   const { signOut } = useAuth()
 
   const [showPicker, setShowPicker] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+
+  const demoNewConceptCards = demoConceptsForCategory
+    .filter((entry) => entry.concept.isNew)
+    .map(toDemoConceptCardViewModel)
+  const demoOlderConceptCards = demoConceptsForCategory
+    .filter((entry) => !entry.concept.isNew)
+    .map(toDemoConceptCardViewModel)
+
+  const visibleNewConceptCards = isDemo ? demoNewConceptCards : newCustomerConceptCards
+  const visibleOlderConceptCards = isDemo ? demoOlderConceptCards : olderCustomerConceptCards
+  const hasVisibleConceptCards =
+    isDemo ? demoConceptsForCategory.length > 0 : customerConceptCards.length > 0
 
   const handleLogout = async () => {
     if (typeof window !== 'undefined') {
@@ -363,52 +399,59 @@ function DashboardMobileContent() {
 
         <div style={{ padding: 24 }}>
           {/* New concepts */}
-          {newConcepts.length > 0 && (
+          {visibleNewConceptCards.length > 0 && (
             <>
               <p style={sectionLabel}>Nytt denna vecka</p>
-              {newConcepts.map(({ concept, matchOverride }) => (
+              {visibleNewConceptCards.map((concept) => (
                 <ConceptCard
-                  key={concept.id}
-                  concept={concept}
-                  isNew={true}
-                  matchOverride={matchOverride}
-                  onClick={() => handleConceptClick(concept.id, true)}
+                  key={concept.conceptId}
+                  title={concept.title}
+                  isNew={concept.isNew}
+                  matchPercent={concept.matchPercent}
+                  difficultyLabel={concept.difficultyLabel}
+                  onClick={() => handleConceptClick(concept.conceptId, true)}
                 />
               ))}
             </>
           )}
 
           {/* All/older concepts */}
-          {olderConcepts.length > 0 && (
+          {visibleOlderConceptCards.length > 0 && (
             <>
-              <p style={{ ...sectionLabel, marginTop: newConcepts.length > 0 ? 28 : 0 }}>
-                {newConcepts.length > 0 ? 'Tidigare' : 'Koncept för dig'}
+              <p style={{ ...sectionLabel, marginTop: visibleNewConceptCards.length > 0 ? 28 : 0 }}>
+                {visibleNewConceptCards.length > 0 ? 'Tidigare' : 'Koncept för dig'}
               </p>
-              {olderConcepts.map(({ concept, matchOverride }) => (
+              {visibleOlderConceptCards.map((concept) => (
                 <ConceptCard
-                  key={concept.id}
-                  concept={concept}
-                  isNew={false}
-                  matchOverride={matchOverride}
-                  onClick={() => handleConceptClick(concept.id, true)}
+                  key={concept.conceptId}
+                  title={concept.title}
+                  isNew={concept.isNew}
+                  matchPercent={concept.matchPercent}
+                  difficultyLabel={concept.difficultyLabel}
+                  onClick={() => handleConceptClick(concept.conceptId, true)}
                 />
               ))}
             </>
           )}
 
           {/* Empty state: demo shows sample concepts, logged-in shows message */}
-          {conceptsForCategory.length === 0 && (
+          {!hasVisibleConceptCards && (
             isDemo ? (
               <>
                 <p style={sectionLabel}>Alla koncept</p>
-                {allConcepts.slice(0, 6).map((concept) => (
-                  <ConceptCard
-                    key={concept.id}
-                    concept={concept}
-                    isNew={concept.isNew}
-                    onClick={() => handleConceptClick(concept.id, true)}
-                  />
-                ))}
+                {allConcepts.slice(0, 6).map((concept) => {
+                  const demoCard = toDemoLibraryCardViewModel(concept)
+                  return (
+                    <ConceptCard
+                      key={demoCard.conceptId}
+                      title={demoCard.title}
+                      isNew={demoCard.isNew}
+                      matchPercent={demoCard.matchPercent}
+                      difficultyLabel={demoCard.difficultyLabel}
+                      onClick={() => handleConceptClick(demoCard.conceptId, true)}
+                    />
+                  )
+                })}
               </>
             ) : (
               <div style={{ textAlign: 'center', padding: '48px 24px', color: '#9ca3af' }}>

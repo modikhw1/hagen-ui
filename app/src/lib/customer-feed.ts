@@ -4,6 +4,7 @@ import {
   getCustomerFeedStatusLabel,
   normalizeCustomerConceptAssignmentStatus,
 } from '@/lib/customer-concept-lifecycle';
+import { resolveCustomerConceptAssignmentNote } from '@/lib/customer-concept-assignment';
 import { resolveCustomerConceptContentOverrides } from '@/lib/customer-concept-overrides';
 import type { CustomerFeedBucket, CustomerFeedResponse, CustomerFeedSlot } from '@/types/customer-feed';
 
@@ -20,11 +21,6 @@ type RawCustomerFeedRow = {
   id: string;
   concept_id: string | null;
   content_overrides: Record<string, unknown> | null;
-  custom_headline: string | null;
-  custom_description: string | null;
-  custom_script: string | null;
-  custom_why_it_works: string | null;
-  custom_production_notes: string[] | null;
   match_percentage: number | null;
   status: string | null;
   feed_order: number | null;
@@ -32,7 +28,6 @@ type RawCustomerFeedRow = {
   produced_at: string | null;
   published_at: string | null;
   tiktok_url: string | null;
-  notes: string | null;
   cm_note: string | null;
   concepts: FeedConceptRelation;
 };
@@ -59,13 +54,13 @@ export function buildCustomerFeedResponse(rows: RawCustomerFeedRow[]): CustomerF
 }
 
 export function splitCustomerFeedSlots(slots: CustomerFeedSlot[]) {
-  const current = slots.find((slot) => slot.bucket === 'current') ?? null;
+  const current = slots.find((slot) => slot.placement.bucket === 'current') ?? null;
   const upcoming = slots
-    .filter((slot) => slot.bucket === 'upcoming')
-    .sort((a, b) => a.feedOrder - b.feedOrder);
+    .filter((slot) => slot.placement.bucket === 'upcoming')
+    .sort((a, b) => a.placement.feedOrder - b.placement.feedOrder);
   const history = slots
-    .filter((slot) => slot.bucket === 'history')
-    .sort((a, b) => b.feedOrder - a.feedOrder);
+    .filter((slot) => slot.placement.bucket === 'history')
+    .sort((a, b) => b.placement.feedOrder - a.placement.feedOrder);
 
   return { current, upcoming, history };
 }
@@ -96,7 +91,6 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
     contentOverrides.summary ??
     readString(baseOverrides.description_sv) ??
     readString(backendData.description_sv) ??
-    readString(row.custom_why_it_works) ??
     readString(baseOverrides.whyItWorks_sv) ??
     readString(backendData.whyItWorks_sv);
 
@@ -106,17 +100,21 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
     readString(backendData.script_sv);
 
   const productionNotes = sanitizeProductionNotes(
-    row.custom_production_notes ??
-      readStringArray(row.content_overrides?.production_checklist) ??
+    readStringArray(row.content_overrides?.production_checklist) ??
       readStringArray(row.content_overrides?.productionNotes_sv) ??
       readStringArray(baseOverrides.productionNotes_sv) ??
       readStringArray(backendData.productionNotes_sv)
   );
 
-  const note = sanitizeText(row.cm_note ?? row.notes);
+  const note = sanitizeText(resolveCustomerConceptAssignmentNote(row));
   const title = sanitizeText(rawTitle) ?? FALLBACK_TITLES[bucket];
   const summary = sanitizeText(rawSummary) ?? FALLBACK_SUMMARIES[bucket];
   const hasScript = Boolean(sanitizeText(script));
+  const hasWhyItFits = Boolean(
+    sanitizeText(readString(contentOverrides.why_it_fits as string | null | undefined) ??
+    readString(baseOverrides.whyItWorks_sv) ??
+    readString(backendData.whyItWorks_sv))
+  );
   const status = deriveCustomerFeedStatus({
     rawStatus: row.status,
     feedOrder: row.feed_order,
@@ -128,16 +126,11 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
 
   return {
     assignmentId: row.id,
-    customerConceptId: row.id,
-    sourceConceptId: row.concept_id,
-    conceptId: row.concept_id,
     assignmentStatus: normalizeCustomerConceptAssignmentStatus(row.status),
-    feedOrder: row.feed_order,
-    bucket,
     title,
     summary,
     note,
-    detailHint: buildDetailHint({ bucket, hasScript, productionNotesCount: productionNotes.length, note }),
+    detailHint: buildDetailHint({ bucket, hasScript, productionNotesCount: productionNotes.length, note, hasWhyItFits }),
     status,
     statusLabel: getCustomerFeedStatusLabel(status),
     matchPercentage: typeof row.match_percentage === 'number' ? row.match_percentage : null,
@@ -145,10 +138,17 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
     scriptPreview: toScriptPreview(script),
     productionNotes,
     sourceUrl: readString(backendData.url),
-    tiktokUrl: sanitizeText(row.tiktok_url),
-    sharedAt: row.sent_at,
-    producedAt: row.produced_at,
-    publishedAt: row.published_at,
+    // Boundary-grouped sub-objects
+    placement: {
+      feedOrder: row.feed_order,
+      bucket,
+    },
+    result: {
+      sharedAt: row.sent_at,
+      producedAt: row.produced_at,
+      publishedAt: row.published_at,
+      tiktokUrl: sanitizeText(row.tiktok_url),
+    },
   };
 }
 
@@ -157,6 +157,7 @@ function buildDetailHint(input: {
   hasScript: boolean;
   productionNotesCount: number;
   note: string | null;
+  hasWhyItFits: boolean;
 }): string | null {
   if (input.hasScript && input.productionNotesCount > 0) {
     return 'Manus och inspelningsstöd finns i konceptdetaljen.';
@@ -168,6 +169,10 @@ function buildDetailHint(input: {
 
   if (input.note) {
     return 'Det finns en notering från din content manager.';
+  }
+
+  if (input.hasWhyItFits) {
+    return 'Varför det passar er finns beskrivet i konceptdetaljen.';
   }
 
   if (input.bucket === 'upcoming') {

@@ -218,7 +218,7 @@ function FeedSection({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {slots.map((slot) => (
           <FeedSlotCard
-            key={slot.customerConceptId}
+            key={slot.assignmentId}
             slot={slot}
             variant={variant}
             highlight={highlightCurrent}
@@ -251,8 +251,8 @@ function FeedSlotCard({
     router.push(`${isMobile ? '/m/concept' : '/concept'}/${slot.assignmentId}`);
   };
 
-  const primaryAction = slot.tiktokUrl
-    ? { label: 'Se publicerad video', href: slot.tiktokUrl }
+  const primaryAction = slot.result.tiktokUrl
+    ? { label: 'Se publicerad video', href: slot.result.tiktokUrl }
     : slot.assignmentId
       ? { label: 'Öppna koncept', onClick: handleOpenConcept }
       : slot.sourceUrl
@@ -341,7 +341,7 @@ function FeedSlotCard({
         fontFamily: isMobile ? fontFamily : undefined,
       }}>
         <span>{getDateLabel(slot)}</span>
-        {slot.sourceUrl && !slot.tiktokUrl && <span>{getCustomerOriginalReferenceLabel()}</span>}
+        {slot.sourceUrl && !slot.result.tiktokUrl && <span>{getCustomerOriginalReferenceLabel()}</span>}
         {slot.productionNotes.length > 0 && <span>{slot.productionNotes.length} inspelningspunkter</span>}
       </div>
 
@@ -467,11 +467,11 @@ function DesktopLoadingState() {
 }
 
 function getDateLabel(slot: CustomerFeedSlot): string {
-  if (slot.publishedAt) return `Publicerad ${formatDate(slot.publishedAt)}`;
-  if (slot.producedAt) return `Producerad ${formatDate(slot.producedAt)}`;
-  if (slot.sharedAt) return `Delad ${formatDate(slot.sharedAt)}`;
-  if (slot.bucket === 'current') return 'Nu i din plan';
-  if (slot.bucket === 'upcoming') return 'Kommande i din plan';
+  if (slot.result.publishedAt) return `Publicerad ${formatDate(slot.result.publishedAt)}`;
+  if (slot.result.producedAt) return `Producerad ${formatDate(slot.result.producedAt)}`;
+  if (slot.result.sharedAt) return `Delad ${formatDate(slot.result.sharedAt)}`;
+  if (slot.placement.bucket === 'current') return 'Nu i din plan';
+  if (slot.placement.bucket === 'upcoming') return 'Kommande i din plan';
   return 'Tidigare i din plan';
 }
 

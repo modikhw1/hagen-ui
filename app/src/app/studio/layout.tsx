@@ -311,13 +311,28 @@ function StudioLayoutContent({ children }: StudioLayoutProps) {
             </div>
 
             <div style={studioStyles.workspaceLinks}>
-              {STUDIO_WORKSPACE_SECTIONS.map((section) => (
+              {STUDIO_WORKSPACE_SECTIONS.filter((s) => s.kind === 'primary').map((section) => (
                 <Link
                   key={section.key}
                   href={buildStudioWorkspaceHref(workspaceCustomerId, section.key)}
                   style={{
                     ...studioStyles.navLink,
                     ...(workspaceSection === section.key ? studioStyles.navLinkActive : {}),
+                  }}
+                >
+                  {section.short_label}
+                </Link>
+              ))}
+              <span style={{ opacity: 0.25, alignSelf: 'center', fontSize: '12px', padding: '0 2px' }}>|</span>
+              {STUDIO_WORKSPACE_SECTIONS.filter((s) => s.kind === 'utility').map((section) => (
+                <Link
+                  key={section.key}
+                  href={buildStudioWorkspaceHref(workspaceCustomerId, section.key)}
+                  style={{
+                    ...studioStyles.navLink,
+                    ...(workspaceSection === section.key ? studioStyles.navLinkActive : {}),
+                    opacity: workspaceSection === section.key ? 1 : 0.5,
+                    fontSize: '12px',
                   }}
                 >
                   {section.short_label}

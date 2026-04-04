@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
+import { buildAssignmentInsertPayload } from '@/lib/customer-concept-assignment';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
 
@@ -8,7 +9,34 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from('customer_concepts')
-    .select('*')
+    .select(`
+      id,
+      customer_profile_id,
+      customer_id,
+      concept_id,
+      status,
+      content_overrides,
+      cm_id,
+      cm_note,
+      match_percentage,
+      feed_order,
+      tags,
+      collection_id,
+      added_at,
+      sent_at,
+      produced_at,
+      planned_publish_at,
+      content_loaded_at,
+      content_loaded_seen_at,
+      published_at,
+      tiktok_url,
+      tiktok_thumbnail_url,
+      tiktok_views,
+      tiktok_likes,
+      tiktok_comments,
+      tiktok_watch_time_seconds,
+      tiktok_last_synced_at
+    `)
     .eq('customer_profile_id', customerId)
     .order('added_at', { ascending: false });
 
@@ -58,6 +86,13 @@ export const POST = withAuth(async (request, user, { params }: { params: Promise
     return NextResponse.json({ error: 'Concept not found' }, { status: 404 });
   }
 
+  if (!concept.is_active) {
+    return NextResponse.json(
+      { error: 'Concept is not published. Publish it in the review page before assigning to customers.' },
+      { status: 409 }
+    );
+  }
+
   const { data: existingAssignment, error: existingError } = await supabase
     .from('customer_concepts')
     .select('id')
@@ -81,20 +116,15 @@ export const POST = withAuth(async (request, user, { params }: { params: Promise
     );
   }
 
-  const insertPayload = {
-    customer_profile_id: customerId,
-    customer_id: customerId,
-    concept_id: conceptId,
-    cm_id: user.id,
-    status: 'draft',
-    feed_order: null,
-    tags: [],
-    content_overrides: {},
-  };
-
+  // assignment boundary write: creates a new assignment row with identity
+  // fields only; content/placement/result/markers start empty
   const { data, error } = await supabase
     .from('customer_concepts')
-    .insert(insertPayload)
+    .insert(buildAssignmentInsertPayload({
+      customerId,
+      sourceConceptId: conceptId,
+      cmId: user.id,
+    }))
     .select()
     .single();
 

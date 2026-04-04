@@ -37,21 +37,28 @@ export function normalizeCustomerConceptAssignmentStatus(
 }
 
 export function serializeCustomerConceptAssignmentStatus(
-  value: CustomerConceptAssignmentStatus | null | undefined
-): CustomerConceptRowStatus | null | undefined {
+  value: CustomerConceptRowStatus | null | undefined
+): CustomerConceptAssignmentStatus | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
 
-  switch (value) {
-    case 'draft':
-      return 'active';
-    case 'sent':
-      return 'paused';
+  return normalizeCustomerConceptAssignmentStatus(value) ?? null;
+}
+
+export function getCustomerConceptStatusAfterShare(
+  value: string | null | undefined
+): CustomerConceptAssignmentStatus {
+  const normalized = normalizeCustomerConceptAssignmentStatus(value);
+
+  switch (normalized) {
     case 'produced':
-      return 'completed';
     case 'archived':
+      return normalized;
+    case 'sent':
+      return 'sent';
+    case 'draft':
     default:
-      return value;
+      return 'sent';
   }
 }
 
@@ -87,6 +94,46 @@ export function getCustomerConceptPlacementBucketLabel(
     default:
       return null;
   }
+}
+
+export function getStudioFeedOrderLabel(
+  feedOrder: number | null | undefined
+): string {
+  if (typeof feedOrder !== 'number') {
+    return 'Inte i plan';
+  }
+
+  if (feedOrder === 0) {
+    return 'Nu-slot (0)';
+  }
+
+  if (feedOrder > 0) {
+    return `Kommande slot (+${feedOrder})`;
+  }
+
+  return `Historikslot (${feedOrder})`;
+}
+
+export function getStudioFeedOrderDescription(
+  feedOrder: number | null | undefined
+): string {
+  if (typeof feedOrder !== 'number') {
+    return 'Inte placerad i kundens plan';
+  }
+
+  if (feedOrder === 0) {
+    return 'Det som ska produceras nu';
+  }
+
+  if (feedOrder > 0) {
+    return feedOrder === 1
+      ? 'Nast upp i kundens plan'
+      : `Ligger ${feedOrder} steg fram i kundens plan`;
+  }
+
+  return feedOrder === -1
+    ? 'Senast publicerade historikklipp'
+    : `Historik ${Math.abs(feedOrder)} steg bak`;
 }
 
 export function deriveCustomerFeedStatus(
@@ -179,3 +226,53 @@ export function getCustomerConceptResultLabel(
 }
 
 export const getStudioAssignmentStatusLabel = getCustomerConceptAssignmentLabel;
+
+// ── Boundary-specific write payload builders ───────────────────────────────
+
+/**
+ * Builds the result + placement boundary payload for the mark-produced action.
+ *
+ * Boundary: result (produced/published timestamps, TikTok URL) + placement
+ * (feed_order cleared, removing the concept from the active plan).
+ */
+export function buildMarkProducedPayload(input: {
+  tiktok_url?: string | null;
+  now: string;
+}): {
+  status: CustomerConceptAssignmentStatus;
+  produced_at: string;
+  published_at: string | null;
+  tiktok_url: string | null;
+  feed_order: null;
+} {
+  return {
+    status: 'produced',
+    produced_at: input.now,
+    published_at: input.tiktok_url ? input.now : null,
+    tiktok_url: input.tiktok_url ?? null,
+    feed_order: null,
+  };
+}
+
+/**
+ * Builds the markers boundary payload for an assignment share-marker update.
+ *
+ * Boundary: markers (shared_at / sent_at) + assignment status progression
+ * after a customer email has been sent.
+ */
+export function buildAssignmentShareMarkerPayload(
+  assignment: { status: string | null; sent_at: string | null },
+  now: string
+): {
+  status: CustomerConceptAssignmentStatus | null;
+  sent_at: string;
+  updated_at: string;
+} {
+  return {
+    status: serializeCustomerConceptAssignmentStatus(
+      getCustomerConceptStatusAfterShare(assignment.status)
+    ) ?? null,
+    sent_at: assignment.sent_at ?? now,
+    updated_at: now,
+  };
+}

@@ -5,9 +5,15 @@ import {
   getCustomerConceptResultLabel,
   normalizeCustomerConceptAssignmentStatus,
 } from '@/lib/customer-concept-lifecycle';
+import { resolveCustomerConceptAssignmentNote } from '@/lib/customer-concept-assignment';
 import { resolveCustomerConceptContentOverrides } from '@/lib/customer-concept-overrides';
-import { translateClipToConcept, type BackendClip, type ClipOverride } from '@/lib/translator';
-import type { CustomerConceptDetailResponse } from '@/types/customer-concept';
+import { display } from '@/lib/display';
+import { translateClipToConcept, type BackendClip, type ClipOverride, type TranslatedConcept } from '@/lib/translator';
+import type {
+  CustomerConceptDetailResponse,
+  CustomerConceptListItem,
+  CustomerConceptMetadata,
+} from '@/types/customer-concept';
 
 type FeedConceptRecord = {
   backend_data?: Record<string, unknown> | null;
@@ -18,27 +24,41 @@ type FeedConceptRelation = FeedConceptRecord | FeedConceptRecord[];
 
 export type RawCustomerConceptDetailRow = {
   id: string;
-  concept_id: string;
-  custom_headline: string | null;
-  custom_description: string | null;
-  custom_why_it_works: string | null;
-  custom_instructions: string | null;
-  custom_script: string | null;
-  custom_production_notes: string[] | null;
+  /** Null for imported-history rows (concept_id IS NULL in storage). */
+  concept_id: string | null;
   content_overrides: Record<string, unknown> | null;
-  why_it_fits: string | null;
-  filming_instructions: string | null;
   match_percentage: number | null;
   status: string | null;
   tags: string[] | null;
   cm_note: string | null;
-  notes: string | null;
   tiktok_url: string | null;
   feed_order: number | null;
   added_at: string | null;
   sent_at: string | null;
   produced_at: string | null;
   published_at: string | null;
+  concepts: FeedConceptRelation;
+};
+
+/**
+ * The raw row shape expected by buildCustomerConceptListItem.
+ * Matches what GET /api/customer/concepts selects from customer_concepts.
+ */
+export type RawCustomerConceptListRow = {
+  id: string;
+  /** Null for imported-history rows (concept_id IS NULL in storage). */
+  concept_id: string | null;
+  content_overrides: Record<string, unknown> | null;
+  match_percentage: number | null;
+  status: string | null;
+  tags: string[] | null;
+  cm_note: string | null;
+  feed_order: number | null;
+  added_at: string | null;
+  sent_at: string | null;
+  produced_at: string | null;
+  published_at: string | null;
+  tiktok_url: string | null;
   concepts: FeedConceptRelation;
 };
 
@@ -49,7 +69,7 @@ export function buildCustomerConceptDetailResponse(
   const rawBackendData = (concept?.backend_data ?? {}) as Record<string, unknown>;
   const backendData: BackendClip = {
     ...(rawBackendData as unknown as BackendClip),
-    id: readString(rawBackendData.id) ?? row.concept_id,
+    id: readString(rawBackendData.id) ?? row.concept_id ?? '',
     url: readString(rawBackendData.url) ?? '',
   };
   const baseOverrides = (concept?.overrides ?? {}) as ClipOverride;
@@ -57,75 +77,180 @@ export function buildCustomerConceptDetailResponse(
   const rawContentOverrides = (row.content_overrides ?? {}) as Record<string, unknown>;
   const contentOverrides = resolveCustomerConceptContentOverrides(row);
 
-  const productionChecklist = sanitizeStringArray(
-    row.custom_production_notes ??
-      readStringArray(rawContentOverrides.production_checklist) ??
-      readStringArray(rawContentOverrides.productionNotes_sv) ??
-      translated.productionNotes_sv ??
-      null
-  );
-
-  const whyItFits =
-    sanitizeText(
-      contentOverrides.why_it_fits ??
-        readJoinedStringArray(rawContentOverrides.whyItFits_sv) ??
-        readJoinedStringArray(translated.whyItFits_sv) ??
-        translated.whyItWorks_sv ??
-        translated.whyItFits.join(' ')
-    ) ?? null;
-
-  const filmingGuidance =
-    sanitizeText(contentOverrides.filming_instructions ?? null) ??
-    (productionChecklist.length > 0 ? productionChecklist[0] : null);
   const assignmentStatus = normalizeCustomerConceptAssignmentStatus(row.status);
+  const assignmentNote = sanitizeText(resolveCustomerConceptAssignmentNote(row));
+
+  const placementBucket = getCustomerConceptPlacementBucket(row.feed_order);
+  const placementLabel = getCustomerConceptPlacementLabel(row.feed_order);
+  const resultLabel = getCustomerConceptResultLabel({
+    rawStatus: row.status,
+    producedAt: row.produced_at,
+    publishedAt: row.published_at,
+    publishedClipUrl: row.tiktok_url,
+  });
 
   return {
+    // Assignment identity and lifecycle status
     assignment: {
       id: row.id,
       source_concept_id: row.concept_id,
       concept_id: row.concept_id,
       status: assignmentStatus,
       lifecycle_label: assignmentStatus ? getCustomerConceptAssignmentLabel(assignmentStatus) : null,
-      placement_bucket: getCustomerConceptPlacementBucket(row.feed_order),
-      feed_order: row.feed_order,
-      placement_label: getCustomerConceptPlacementLabel(row.feed_order),
       match_percentage: typeof row.match_percentage === 'number' ? row.match_percentage : null,
-      cm_note: sanitizeText(row.cm_note ?? row.notes),
+      cm_note: assignmentNote,
       added_at: row.added_at,
     },
-    metadata: {
-      title:
-        sanitizeText(
-          contentOverrides.headline ??
-            translated.headline_sv ??
-            translated.headline
-        ) ?? 'Koncept',
-      summary:
-        sanitizeText(
-          contentOverrides.summary ??
-            translated.description_sv
-        ) ?? null,
-      script:
-        sanitizeText(
-          contentOverrides.script ??
-            translated.script_sv
-        ) ?? null,
-      why_it_fits: whyItFits,
-      filming_guidance: filmingGuidance,
-      production_checklist: productionChecklist,
-      tags: sanitizeTags(row.tags ?? readStringArray(contentOverrides.tags) ?? null),
+    // Placement boundary: where the assignment sits in the customer's plan
+    placement: {
+      feed_order: row.feed_order,
+      bucket: placementBucket,
+      placement_label: placementLabel,
     },
+    // Result boundary: production and publication outcome
+    result: {
+      sent_at: row.sent_at,
+      produced_at: row.produced_at,
+      published_at: row.published_at,
+      tiktok_url: row.tiktok_url,
+      result_label: resultLabel,
+    },
+    // Content boundary: adapted text, script, and production guidance
+    metadata: resolveCustomerConceptMetadataSection({
+      contentOverrides,
+      rawContentOverrides,
+      translated,
+      tags: row.tags,
+    }),
+    // Source media references
     media: {
       source_reference_url: sanitizeText(translated.sourceUrl ?? readString(backendData.url)),
       reference_video_gcs_uri: sanitizeText(translated.gcsUri ?? readString(backendData.gcs_uri)),
-      published_clip_url: sanitizeText(row.tiktok_url),
-      result_label: getCustomerConceptResultLabel({
-        rawStatus: row.status,
-        producedAt: row.produced_at,
-        publishedAt: row.published_at,
-        publishedClipUrl: row.tiktok_url,
-      }),
     },
+  };
+}
+
+/**
+ * Builds a single customer concept list item for GET /api/customer/concepts.
+ *
+ * Returns explicit boundary-grouped sections only:
+ * - assignment: identity and lifecycle status
+ * - placement: where the assignment sits in the customer's plan
+ * - result: production and publication outcome
+ * - metadata: adapted content — same shape as CustomerConceptDetailResponse.metadata
+ * - difficulty_label: pre-computed display label
+ * - is_new: whether the concept was recently added to the library
+ */
+export function buildCustomerConceptListItem(
+  row: RawCustomerConceptListRow
+): CustomerConceptListItem {
+  const concept = getConceptRecord(row.concepts);
+  const rawBackendData = (concept?.backend_data ?? {}) as Record<string, unknown>;
+  const backendData: BackendClip = {
+    ...(rawBackendData as unknown as BackendClip),
+    id: readString(rawBackendData.id) ?? row.concept_id ?? '',
+    url: readString(rawBackendData.url) ?? '',
+  };
+  const baseOverrides = (concept?.overrides ?? {}) as ClipOverride;
+  const contentOverrides = resolveCustomerConceptContentOverrides(row);
+  const assignmentStatus = normalizeCustomerConceptAssignmentStatus(row.status);
+  const assignmentNote = sanitizeText(resolveCustomerConceptAssignmentNote(row));
+
+  const translated = translateClipToConcept(backendData, baseOverrides);
+
+  const rawContentOverrides = (row.content_overrides ?? {}) as Record<string, unknown>;
+
+  const placementBucket = getCustomerConceptPlacementBucket(row.feed_order);
+  const placementLabel = getCustomerConceptPlacementLabel(row.feed_order);
+  const resultLabel = getCustomerConceptResultLabel({
+    rawStatus: row.status,
+    producedAt: row.produced_at,
+    publishedAt: row.published_at,
+    publishedClipUrl: row.tiktok_url,
+  });
+
+  return {
+    // Assignment boundary: identity and lifecycle status
+    assignment: {
+      id: row.id,
+      source_concept_id: row.concept_id,
+      concept_id: row.concept_id,
+      status: assignmentStatus,
+      lifecycle_label: assignmentStatus ? getCustomerConceptAssignmentLabel(assignmentStatus) : null,
+      match_percentage: typeof row.match_percentage === 'number' ? row.match_percentage : null,
+      cm_note: assignmentNote,
+      added_at: row.added_at,
+    },
+    // Placement boundary: where this assignment sits in the customer's plan
+    placement: {
+      feed_order: row.feed_order,
+      bucket: placementBucket,
+      placement_label: placementLabel,
+    },
+    // Result boundary: production and publication outcome
+    result: {
+      sent_at: row.sent_at,
+      produced_at: row.produced_at,
+      published_at: row.published_at,
+      tiktok_url: row.tiktok_url,
+      result_label: resultLabel,
+    },
+    difficulty_label: display.difficulty(translated.difficulty).label,
+    // Content boundary: adapted text, script, and production guidance
+    metadata: resolveCustomerConceptMetadataSection({
+      contentOverrides,
+      rawContentOverrides,
+      translated,
+      tags: row.tags,
+    }),
+    is_new: translated.isNew === true,
+  };
+}
+
+type MetadataSectionInput = {
+  contentOverrides: {
+    headline?: string;
+    summary?: string;
+    script?: string;
+    why_it_fits?: string;
+    filming_instructions?: string;
+  };
+  rawContentOverrides: Record<string, unknown>;
+  translated: TranslatedConcept;
+  tags?: string[] | null;
+};
+
+function resolveCustomerConceptMetadataSection(input: MetadataSectionInput): CustomerConceptMetadata {
+  const productionChecklist = sanitizeStringArray(
+    readStringArray(input.rawContentOverrides.production_checklist) ??
+      readStringArray(input.rawContentOverrides.productionNotes_sv) ??
+      (input.translated.productionNotes_sv as string[] | undefined) ??
+      null
+  );
+  const whyItFits =
+    sanitizeText(
+      input.contentOverrides.why_it_fits ??
+        readJoinedStringArray(input.rawContentOverrides.whyItFits_sv) ??
+        readJoinedStringArray(input.translated.whyItFits_sv) ??
+        input.translated.whyItWorks_sv ??
+        (Array.isArray(input.translated.whyItFits) ? input.translated.whyItFits.join(' ') : null)
+    ) ?? null;
+  const filmingGuidance =
+    sanitizeText(input.contentOverrides.filming_instructions ?? null) ??
+    (productionChecklist.length > 0 ? productionChecklist[0] : null);
+  return {
+    title:
+      sanitizeText(
+        input.contentOverrides.headline ??
+          input.translated.headline_sv ??
+          input.translated.headline
+      ) ?? 'Koncept',
+    summary: sanitizeText(input.contentOverrides.summary ?? input.translated.description_sv) ?? null,
+    script: sanitizeText(input.contentOverrides.script ?? input.translated.script_sv) ?? null,
+    why_it_fits: whyItFits,
+    filming_guidance: filmingGuidance,
+    production_checklist: productionChecklist,
+    tags: sanitizeTags(input.tags ?? null),
   };
 }
 

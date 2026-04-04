@@ -52,8 +52,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
-    // Validate authentication (only admin can update)
-    const user = await validateApiRequest(request, ['admin']);
+    // Validate authentication (admin and content_manager can update overrides/is_active)
+    const user = await validateApiRequest(request, ['admin', 'content_manager']);
 
     const { id } = await params;
     const body = await request.json();

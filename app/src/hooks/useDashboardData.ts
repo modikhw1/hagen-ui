@@ -1,14 +1,20 @@
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { useProfile, DemoProfile, ConceptWithMatch, ProfileMeta } from '@/contexts/ProfileContext'
+import {
+  useProfile,
+  DemoProfile,
+  DemoConceptWithMatch,
+  DashboardConceptCardViewModel,
+  ProfileMeta,
+} from '@/contexts/ProfileContext'
 import { loadConcepts, loadDashboardData } from '@/lib/conceptLoader'
 import { mockUserProfile } from '@/mocks/data'
 import type { UserProfile } from '@/types'
 import type { TranslatedConcept } from '@/lib/translator'
 
-export type { DemoProfile, ConceptWithMatch }
+export type { DashboardConceptCardViewModel, DemoConceptWithMatch, DemoProfile }
 
 export interface DashboardData {
   // Auth state
@@ -31,9 +37,10 @@ export interface DashboardData {
 
   // Concepts
   allConcepts: TranslatedConcept[]
-  conceptsForCategory: ConceptWithMatch[]
-  newConcepts: ConceptWithMatch[]
-  olderConcepts: ConceptWithMatch[]
+  demoConceptsForCategory: DemoConceptWithMatch[]
+  customerConceptCards: DashboardConceptCardViewModel[]
+  newCustomerConceptCards: DashboardConceptCardViewModel[]
+  olderCustomerConceptCards: DashboardConceptCardViewModel[]
   rows: ReturnType<typeof loadDashboardData>['rows']
 
   // Actions
@@ -55,8 +62,9 @@ export function useDashboardData(): DashboardData {
     activeDemoProfile,
     activeDisplayName,
     activeProfileMeta,
-    concepts: conceptsFromContext,
-    newConcepts: newConceptsFromContext,
+    demoConcepts,
+    customerConceptCards,
+    newCustomerConceptCards,
   } = useProfile()
 
   // Convert to UserProfile format for backwards compatibility
@@ -80,10 +88,11 @@ export function useDashboardData(): DashboardData {
   const allConcepts = loadConcepts()
   const { rows } = loadDashboardData()
 
-  // Use concepts from ProfileContext
-  const conceptsForCategory = conceptsFromContext
-  const newConcepts = newConceptsFromContext
-  const olderConcepts = conceptsForCategory.filter(c => !c.concept.isNew)
+  // Demo keeps raw translated concepts locally.
+  const demoConceptsForCategory = demoConcepts
+
+  // Logged-in dashboard path uses an explicit card/view-model shape.
+  const olderCustomerConceptCards = customerConceptCards.filter((concept) => !concept.isNew)
 
   // Actions
   const handleConceptClick = (conceptId: string, mobileRoute = false) => {
@@ -109,9 +118,10 @@ export function useDashboardData(): DashboardData {
     setCategoryIndex: setActiveDemoIndex,
     currentCategory: activeDemoProfile,
     allConcepts,
-    conceptsForCategory,
-    newConcepts,
-    olderConcepts,
+    demoConceptsForCategory,
+    customerConceptCards,
+    newCustomerConceptCards,
+    olderCustomerConceptCards,
     rows,
     handleConceptClick,
     handleImproveProfile,

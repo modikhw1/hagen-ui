@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { withAuth } from '@/lib/auth/api-auth';
+import { buildAssignmentShareMarkerPayload } from '@/lib/customer-concept-lifecycle';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -82,6 +83,41 @@ export const POST = withAuth(async (request, user) => {
     concept_ids: conceptIds,
     sent_at: now,
   });
+
+  if (status === 'sent' && conceptIds.length > 0) {
+    const { data: assignmentRows, error: assignmentLookupError } = await supabase
+      .from('customer_concepts')
+      .select('id, status, sent_at')
+      .eq('customer_profile_id', customerId)
+      .in('id', conceptIds);
+
+    if (assignmentLookupError) {
+      console.error('[studio-v2/email/send] Failed to load assignment rows:', assignmentLookupError);
+      warning = warning
+        ? `${warning} Assignment share markers were not updated.`
+        : 'Assignment share markers were not updated.';
+    } else if (assignmentRows && assignmentRows.length > 0) {
+      // markers boundary write: advances share marker (sent_at) and assignment
+      // status for each concept included in the sent email
+      const shareUpdates = await Promise.all(
+        assignmentRows.map((assignment) => (
+          supabase
+            .from('customer_concepts')
+            .update(buildAssignmentShareMarkerPayload(assignment, now))
+            .eq('id', assignment.id)
+            .eq('customer_profile_id', customerId)
+        ))
+      );
+
+      const shareUpdateError = shareUpdates.find((result) => result.error)?.error;
+      if (shareUpdateError) {
+        console.error('[studio-v2/email/send] Failed to update assignment share markers:', shareUpdateError);
+        warning = warning
+          ? `${warning} Assignment share markers were not fully updated.`
+          : 'Assignment share markers were not fully updated.';
+      }
+    }
+  }
 
   return NextResponse.json({
     success: true,

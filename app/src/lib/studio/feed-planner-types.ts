@@ -19,8 +19,8 @@ export interface GridConfig {
 
 export const DEFAULT_GRID_CONFIG: GridConfig = {
   columns: 3,
-  rows: 2,
-  currentSlotIndex: 3,
+  rows: 3,
+  currentSlotIndex: 2,
 };
 
 // =====================================================
@@ -44,7 +44,7 @@ export type SlotType = 'planned' | 'current' | 'history' | 'empty';
 export interface FeedCustomerConcept {
   id: string;
   customer_id: string;
-  concept_id: string;
+  concept_id: string | null;
   status: CustomerConceptAssignmentStatus;
   custom_script: string | null;
   why_it_fits: string | null;
@@ -57,7 +57,6 @@ export interface FeedCustomerConcept {
   tiktok_watch_time_seconds: number | null;
   tiktok_last_synced_at: string | null;
   feed_order: number | null;
-  feed_slot: number | null;
   tags: string[];
   collection_id: string | null;
   cm_note: string | null;

@@ -49,7 +49,7 @@ export interface ResolvedConceptContent {
  * Get content overrides from a customer concept
  */
 export function getContentOverrides(concept: CustomerConcept): ConceptContentOverrides | null {
-  return concept.content_overrides || null;
+  return concept.content.content_overrides || null;
 }
 
 /**

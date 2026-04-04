@@ -1,16 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 
 interface UploadResult {
-  success: boolean;
   message: string;
-  conceptId?: string;
   gcsUri?: string;
 }
 
 export default function StudioUploadPage() {
+  const router = useRouter();
   const [videoUrl, setVideoUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
@@ -102,25 +102,19 @@ export default function StudioUploadPage() {
       const saveData = await saveRes.json();
 
       if (!saveRes.ok) {
-        // Still show success for the analysis, but note the save issue
         setResult({
-          success: true,
           message: `Video analyserad, men sparning misslyckades: ${saveData.error}`,
           gcsUri: uploadData.gcsUri,
         });
         return;
       }
 
-      setResult({
-        success: true,
-        message: 'Video analyserad och concept sparat!',
-        conceptId: saveData.concept?.id || conceptId,
-        gcsUri: uploadData.gcsUri,
-      });
+      const savedConceptId = saveData.concept?.id || conceptId;
+      setProgress('Concept sparat! Vidarebefordrar till granskning...');
+      router.push(`/studio/concepts/${savedConceptId}/review`);
 
     } catch (err: any) {
       setResult({
-        success: false,
         message: err.message || 'Något gick fel',
       });
     } finally {
@@ -215,39 +209,20 @@ export default function StudioUploadPage() {
         </div>
       )}
 
-      {/* Result */}
+      {/* Result — only shown on failure (success redirects to review) */}
       {result && (
-        <div style={{ 
-          background: result.success ? '#ecfdf5' : '#fef2f2', 
-          borderRadius: '12px', 
+        <div style={{
+          background: '#fef2f2',
+          borderRadius: '12px',
           padding: '20px',
           marginBottom: '24px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-            <span style={{ fontSize: '24px' }}>{result.success ? '✅' : '❌'}</span>
-            <span style={{ fontSize: '16px', fontWeight: 600, color: result.success ? '#065f46' : '#991b1b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>❌</span>
+            <span style={{ fontSize: '16px', fontWeight: 600, color: '#991b1b' }}>
               {result.message}
             </span>
           </div>
-          
-          {result.success && (
-            <div style={{ paddingLeft: '36px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {result.conceptId && (
-                <a
-                  href={`/studio/concepts/${result.conceptId}/edit`}
-                  style={{ color: '#4f46e5', fontSize: '14px', textDecoration: 'none' }}
-                >
-                  → Redigera nytt concept ({result.conceptId})
-                </a>
-              )}
-              <a
-                href="/studio/concepts"
-                style={{ color: '#4f46e5', fontSize: '14px', textDecoration: 'none' }}
-              >
-                → Visa alla concepts
-              </a>
-            </div>
-          )}
         </div>
       )}
 
@@ -264,9 +239,10 @@ export default function StudioUploadPage() {
         <ol style={{ margin: 0, paddingLeft: '20px', color: '#475569', fontSize: '14px', lineHeight: 1.8 }}>
           <li>Klistra in en TikTok-länk ovan</li>
           <li>Klicka på "Ladda upp & analysera"</li>
-          <li>hagen-main laddar ner videon och analyserar humorn</li>
-          <li>Analysen sparas som ett concept som du kan redigera</li>
-          <li>Koppla conceptet till en kund i nästa steg</li>
+          <li>hagen-main laddar ner videon och analyserar innehållet</li>
+          <li>Du skickas direkt till granskning för att namnge och klassificera konceptet</li>
+          <li>Publicera konceptet när det är klart — det syns då i biblioteket</li>
+          <li>Tilldela konceptet till en kund från biblioteket</li>
         </ol>
       </div>
     </div>

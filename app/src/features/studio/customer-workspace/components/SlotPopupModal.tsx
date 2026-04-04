@@ -1,9 +1,19 @@
 'use client';
 
+import {
+  getCustomerConceptPlacementLabel,
+  getStudioFeedOrderDescription,
+  getStudioFeedOrderLabel,
+} from '@/lib/customer-concept-lifecycle';
+import {
+  getStudioCustomerConceptDisplayTitle,
+} from '@/lib/studio/customer-concepts';
+import type { CustomerConcept } from '@/types/studio-v2';
+
 interface SlotPopupModalProps {
   slotData: {
     slot: { feedOrder: number };
-    concept: { concept_id: string } | null;
+    concept: Pick<CustomerConcept, 'id' | 'concept_id' | 'row_kind' | 'assignment'> | null;
     details: { headline?: string; headline_sv?: string } | null;
   };
   onClose: () => void;
@@ -11,7 +21,12 @@ interface SlotPopupModalProps {
 }
 
 export function SlotPopupModal({ slotData, onClose, onAddConcept }: SlotPopupModalProps) {
-  const title = slotData.details?.headline_sv || slotData.details?.headline || slotData.concept?.concept_id || 'Empty slot';
+  const title = slotData.concept
+    ? getStudioCustomerConceptDisplayTitle(
+        slotData.concept,
+        slotData.details?.headline_sv || slotData.details?.headline || null
+      )
+    : 'Tom plan-slot';
 
   return (
     <div
@@ -35,7 +50,12 @@ export function SlotPopupModal({ slotData, onClose, onAddConcept }: SlotPopupMod
       >
         <h3 style={{ margin: '0 0 10px', fontSize: 20, color: '#4A2F18' }}>{title}</h3>
         <p style={{ margin: '0 0 18px', color: '#7D6E5D', fontSize: 14 }}>
-          Feed position: {slotData.slot.feedOrder}
+          {getStudioFeedOrderLabel(slotData.slot.feedOrder)}
+        </p>
+        <p style={{ margin: '0 0 18px', color: '#7D6E5D', fontSize: 13, lineHeight: 1.6 }}>
+          {getCustomerConceptPlacementLabel(slotData.slot.feedOrder, 'studio') ?? 'Planen'}.
+          {' '}
+          {getStudioFeedOrderDescription(slotData.slot.feedOrder)}.
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
           {!slotData.concept && (
@@ -44,7 +64,7 @@ export function SlotPopupModal({ slotData, onClose, onAddConcept }: SlotPopupMod
               onClick={onAddConcept}
               style={{ border: 'none', borderRadius: 10, background: '#4A2F18', color: '#fff', padding: '10px 14px', fontWeight: 700 }}
             >
-              Add concept
+              Välj kunduppdrag
             </button>
           )}
           <button
@@ -52,7 +72,7 @@ export function SlotPopupModal({ slotData, onClose, onAddConcept }: SlotPopupMod
             onClick={onClose}
             style={{ border: '1px solid rgba(74,47,24,0.14)', borderRadius: 10, background: '#fff', color: '#4A2F18', padding: '10px 14px', fontWeight: 700 }}
           >
-            Close
+            Stäng
           </button>
         </div>
       </div>

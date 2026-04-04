@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+// Intentional: demo mode uses the static JSON loader (clips-priority.json) for stable,
+// auth-free fixture data. Do not replace with conceptLoaderDB — demo state is computed
+// synchronously via useMemo and the demo clips are curated fixtures, not DB-ingested concepts.
 import { loadConceptById } from '@/lib/conceptLoader';
 import type { TranslatedConcept } from '@/lib/translator';
 import { useVideoSignedUrl } from '@/hooks/useVideoSignedUrl';
@@ -198,8 +201,8 @@ export function CustomerConceptDetailView({
 function HeroCard({ detail }: { detail: CustomerConceptDetailResponse }) {
   const chips = [
     detail.assignment.lifecycle_label,
-    detail.assignment.placement_label,
-    detail.media.result_label,
+    detail.placement.placement_label,
+    detail.result.result_label,
     ...detail.metadata.tags.slice(0, 4),
   ].filter((value): value is string => Boolean(value));
 
@@ -359,8 +362,8 @@ function MediaCard({
         {detail.media.source_reference_url ? (
           <ActionLink href={detail.media.source_reference_url} label="Se originalreferens" />
         ) : null}
-        {detail.media.published_clip_url ? (
-          <ActionLink href={detail.media.published_clip_url} label="Se publicerad video" />
+        {detail.result.tiktok_url ? (
+          <ActionLink href={detail.result.tiktok_url} label="Se publicerad video" />
         ) : null}
       </div>
     </div>
@@ -624,12 +627,21 @@ function buildDemoDetailResponse(concept: TranslatedConcept): CustomerConceptDet
       concept_id: concept.id,
       status: null,
       lifecycle_label: 'Demo',
-      placement_bucket: null,
-      feed_order: null,
-      placement_label: null,
       match_percentage: concept.matchPercentage,
       cm_note: null,
       added_at: null,
+    },
+    placement: {
+      feed_order: null,
+      bucket: null,
+      placement_label: null,
+    },
+    result: {
+      sent_at: null,
+      produced_at: null,
+      published_at: null,
+      tiktok_url: null,
+      result_label: null,
     },
     metadata: {
       title: concept.headline_sv || concept.headline,
@@ -647,8 +659,6 @@ function buildDemoDetailResponse(concept: TranslatedConcept): CustomerConceptDet
     media: {
       source_reference_url: concept.sourceUrl ?? null,
       reference_video_gcs_uri: concept.gcsUri ?? null,
-      published_clip_url: null,
-      result_label: null,
     },
   };
 }

@@ -320,6 +320,10 @@ export interface ClipOverride {
   price?: number
   isNew?: boolean
   remaining?: number
+  // Human-reviewed classification (preferred over auto-derived values)
+  difficulty?: Difficulty
+  market?: Market
+  peopleNeeded?: PeopleNeeded
 }
 
 export interface ClipDefaults {
@@ -350,12 +354,12 @@ export function translateClipToConcept(
     headline: override?.headline_sv || translateHeadline(clip),
     matchPercentage: override?.matchPercentage ?? 85,
 
-    // Category keys
-    difficulty: translateDifficulty(clip),
+    // Category keys (human override preferred, auto-derived as fallback)
+    difficulty: override?.difficulty ?? translateDifficulty(clip),
     filmTime: translateFilmTime(clip),
-    peopleNeeded: translatePeopleNeeded(clip),
+    peopleNeeded: override?.peopleNeeded ?? translatePeopleNeeded(clip),
     mechanism: translateMechanism(clip),
-    market: translateMarket(clip),
+    market: override?.market ?? translateMarket(clip),
     trendLevel: translateTrendLevel(clip),
 
     // Arrays

@@ -10,7 +10,7 @@ export function buildSlotMap(
 
   return Array.from({ length: totalSlots }, (_, slotIndex) => {
     const feedOrder = startFeedOrder + slotIndex;
-    const concept = concepts.find((item) => item.feed_order === feedOrder) ?? null;
+    const concept = concepts.find((item) => item.placement.feed_order === feedOrder) ?? null;
     const type = concept
       ? feedOrder === 0
         ? 'current'
@@ -34,7 +34,7 @@ export function hasMoreHistory(
   historyOffset = 0
 ): boolean {
   const earliestFeedOrder = concepts
-    .map((concept) => concept.feed_order)
+    .map((concept) => concept.placement.feed_order)
     .filter((value): value is number => typeof value === 'number')
     .reduce((min, value) => Math.min(min, value), 0);
 

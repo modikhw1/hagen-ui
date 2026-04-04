@@ -277,7 +277,7 @@ export function CustomerFeedShell() {
                     />
                     <div style={{ display: 'grid', gap: 14 }}>
                       {groups.upcoming.map((slot) => (
-                        <DesktopSlotCard key={slot.customerConceptId} slot={slot} />
+                        <DesktopSlotCard key={slot.assignmentId} slot={slot} />
                       ))}
                     </div>
                   </section>
@@ -292,7 +292,7 @@ export function CustomerFeedShell() {
                     />
                     <div style={{ display: 'grid', gap: 14 }}>
                       {groups.history.map((slot) => (
-                        <DesktopSlotCard key={slot.customerConceptId} slot={slot} dimmed />
+                        <DesktopSlotCard key={slot.assignmentId} slot={slot} dimmed />
                       ))}
                     </div>
                   </section>
@@ -488,8 +488,8 @@ function DesktopSlotCard({
   const router = useRouter();
   const statusStyle = CUSTOMER_FEED_STATUS_STYLES[slot.status];
   const title = slot.title || (
-    slot.bucket === 'history'
-      ? (slot.publishedAt || slot.tiktokUrl ? 'Publicerad video' : 'Producerad video')
+    slot.placement.bucket === 'history'
+      ? (slot.result.publishedAt || slot.result.tiktokUrl ? 'Publicerad video' : 'Producerad video')
       : 'Koncept'
   );
 
@@ -497,8 +497,8 @@ function DesktopSlotCard({
     router.push(`/concept/${slot.assignmentId}`);
   };
 
-  const primaryAction = slot.tiktokUrl
-    ? { label: 'Se publicerad video', href: slot.tiktokUrl }
+  const primaryAction = slot.result.tiktokUrl
+    ? { label: 'Se publicerad video', href: slot.result.tiktokUrl }
     : slot.assignmentId
       ? { label: 'Öppna koncept', onClick: handleOpenConcept }
       : slot.sourceUrl
@@ -560,7 +560,7 @@ function DesktopSlotCard({
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 13, color: '#8E7E6B', marginTop: 14 }}>
         <Chip>{getDateLabel(slot)}</Chip>
-        {slot.sourceUrl && !slot.tiktokUrl && <Chip>{getCustomerOriginalReferenceLabel()}</Chip>}
+        {slot.sourceUrl && !slot.result.tiktokUrl && <Chip>{getCustomerOriginalReferenceLabel()}</Chip>}
         {slot.productionNotes.length > 0 && <Chip>{slot.productionNotes.length} inspelningspunkter</Chip>}
       </div>
 
@@ -691,11 +691,11 @@ function MessageCard({
 }
 
 function getDateLabel(slot: CustomerFeedSlot): string {
-  if (slot.publishedAt) return `Publicerad ${formatDate(slot.publishedAt)}`;
-  if (slot.producedAt) return `Producerad ${formatDate(slot.producedAt)}`;
-  if (slot.sharedAt) return `Delad ${formatDate(slot.sharedAt)}`;
-  if (slot.bucket === 'current') return 'Nu i din plan';
-  if (slot.bucket === 'upcoming') return 'Kommande i din plan';
+  if (slot.result.publishedAt) return `Publicerad ${formatDate(slot.result.publishedAt)}`;
+  if (slot.result.producedAt) return `Producerad ${formatDate(slot.result.producedAt)}`;
+  if (slot.result.sharedAt) return `Delad ${formatDate(slot.result.sharedAt)}`;
+  if (slot.placement.bucket === 'current') return 'Nu i din plan';
+  if (slot.placement.bucket === 'upcoming') return 'Kommande i din plan';
   return 'Tidigare i din plan';
 }
 

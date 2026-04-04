@@ -71,7 +71,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
         created_by: user.id,
         backend_data,
         overrides: overrides || {},
-        is_active: true,
+        is_active: false,
         version: 1,
       })
       .select()

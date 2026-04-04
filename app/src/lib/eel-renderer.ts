@@ -49,7 +49,7 @@ export function buildSegmentPaths(centers: SlotCenter[]): string[] {
 
 export function buildGradients(slotMap: FeedSlot[], tags: CmTag[]): EelGradient[] {
   return slotMap.map((slot, index) => {
-    const firstTag = slot.concept?.tags?.[0];
+    const firstTag = slot.concept?.markers.tags[0];
     const tagColor = tags.find((tag) => tag.name === firstTag)?.color;
     return {
       id: `eel-gradient-${index}`,

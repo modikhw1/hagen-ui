@@ -7,14 +7,23 @@ import type {
 export type CustomerFeedBucket = CustomerConceptPlacementBucket;
 export type CustomerFeedStatus = CustomerConceptFeedStatus;
 
-export interface CustomerFeedSlot {
-  assignmentId: string;
-  customerConceptId: string;
-  sourceConceptId: string | null;
-  conceptId: string | null;
-  assignmentStatus: CustomerConceptAssignmentStatus | null;
+/** Placement boundary: where the slot sits in the customer's plan. */
+export interface CustomerFeedPlacement {
   feedOrder: number;
   bucket: CustomerFeedBucket;
+}
+
+/** Result boundary: production and publication outcome for the slot. */
+export interface CustomerFeedResult {
+  sharedAt: string | null;
+  producedAt: string | null;
+  publishedAt: string | null;
+  tiktokUrl: string | null;
+}
+
+export interface CustomerFeedSlot {
+  assignmentId: string;
+  assignmentStatus: CustomerConceptAssignmentStatus | null;
   title: string;
   summary: string;
   note: string | null;
@@ -26,10 +35,10 @@ export interface CustomerFeedSlot {
   scriptPreview: string | null;
   productionNotes: string[];
   sourceUrl: string | null;
-  tiktokUrl: string | null;
-  sharedAt: string | null;
-  producedAt: string | null;
-  publishedAt: string | null;
+  /** Placement boundary sub-object. */
+  placement: CustomerFeedPlacement;
+  /** Result boundary sub-object. */
+  result: CustomerFeedResult;
 }
 
 export interface CustomerFeedResponse {

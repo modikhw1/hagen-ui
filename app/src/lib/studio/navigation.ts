@@ -11,6 +11,7 @@ type StudioWorkspaceSectionItem = {
   label: string;
   short_label: string;
   description: string;
+  kind: 'primary' | 'utility';
 };
 
 export const STUDIO_SHELL_NAV_ITEMS: StudioShellNavItem[] = [
@@ -26,30 +27,35 @@ export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [
     label: 'Game Plan och Notes',
     short_label: 'Game Plan',
     description: 'Strategi, brief och löpande notes till kunden.',
+    kind: 'primary',
   },
   {
     key: 'koncept',
     label: 'Konceptarbete',
     short_label: 'Koncept',
     description: 'Tilldelade koncept, redigering och handoff.',
+    kind: 'primary',
   },
   {
     key: 'feed',
     label: 'Feedplan',
     short_label: 'Feedplan',
     description: 'Placeringar i planen, timing och tidigare historik.',
+    kind: 'primary',
   },
   {
     key: 'kommunikation',
     label: 'Kommunikation',
     short_label: 'Kommunikation',
     description: 'Mailutkast, skickhistorik och kundkontakt.',
+    kind: 'primary',
   },
   {
     key: 'demo',
     label: 'Demo',
     short_label: 'Demo',
     description: 'Förbered demo och importera historik.',
+    kind: 'utility',
   },
 ];
 
