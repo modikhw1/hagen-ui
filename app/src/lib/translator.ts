@@ -60,6 +60,14 @@ export interface BackendClip {
   replicability_signals?: BackendReplicabilitySignals
   replicability_analysis?: string  // Swedish text description
 
+  // Raw Gemini script extraction (mirrors visual_analysis.script)
+  script?: {
+    transcript?: string
+    conceptCore?: string
+    hasScript?: boolean
+    scriptQuality?: number | null
+  }
+
   // Scene data
   scene_breakdown?: Array<{
     timestamp: string
@@ -324,6 +332,8 @@ export interface ClipOverride {
   difficulty?: Difficulty
   market?: Market
   peopleNeeded?: PeopleNeeded
+  // CM-corrected transcript (overrides backend_data.script.transcript when present)
+  transcript?: string
 }
 
 export interface ClipDefaults {

@@ -25,7 +25,7 @@ function buildCustomEmailHtml(
       </div>
       ${c.whyItWorks ? `<p style="color: #5D4D3D; font-size: 14px; margin: 0 0 12px; line-height: 1.5;">${c.whyItWorks}</p>` : ''}
       <span style="display: inline-block; background: #10b981; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px;">
-        ${c.matchPercentage}% matchning
+        ${c.matchPercentage}% passning
       </span>
     </div>
   `).join('') : '';

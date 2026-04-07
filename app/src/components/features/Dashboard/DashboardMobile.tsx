@@ -152,7 +152,7 @@ function ConceptCard({
             {title}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <span style={tagStyle}>{matchPercent}% match</span>
+            <span style={tagStyle}>{matchPercent}% passning</span>
             <span style={tagStyle}>{difficultyLabel}</span>
           </div>
         </div>

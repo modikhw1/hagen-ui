@@ -25,6 +25,7 @@ interface CustomerBrief {
 interface CustomerGamePlanPayload {
   business_name: string | null;
   brief: CustomerBrief | null;
+  cm_name?: string | null;
   game_plan_html: string;
   has_game_plan: boolean;
 }
@@ -248,6 +249,10 @@ export function CustomerFeedShell() {
               hasFeedError={Boolean(feedError)}
             />
 
+            {gamePlan?.brief?.current_focus?.trim() && (
+              <EditorialIntroCard text={gamePlan.brief.current_focus} cmName={gamePlan.cm_name ?? null} />
+            )}
+
             {feedError ? (
               <MessageCard title="Kunde inte ladda din feed" description={feedError} tone="error" />
             ) : slots.length === 0 ? (
@@ -264,7 +269,7 @@ export function CustomerFeedShell() {
                       title="Det som ligger först i din plan"
                       subtitle="Detta är det tydligaste nästa steget just nu."
                     />
-                    <DesktopSlotCard slot={groups.current} highlight />
+                    <DesktopSlotCard slot={groups.current} highlight cmName={gamePlan?.cm_name ?? null} />
                   </section>
                 )}
 
@@ -277,7 +282,7 @@ export function CustomerFeedShell() {
                     />
                     <div style={{ display: 'grid', gap: 14 }}>
                       {groups.upcoming.map((slot) => (
-                        <DesktopSlotCard key={slot.assignmentId} slot={slot} />
+                        <DesktopSlotCard key={slot.assignmentId} slot={slot} cmName={gamePlan?.cm_name ?? null} />
                       ))}
                     </div>
                   </section>
@@ -292,7 +297,7 @@ export function CustomerFeedShell() {
                     />
                     <div style={{ display: 'grid', gap: 14 }}>
                       {groups.history.map((slot) => (
-                        <DesktopSlotCard key={slot.assignmentId} slot={slot} dimmed />
+                        <DesktopSlotCard key={slot.assignmentId} slot={slot} dimmed cmName={gamePlan?.cm_name ?? null} />
                       ))}
                     </div>
                   </section>
@@ -328,10 +333,9 @@ export function CustomerFeedShell() {
                 </p>
               </div>
 
-              {gamePlan?.brief && (gamePlan.brief.tone?.trim() || gamePlan.brief.current_focus?.trim() || gamePlan.brief.constraints?.trim()) && (
+              {gamePlan?.brief && (gamePlan.brief.tone?.trim() || gamePlan.brief.constraints?.trim()) && (
                 <div style={{ display: 'grid', gap: 10 }}>
                   <BriefItem label="Ton" value={gamePlan.brief.tone} />
-                  <BriefItem label="Nuvarande fokus" value={gamePlan.brief.current_focus} />
                   <BriefItem label="Ramar" value={gamePlan.brief.constraints} />
                 </div>
               )}
@@ -480,10 +484,12 @@ function DesktopSlotCard({
   slot,
   highlight = false,
   dimmed = false,
+  cmName = null,
 }: {
   slot: CustomerFeedSlot;
   highlight?: boolean;
   dimmed?: boolean;
+  cmName?: string | null;
 }) {
   const router = useRouter();
   const statusStyle = CUSTOMER_FEED_STATUS_STYLES[slot.status];
@@ -542,7 +548,7 @@ function DesktopSlotCard({
                   fontWeight: 700,
                 }}
               >
-                {slot.matchPercentage}% match
+                {slot.matchPercentage}% passning
               </span>
             )}
           </div>
@@ -574,8 +580,8 @@ function DesktopSlotCard({
             border: '1px solid rgba(217, 119, 6, 0.12)',
           }}
         >
-          <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: '#A16207', marginBottom: 6 }}>
-            Notering från CM
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#A16207', marginBottom: 6 }}>
+            {cmName ? `Notering från ${cmName}` : 'Notering från CM'}
           </div>
           <div style={{ fontSize: 14, lineHeight: 1.6, color: '#854D0E' }}>{slot.note}</div>
         </div>
@@ -686,6 +692,32 @@ function MessageCard({
     >
       <div style={{ fontSize: compact ? 16 : 20, fontWeight: 700, color: palette.title, marginBottom: 6 }}>{title}</div>
       <div style={{ fontSize: 14, lineHeight: 1.7, color: palette.text }}>{description}</div>
+    </div>
+  );
+}
+
+function EditorialIntroCard({ text, cmName = null }: { text: string; cmName?: string | null }) {
+  return (
+    <div
+      style={{
+        background: '#FAF6F0',
+        borderRadius: 22,
+        padding: '20px 24px',
+        border: '1px solid rgba(74, 47, 24, 0.08)',
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          textTransform: 'uppercase' as const,
+          letterSpacing: '0.08em',
+          color: '#8E7E6B',
+          marginBottom: 8,
+        }}
+      >
+        {cmName ?? 'Den här perioden'}
+      </div>
+      <div style={{ fontSize: 17, lineHeight: 1.7, color: '#3C3127', fontWeight: 500 }}>{text}</div>
     </div>
   );
 }

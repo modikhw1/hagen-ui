@@ -43,6 +43,9 @@ export const GET = withAuth(async (_request, user) => {
       produced_at,
       published_at,
       tiktok_url,
+      tiktok_thumbnail_url,
+      tiktok_views,
+      tiktok_likes,
       cm_note,
       concepts (
         id,

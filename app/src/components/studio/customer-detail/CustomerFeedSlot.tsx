@@ -443,6 +443,26 @@ export function CustomerFeedSlot({
         </div>
       )}
 
+      {type === 'history' && concept?.row_kind === 'imported_history' && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            left: 8,
+            background: hasThumbnail ? 'rgba(0,0,0,0.45)' : 'rgba(219,234,254,0.85)',
+            color: hasThumbnail ? '#bfdbfe' : '#1d4ed8',
+            border: hasThumbnail ? '1px solid rgba(191,219,254,0.25)' : '1px solid #bfdbfe',
+            padding: '2px 7px',
+            borderRadius: LeTrendRadius.sm,
+            fontSize: 10,
+            fontWeight: 600,
+            letterSpacing: '0.03em',
+          }}
+        >
+          Importerad
+        </div>
+      )}
+
       {result?.content_loaded_at && (
         <div
           style={{

@@ -171,9 +171,11 @@ export function CustomerConceptDetailView({
                 {detail.metadata.script}
               </SectionCard>
 
-              <SectionCard title="Varfor det passar er" emptyLabel="Fit-forklaringen ar inte ifylld an.">
-                {detail.metadata.why_it_fits}
-              </SectionCard>
+              {detail.metadata.why_it_fits && (
+                <SectionCard title="Varfor det passar er" emptyLabel="">
+                  {detail.metadata.why_it_fits}
+                </SectionCard>
+              )}
 
               <SectionCard title="Filmtips" emptyLabel="Det finns inga specifika filmtips an.">
                 {detail.metadata.filming_guidance}

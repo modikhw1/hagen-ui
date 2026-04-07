@@ -19,11 +19,23 @@ export const POST = withAuth(async (request) => {
     return NextResponse.json({ error: 'customer_id is required' }, { status: 400 });
   }
 
+  // Determine next available historical slot for this customer.
+  // Most-recent history is -1; each older entry is one step further negative.
+  const { data: historySlots } = await supabase
+    .from('customer_concepts')
+    .select('feed_order')
+    .eq('customer_profile_id', customerId)
+    .lt('feed_order', 0)
+    .order('feed_order', { ascending: true })
+    .limit(1);
+  const currentMostNegative = historySlots?.[0]?.feed_order ?? 0;
+  const nextHistoryOrder = Math.min(currentMostNegative - 1, -1);
+
   // result boundary write: sets produced/published timestamps, TikTok URL,
-  // and clears placement (feed_order: null — removes concept from active plan)
+  // and moves placement to next historical slot (keeping concept in timeline)
   const { data, error } = await supabase
     .from('customer_concepts')
-    .update(buildMarkProducedPayload({ tiktok_url: body?.tiktok_url, now }))
+    .update(buildMarkProducedPayload({ tiktok_url: body?.tiktok_url, now, nextHistoryOrder }))
     .eq('id', conceptId)
     .eq('customer_profile_id', customerId)
     .select(`

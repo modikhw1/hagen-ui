@@ -66,6 +66,21 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
+  // Auto-link profile_id if an auth account with this email already exists.
+  // Best-effort: failure does not affect team member creation.
+  const { data: existingProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .ilike('email', email.trim())
+    .maybeSingle();
+
+  if (existingProfile?.id) {
+    await supabaseAdmin
+      .from('team_members')
+      .update({ profile_id: existingProfile.id })
+      .eq('id', member.id);
+  }
+
   // Optionally send invite email
   if (sendInvite && email?.trim()) {
     const appUrl = getAppUrl();

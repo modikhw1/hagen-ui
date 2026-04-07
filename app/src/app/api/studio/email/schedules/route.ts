@@ -22,7 +22,7 @@ function buildWeeklySummaryHtml(
   const conceptsHtml = weekData.concepts.length > 0 ? weekData.concepts.map((c, i) => `
     <div style="background: #f9fafb; border-radius: 8px; padding: 12px; margin: 8px 0;">
       <div style="font-weight: 600; color: #1a1a2e;">${i + 1}. ${c.headline}</div>
-      <span style="color: #10b981; font-size: 12px;">${c.matchPercentage}% matchning</span>
+      <span style="color: #10b981; font-size: 12px;">${c.matchPercentage}% passning</span>
     </div>
   `).join('') : '<p>Inga nya koncept denna vecka.</p>';
 

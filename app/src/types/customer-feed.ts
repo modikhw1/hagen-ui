@@ -19,11 +19,17 @@ export interface CustomerFeedResult {
   producedAt: string | null;
   publishedAt: string | null;
   tiktokUrl: string | null;
+  tiktokThumbnailUrl: string | null;
+  /** TikTok performance — only populated for imported_history rows */
+  tiktokViews: number | null;
+  tiktokLikes: number | null;
 }
 
 export interface CustomerFeedSlot {
   assignmentId: string;
   assignmentStatus: CustomerConceptAssignmentStatus | null;
+  /** Structural origin: 'assignment' = LeTrend-curated concept; 'imported_history' = external TikTok clip */
+  rowKind: 'assignment' | 'imported_history';
   title: string;
   summary: string;
   note: string | null;

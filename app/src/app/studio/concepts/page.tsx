@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { loadConcepts } from '@/lib/conceptLoaderDB';
 import type { TranslatedConcept } from '@/lib/translator';
@@ -9,9 +10,58 @@ import { supabase } from '@/lib/supabase/client';
 interface PendingConcept {
   id: string;
   headline: string;
+  completeness: number; // 0–3: how many of headline_sv/description_sv/whyItWorks_sv are filled
+}
+
+function getCompleteness(c: TranslatedConcept): number {
+  let n = 0;
+  if (c.headline_sv?.trim()) n++;
+  if (c.description_sv?.trim()) n++;
+  if (c.whyItWorks_sv?.trim()) n++;
+  return n;
+}
+
+function AssignmentTag({ count }: { count: number }) {
+  if (count === 0) {
+    return (
+      <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>
+        Ej tilldelad
+      </span>
+    );
+  }
+  return (
+    <span style={{ fontSize: 11, fontWeight: 600, color: '#065f46', background: '#d1fae5', padding: '2px 6px', borderRadius: 4 }}>
+      {count === 1 ? '1 kund' : `${count} kunder`}
+    </span>
+  );
+}
+
+function CompletenessTag({ n }: { n: number }) {
+  const configs: Record<number, { label: string; color: string; bg: string }> = {
+    3: { label: '3/3', color: '#065f46', bg: '#d1fae5' },
+    2: { label: '2/3', color: '#92400e', bg: '#fef3c7' },
+    1: { label: '1/3', color: '#9a3412', bg: '#ffedd5' },
+    0: { label: '0/3', color: '#6b7280', bg: '#f3f4f6' },
+  };
+  const c = configs[n] ?? configs[0];
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 600,
+        color: c.color,
+        background: c.bg,
+        padding: '2px 6px',
+        borderRadius: 4,
+      }}
+    >
+      {c.label}
+    </span>
+  );
 }
 
 export default function StudioConceptsPage() {
+  const router = useRouter();
   const [concepts, setConcepts] = useState<TranslatedConcept[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -21,11 +71,15 @@ export default function StudioConceptsPage() {
   const [curationCustomer, setCurationCustomer] = useState<string>('');
   const [assignedConceptIds, setAssignedConceptIds] = useState<Set<string>>(new Set());
   const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number>>({});
+  const [customerConceptCounts, setCustomerConceptCounts] = useState<Record<string, number>>({});
   const [pendingConcepts, setPendingConcepts] = useState<PendingConcept[]>([]);
   const [customers, setCustomers] = useState<{ id: string; business_name: string }[]>([]);
+  const [sortByCompleteness, setSortByCompleteness] = useState(false);
+  const [filterUnassigned, setFilterUnassigned] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<TranslatedConcept | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState('');
+  const [customerPreview, setCustomerPreview] = useState<'loading' | { headline: string }[] | null>(null);
 
   useEffect(() => {
     void loadConceptsData();
@@ -33,6 +87,36 @@ export default function StudioConceptsPage() {
     void fetchCustomers();
     void fetchAssignmentCounts();
   }, []);
+
+  useEffect(() => {
+    if (!selectedCustomer) {
+      setCustomerPreview(null);
+      return;
+    }
+    setCustomerPreview('loading');
+    void (async () => {
+      try {
+        const { data } = await supabase
+          .from('customer_concepts')
+          .select('concept_id, concepts(overrides)')
+          .eq('customer_profile_id', selectedCustomer)
+          .order('created_at', { ascending: false })
+          .limit(3);
+        if (!data) { setCustomerPreview([]); return; }
+        setCustomerPreview(
+          data.map((row) => {
+            const ov = ((row.concepts as { overrides?: Record<string, unknown> } | null)?.overrides ?? {}) as Record<string, unknown>;
+            const headline = typeof ov.headline_sv === 'string' && ov.headline_sv.trim()
+              ? ov.headline_sv.trim()
+              : '(Inget namn)';
+            return { headline };
+          }),
+        );
+      } catch {
+        setCustomerPreview([]);
+      }
+    })();
+  }, [selectedCustomer]);
 
   useEffect(() => {
     if (!curationCustomer) {
@@ -69,12 +153,17 @@ export default function StudioConceptsPage() {
         .limit(20);
       if (data) {
         setPendingConcepts(
-          data.map((row) => ({
-            id: row.id as string,
-            headline:
-              (row.overrides as Record<string, unknown>)?.headline_sv as string ||
-              '(Inget namn)',
-          })),
+          data.map((row) => {
+            const ov = (row.overrides as Record<string, unknown>) ?? {};
+            const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+            const completeness = [str(ov.headline_sv), str(ov.description_sv), str(ov.whyItWorks_sv)]
+              .filter(Boolean).length;
+            return {
+              id: row.id as string,
+              headline: str(ov.headline_sv) || '(Inget namn)',
+              completeness,
+            };
+          }),
         );
       }
     } catch (err) {
@@ -98,20 +187,25 @@ export default function StudioConceptsPage() {
     try {
       const { data } = await supabase
         .from('customer_concepts')
-        .select('concept_id');
+        .select('concept_id, customer_profile_id');
       if (!data) return;
       const counts: Record<string, number> = {};
+      const custCounts: Record<string, number> = {};
       for (const row of data) {
-        const id = row.concept_id as string;
-        counts[id] = (counts[id] ?? 0) + 1;
+        const cid = row.concept_id as string;
+        counts[cid] = (counts[cid] ?? 0) + 1;
+        const pid = row.customer_profile_id as string;
+        custCounts[pid] = (custCounts[pid] ?? 0) + 1;
       }
       setAssignmentCounts(counts);
+      setCustomerConceptCounts(custCounts);
     } catch (err) {
       console.error('Error fetching assignment counts:', err);
     }
   };
 
-  const filteredConcepts = concepts.filter((c) => {
+  const filteredConcepts = concepts
+    .filter((c) => {
     const matchesSearch =
       !search ||
       (c.headline_sv || c.headline)?.toLowerCase().includes(search.toLowerCase()) ||
@@ -121,8 +215,10 @@ export default function StudioConceptsPage() {
     const matchesPeople = peopleFilter === 'all' || c.peopleNeeded === peopleFilter;
     const matchesFilmTime = filmTimeFilter === 'all' || c.filmTime === filmTimeFilter;
     const matchesNotAssigned = !curationCustomer || !assignedConceptIds.has(c.id);
-    return matchesSearch && matchesDifficulty && matchesPeople && matchesFilmTime && matchesNotAssigned;
-  });
+    const matchesUnassignedFilter = !filterUnassigned || (assignmentCounts[c.id] ?? 0) === 0;
+      return matchesSearch && matchesDifficulty && matchesPeople && matchesFilmTime && matchesNotAssigned && matchesUnassignedFilter;
+    })
+    .sort((a, b) => sortByCompleteness ? getCompleteness(a) - getCompleteness(b) : 0);
 
   const getDifficultyLabel = (difficulty: string): { label: string; color: string } => {
     switch (difficulty) {
@@ -149,10 +245,13 @@ export default function StudioConceptsPage() {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `HTTP ${response.status}`);
       }
-      alert('Konceptet har lagts till på kundens lista!');
+      const data = await response.json().catch(() => ({}));
+      const assignedId = typeof data?.concept?.id === 'string' ? data.concept.id : null;
       setShowAssignModal(false);
       setSelectedConcept(null);
       setSelectedCustomer('');
+      const justAddedParam = assignedId ? `&justAdded=${assignedId}` : '';
+      router.push(`/studio/customers/${selectedCustomer}?section=koncept${justAddedParam}`);
     } catch (err) {
       console.error('Error:', err);
       alert(err instanceof Error ? err.message : 'Kunde inte lägga till konceptet');
@@ -332,6 +431,38 @@ export default function StudioConceptsPage() {
             );
           })}
         </div>
+        <button
+          onClick={() => setSortByCompleteness((v) => !v)}
+          style={{
+            padding: '8px 14px',
+            borderRadius: '999px',
+            border: sortByCompleteness ? 'none' : '1px solid #e5e7eb',
+            background: sortByCompleteness ? '#4f46e5' : '#fff',
+            color: sortByCompleteness ? '#fff' : '#6b7280',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Saknar granskning ↑
+        </button>
+        <button
+          onClick={() => setFilterUnassigned((v) => !v)}
+          style={{
+            padding: '8px 14px',
+            borderRadius: '999px',
+            border: filterUnassigned ? 'none' : '1px solid #e5e7eb',
+            background: filterUnassigned ? '#0891b2' : '#fff',
+            color: filterUnassigned ? '#fff' : '#6b7280',
+            fontSize: '13px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Ej tilldelad
+        </button>
       </div>
 
       {/* Pending review strip */}
@@ -369,6 +500,7 @@ export default function StudioConceptsPage() {
                 <span style={{ fontSize: '13px', color: '#78350f', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {p.headline}
                 </span>
+                <CompletenessTag n={p.completeness} />
                 <Link
                   href={`/studio/concepts/${p.id}/review`}
                   style={{
@@ -549,8 +681,9 @@ export default function StudioConceptsPage() {
                 {concept.vibeAlignments.length > 0 && (
                   <span>🏷️ {concept.vibeAlignments.slice(0, 2).join(', ')}</span>
                 )}
+                <CompletenessTag n={getCompleteness(concept)} />
                 <span style={{ marginLeft: 'auto' }}>
-                  {assignmentCounts[concept.id] ?? 0} kunder
+                  <AssignmentTag count={assignmentCounts[concept.id] ?? 0} />
                 </span>
               </div>
             </div>
@@ -619,9 +752,8 @@ export default function StudioConceptsPage() {
             </div>
 
             <div style={{ marginBottom: '24px' }}>
-              <label
+              <div
                 style={{
-                  display: 'block',
                   fontSize: '13px',
                   fontWeight: 500,
                   marginBottom: '8px',
@@ -629,34 +761,90 @@ export default function StudioConceptsPage() {
                 }}
               >
                 Välj kund
-              </label>
-              <select
-                value={selectedCustomer}
-                onChange={(e) => setSelectedCustomer(e.target.value)}
+              </div>
+              <div
                 style={{
-                  width: '100%',
-                  padding: '12px',
-                  borderRadius: '8px',
                   border: '1px solid #e5e7eb',
-                  fontSize: '15px',
-                  background: '#fff',
-                  outline: 'none',
+                  borderRadius: '8px',
+                  maxHeight: '240px',
+                  overflowY: 'auto',
                 }}
               >
-                <option value="">Välj kund...</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.business_name}
-                  </option>
-                ))}
-              </select>
+                {customers.map((c, i) => {
+                  const count = customerConceptCounts[c.id] ?? 0;
+                  const isSelected = selectedCustomer === c.id;
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => setSelectedCustomer(c.id)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 14px',
+                        cursor: 'pointer',
+                        background: isSelected ? '#eef2ff' : '#fff',
+                        borderTop: i > 0 ? '1px solid #f3f4f6' : 'none',
+                        borderRadius: i === 0 ? '8px 8px 0 0' : i === customers.length - 1 ? '0 0 8px 8px' : 0,
+                      }}
+                    >
+                      <span style={{ fontSize: '14px', fontWeight: isSelected ? 600 : 400, color: isSelected ? '#4338ca' : '#1a1a2e' }}>
+                        {c.business_name}
+                      </span>
+                      <span style={{ fontSize: '12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                        {count === 0 ? 'Inga koncept' : count === 1 ? '1 koncept' : `${count} koncept`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+
+            {selectedCustomer && (
+              <div
+                style={{
+                  marginBottom: '20px',
+                  background: '#f9fafb',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  padding: '12px 14px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Senaste koncept
+                  </span>
+                  <Link
+                    href={`/studio/customers/${selectedCustomer}?section=koncept`}
+                    target="_blank"
+                    style={{ fontSize: '12px', color: '#4f46e5', textDecoration: 'none', fontWeight: 500 }}
+                  >
+                    Se alla →
+                  </Link>
+                </div>
+                {customerPreview === 'loading' ? (
+                  <div style={{ fontSize: '13px', color: '#9ca3af' }}>Hämtar...</div>
+                ) : customerPreview && customerPreview.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {customerPreview.map((p, i) => (
+                      <div key={i} style={{ fontSize: '13px', color: '#374151', display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
+                        <span style={{ color: '#d1d5db', flexShrink: 0 }}>·</span>
+                        <span>{p.headline}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '13px', color: '#9ca3af' }}>Inga koncept tilldelade ännu</div>
+                )}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => {
                   setShowAssignModal(false);
                   setSelectedConcept(null);
+                  setSelectedCustomer('');
                 }}
                 style={{
                   padding: '12px 20px',

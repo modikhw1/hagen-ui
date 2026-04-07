@@ -28,6 +28,9 @@ type RawCustomerFeedRow = {
   produced_at: string | null;
   published_at: string | null;
   tiktok_url: string | null;
+  tiktok_thumbnail_url: string | null;
+  tiktok_views: number | null;
+  tiktok_likes: number | null;
   cm_note: string | null;
   concepts: FeedConceptRelation;
 };
@@ -54,13 +57,19 @@ export function buildCustomerFeedResponse(rows: RawCustomerFeedRow[]): CustomerF
 }
 
 export function splitCustomerFeedSlots(slots: CustomerFeedSlot[]) {
-  const current = slots.find((slot) => slot.placement.bucket === 'current') ?? null;
-  const upcoming = slots
+  const formalCurrent = slots.find((slot) => slot.placement.bucket === 'current') ?? null;
+  const allUpcoming = slots
     .filter((slot) => slot.placement.bucket === 'upcoming')
     .sort((a, b) => a.placement.feedOrder - b.placement.feedOrder);
   const history = slots
     .filter((slot) => slot.placement.bucket === 'history')
     .sort((a, b) => b.placement.feedOrder - a.placement.feedOrder);
+
+  // Display-layer promotion: if feed_order=0 is vacant, show the nearest upcoming
+  // concept as JUST NU in the customer list. No data is mutated — the planner grid
+  // continues reading feed_order positions directly and is unaffected.
+  const current = formalCurrent ?? allUpcoming[0] ?? null;
+  const upcoming = formalCurrent ? allUpcoming : allUpcoming.slice(1);
 
   return { current, upcoming, history };
 }
@@ -111,9 +120,7 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
   const summary = sanitizeText(rawSummary) ?? FALLBACK_SUMMARIES[bucket];
   const hasScript = Boolean(sanitizeText(script));
   const hasWhyItFits = Boolean(
-    sanitizeText(readString(contentOverrides.why_it_fits as string | null | undefined) ??
-    readString(baseOverrides.whyItWorks_sv) ??
-    readString(backendData.whyItWorks_sv))
+    sanitizeText(readString(contentOverrides.why_it_fits as string | null | undefined))
   );
   const status = deriveCustomerFeedStatus({
     rawStatus: row.status,
@@ -127,10 +134,11 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
   return {
     assignmentId: row.id,
     assignmentStatus: normalizeCustomerConceptAssignmentStatus(row.status),
+    rowKind: row.concept_id === null ? 'imported_history' : 'assignment',
     title,
     summary,
     note,
-    detailHint: buildDetailHint({ bucket, hasScript, productionNotesCount: productionNotes.length, note, hasWhyItFits }),
+    detailHint: buildDetailHint({ bucket, hasScript, productionNotesCount: productionNotes.length, hasWhyItFits }),
     status,
     statusLabel: getCustomerFeedStatusLabel(status),
     matchPercentage: typeof row.match_percentage === 'number' ? row.match_percentage : null,
@@ -148,6 +156,9 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
       producedAt: row.produced_at,
       publishedAt: row.published_at,
       tiktokUrl: sanitizeText(row.tiktok_url),
+      tiktokThumbnailUrl: sanitizeText(row.tiktok_thumbnail_url),
+      tiktokViews: typeof row.tiktok_views === 'number' ? row.tiktok_views : null,
+      tiktokLikes: typeof row.tiktok_likes === 'number' ? row.tiktok_likes : null,
     },
   };
 }
@@ -156,7 +167,6 @@ function buildDetailHint(input: {
   bucket: CustomerFeedBucket;
   hasScript: boolean;
   productionNotesCount: number;
-  note: string | null;
   hasWhyItFits: boolean;
 }): string | null {
   if (input.hasScript && input.productionNotesCount > 0) {
@@ -165,10 +175,6 @@ function buildDetailHint(input: {
 
   if (input.hasScript) {
     return 'Manus finns klart i konceptdetaljen.';
-  }
-
-  if (input.note) {
-    return 'Det finns en notering från din content manager.';
   }
 
   if (input.hasWhyItFits) {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CustomerNotesSection } from '@/components/customer/CustomerNotesSection';
 import { useAuth } from '@/contexts/AuthContext';
 import { splitCustomerFeedSlots } from '@/lib/customer-feed';
+import { CustomerPlannerGrid } from '@/components/customer/CustomerPlannerGrid';
 import {
   CUSTOMER_FEED_STATUS_STYLES,
   getCustomerOriginalReferenceLabel,
@@ -22,6 +23,8 @@ export function CustomerFeedView({ variant }: CustomerFeedViewProps) {
   const { user, loading: authLoading } = useAuth();
   const [slots, setSlots] = useState<CustomerFeedSlot[]>([]);
   const [notes, setNotes] = useState<CustomerNoteItem[]>([]);
+  const [currentFocus, setCurrentFocus] = useState<string | null>(null);
+  const [cmName, setCmName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notesError, setNotesError] = useState<string | null>(null);
@@ -42,12 +45,16 @@ export function CustomerFeedView({ variant }: CustomerFeedViewProps) {
       setError(null);
       setNotesError(null);
 
-      const [feedResult, notesResult] = await Promise.allSettled([
+      const [feedResult, notesResult, gamePlanResult] = await Promise.allSettled([
         fetch('/api/customer/feed', {
           signal: controller.signal,
           cache: 'no-store',
         }),
         fetch('/api/customer/notes?limit=6', {
+          signal: controller.signal,
+          cache: 'no-store',
+        }),
+        fetch('/api/customer/game-plan', {
           signal: controller.signal,
           cache: 'no-store',
         }),
@@ -93,6 +100,20 @@ export function CustomerFeedView({ variant }: CustomerFeedViewProps) {
         setNotes([]);
       }
 
+      if (gamePlanResult.status === 'fulfilled') {
+        try {
+          const response = gamePlanResult.value;
+          if (response.ok) {
+            const gpData = await response.json() as { brief?: { current_focus?: string } | null; cm_name?: string | null };
+            const focus = gpData?.brief?.current_focus?.trim() ?? null;
+            setCurrentFocus(focus || null);
+            setCmName(gpData?.cm_name?.trim() || null);
+          }
+        } catch {
+          // Non-critical — editorial intro simply won't render
+        }
+      }
+
       setLoading(false);
     };
 
@@ -109,6 +130,8 @@ export function CustomerFeedView({ variant }: CustomerFeedViewProps) {
 
   const content = (
     <>
+      {currentFocus && <EditorialIntroCard text={currentFocus} variant={variant} cmName={cmName} />}
+
       {error && <FeedMessageCard tone="error" message={error} />}
 
       {!error && slots.length === 0 && (
@@ -121,12 +144,22 @@ export function CustomerFeedView({ variant }: CustomerFeedViewProps) {
 
       {!error && slots.length > 0 && (
         <>
+          {variant === 'mobile' ? (
+            <p style={sectionLabel}>PLAN</p>
+          ) : (
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: '#374151', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Plan
+            </h2>
+          )}
+          <CustomerPlannerGrid slots={slots} variant={variant} />
+
           {groups.current && (
             <FeedSection
               variant={variant}
               title={variant === 'mobile' ? 'JUST NU' : 'Just nu'}
               slots={[groups.current]}
               highlightCurrent
+              cmName={cmName}
             />
           )}
 
@@ -135,6 +168,7 @@ export function CustomerFeedView({ variant }: CustomerFeedViewProps) {
               variant={variant}
               title={variant === 'mobile' ? 'KOMMANDE' : 'Kommande'}
               slots={groups.upcoming}
+              cmName={cmName}
             />
           )}
 
@@ -144,6 +178,7 @@ export function CustomerFeedView({ variant }: CustomerFeedViewProps) {
               title={variant === 'mobile' ? 'TIDIGARE' : 'Tidigare'}
               slots={groups.history}
               dimHistory
+              cmName={cmName}
             />
           )}
         </>
@@ -198,12 +233,14 @@ function FeedSection({
   slots,
   highlightCurrent = false,
   dimHistory = false,
+  cmName = null,
 }: {
   variant: 'mobile' | 'desktop';
   title: string;
   slots: CustomerFeedSlot[];
   highlightCurrent?: boolean;
   dimHistory?: boolean;
+  cmName?: string | null;
 }) {
   return (
     <div style={{ marginBottom: 28 }}>
@@ -223,6 +260,7 @@ function FeedSection({
             variant={variant}
             highlight={highlightCurrent}
             dimmed={dimHistory}
+            cmName={cmName}
           />
         ))}
       </div>
@@ -235,16 +273,23 @@ function FeedSlotCard({
   variant,
   highlight = false,
   dimmed = false,
+  cmName = null,
 }: {
   slot: CustomerFeedSlot;
   variant: 'mobile' | 'desktop';
   highlight?: boolean;
   dimmed?: boolean;
+  cmName?: string | null;
 }) {
   const router = useRouter();
   const statusStyle = CUSTOMER_FEED_STATUS_STYLES[slot.status];
   const isMobile = variant === 'mobile';
-  const background = highlight ? (isMobile ? '#fdf4ff' : '#faf5ff') : isMobile ? colors.card : '#fff';
+  const isImportedHistory = slot.rowKind === 'imported_history';
+  const background = highlight
+    ? (isMobile ? '#fdf4ff' : '#faf5ff')
+    : isImportedHistory
+      ? (isMobile ? '#f8f8f8' : '#f9fafb')
+      : isMobile ? colors.card : '#fff';
   const borderColor = highlight ? (isMobile ? '#c084fc' : '#8b5cf6') : isMobile ? 'transparent' : '#e5e7eb';
 
   const handleOpenConcept = () => {
@@ -252,8 +297,8 @@ function FeedSlotCard({
   };
 
   const primaryAction = slot.result.tiktokUrl
-    ? { label: 'Se publicerad video', href: slot.result.tiktokUrl }
-    : slot.assignmentId
+    ? { label: isImportedHistory ? 'Se originalet' : 'Se publicerad video', href: slot.result.tiktokUrl }
+    : !isImportedHistory && slot.assignmentId
       ? { label: 'Öppna koncept', onClick: handleOpenConcept }
       : slot.sourceUrl
         ? { label: 'Se referens', href: slot.sourceUrl }
@@ -273,17 +318,30 @@ function FeedSlotCard({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-            <span style={{
-              background: statusStyle.bg,
-              color: statusStyle.text,
-              padding: isMobile ? '2px 8px' : '3px 8px',
-              borderRadius: 999,
-              fontSize: 11,
-              fontWeight: 700,
-            }}>
-              {slot.statusLabel}
-            </span>
-            {typeof slot.matchPercentage === 'number' && (
+            {isImportedHistory ? (
+              <span style={{
+                background: '#f1f5f9',
+                color: '#64748b',
+                padding: isMobile ? '2px 8px' : '3px 8px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 600,
+              }}>
+                TikTok-klipp
+              </span>
+            ) : (
+              <span style={{
+                background: statusStyle.bg,
+                color: statusStyle.text,
+                padding: isMobile ? '2px 8px' : '3px 8px',
+                borderRadius: 999,
+                fontSize: 11,
+                fontWeight: 700,
+              }}>
+                {slot.statusLabel}
+              </span>
+            )}
+            {!isImportedHistory && typeof slot.matchPercentage === 'number' && (
               <span style={{
                 background: '#f3f4f6',
                 color: '#4b5563',
@@ -292,7 +350,7 @@ function FeedSlotCard({
                 fontSize: 11,
                 fontWeight: 600,
               }}>
-                {slot.matchPercentage}% match
+                {slot.matchPercentage}% passning
               </span>
             )}
           </div>
@@ -319,6 +377,21 @@ function FeedSlotCard({
         {slot.summary}
       </p>
 
+      {isImportedHistory && (slot.result.tiktokViews !== null || slot.result.tiktokLikes !== null || slot.result.publishedAt !== null) && (
+        <div style={{
+          fontSize: 12,
+          color: isMobile ? colors.textSubtle : '#94a3b8',
+          margin: '0 0 10px',
+          fontFamily: isMobile ? fontFamily : undefined,
+        }}>
+          {[
+            slot.result.publishedAt !== null && formatShortDate(slot.result.publishedAt),
+            slot.result.tiktokViews !== null && `${formatCompact(slot.result.tiktokViews)} visningar`,
+            slot.result.tiktokLikes !== null && `${formatCompact(slot.result.tiktokLikes)} likes`,
+          ].filter(Boolean).join(' · ')}
+        </div>
+      )}
+
       {slot.detailHint && (
         <p style={{
           fontSize: 12,
@@ -340,7 +413,7 @@ function FeedSlotCard({
         marginBottom: slot.note || primaryAction ? 12 : 0,
         fontFamily: isMobile ? fontFamily : undefined,
       }}>
-        <span>{getDateLabel(slot)}</span>
+        {!isImportedHistory && <span>{getDateLabel(slot)}</span>}
         {slot.sourceUrl && !slot.result.tiktokUrl && <span>{getCustomerOriginalReferenceLabel()}</span>}
         {slot.productionNotes.length > 0 && <span>{slot.productionNotes.length} inspelningspunkter</span>}
       </div>
@@ -359,7 +432,7 @@ function FeedSlotCard({
             margin: '0 0 2px',
             fontFamily: isMobile ? fontFamily : undefined,
           }}>
-            NOTERING FRÅN CM
+            {cmName ? `Notering från ${cmName}` : 'Notering från CM'}
           </p>
           <p style={{
             fontSize: 13,
@@ -414,6 +487,46 @@ function FeedSlotCard({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function EditorialIntroCard({ text, variant, cmName = null }: { text: string; variant: 'mobile' | 'desktop'; cmName?: string | null }) {
+  const isMobile = variant === 'mobile';
+  return (
+    <div
+      style={{
+        background: '#FAF6F0',
+        borderRadius: isMobile ? 14 : 16,
+        padding: isMobile ? '14px 16px' : '18px 20px',
+        marginBottom: 20,
+        border: '1px solid rgba(74, 47, 24, 0.08)',
+      }}
+    >
+      <p
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: '#8E7E6B',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          margin: '0 0 4px',
+          fontFamily: isMobile ? fontFamily : undefined,
+        }}
+      >
+        {cmName ?? 'Den här perioden'}
+      </p>
+      <p
+        style={{
+          fontSize: isMobile ? 14 : 15,
+          color: '#3C3127',
+          lineHeight: 1.6,
+          margin: 0,
+          fontFamily: isMobile ? fontFamily : undefined,
+        }}
+      >
+        {text}
+      </p>
     </div>
   );
 }
@@ -477,4 +590,14 @@ function getDateLabel(slot: CustomerFeedSlot): string {
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString('sv-SE');
+}
+
+function formatShortDate(value: string): string {
+  return new Date(value).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatCompact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.0', '')}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace('.0', '')}k`;
+  return String(n);
 }

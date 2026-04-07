@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { loadConcepts as loadConceptsFromDB } from '@/lib/conceptLoaderDB';
 import type { TranslatedConcept } from '@/lib/translator';
+import { display } from '@/lib/display';
 import { FeedTimeline } from '@/components/studio/FeedTimeline';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import { SidePanel } from '@/components/studio-v2/SidePanel';
@@ -176,6 +177,12 @@ function getInlineFeedbackStyle(tone: InlineFeedbackTone) {
   }
 }
 
+function formatCompactViews(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.0', '')}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace('.0', '')}k`;
+  return String(n);
+}
+
 function getOperatorNextStepLabel(concept: CustomerConcept): string {
   const assignment = concept.assignment;
   const placement = concept.placement;
@@ -212,6 +219,37 @@ function getOperatorNextStepLabel(concept: CustomerConcept): string {
   return 'Redigera uppdraget och dela eller planera det som nästa steg.';
 }
 
+interface CMIdentity {
+  name: string;
+  avatarUrl?: string;
+  color?: string;
+}
+
+function renderCmBadge(identity: CMIdentity): React.ReactNode {
+  const initials = identity.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, verticalAlign: 'middle' }}>
+      {identity.avatarUrl ? (
+        <img
+          src={identity.avatarUrl}
+          alt={identity.name}
+          style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+        />
+      ) : (
+        <span style={{
+          width: 14, height: 14, borderRadius: '50%',
+          background: identity.color || '#4f46e5',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', fontSize: 8, fontWeight: 700, flexShrink: 0
+        }}>
+          {initials}
+        </span>
+      )}
+      <span>{identity.name}</span>
+    </span>
+  );
+}
+
 export default function CustomerWorkspacePage() {
   return (
     <Suspense fallback={<WorkspacePageFallback />}>
@@ -236,7 +274,7 @@ function CustomerWorkspacePageContent() {
   const [allConcepts, setAllConcepts] = useState<TranslatedConcept[]>([]);
   const [gamePlanHtml, setGamePlanHtml] = useState('');
   const [gamePlanSummary, setGamePlanSummary] = useState<CustomerGamePlanSummary | null>(null);
-  const [cmDisplayNames, setCmDisplayNames] = useState<Record<string, string>>({});
+  const [cmDisplayNames, setCmDisplayNames] = useState<Record<string, CMIdentity>>({});
 
   // UI state
   const [activeSection, setActiveSection] = useState<Section>(() => {
@@ -257,7 +295,12 @@ function CustomerWorkspacePageContent() {
   const [savingGamePlan, setSavingGamePlan] = useState(false);
   const [gamePlanError, setGamePlanError] = useState<string | null>(null);
   const [gamePlanSaveMessage, setGamePlanSaveMessage] = useState<string | null>(null);
-  const [expandedConceptId, setExpandedConceptId] = useState<string | null>(null);
+  const [expandedConceptId, setExpandedConceptId] = useState<string | null>(() =>
+    searchParams.get('justAdded') ?? null
+  );
+  const [justAddedConceptId, setJustAddedConceptId] = useState<string | null>(() =>
+    searchParams.get('justAdded') ?? null
+  );
   const [editingConceptId, setEditingConceptId] = useState<string | null>(null);
   const [editorInitialSections, setEditorInitialSections] = useState<ConceptSectionKey[]>([
     'script',
@@ -299,6 +342,7 @@ function CustomerWorkspacePageContent() {
   const [importHistoryJson, setImportHistoryJson] = useState('');
   const [importingHistory, setImportingHistory] = useState(false);
   const [importHistoryError, setImportHistoryError] = useState<string | null>(null);
+  const [importHistoryResult, setImportHistoryResult] = useState<{ imported: number; skipped: number } | null>(null);
 
   const customerCacheKey = `studio-v2:workspace:${customerId}:customer`;
   const gamePlanCacheKey = `studio-v2:workspace:${customerId}:game-plan`;
@@ -543,16 +587,37 @@ function CustomerWorkspacePageContent() {
     void loadFeedPlannerData();
   }, []);
 
-  // Load CM display names once for note/email attribution
+  // Load CM identity once for note/email/concept attribution badges.
+  // Pass 1: team_members — preferred (name + avatar_url + color for badge rendering)
+  // Pass 2: profiles.email username fallback for CMs without a team_members link
   useEffect(() => {
     void (async () => {
-      const { data } = await supabase.from('profiles').select('id, full_name');
-      if (!data) return;
-      const names: Record<string, string> = {};
-      for (const row of data) {
-        if (row.full_name) names[row.id as string] = row.full_name as string;
+      const identities: Record<string, CMIdentity> = {};
+
+      const { data: teamData } = await supabase
+        .from('team_members')
+        .select('profile_id, name, avatar_url, color')
+        .not('profile_id', 'is', null);
+      for (const row of teamData ?? []) {
+        if (row.profile_id && row.name) {
+          identities[row.profile_id as string] = {
+            name: row.name as string,
+            avatarUrl: (row.avatar_url as string | null) ?? undefined,
+            color: (row.color as string | null) ?? undefined,
+          };
+        }
       }
-      setCmDisplayNames(names);
+
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('role', ['admin', 'content_manager']);
+      for (const row of profileData ?? []) {
+        const id = row.id as string;
+        if (!identities[id] && row.email) identities[id] = { name: (row.email as string).split('@')[0] };
+      }
+
+      setCmDisplayNames(identities);
     })();
   }, []);
 
@@ -748,6 +813,22 @@ function CustomerWorkspacePageContent() {
     }
   };
 
+  const handleAddConceptNote = async (conceptId: string, content: string) => {
+    if (!content.trim()) return;
+    try {
+      const response = await fetch(`/api/studio-v2/customers/${customerId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, primary_customer_concept_id: conceptId })
+      });
+      if (!response.ok) throw new Error('Failed to add concept note');
+      await fetchNotes(true);
+    } catch (err) {
+      console.error('Error adding concept note:', err);
+      alert('Kunde inte lägga till notering');
+    }
+  };
+
   const handleDeleteNote = async (noteId: string) => {
     if (!confirm('Ta bort denna notering?')) return;
 
@@ -784,9 +865,10 @@ function CustomerWorkspacePageContent() {
       await fetchConcepts(true);
       setShowAddConceptPanel(false);
 
-      // Auto-expand the new concept
+      // Auto-expand the new concept and signal post-add note nudge
       if (data?.concept?.id) {
         setExpandedConceptId(data.concept.id);
+        setJustAddedConceptId(data.concept.id);
       }
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : 'Kunde inte lägga till koncept');
@@ -894,6 +976,10 @@ function CustomerWorkspacePageContent() {
 
   const handleUpdateCmNote = async (conceptId: string, note: string) => {
     await handleUpdateConcept(conceptId, { cm_note: note });
+  };
+
+  const handleUpdateWhyItFits = async (conceptId: string, text: string) => {
+    await handleUpdateConcept(conceptId, { content_overrides: { why_it_fits: text } });
   };
 
   const handleUpdateTikTokUrl = async (conceptId: string, url: string) => {
@@ -1090,6 +1176,7 @@ function CustomerWorkspacePageContent() {
   const handleImportHistory = async (replace: boolean) => {
     if (!customerId || importingHistory) return;
     setImportHistoryError(null);
+    setImportHistoryResult(null);
 
     let clips: unknown[];
     try {
@@ -1102,17 +1189,17 @@ function CustomerWorkspacePageContent() {
 
     setImportingHistory(true);
     try {
-      const res = await fetch('/api/demo/import-history', {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/import-history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId, clips, replace }),
+        body: JSON.stringify({ clips, replace }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Import misslyckades');
 
       await fetchConcepts(true);
-      setShowImportHistoryModal(false);
       setImportHistoryJson('');
+      setImportHistoryResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
     } catch (err) {
       setImportHistoryError((err as Error).message);
     } finally {
@@ -1459,14 +1546,14 @@ function CustomerWorkspacePageContent() {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: LeTrendColors.textSecondary, display: 'block', marginBottom: 4 }}>
-                    Fokus just nu
+                    Periodens ingång — syns som intro i kundens feed
                   </label>
                   <AutoSaveTextarea
                     value={brief.current_focus}
                     onChange={(val) => setBrief({ ...brief, current_focus: val })}
                     onSave={(val) => handleSaveBrief('current_focus', val)}
                     rows={2}
-                    placeholder='T.ex. "Sommarsäsong — lyfta friluftslinjen"'
+                    placeholder='T.ex. "Den här perioden fokuserar vi på format som bygger trovärdighet inför höst..."'
                   />
                 </div>
               </div>
@@ -1664,7 +1751,11 @@ function CustomerWorkspacePageContent() {
                 setWorkspaceSection('kommunikation');
               }}
               handleUpdateCmNote={handleUpdateCmNote}
-              brief={{ tone: brief.tone, current_focus: brief.current_focus }}
+              handleUpdateWhyItFits={handleUpdateWhyItFits}
+              handleAddConceptNote={handleAddConceptNote}
+              justAddedConceptId={justAddedConceptId}
+              cmDisplayNames={cmDisplayNames}
+              brief={{ tone: brief.tone, constraints: brief.constraints, current_focus: brief.current_focus }}
             />
           )}
 
@@ -1749,7 +1840,7 @@ function CustomerWorkspacePageContent() {
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button
-                    onClick={() => setShowImportHistoryModal(true)}
+                    onClick={() => { setImportHistoryResult(null); setImportHistoryError(null); setShowImportHistoryModal(true); }}
                     style={{
                       padding: '8px 14px',
                       background: LeTrendColors.surface,
@@ -1867,11 +1958,16 @@ function CustomerWorkspacePageContent() {
         title="Lägg till koncept"
       >
         <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: LeTrendRadius.md, background: LeTrendColors.surface, border: `1px solid ${LeTrendColors.border}`, fontSize: 12, lineHeight: 1.5 }}>
-          {(brief.tone || brief.current_focus) ? (
-            <span style={{ color: LeTrendColors.textSecondary }}>
+          {(brief.tone || brief.current_focus || brief.constraints) ? (
+            <div style={{ color: LeTrendColors.textSecondary }}>
               <strong style={{ color: LeTrendColors.brownDark }}>Kundbrief:</strong>{' '}
               {[brief.tone, brief.current_focus].filter(Boolean).join(' · ')}
-            </span>
+              {brief.constraints && (
+                <div style={{ marginTop: 4, color: LeTrendColors.textMuted }}>
+                  <strong style={{ color: LeTrendColors.brownDark }}>Begränsningar:</strong>{' '}{brief.constraints}
+                </div>
+              )}
+            </div>
           ) : (
             <em style={{ color: LeTrendColors.textMuted }}>Brief saknas — fyll i kundbriefen i sidopanelen för bättre konceptpassning.</em>
           )}
@@ -1892,7 +1988,9 @@ function CustomerWorkspacePageContent() {
               return (
                 (c.headline_sv || c.headline || '').toLowerCase().includes(q) ||
                 (c.description_sv || '').toLowerCase().includes(q) ||
-                c.vibeAlignments.some(v => v.toLowerCase().includes(q))
+                c.vibeAlignments.some(v => v.toLowerCase().includes(q)) ||
+                (c.mechanism || '').toLowerCase().includes(q) ||
+                display.mechanism(c.mechanism).label.toLowerCase().includes(q)
               );
             })
             .map(concept => (
@@ -1913,15 +2011,30 @@ function CustomerWorkspacePageContent() {
                 }}>
                   {concept.headline_sv || concept.headline}
                 </h4>
-                {concept.vibeAlignments.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                    {concept.vibeAlignments.map((vibe) => (
-                      <span key={vibe} style={{ fontSize: 11, padding: '2px 7px', borderRadius: 999, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}>
-                        {vibe}
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                  {concept.mechanism && (
+                    <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 999, background: '#faf5ff', border: '1px solid #e9d5ff', color: '#7c3aed', fontWeight: 600 }}>
+                      {display.mechanism(concept.mechanism).label}
+                    </span>
+                  )}
+                  {concept.vibeAlignments.map((vibe) => (
+                    <span key={vibe} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 999, background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534' }}>
+                      {vibe}
+                    </span>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 8, fontSize: 11, color: LeTrendColors.textMuted, alignItems: 'center' }}>
+                  <span>{display.difficulty(concept.difficulty).label}</span>
+                  <span>·</span>
+                  <span>{display.filmTime(concept.filmTime).label}</span>
+                  <span>·</span>
+                  <span>{display.peopleNeeded(concept.peopleNeeded).label}</span>
+                  {concept.trendLevel >= 4 && (
+                    <span style={{ marginLeft: 4, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', fontWeight: 600 }}>
+                      {display.trendLevel(concept.trendLevel).icon} {display.trendLevel(concept.trendLevel).label}
+                    </span>
+                  )}
+                </div>
                 {concept.description_sv && (
                   <p style={{
                     fontSize: 12,
@@ -2134,39 +2247,76 @@ function CustomerWorkspacePageContent() {
               </div>
             )}
 
+            {importHistoryResult && (
+              <div style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: LeTrendRadius.md,
+                padding: '10px 14px',
+                fontSize: 13,
+                color: '#166534',
+              }}>
+                Import klar — {importHistoryResult.imported} klipp importerade
+                {importHistoryResult.skipped > 0 && `, ${importHistoryResult.skipped} hoppades över (redan finns)`}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => void handleImportHistory(true)}
-                disabled={importingHistory || !importHistoryJson.trim()}
-                style={{
-                  padding: '9px 16px',
-                  background: LeTrendColors.surface,
-                  border: `1px solid ${LeTrendColors.borderMedium}`,
-                  borderRadius: LeTrendRadius.md,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: LeTrendColors.textSecondary,
-                  cursor: importingHistory ? 'not-allowed' : 'pointer',
-                }}
-              >
-                Ersätt historik
-              </button>
-              <button
-                onClick={() => void handleImportHistory(false)}
-                disabled={importingHistory || !importHistoryJson.trim()}
-                style={{
-                  padding: '9px 16px',
-                  background: LeTrendColors.brownLight,
-                  border: 'none',
-                  borderRadius: LeTrendRadius.md,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: LeTrendColors.cream,
-                  cursor: importingHistory ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {importingHistory ? 'Importerar...' : 'Lägg till historik'}
-              </button>
+              {importHistoryResult ? (
+                <button
+                  onClick={() => {
+                    setShowImportHistoryModal(false);
+                    setImportHistoryResult(null);
+                  }}
+                  style={{
+                    padding: '9px 16px',
+                    background: LeTrendColors.brownLight,
+                    border: 'none',
+                    borderRadius: LeTrendRadius.md,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: LeTrendColors.cream,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Klar
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => void handleImportHistory(true)}
+                    disabled={importingHistory || !importHistoryJson.trim()}
+                    style={{
+                      padding: '9px 16px',
+                      background: LeTrendColors.surface,
+                      border: `1px solid ${LeTrendColors.borderMedium}`,
+                      borderRadius: LeTrendRadius.md,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: LeTrendColors.textSecondary,
+                      cursor: importingHistory ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    Ersätt historik
+                  </button>
+                  <button
+                    onClick={() => void handleImportHistory(false)}
+                    disabled={importingHistory || !importHistoryJson.trim()}
+                    style={{
+                      padding: '9px 16px',
+                      background: LeTrendColors.brownLight,
+                      border: 'none',
+                      borderRadius: LeTrendRadius.md,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: LeTrendColors.cream,
+                      cursor: importingHistory ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {importingHistory ? 'Importerar...' : 'Lägg till historik'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -2207,7 +2357,7 @@ interface GamePlanSectionProps {
   handleDeleteNote: (noteId: string) => Promise<void>;
   parseMarkdownLinks: (text: string) => React.ReactNode[] | string;
   formatDateTime: (dateStr: string) => string;
-  cmDisplayNames: Record<string, string>;
+  cmDisplayNames: Record<string, CMIdentity>;
 }
 
 interface FeedPlannerSectionProps {
@@ -2271,7 +2421,7 @@ interface KommunikationSectionProps {
   getDraftConcepts: () => CustomerConcept[];
   getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
   formatDateTime: (dateStr: string) => string;
-  cmDisplayNames: Record<string, string>;
+  cmDisplayNames: Record<string, CMIdentity>;
 }
 
 
@@ -2616,7 +2766,10 @@ function GamePlanSection({
                   marginBottom: 8
                 }}>
                   <div style={{ fontSize: 11, color: LeTrendColors.textMuted }}>
-                    {formatDateTime(note.created_at)} av {(note.cm_id && cmDisplayNames[note.cm_id]) || note.cm_id || 'okänd'}
+                    {formatDateTime(note.created_at)} av{' '}
+                    {note.cm_id && cmDisplayNames[note.cm_id]
+                      ? renderCmBadge(cmDisplayNames[note.cm_id]!)
+                      : (note.cm_id || 'okänd')}
                   </div>
                   <button
                     onClick={() => handleDeleteNote(note.id)}
@@ -2661,6 +2814,10 @@ function KonceptSection({
   getConceptDetails,
   onSendConcept,
   handleUpdateCmNote,
+  handleUpdateWhyItFits,
+  handleAddConceptNote,
+  justAddedConceptId,
+  cmDisplayNames,
   brief,
 }: {
   concepts: CustomerConcept[];
@@ -2677,10 +2834,35 @@ function KonceptSection({
   getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
   onSendConcept: (conceptId: string) => void;
   handleUpdateCmNote: (conceptId: string, note: string) => Promise<void>;
-  brief: { tone: string; current_focus: string };
+  handleUpdateWhyItFits: (conceptId: string, text: string) => Promise<void>;
+  handleAddConceptNote: (conceptId: string, content: string) => Promise<void>;
+  justAddedConceptId: string | null;
+  cmDisplayNames: Record<string, CMIdentity>;
+  brief: { tone: string; constraints: string; current_focus: string };
 }) {
   const [editingNoteForConcept, setEditingNoteForConcept] = React.useState<string | null>(null);
   const [localNoteText, setLocalNoteText] = React.useState('');
+  const [editingWhyItFitsForConcept, setEditingWhyItFitsForConcept] = React.useState<string | null>(null);
+  const [localWhyItFitsText, setLocalWhyItFitsText] = React.useState('');
+  const [addingConceptNoteForConcept, setAddingConceptNoteForConcept] = React.useState<string | null>(null);
+  const [localConceptNoteText, setLocalConceptNoteText] = React.useState('');
+  const [savingConceptNote, setSavingConceptNote] = React.useState(false);
+
+  const startWhyItFitsEdit = (conceptId: string, currentText: string | null) => {
+    setEditingWhyItFitsForConcept(conceptId);
+    setLocalWhyItFitsText(currentText ?? '');
+  };
+
+  const cancelWhyItFitsEdit = () => {
+    setEditingWhyItFitsForConcept(null);
+    setLocalWhyItFitsText('');
+  };
+
+  const saveWhyItFits = async (conceptId: string) => {
+    await handleUpdateWhyItFits(conceptId, localWhyItFitsText);
+    setEditingWhyItFitsForConcept(null);
+    setLocalWhyItFitsText('');
+  };
 
   const startNoteEdit = (conceptId: string, currentNote: string | null) => {
     setEditingNoteForConcept(conceptId);
@@ -2696,7 +2878,26 @@ function KonceptSection({
     await handleUpdateCmNote(conceptId, localNoteText);
     setEditingNoteForConcept(null);
     setLocalNoteText('');
+    // After saving cm_note on a just-added concept, auto-open why_it_fits if not already set
+    if (justAddedConceptId === conceptId) {
+      const concept = concepts.find(c => c.id === conceptId);
+      if (concept && !concept.content.content_overrides?.why_it_fits) {
+        startWhyItFitsEdit(conceptId, null);
+      }
+    }
   };
+
+  // Auto-open note editing immediately after a concept is added, but only once per add
+  const autoStartedRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    if (justAddedConceptId && !autoStartedRef.current.has(justAddedConceptId)) {
+      const concept = concepts.find(c => c.id === justAddedConceptId);
+      if (concept && !concept.cm_note) {
+        autoStartedRef.current.add(justAddedConceptId);
+        startNoteEdit(justAddedConceptId, null);
+      }
+    }
+  }, [justAddedConceptId, concepts]);
 
   return (
     <div style={{
@@ -2750,11 +2951,16 @@ function KonceptSection({
       </div>
 
       <div style={{ marginBottom: 16, fontSize: 12, lineHeight: 1.5 }}>
-        {(brief.tone || brief.current_focus) ? (
-          <span style={{ color: LeTrendColors.textSecondary }}>
+        {(brief.tone || brief.current_focus || brief.constraints) ? (
+          <div style={{ color: LeTrendColors.textSecondary }}>
             <strong style={{ color: LeTrendColors.brownDark }}>Kundbrief:</strong>{' '}
             {[brief.tone, brief.current_focus].filter(Boolean).join(' · ')}
-          </span>
+            {brief.constraints && (
+              <span style={{ color: LeTrendColors.textMuted }}>
+                {' · '}<strong style={{ color: LeTrendColors.brownDark }}>Begränsningar:</strong>{' '}{brief.constraints}
+              </span>
+            )}
+          </div>
         ) : (
           <em style={{ color: LeTrendColors.textMuted }}>Brief saknas — fyll i kundbriefen i sidopanelen för bättre konceptpassning.</em>
         )}
@@ -2857,6 +3063,21 @@ function KonceptSection({
                           ? `Delad ${formatDate(concept.markers.shared_at)}`
                           : 'Inte delad ännu'}
                       </span>
+                      {(concept.result.tiktok_url || concept.result.published_at) && (
+                        <span style={{
+                          padding: '4px 8px',
+                          borderRadius: 999,
+                          background: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: '#166534'
+                        }}>
+                          {concept.result.tiktok_views && concept.result.tiktok_views > 0
+                            ? `Publicerad · ${formatCompactViews(concept.result.tiktok_views)} visningar`
+                            : 'Publicerad på TikTok'}
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 13 }}>
                       <StatusChip
@@ -2893,6 +3114,16 @@ function KonceptSection({
                     {resolved.fit.whyItWorks_sv && !isExpanded && (
                       <div style={{ marginTop: 8, fontSize: 12, color: LeTrendColors.textSecondary, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                         <strong style={{ color: LeTrendColors.brownDark }}>Varför det funkar:</strong>{' '}{resolved.fit.whyItWorks_sv}
+                      </div>
+                    )}
+                    {concept.cm_note && !isExpanded && (
+                      <div style={{ marginTop: 6, fontSize: 11, color: LeTrendColors.textMuted, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        <strong style={{ color: LeTrendColors.brownDark }}>CM:</strong>{' '}{concept.cm_note}
+                      </div>
+                    )}
+                    {!concept.content.content_overrides?.why_it_fits && !isExpanded && (
+                      <div style={{ marginTop: 6, fontSize: 11, color: '#b45309', lineHeight: 1.5 }}>
+                        Passning till kunden ej ifylld — syns tomt hos kunden
                       </div>
                     )}
                   </div>
@@ -2974,10 +3205,49 @@ function KonceptSection({
                     </div>
                     <div style={{ height: 10 }} />
                     <div style={{ background: '#fff', borderRadius: LeTrendRadius.md, border: `1px solid ${LeTrendColors.border}`, padding: 12 }}>
-                      <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, marginBottom: 4 }}>Varför det funkar</div>
-                      <div style={{ fontSize: 14, color: LeTrendColors.textPrimary, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                        {resolved.fit.whyItWorks_sv || 'Inga argument tillagda'}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                        <div>
+                          <div style={{ fontSize: 12, color: LeTrendColors.textSecondary }}>Passning till kunden</div>
+                          <div style={{ fontSize: 10, color: LeTrendColors.textMuted, marginTop: 1 }}>syns hos kunden under "Varför det passar er"</div>
+                        </div>
+                        {editingWhyItFitsForConcept !== concept.id && (
+                          <button
+                            onClick={() => startWhyItFitsEdit(concept.id, concept.content.content_overrides?.why_it_fits ?? null)}
+                            style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: LeTrendColors.brownLight, cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                          >
+                            {concept.content.content_overrides?.why_it_fits ? 'Redigera' : 'Lägg till'}
+                          </button>
+                        )}
                       </div>
+                      {editingWhyItFitsForConcept === concept.id ? (
+                        <div>
+                          <textarea
+                            value={localWhyItFitsText}
+                            onChange={(e) => setLocalWhyItFitsText(e.target.value)}
+                            rows={3}
+                            placeholder="Varför passar det här konceptet just den här kunden? Vad i deras brief gör det relevant?"
+                            style={{ width: '100%', padding: 8, borderRadius: LeTrendRadius.sm, border: `1px solid ${LeTrendColors.border}`, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+                          />
+                          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                            <button
+                              onClick={() => void saveWhyItFits(concept.id)}
+                              style={{ padding: '6px 12px', background: LeTrendColors.brownLight, color: '#fff', border: 'none', borderRadius: LeTrendRadius.sm, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                            >
+                              Spara
+                            </button>
+                            <button
+                              onClick={cancelWhyItFitsEdit}
+                              style={{ padding: '6px 12px', background: '#fff', color: LeTrendColors.brownDark, border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                            >
+                              Avbryt
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 14, color: concept.content.content_overrides?.why_it_fits ? LeTrendColors.textPrimary : LeTrendColors.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                          {concept.content.content_overrides?.why_it_fits || 'Ingen kundspecifik passning ännu.'}
+                        </div>
+                      )}
                     </div>
                     <div style={{ height: 10 }} />
                     <div style={{ background: '#fff', borderRadius: LeTrendRadius.md, border: `1px solid ${LeTrendColors.border}`, padding: 12 }}>
@@ -3005,7 +3275,7 @@ function KonceptSection({
                             value={localNoteText}
                             onChange={(e) => setLocalNoteText(e.target.value)}
                             rows={3}
-                            placeholder="Varför passar det här konceptet den här kunden?"
+                            placeholder="Något att nämna kring timingen, kontexten eller nästa steg?"
                             style={{ width: '100%', padding: 8, borderRadius: LeTrendRadius.sm, border: `1px solid ${LeTrendColors.border}`, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
                           />
                           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
@@ -3024,8 +3294,65 @@ function KonceptSection({
                           </div>
                         </div>
                       ) : (
-                        <div style={{ fontSize: 14, color: concept.cm_note ? LeTrendColors.textPrimary : LeTrendColors.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-                          {concept.cm_note || 'Ingen notering ännu.'}
+                        <div>
+                          <div style={{ fontSize: 14, color: concept.cm_note ? LeTrendColors.textPrimary : LeTrendColors.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                            {concept.cm_note || 'Ingen notering ännu.'}
+                          </div>
+                          {concept.cm_note && concept.cm_id && cmDisplayNames[concept.cm_id] && (
+                            <div style={{ marginTop: 4, fontSize: 11, color: LeTrendColors.textMuted }}>
+                              av{' '}{renderCmBadge(cmDisplayNames[concept.cm_id]!)}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ height: 10 }} />
+                    <div style={{ background: '#fff', borderRadius: LeTrendRadius.md, border: `1px solid ${LeTrendColors.border}`, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                        <div>
+                          <div style={{ fontSize: 12, color: LeTrendColors.textSecondary }}>Notering</div>
+                          <div style={{ fontSize: 10, color: LeTrendColors.textMuted, marginTop: 1 }}>syns i kundens flöde som en uppdatering</div>
+                        </div>
+                        {addingConceptNoteForConcept !== concept.id && (
+                          <button
+                            onClick={() => { setAddingConceptNoteForConcept(concept.id); setLocalConceptNoteText(''); }}
+                            style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: LeTrendColors.brownLight, cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                          >
+                            Lägg till
+                          </button>
+                        )}
+                      </div>
+                      {addingConceptNoteForConcept === concept.id && (
+                        <div>
+                          <textarea
+                            value={localConceptNoteText}
+                            onChange={(e) => setLocalConceptNoteText(e.target.value)}
+                            rows={3}
+                            placeholder="Vad vill du notera kring detta koncept just nu?"
+                            style={{ width: '100%', padding: 8, borderRadius: LeTrendRadius.sm, border: `1px solid ${LeTrendColors.border}`, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+                          />
+                          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+                            <button
+                              onClick={async () => {
+                                if (!localConceptNoteText.trim() || savingConceptNote) return;
+                                setSavingConceptNote(true);
+                                await handleAddConceptNote(concept.id, localConceptNoteText);
+                                setAddingConceptNoteForConcept(null);
+                                setLocalConceptNoteText('');
+                                setSavingConceptNote(false);
+                              }}
+                              disabled={savingConceptNote || !localConceptNoteText.trim()}
+                              style={{ padding: '6px 12px', background: LeTrendColors.brownLight, color: '#fff', border: 'none', borderRadius: LeTrendRadius.sm, fontSize: 12, fontWeight: 600, cursor: localConceptNoteText.trim() ? 'pointer' : 'not-allowed' }}
+                            >
+                              {savingConceptNote ? 'Sparar...' : 'Spara'}
+                            </button>
+                            <button
+                              onClick={() => { setAddingConceptNoteForConcept(null); setLocalConceptNoteText(''); }}
+                              style={{ padding: '6px 12px', background: '#fff', color: LeTrendColors.brownDark, border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                            >
+                              Avbryt
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -5909,7 +6236,10 @@ function KommunikationSection({
                           {email.subject}
                         </div>
                         <div style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
-                          {formatDateTime(email.sent_at)} av {(email.cm_id && cmDisplayNames[email.cm_id]) || email.cm_id || 'okänd'}
+                          {formatDateTime(email.sent_at)} av{' '}
+                          {email.cm_id && cmDisplayNames[email.cm_id]
+                            ? renderCmBadge(cmDisplayNames[email.cm_id]!)
+                            : (email.cm_id || 'okänd')}
                         </div>
                       </div>
                       <span style={{ fontSize: 16 }}>{isExpanded ? 'Dölj' : 'Visa'}</span>

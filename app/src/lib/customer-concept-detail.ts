@@ -230,10 +230,7 @@ function resolveCustomerConceptMetadataSection(input: MetadataSectionInput): Cus
   const whyItFits =
     sanitizeText(
       input.contentOverrides.why_it_fits ??
-        readJoinedStringArray(input.rawContentOverrides.whyItFits_sv) ??
-        readJoinedStringArray(input.translated.whyItFits_sv) ??
-        input.translated.whyItWorks_sv ??
-        (Array.isArray(input.translated.whyItFits) ? input.translated.whyItFits.join(' ') : null)
+        readJoinedStringArray(input.rawContentOverrides.whyItFits_sv) ?? null
     ) ?? null;
   const filmingGuidance =
     sanitizeText(input.contentOverrides.filming_instructions ?? null) ??

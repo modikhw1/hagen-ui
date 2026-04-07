@@ -30,7 +30,7 @@ export const GET = withAuth(async (_request, user) => {
 
   const { data: customerProfile, error: customerProfileError } = await supabase
     .from('customer_profiles')
-    .select('business_name, brief, game_plan')
+    .select('business_name, brief, game_plan, account_manager')
     .eq('id', customerProfileId)
     .single();
 
@@ -50,6 +50,7 @@ export const GET = withAuth(async (_request, user) => {
   return NextResponse.json({
     business_name: customerProfile.business_name ?? null,
     brief: customerProfile.brief ?? null,
+    cm_name: (customerProfile as unknown as { account_manager?: string | null }).account_manager?.trim() || null,
     game_plan_html: gamePlanResponse.game_plan.html,
     ...gamePlanResponse,
   });
