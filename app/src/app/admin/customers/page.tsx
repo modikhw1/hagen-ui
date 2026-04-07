@@ -53,6 +53,7 @@ interface InviteFormState {
   discount_end_date: string;
   brief_tone: string;
   brief_focus: string;
+  tiktok_profile_url: string;
 }
 
 interface ContractEditState {
@@ -120,6 +121,7 @@ const buildDefaultInviteForm = (): InviteFormState => ({
   discount_end_date: '',
   brief_tone: '',
   brief_focus: '',
+  tiktok_profile_url: '',
 });
 
 const buildContractEditForm = (customer: CustomerProfile): ContractEditState => ({
@@ -870,6 +872,17 @@ export default function AdminDashboard() {
                   style={{ width: '100%', padding: '10px', borderRadius: LeTrendRadius.md, border: `1px solid ${LeTrendColors.border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
                 />
               </div>
+            </div>
+
+            {/* TikTok profile URL (optional) */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ display: 'block', fontSize: '13px', marginBottom: '6px', fontWeight: 500, color: LeTrendColors.textSecondary }}>TikTok-profil URL — valfri</label>
+              <input
+                value={inviteForm.tiktok_profile_url}
+                onChange={e => setInviteForm({ ...inviteForm, tiktok_profile_url: e.target.value })}
+                placeholder="https://www.tiktok.com/@kundenshandle"
+                style={{ width: '100%', padding: '10px', borderRadius: LeTrendRadius.md, border: `1px solid ${LeTrendColors.border}`, fontSize: '13px', outline: 'none', boxSizing: 'border-box', background: '#fff' }}
+              />
             </div>
 
             {/* Price + Contract start */}

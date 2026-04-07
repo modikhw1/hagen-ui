@@ -20,7 +20,7 @@ export interface GridConfig {
 export const DEFAULT_GRID_CONFIG: GridConfig = {
   columns: 3,
   rows: 3,
-  currentSlotIndex: 2,
+  currentSlotIndex: 4, // center of 3×3 — matches CustomerPlannerGrid CURRENT_SLOT_INDEX
 };
 
 // =====================================================

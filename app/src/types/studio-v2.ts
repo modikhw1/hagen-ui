@@ -291,6 +291,11 @@ export interface CustomerProfile {
   // Studio 2.0 additions
   brief?: CustomerBrief;
 
+  // TikTok profile identity
+  tiktok_profile_url?: string | null;   // canonical: full profile URL (e.g. https://www.tiktok.com/@brand)
+  tiktok_handle?: string | null;        // derived display value, normalized from tiktok_profile_url
+  last_history_sync_at?: string | null;
+
   created_at: string;
   updated_at?: string;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useState, useEffect } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
@@ -343,6 +343,31 @@ function CustomerWorkspacePageContent() {
   const [importingHistory, setImportingHistory] = useState(false);
   const [importHistoryError, setImportHistoryError] = useState<string | null>(null);
   const [importHistoryResult, setImportHistoryResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [fetchingFromHagen, setFetchingFromHagen] = useState(false);
+  const [fetchFromHagenError, setFetchFromHagenError] = useState<string | null>(null);
+  const [fetchedFromUsernames, setFetchedFromUsernames] = useState<string[]>([]);
+  const [tiktokProfileUrlInput, setTiktokProfileUrlInput] = useState('');
+  const [savingTiktokProfile, setSavingTiktokProfile] = useState(false);
+  const [fetchingProfileHistory, setFetchingProfileHistory] = useState(false);
+  const [profileHistoryFetchResult, setProfileHistoryFetchResult] = useState<{ fetched: number; imported: number; skipped: number } | null>(null);
+  const [profileHistoryFetchError, setProfileHistoryFetchError] = useState<string | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyNextCursor, setHistoryNextCursor] = useState<number | null>(null);
+  // Guard: prevents auto-fetch from firing more than once per workspace open cycle
+  const profileHistoryAutoFetchRef = useRef(false);
+  const [syncingHistory, setSyncingHistory] = useState(false);
+  const [syncHistoryResult, setSyncHistoryResult] = useState<{ imported: number; skipped: number } | null>(null);
+  const [syncHistoryError, setSyncHistoryError] = useState<string | null>(null);
+  const [previewingSync, setPreviewingSync] = useState(false);
+  const [syncPreviewResult, setSyncPreviewResult] = useState<{
+    handle: string;
+    wouldImport: number;
+    wouldSkip: number;
+    totalMatched: number;
+    samples: Array<{ tiktok_url: string; source_username: string | null; description: string | null }>;
+    availableUsernames?: string[];
+  } | null>(null);
+  const [syncPreviewError, setSyncPreviewError] = useState<string | null>(null);
 
   const customerCacheKey = `studio-v2:workspace:${customerId}:customer`;
   const gamePlanCacheKey = `studio-v2:workspace:${customerId}:game-plan`;
@@ -354,6 +379,7 @@ function CustomerWorkspacePageContent() {
   const applyCustomerState = (profile: WorkspaceCustomerProfile) => {
     setCustomer(profile);
     setBrief(profile.brief || { tone: '', constraints: '', current_focus: '' });
+    setTiktokProfileUrlInput(profile.tiktok_profile_url || (profile.tiktok_handle ? `https://www.tiktok.com/@${profile.tiktok_handle}` : ''));
   };
 
   useEffect(() => {
@@ -415,6 +441,13 @@ function CustomerWorkspacePageContent() {
   // Load all data
   useEffect(() => {
     if (!customerId) return;
+
+    // Reset auto-fetch guard and history pagination state on customer change
+    profileHistoryAutoFetchRef.current = false;
+    setHistoryHasMore(false);
+    setHistoryNextCursor(null);
+    setProfileHistoryFetchResult(null);
+    setProfileHistoryFetchError(null);
 
     let isMounted = true;
 
@@ -503,6 +536,36 @@ function CustomerWorkspacePageContent() {
       void loadConceptLibrary();
     }
   }, [customerId]);
+
+  // Auto-fetch real customer profile history on first open — only when no history exists yet.
+  // Conservative policy: fires once per customer lifetime (when last_history_sync_at is null).
+  // Subsequent refreshes and load-more are explicit CM actions to preserve API budget.
+  useEffect(() => {
+    if (!customerId || !customer) return;
+    if (!customer.tiktok_profile_url) return;
+    if (profileHistoryAutoFetchRef.current) return;
+    // Only fire when history has never been fetched for this customer
+    if (customer.last_history_sync_at) return;
+
+    profileHistoryAutoFetchRef.current = true;
+    void (async () => {
+      setFetchingProfileHistory(true);
+      try {
+        const res = await fetch(`/api/studio-v2/customers/${customerId}/fetch-profile-history`, { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || 'Historik-hämtning misslyckades');
+        setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
+        setHistoryHasMore(data.has_more ?? false);
+        setHistoryNextCursor(data.cursor ?? null);
+        await Promise.all([fetchCustomer(true), fetchConcepts(true)]);
+      } catch (err) {
+        setProfileHistoryFetchError((err as Error).message);
+      } finally {
+        setFetchingProfileHistory(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer]);
 
   const fetchGridConfig = async (force = false) => {
     try {
@@ -1207,6 +1270,150 @@ function CustomerWorkspacePageContent() {
     }
   };
 
+  const handleFetchFromHagen = async () => {
+    if (!customerId || fetchingFromHagen) return;
+    setFetchFromHagenError(null);
+    setFetchedFromUsernames([]);
+    setFetchingFromHagen(true);
+    try {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/hagen-clips`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Kunde inte hämta klipp från hagen');
+      if (!Array.isArray(data.clips) || data.clips.length === 0) throw new Error('Inga TikTok-klipp hittades i hagen');
+      setImportHistoryJson(JSON.stringify(data.clips, null, 2));
+      setImportHistoryError(null);
+      // Collect unique source usernames for CM discernibility display
+      const usernames = [
+        ...new Set(
+          (data.clips as Array<{ source_username?: string | null }>)
+            .map((c) => c.source_username)
+            .filter((u): u is string => typeof u === 'string' && u.trim() !== '')
+        ),
+      ];
+      setFetchedFromUsernames(usernames);
+    } catch (err) {
+      setFetchFromHagenError((err as Error).message);
+    } finally {
+      setFetchingFromHagen(false);
+    }
+  };
+
+  const handleSaveTikTokProfile = async () => {
+    if (!customerId || savingTiktokProfile) return;
+    setSavingTiktokProfile(true);
+    try {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tiktok_profile_url: tiktokProfileUrlInput.trim() || null }),
+      });
+      if (!res.ok) throw new Error('Kunde inte spara TikTok-profil');
+      await fetchCustomer(true);
+    } catch (err) {
+      console.error('Error saving tiktok profile url:', err);
+    } finally {
+      setSavingTiktokProfile(false);
+    }
+  };
+
+  const handleFetchProfileHistory = async () => {
+    if (!customerId || fetchingProfileHistory) return;
+    setProfileHistoryFetchResult(null);
+    setProfileHistoryFetchError(null);
+    setHistoryHasMore(false);
+    setHistoryNextCursor(null);
+    setFetchingProfileHistory(true);
+    try {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/fetch-profile-history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count: 10 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Historik-hämtning misslyckades');
+      setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
+      setHistoryHasMore(data.has_more ?? false);
+      setHistoryNextCursor(data.cursor ?? null);
+      await Promise.all([fetchCustomer(true), fetchConcepts(true)]);
+    } catch (err) {
+      setProfileHistoryFetchError((err as Error).message);
+    } finally {
+      setFetchingProfileHistory(false);
+    }
+  };
+
+  const handleLoadMoreHistory = async () => {
+    if (!customerId || fetchingProfileHistory || !historyNextCursor) return;
+    setProfileHistoryFetchError(null);
+    setFetchingProfileHistory(true);
+    try {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/fetch-profile-history`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ count: 10, cursor: historyNextCursor }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Historik-hämtning misslyckades');
+      setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
+      setHistoryHasMore(data.has_more ?? false);
+      setHistoryNextCursor(data.cursor ?? null);
+      await Promise.all([fetchCustomer(true), fetchConcepts(true)]);
+    } catch (err) {
+      setProfileHistoryFetchError((err as Error).message);
+    } finally {
+      setFetchingProfileHistory(false);
+    }
+  };
+
+  const handleSyncHistory = async () => {
+    if (!customerId || syncingHistory || !customer?.tiktok_handle) return;
+    setSyncHistoryError(null);
+    setSyncHistoryResult(null);
+    setSyncPreviewResult(null);
+    setSyncingHistory(true);
+    try {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/sync-history`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Synk misslyckades');
+      setSyncHistoryResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
+      await fetchCustomer(true);
+      await fetchConcepts(true);
+    } catch (err) {
+      setSyncHistoryError((err as Error).message);
+    } finally {
+      setSyncingHistory(false);
+    }
+  };
+
+  const handlePreviewSync = async () => {
+    if (!customerId || previewingSync || !customer?.tiktok_handle) return;
+    setSyncPreviewError(null);
+    setSyncPreviewResult(null);
+    setSyncHistoryResult(null);
+    setSyncHistoryError(null);
+    setPreviewingSync(true);
+    try {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/sync-history?preview=true`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Förhandsvisning misslyckades');
+      setSyncPreviewResult({
+        handle: data.handle ?? '',
+        wouldImport: data.wouldImport ?? 0,
+        wouldSkip: data.wouldSkip ?? 0,
+        totalMatched: data.totalMatched ?? 0,
+        samples: data.samples ?? [],
+      });
+    } catch (err) {
+      setSyncPreviewError((err as Error).message);
+    } finally {
+      setPreviewingSync(false);
+    }
+  };
+
   // Game Plan handlers
   const handleSaveGamePlan = async () => {
     if (!customer) return;
@@ -1876,6 +2083,225 @@ function CustomerWorkspacePageContent() {
                 </div>
               </div>
 
+              {/* TikTok-profil */}
+              <div style={{
+                background: '#fff',
+                borderRadius: LeTrendRadius.lg,
+                border: `1px solid ${LeTrendColors.border}`,
+                padding: '16px 20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}>
+                <div style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: LeTrendColors.textSecondary,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}>
+                  TikTok-profil
+                </div>
+
+                {/* Profile URL identity row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    value={tiktokProfileUrlInput}
+                    onChange={e => setTiktokProfileUrlInput(e.target.value)}
+                    placeholder="https://www.tiktok.com/@kundenshandle"
+                    style={{
+                      padding: '7px 10px',
+                      borderRadius: LeTrendRadius.md,
+                      border: `1px solid ${LeTrendColors.borderMedium}`,
+                      fontSize: 13,
+                      color: LeTrendColors.textPrimary,
+                      width: 260,
+                      outline: 'none',
+                    }}
+                  />
+                  <button
+                    onClick={() => void handleSaveTikTokProfile()}
+                    disabled={savingTiktokProfile}
+                    style={{
+                      padding: '7px 12px',
+                      background: LeTrendColors.surface,
+                      border: `1px solid ${LeTrendColors.borderMedium}`,
+                      borderRadius: LeTrendRadius.md,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: LeTrendColors.textSecondary,
+                      cursor: savingTiktokProfile ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {savingTiktokProfile ? 'Sparar...' : 'Spara'}
+                  </button>
+                  {customer?.tiktok_handle && (
+                    <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
+                      @{customer.tiktok_handle}
+                    </span>
+                  )}
+                </div>
+
+                {/* Real profile-history fetch — primary action */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => void handleFetchProfileHistory()}
+                      disabled={fetchingProfileHistory || !customer?.tiktok_profile_url}
+                      title={!customer?.tiktok_profile_url ? 'Spara TikTok-profil URL först' : undefined}
+                      style={{
+                        padding: '7px 14px',
+                        background: customer?.tiktok_profile_url ? LeTrendColors.brownLight : LeTrendColors.surface,
+                        border: customer?.tiktok_profile_url ? 'none' : `1px solid ${LeTrendColors.borderMedium}`,
+                        borderRadius: LeTrendRadius.md,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: customer?.tiktok_profile_url ? LeTrendColors.cream : LeTrendColors.textMuted,
+                        cursor: (fetchingProfileHistory || !customer?.tiktok_profile_url) ? 'not-allowed' : 'pointer',
+                        opacity: !customer?.tiktok_profile_url ? 0.5 : 1,
+                      }}
+                    >
+                      {fetchingProfileHistory ? 'Hämtar TikTok-historik...' : 'Hämta historik'}
+                    </button>
+                    {profileHistoryFetchResult && !fetchingProfileHistory && (
+                      <span style={{ fontSize: 12, color: profileHistoryFetchResult.imported > 0 ? '#166534' : LeTrendColors.textMuted }}>
+                        {profileHistoryFetchResult.imported > 0
+                          ? `${profileHistoryFetchResult.imported} nya klipp importerade`
+                          : 'Historik är uppdaterad'}
+                        {profileHistoryFetchResult.skipped > 0 && ` · ${profileHistoryFetchResult.skipped} redan finns`}
+                      </span>
+                    )}
+                    {profileHistoryFetchError && !fetchingProfileHistory && (
+                      <span style={{ fontSize: 12, color: LeTrendColors.error }}>{profileHistoryFetchError}</span>
+                    )}
+                    {customer?.last_history_sync_at && !fetchingProfileHistory && !profileHistoryFetchResult && !profileHistoryFetchError && (
+                      <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
+                        {concepts.filter(c => (c.feed_order ?? 1) < 0).length} klipp · Senast: {new Date(customer.last_history_sync_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    )}
+                  </div>
+                  {historyHasMore && !fetchingProfileHistory && (
+                    <button
+                      onClick={() => void handleLoadMoreHistory()}
+                      style={{
+                        alignSelf: 'flex-start',
+                        padding: '5px 10px',
+                        background: 'transparent',
+                        border: `1px solid ${LeTrendColors.borderMedium}`,
+                        borderRadius: LeTrendRadius.md,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: LeTrendColors.textSecondary,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Ladda äldre historik
+                    </button>
+                  )}
+                </div>
+
+                {/* hagen-library import — separate secondary workflow */}
+                <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 10, color: LeTrendColors.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Importera från hagen-biblioteket
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <button
+                      onClick={() => void handlePreviewSync()}
+                      disabled={previewingSync || !customer?.tiktok_handle}
+                      title={!customer?.tiktok_handle ? 'Ange och spara ett TikTok-konto först' : undefined}
+                      style={{
+                        padding: '6px 10px',
+                        background: LeTrendColors.surface,
+                        border: `1px solid ${LeTrendColors.borderMedium}`,
+                        borderRadius: LeTrendRadius.md,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: LeTrendColors.textSecondary,
+                        cursor: (previewingSync || !customer?.tiktok_handle) ? 'not-allowed' : 'pointer',
+                        opacity: !customer?.tiktok_handle ? 0.5 : 1,
+                      }}
+                    >
+                      {previewingSync ? 'Kollar...' : 'Förhandsgranska'}
+                    </button>
+                    <button
+                      onClick={() => void handleSyncHistory()}
+                      disabled={syncingHistory || !customer?.tiktok_handle}
+                      title={!customer?.tiktok_handle ? 'Ange och spara ett TikTok-konto först' : undefined}
+                      style={{
+                        padding: '6px 10px',
+                        background: LeTrendColors.surface,
+                        border: `1px solid ${LeTrendColors.borderMedium}`,
+                        borderRadius: LeTrendRadius.md,
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: LeTrendColors.textSecondary,
+                        cursor: (syncingHistory || !customer?.tiktok_handle) ? 'not-allowed' : 'pointer',
+                        opacity: !customer?.tiktok_handle ? 0.5 : 1,
+                      }}
+                    >
+                      {syncingHistory ? 'Syncar...' : 'Synca från hagen'}
+                    </button>
+                    {syncHistoryResult && (
+                      <span style={{ fontSize: 11, color: '#166534' }}>
+                        {syncHistoryResult.imported} klipp importerade{syncHistoryResult.skipped > 0 ? `, ${syncHistoryResult.skipped} redan finns` : ''}
+                      </span>
+                    )}
+                    {syncHistoryError && (
+                      <span style={{ fontSize: 11, color: LeTrendColors.error }}>{syncHistoryError}</span>
+                    )}
+                    {syncPreviewError && (
+                      <span style={{ fontSize: 11, color: LeTrendColors.error }}>{syncPreviewError}</span>
+                    )}
+                  </div>
+                  {/* Preview result */}
+                  {syncPreviewResult && (
+                    <div style={{
+                      background: LeTrendColors.surface,
+                      borderRadius: LeTrendRadius.md,
+                      padding: '8px 12px',
+                      fontSize: 11,
+                      color: LeTrendColors.textSecondary,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 4,
+                    }}>
+                      <div style={{ fontWeight: 600, color: LeTrendColors.textPrimary }}>
+                        @{syncPreviewResult.handle} — {syncPreviewResult.totalMatched} matchade klipp
+                        {' · '}<span style={{ color: '#166534' }}>{syncPreviewResult.wouldImport} nya</span>
+                        {syncPreviewResult.wouldSkip > 0 && (
+                          <span style={{ color: LeTrendColors.textMuted }}>, {syncPreviewResult.wouldSkip} redan finns</span>
+                        )}
+                      </div>
+                      {syncPreviewResult.samples.map((s, i) => (
+                        <div key={i} style={{ fontSize: 10, color: LeTrendColors.textMuted, fontFamily: 'monospace' }}>
+                          {s.source_username ? `@${s.source_username}` : ''}
+                          {s.description ? ` — ${s.description.slice(0, 60)}${s.description.length > 60 ? '…' : ''}` : ''}
+                          {' '}
+                          <span style={{ opacity: 0.6 }}>{s.tiktok_url.replace('https://www.tiktok.com', '').slice(0, 40)}</span>
+                        </div>
+                      ))}
+                      {syncPreviewResult.totalMatched === 0 && syncPreviewResult.availableUsernames && syncPreviewResult.availableUsernames.length > 0 && (
+                        <div style={{ marginTop: 2, color: LeTrendColors.textSecondary }}>
+                          Tillgängliga konton i hagen: {syncPreviewResult.availableUsernames.map(u => `@${u}`).join(', ')}
+                        </div>
+                      )}
+                      {syncPreviewResult.totalMatched === 0 && (!syncPreviewResult.availableUsernames || syncPreviewResult.availableUsernames.length === 0) && (
+                        <div style={{ color: LeTrendColors.textMuted, fontStyle: 'italic' }}>
+                          Inga klipp hittades i hagen.
+                        </div>
+                      )}
+                      {syncPreviewResult.totalMatched > 0 && syncPreviewResult.wouldImport === 0 && (
+                        <div style={{ color: LeTrendColors.textMuted, fontStyle: 'italic' }}>
+                          Inga nya klipp att importera.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Feed Timeline */}
               <div style={{
                 background: '#fff',
@@ -2219,6 +2645,36 @@ function CustomerWorkspacePageContent() {
               <br />
               {']'}
             </div>
+
+            {/* Hämta från hagen */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={() => void handleFetchFromHagen()}
+                disabled={fetchingFromHagen}
+                style={{
+                  padding: '7px 14px',
+                  background: LeTrendColors.surface,
+                  border: `1px solid ${LeTrendColors.borderMedium}`,
+                  borderRadius: LeTrendRadius.md,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: LeTrendColors.textSecondary,
+                  cursor: fetchingFromHagen ? 'not-allowed' : 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                {fetchingFromHagen ? 'Hämtar...' : 'Hämta från hagen'}
+              </button>
+              {fetchFromHagenError && (
+                <span style={{ fontSize: 12, color: LeTrendColors.error }}>{fetchFromHagenError}</span>
+              )}
+            </div>
+
+            {fetchedFromUsernames.length > 0 && (
+              <div style={{ fontSize: 12, color: LeTrendColors.textSecondary }}>
+                Konton i hagen: {fetchedFromUsernames.map(u => `@${u}`).join(', ')}
+              </div>
+            )}
 
             <textarea
               value={importHistoryJson}

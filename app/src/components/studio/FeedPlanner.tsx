@@ -1,5 +1,11 @@
 'use client';
 
+// PARITY NOTE: Customer-facing planner is CustomerPlannerGrid.tsx.
+// When changing grid layout, slot ordering, or history rendering here,
+// evaluate whether the same change is needed on the customer side.
+// Key shared invariants: currentSlotIndex=4 (center of 3×3),
+// feed_order < 0 = history, = 0 = current, > 0 = planned.
+
 import React, { useMemo, useState } from 'react';
 import { getCustomerConceptPlacementLabel } from '@/lib/customer-concept-lifecycle';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';

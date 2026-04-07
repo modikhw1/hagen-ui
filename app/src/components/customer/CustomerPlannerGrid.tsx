@@ -1,5 +1,11 @@
 'use client';
 
+// PARITY NOTE: CM-facing planner is FeedPlanner.tsx (studio/FeedPlanner).
+// When changing slot semantics, navigation, or history rendering here,
+// check whether the CM planner needs a matching update.
+// Key shared invariants: currentSlotIndex=4 (center of 3×3),
+// feed_order < 0 = history, = 0 = current, > 0 = planned.
+
 import { useState } from 'react';
 import type { CustomerFeedSlot } from '@/types/customer-feed';
 import { colors, fontFamily } from '@/styles/mobile-design';

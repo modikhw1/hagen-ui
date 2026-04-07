@@ -62,7 +62,24 @@ export const POST = withAuth(
         game_plan = {},
         concepts = [],
         brief,
+        tiktok_profile_url,
       } = body;
+
+      // Derive handle from profile URL if provided
+      function deriveTikTokHandle(input: string): string | null {
+        const trimmed = input.trim();
+        if (!trimmed) return null;
+        if (trimmed.startsWith('http')) {
+          try {
+            const url = new URL(trimmed);
+            const match = url.pathname.match(/^\/@?([^/?&#]+)/);
+            return match ? match[1] : null;
+          } catch { return null; }
+        }
+        return trimmed.replace(/^@/, '').trim() || null;
+      }
+      const tiktokProfileUrl = typeof tiktok_profile_url === 'string' && tiktok_profile_url.trim() ? tiktok_profile_url.trim() : null;
+      const tiktokHandle = tiktokProfileUrl ? deriveTikTokHandle(tiktokProfileUrl) : null;
 
       if (!business_name) {
         return NextResponse.json({ error: 'Business name is required' }, { status: 400 });
@@ -88,6 +105,7 @@ export const POST = withAuth(
           game_plan,
           concepts,
           ...(brief && typeof brief === 'object' ? { brief } : {}),
+          ...(tiktokProfileUrl ? { tiktok_profile_url: tiktokProfileUrl, tiktok_handle: tiktokHandle } : {}),
           status: 'pending'
         })
         .select()
