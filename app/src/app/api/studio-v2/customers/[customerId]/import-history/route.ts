@@ -8,7 +8,10 @@ import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 interface TikTokClipInput {
   tiktok_url: string;
+  /** Primary thumbnail field. */
   tiktok_thumbnail_url?: string | null;
+  /** Alias accepted for compatibility with hagen export format (analyzed_videos.metadata.thumbnail_url). */
+  thumbnail_url?: string | null;
   tiktok_views?: number | null;
   tiktok_likes?: number | null;
   tiktok_comments?: number | null;
@@ -120,7 +123,7 @@ async function insertClips(
     status: 'produced',
     feed_order: startOrder - i,
     tiktok_url: clip.tiktok_url.trim(),
-    tiktok_thumbnail_url: clip.tiktok_thumbnail_url ?? null,
+    tiktok_thumbnail_url: clip.tiktok_thumbnail_url ?? clip.thumbnail_url ?? null,
     tiktok_views: clip.tiktok_views ?? null,
     tiktok_likes: clip.tiktok_likes ?? null,
     tiktok_comments: clip.tiktok_comments ?? null,

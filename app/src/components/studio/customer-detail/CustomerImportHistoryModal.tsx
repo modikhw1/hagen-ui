@@ -91,7 +91,9 @@ export function CustomerImportHistoryModal({
         >
           {'['}
           <br />
-          {'  { "tiktok_url": "https://tiktok.com/@...", "tiktok_thumbnail_url": "...",'}
+          {'  { "tiktok_url": "https://tiktok.com/@...",'}
+          <br />
+          {'    "tiktok_thumbnail_url": "..." (eller "thumbnail_url"),'}
           <br />
           {'    "tiktok_views": 12000, "tiktok_likes": 500, "tiktok_comments": 30,'}
           <br />
