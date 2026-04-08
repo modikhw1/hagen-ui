@@ -114,6 +114,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/auth/callback') ||
     pathname.startsWith('/api/stripe/webhook') ||
     pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/studio-v2/internal/') ||
     pathname.includes('.')
 
   if (!isProtectedRoute && bypassMiddleware) {
