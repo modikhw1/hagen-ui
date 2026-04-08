@@ -89,6 +89,12 @@ export async function middleware(request: NextRequest) {
     return withRequestId(NextResponse.redirect(url))
   }
 
+  // Internal cron routes are protected by CRON_SECRET in the route handler itself.
+  // They must bypass session auth entirely — no Supabase user exists for a cron caller.
+  if (pathname.startsWith('/api/studio-v2/internal/')) {
+    return withRequestId(NextResponse.next({ request: { headers: requestHeaders } }))
+  }
+
   const isAdminApi = ADMIN_API.test(pathname)
   const isStudioApi = STUDIO_API.test(pathname)
   const isCustomerApi = CUSTOMER_API.test(pathname)
@@ -114,7 +120,6 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/auth/callback') ||
     pathname.startsWith('/api/stripe/webhook') ||
     pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/api/studio-v2/internal/') ||
     pathname.includes('.')
 
   if (!isProtectedRoute && bypassMiddleware) {
