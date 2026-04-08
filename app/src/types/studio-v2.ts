@@ -266,6 +266,7 @@ export interface CustomerBrief {
   tone: string;             // Feeling & tone
   constraints: string;      // Constraints
   current_focus: string;    // Current focus
+  posting_weekdays?: number[] | null; // Soft tempo cadence (0=Mon…6=Sun), display-only
 }
 
 // =====================================================
@@ -295,6 +296,12 @@ export interface CustomerProfile {
   tiktok_profile_url?: string | null;   // canonical: full profile URL (e.g. https://www.tiktok.com/@brand)
   tiktok_handle?: string | null;        // derived display value, normalized from tiktok_profile_url
   last_history_sync_at?: string | null;
+  // Motor signal: non-null = new imported_history clips arrived, CM has not yet advanced plan
+  pending_history_advance?: number | null;
+  // Acknowledgement: non-null = CM dismissed the nudge without advancing (cleared by new sync or advance)
+  pending_history_advance_seen_at?: string | null;
+  // Freshness seam: MAX(published_at) of the batch that triggered pending_history_advance
+  pending_history_advance_published_at?: string | null;
 
   created_at: string;
   updated_at?: string;
@@ -459,7 +466,7 @@ export interface GridConfig {
 export const DEFAULT_GRID_CONFIG: GridConfig = {
   columns: 3,
   rows: 3,
-  currentSlotIndex: 2,
+  currentSlotIndex: 4, // center of 3×3 — nu at position 5, kommande above, historik below
 };
 
 export interface CmTag {

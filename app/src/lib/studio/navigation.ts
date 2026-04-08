@@ -50,13 +50,17 @@ export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [
     description: 'Mailutkast, skickhistorik och kundkontakt.',
     kind: 'primary',
   },
-  {
-    key: 'demo',
-    label: 'Demo',
-    short_label: 'Demo',
-    description: 'Förbered demo och importera historik.',
-    kind: 'utility',
-  },
+  // DEMO TAB: not a short-term priority.
+  // Feed plan (key: 'feed') is the primary planner surface.
+  // TikTok history import is accessible directly from the Feed plan section.
+  // Re-enable by uncommenting when demo prep is back in scope.
+  // {
+  //   key: 'demo',
+  //   label: 'Demo',
+  //   short_label: 'Demo',
+  //   description: 'Förbered demo och importera historik.',
+  //   kind: 'utility',
+  // },
 ];
 
 export function getStudioWorkspaceSection(value: string | null | undefined): Section {

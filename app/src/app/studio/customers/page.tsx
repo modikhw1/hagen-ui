@@ -19,6 +19,8 @@ interface CustomerProfile {
     title?: string;
     goals?: string[];
   };
+  pending_history_advance?: number | null;
+  pending_history_advance_seen_at?: string | null;
 }
 
 type CustomerStatusFilter = 'all' | CustomerProfile['status'];
@@ -284,8 +286,18 @@ export default function StudioCustomersPage() {
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 700, color: '#1a1a2e', marginBottom: '2px' }}>
+                  <div style={{ fontWeight: 700, color: '#1a1a2e', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: 6 }}>
                     {customer.business_name}
+                    {customer.pending_history_advance && !customer.pending_history_advance_seen_at ? (
+                      <span style={{
+                        fontSize: '10px', fontWeight: 700,
+                        color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b',
+                        borderRadius: '999px', padding: '1px 6px',
+                        lineHeight: 1.4, flexShrink: 0,
+                      }}>
+                        {customer.pending_history_advance} nya
+                      </span>
+                    ) : null}
                   </div>
                   {customer.game_plan?.title ? (
                     <div style={{ fontSize: '12px', color: '#9ca3af' }}>

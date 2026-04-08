@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import { motorSignalNewEvidence } from '@/lib/studio/motor-signal';
 
 // ─────────────────────────────────────────────
 // Types
@@ -103,7 +104,7 @@ async function insertClips(
   replace: boolean,
   skipped: number
 ): Promise<NextResponse> {
-  // Find current most-negative feed_order for this customer
+  // Find current most-negative feed_order for this customer (anchor for temp positions)
   const { data: existingHistory } = await supabase
     .from('customer_concepts')
     .select('feed_order')
@@ -113,26 +114,35 @@ async function insertClips(
     .limit(1);
 
   const currentMostNegative = existingHistory?.[0]?.feed_order ?? 0;
-  const startOrder = replace ? -1 : Math.min(currentMostNegative - 1, -1);
+  const tempStartOrder = replace ? -1 : Math.min(currentMostNegative - 1, -1);
 
-  // Most-recent clip gets the least-negative order (closest to 0 in history)
-  const inserts = clips.map((clip, i) => ({
+  // Sort newest-first before inserting so temp positions are consistent.
+  // Exact positions don't matter — the chronological renumber below is the
+  // source of truth for final feed_order assignment.
+  const sortedClips = [...clips].sort((a, b) => {
+    if (!a.published_at && !b.published_at) return 0;
+    if (!a.published_at) return 1;
+    if (!b.published_at) return -1;
+    return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
+  });
+
+  const inserts = sortedClips.map((clip, i) => ({
     customer_profile_id: customerId,
     customer_id: customerId,
     concept_id: null,
     status: 'produced',
-    feed_order: startOrder - i,
+    feed_order: tempStartOrder - i,
     tiktok_url: clip.tiktok_url.trim(),
     tiktok_thumbnail_url: clip.tiktok_thumbnail_url ?? clip.thumbnail_url ?? null,
     tiktok_views: clip.tiktok_views ?? null,
     tiktok_likes: clip.tiktok_likes ?? null,
     tiktok_comments: clip.tiktok_comments ?? null,
     published_at: clip.published_at ?? null,
-    tags: [],
+    tags: [] as string[],
     content_overrides: clip.description ? { script: clip.description } : {},
   }));
 
-  const { data, error } = await supabase
+  const { data: insertedRows, error } = await supabase
     .from('customer_concepts')
     .insert(inserts)
     .select('id, feed_order, tiktok_url');
@@ -141,9 +151,69 @@ async function insertClips(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // ── Chronological renumber ────────────────────────────────────────────────
+  //
+  // Re-read ALL imported-history rows and assign feed_order = -1, -2, …, -N so
+  // that the most-recently-published clip is always closest to "nu" regardless
+  // of the order clips were pasted or whether this import filled a gap.
+  //
+  // Scope: concept_id IS NULL AND feed_order < 0 (imported profile history only).
+  // LeTrend-managed rows (concept_id NOT NULL) are never touched.
+  //
+  // Sort rule:
+  //   Primary:   published_at DESC NULLS LAST (most recent = closest to nu)
+  //   Secondary: tiktok_url ASC (deterministic tiebreaker for same-timestamp clips)
+  //
+  const { data: allImported } = await supabase
+    .from('customer_concepts')
+    .select('id, feed_order, published_at, tiktok_url')
+    .eq('customer_profile_id', customerId)
+    .is('concept_id', null)
+    .lt('feed_order', 0);
+
+  const chronological = (allImported ?? []).sort((a, b) => {
+    const dateA = a.published_at ? new Date(a.published_at as string).getTime() : 0;
+    const dateB = b.published_at ? new Date(b.published_at as string).getTime() : 0;
+    if (dateB !== dateA) return dateB - dateA;
+    return (a.tiktok_url as string).localeCompare(b.tiktok_url as string);
+  });
+
+  const renumberUpdates = chronological
+    .map((row, i) => ({ id: row.id as string, from: row.feed_order as number, to: -(i + 1) }))
+    .filter(u => u.from !== u.to);
+
+  if (renumberUpdates.length > 0) {
+    await Promise.all(
+      renumberUpdates.map(u =>
+        supabase
+          .from('customer_concepts')
+          .update({ feed_order: u.to })
+          .eq('id', u.id)
+      )
+    );
+  }
+
+  // Build final feed_orders for the response (post-renumber)
+  const finalFeedOrders = new Map(chronological.map((row, i) => [row.id as string, -(i + 1)]));
+  const insertedIdSet = new Set((insertedRows ?? []).map(r => r.id as string));
+  const finalSlots = chronological
+    .filter(row => insertedIdSet.has(row.id as string))
+    .map(row => ({ id: row.id, tiktok_url: row.tiktok_url, feed_order: finalFeedOrders.get(row.id as string) }));
+
+  const importedCount = insertedRows?.length ?? 0;
+
+  if (importedCount > 0) {
+    // sortedClips is DESC by published_at — index 0 is the most recently published clip in this batch.
+    const latestPublishedAt = sortedClips[0]?.published_at ?? null;
+    await supabase
+      .from('customer_profiles')
+      .update(motorSignalNewEvidence(importedCount, latestPublishedAt))
+      .eq('id', customerId);
+  }
+
   return NextResponse.json({
-    imported: data?.length ?? 0,
+    imported: importedCount,
     skipped,
-    slots: data,
+    slots: finalSlots,
   });
 }

@@ -65,6 +65,7 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
     ...(hasOwnKey('collection_id') ? { collection_id: safeBody.collection_id } : {}),
     // placement boundary
     ...(hasOwnKey('feed_order') ? { feed_order: safeBody.feed_order } : {}),
+    ...(hasOwnKey('planned_publish_at') ? { planned_publish_at: safeBody.planned_publish_at } : {}),
     // timestamp
     updated_at: new Date().toISOString(),
   };

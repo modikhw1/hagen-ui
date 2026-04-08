@@ -76,8 +76,73 @@ export const POST = withAuth(async (request) => {
     return NextResponse.json({ error: 'Concept assignment not found' }, { status: 404 });
   }
 
+  // ── Advance planning window ───────────────────────────────────────────────
+  // Advance the active LeTrend plan window: decrement feed_order by 1 for
+  // kommande/nu assignment rows so the next kommande concept becomes nu.
+  //
+  // Scope: concept_id IS NOT NULL   — LeTrend-managed rows only
+  //        feed_order >= 0          — active plan (kommande + nu) only
+  //        id != conceptId          — exclude the row we just produced
+  //
+  // Why feed_order >= 0 (not all placed rows):
+  //   nextHistoryOrder is computed as most-negative - 1, so the produced row A
+  //   lands directly below the deepest existing historik row (e.g. C at -1
+  //   means A lands at -2). If we also shifted C by -1, C would move to -2 and
+  //   collide with A. Restricting the advance to feed_order >= 0 avoids this:
+  //   A lands at (most-negative - 1) and C stays where it is — no collision.
+  //   LeTrend historik rows are already in the past and do not need to shift
+  //   when the active plan advances one cycle.
+  //
+  // Why concept_id IS NOT NULL:
+  //   Imported profile-history rows (concept_id IS NULL) are ordered by their
+  //   own chronological renumber pass and must never be touched here.
+  //
+  // Note: neq(id) is defense-in-depth. After step 2, the produced row already
+  //   has a negative feed_order so gte(0) would exclude it anyway.
+  const { data: planRows, error: planFetchError } = await supabase
+    .from('customer_concepts')
+    .select('id, feed_order')
+    .eq('customer_profile_id', customerId)
+    .not('concept_id', 'is', null)
+    .neq('id', conceptId)
+    .gte('feed_order', 0);
+
+  let advanceApplied = false;
+  let advanceError: string | null = null;
+
+  if (planFetchError) {
+    advanceError = planFetchError.message;
+  } else {
+    const toShift = (planRows ?? []).filter(
+      (r): r is { id: string; feed_order: number } =>
+        typeof r.id === 'string' && typeof r.feed_order === 'number'
+    );
+
+    if (toShift.length > 0) {
+      const shiftResults = await Promise.all(
+        toShift.map((r) =>
+          supabase
+            .from('customer_concepts')
+            .update({ feed_order: r.feed_order - 1 })
+            .eq('id', r.id)
+        )
+      );
+      const shiftErrors = shiftResults.map((r) => r.error).filter(Boolean);
+      if (shiftErrors.length > 0) {
+        advanceError = shiftErrors[0]?.message ?? 'Plan advance partially failed';
+      } else {
+        advanceApplied = true;
+      }
+    } else {
+      // No other placed LeTrend rows — nothing to advance, still a success
+      advanceApplied = true;
+    }
+  }
+
   return NextResponse.json({
     success: true,
     concept: normalizeStudioCustomerConcept(data),
+    advance_applied: advanceApplied,
+    ...(advanceError ? { advance_error: advanceError } : {}),
   });
 }, ['admin', 'content_manager']);

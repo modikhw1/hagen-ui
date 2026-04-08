@@ -36,7 +36,7 @@ export function FeedPlanner({
     const builtSlots: FeedSlot[] = [];
 
     for (let i = 0; i < totalSlots; i++) {
-      const feedOrder = i - gridConfig.currentSlotIndex;
+      const feedOrder = gridConfig.currentSlotIndex - i;
       const concept = concepts.find(c => c.feed_order === feedOrder) || null;
       const type = getSlotType(feedOrder);
 

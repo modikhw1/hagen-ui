@@ -6,7 +6,7 @@
 // Key shared invariants: currentSlotIndex=4 (center of 3×3),
 // feed_order < 0 = history, = 0 = current, > 0 = planned.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CustomerFeedSlot } from '@/types/customer-feed';
 import { colors, fontFamily } from '@/styles/mobile-design';
 
@@ -56,6 +56,29 @@ export function CustomerPlannerGrid({
   const isMobile = variant === 'mobile';
   const [windowOffset, setWindowOffset] = useState(0);
   const cellMap = buildCustomerSlotMap(slots, windowOffset);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const wheelCbRef = useRef<(e: WheelEvent) => void>(() => {});
+  useEffect(() => {
+    const cooldown = { active: false };
+    wheelCbRef.current = (e: WheelEvent) => {
+      e.preventDefault();
+      if (cooldown.active) return;
+      cooldown.active = true;
+      setTimeout(() => { cooldown.active = false; }, 280);
+      if (e.deltaY > 0) {
+        setWindowOffset(o => Math.max(o - WINDOW_STEP, MIN_WINDOW_OFFSET));
+      } else if (e.deltaY < 0) {
+        setWindowOffset(o => Math.min(o + WINDOW_STEP, MAX_WINDOW_OFFSET));
+      }
+    };
+  }, []);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const cb = (e: WheelEvent) => wheelCbRef.current(e);
+    el.addEventListener('wheel', cb, { passive: false });
+    return () => el.removeEventListener('wheel', cb);
+  }, []);
   // True when any upcoming concept exists — used to give the empty center cell
   // a smarter hint instead of the generic "being prepared" message.
   const hasNearbyUpcoming = slots.some(s => s.placement.feedOrder > 0);
@@ -82,11 +105,14 @@ export function CustomerPlannerGrid({
       maxWidth: isMobile ? undefined : 300,
       marginBottom: isMobile ? 24 : 28,
     }}>
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: isMobile ? 5 : 6,
-      }}>
+      <div
+        ref={gridRef}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: isMobile ? 5 : 6,
+        }}
+      >
         {cellMap.map(cell => (
           <PlannerCell key={cell.slotIndex} cell={cell} isMobile={isMobile} hasNearbyUpcoming={hasNearbyUpcoming} />
         ))}

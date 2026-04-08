@@ -20,6 +20,7 @@ export interface SpanHandlerRefs {
   activeSpan: string | null;
   nextColorIdx: number;
   fracOffset: number;
+  reloadSpans: () => Promise<void>;
 }
 
 function clamp01(value: number): number {
@@ -82,37 +83,72 @@ export function createSpanHandlers(
       const nextFrac = pointerFrac(event.clientY);
 
       if (drag.type === 'create') {
-        setDrag((prev) => (prev ? { ...prev, b: nextFrac } : prev));
+        // Live clamp: don't let the in-progress span overlap an existing span
+        const globalA = (drag.a ?? 0) + refs.current.fracOffset;
+        const globalB = nextFrac + refs.current.fracOffset;
+        const goingDown = globalB > globalA;
+        const allSpans = refs.current.spans;
+        let clampedB = nextFrac;
+        if (goingDown) {
+          // dragging end downward — clamp against the nearest span that starts strictly below globalA
+          const upperBound = allSpans
+            .filter(s => s.frac_start > globalA)
+            .reduce((min, s) => Math.min(min, s.frac_start), 1);
+          clampedB = Math.min(nextFrac, upperBound - refs.current.fracOffset);
+        } else {
+          // dragging end upward — clamp against the nearest span that ends strictly above globalA
+          const lowerBound = allSpans
+            .filter(s => s.frac_end < globalA)
+            .reduce((max, s) => Math.max(max, s.frac_end), 0);
+          clampedB = Math.max(nextFrac, lowerBound - refs.current.fracOffset);
+        }
+        setDrag((prev) => (prev ? { ...prev, b: clampedB } : prev));
         return;
       }
 
       if (!drag.spanId) return;
       const adjustedFrac = clamp01(nextFrac + refs.current.fracOffset);
+      const otherSpans = refs.current.spans.filter(s => s.id !== drag.spanId);
       setSpans((prev) =>
         prev.map((span) => {
           if (span.id !== drag.spanId) return span;
           if (drag.type === 'start') {
-            return { ...span, frac_start: Math.min(adjustedFrac, span.frac_end - 0.01) };
+            // Hard stop: clamp against spans that end at or before the current start
+            const lowerBound = otherSpans
+              .filter(s => s.frac_end <= span.frac_start + 0.001)
+              .reduce((max, s) => Math.max(max, s.frac_end), 0);
+            const clamped = Math.max(adjustedFrac, lowerBound);
+            return { ...span, frac_start: Math.min(clamped, span.frac_end - 0.01) };
           }
           if (drag.type === 'end') {
-            return { ...span, frac_end: Math.max(adjustedFrac, span.frac_start + 0.01) };
-          }
-          if (drag.type === 'climax') {
-            return { ...span, climax: adjustedFrac };
+            // Hard stop: clamp against spans that start at or after the current end
+            const upperBound = otherSpans
+              .filter(s => s.frac_start >= span.frac_end - 0.001)
+              .reduce((min, s) => Math.min(min, s.frac_start), 1);
+            const clamped = Math.min(adjustedFrac, upperBound);
+            return { ...span, frac_end: Math.max(clamped, span.frac_start + 0.01) };
           }
           return span;
         })
       );
     },
 
-    async onUp() {
+    onUp() {
       const drag = refs.current.drag;
+      // Clear drag immediately so UI is responsive regardless of server round-trip
+      setDrag(null);
+      setHoveredSpan(null);
       if (!drag) return;
 
       if (drag.type === 'create' && drag.a !== undefined && drag.b !== undefined) {
         const start = Math.min(drag.a, drag.b) + refs.current.fracOffset;
         const end = Math.max(drag.a, drag.b) + refs.current.fracOffset;
         if (end - start > 0.01) {
+          // Abort if the new span would overlap any existing span
+          const hasOverlap = refs.current.spans.some(
+            s => !(end <= s.frac_start || start >= s.frac_end)
+          );
+          if (hasOverlap) return;
           const spanId = crypto.randomUUID();
           const colorIdx = drag.colorIdx ?? 0;
           const now = new Date().toISOString();
@@ -132,17 +168,53 @@ export function createSpanHandlers(
             updated_at: now,
           };
 
+          // Optimistic local add
           setSpans((prev) => [...prev, newSpan]);
           setActiveSpan(newSpan.id);
           setEditingSpan(newSpan.id);
           setEditTitle('');
           setEditBody('');
           setNextColorIdx((prev) => (prev + 1) % SPAN_COLOR_PALETTE.length);
+
+          // Persist to server — fire-and-forget, optimistic span is kept on failure
+          fetch('/api/studio-v2/feed-spans', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSpan),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              console.error('[SpanHandlers] create persist failed:', data.error || `HTTP ${res.status}`);
+            }
+          }).catch((err) => {
+            console.error('[SpanHandlers] create persist network error:', err);
+          });
         }
+        return;
       }
 
-      setDrag(null);
-      setHoveredSpan(null);
+      if (drag.spanId && (drag.type === 'start' || drag.type === 'end' || drag.type === 'climax')) {
+        // Resize ended — PATCH updated geometry to server
+        const span = refs.current.spans.find((s) => s.id === drag.spanId);
+        if (span) {
+          fetch(`/api/studio-v2/feed-spans/${span.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              frac_start: span.frac_start,
+              frac_end: span.frac_end,
+              climax: span.climax,
+            }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              console.error('[SpanHandlers] resize persist failed:', data.error || `HTTP ${res.status}`);
+            }
+          }).catch((err) => {
+            console.error('[SpanHandlers] resize persist network error:', err);
+          });
+        }
+      }
     },
 
     beginResize(spanId: string, type: 'start' | 'end' | 'climax') {

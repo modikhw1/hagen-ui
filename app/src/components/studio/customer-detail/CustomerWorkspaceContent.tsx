@@ -32,7 +32,9 @@ import type {
   FeedSpan
 } from '@/types/studio-v2';
 import { DEFAULT_GRID_CONFIG, SPAN_COLOR_PALETTE } from '@/types/studio-v2';
-import { buildSlotMap } from '@/lib/feed-planner-utils';
+import { classifyMotorSignal } from '@/lib/studio/motor-signal';
+import type { MotorSignalKind } from '@/lib/studio/motor-signal';
+import { buildSlotMap, projectTempoDate, DEFAULT_TEMPO_WEEKDAYS, TEMPO_PRESETS, globalFracToProjectedDate, dateToGlobalFrac } from '@/lib/feed-planner-utils';
 import {
   getNextCustomerConceptAssignmentStatus,
   getCustomerConceptAssignmentLabel,
@@ -51,7 +53,6 @@ import {
 } from '@/lib/eel-renderer';
 import { createSpanHandlers, fracToY as spanFracToY } from '@/components/studio-v2/SpanHandlers';
 import type { SpanHandlerRefs } from '@/components/studio-v2/SpanHandlers';
-import { SlotPopupModal } from '@/features/studio/customer-workspace/components/SlotPopupModal';
 import { TagManager } from '@/features/studio/customer-workspace/components/TagManager';
 import {
   buildStudioWorkspaceHref,
@@ -74,6 +75,7 @@ import {
   hasUnreadUploadMarker,
   hexToRgba,
 } from './shared';
+import { CustomerImportHistoryModal } from './CustomerImportHistoryModal';
 
 type PositionedEelGradient = ReturnType<typeof updateGradientPositions>[number];
 type InlineFeedbackTone = 'success' | 'warning' | 'error' | 'info';
@@ -311,11 +313,6 @@ function CustomerWorkspacePageContent() {
   const [addConceptSearch, setAddConceptSearch] = useState('');
   const [showFeedSlotPanel, setShowFeedSlotPanel] = useState(false);
   const [selectedFeedSlot, setSelectedFeedSlot] = useState<number | null>(null);
-  const [slotPopupData, setSlotPopupData] = useState<{
-    slot: FeedSlot;
-    concept: CustomerConcept | null;
-    details: TranslatedConcept | null;
-  } | null>(null);
 
   // Feed planner state (nya)
   const [gridConfig, setGridConfig] = useState<GridConfig>(DEFAULT_GRID_CONFIG);
@@ -353,6 +350,20 @@ function CustomerWorkspacePageContent() {
   const [profileHistoryFetchError, setProfileHistoryFetchError] = useState<string | null>(null);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyNextCursor, setHistoryNextCursor] = useState<number | null>(null);
+  const [pendingAdvanceCue, setPendingAdvanceCue] = useState<{ imported: number; kind: MotorSignalKind } | null>(null);
+  const [advancingPlan, setAdvancingPlan] = useState(false);
+
+  // Derive cue from backend truth whenever the customer profile changes.
+  // Shows the nudge when there is unseen pending evidence; hides it otherwise.
+  // seen_at is cleared by sync on new evidence, so fresh clips always re-surface.
+  // No guard — allows count to update if a new sync arrives while the cue is already showing.
+  useEffect(() => {
+    if (customer?.pending_history_advance && !customer.pending_history_advance_seen_at) {
+      const kind = classifyMotorSignal(customer) ?? 'fresh_activity';
+      setPendingAdvanceCue({ imported: customer.pending_history_advance, kind });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer?.pending_history_advance, customer?.pending_history_advance_seen_at, customer?.pending_history_advance_published_at]);
   // Guard: prevents auto-fetch from firing more than once per workspace open cycle
   const profileHistoryAutoFetchRef = useRef(false);
   const [syncingHistory, setSyncingHistory] = useState(false);
@@ -579,7 +590,8 @@ function CustomerWorkspacePageContent() {
       });
 
       if (cached?.value) {
-        setGridConfig(cached.value);
+        // Always enforce canonical currentSlotIndex — stored value may be stale (e.g. old 2→4 migration)
+        setGridConfig({ ...cached.value, currentSlotIndex: DEFAULT_GRID_CONFIG.currentSlotIndex });
       }
 
       const nextConfig = await fetchAndCacheClient<GridConfig>(
@@ -592,7 +604,9 @@ function CustomerWorkspacePageContent() {
             .single();
 
           if (error) throw error;
-          return (profile?.grid_config as GridConfig) || DEFAULT_GRID_CONFIG;
+          const raw = (profile?.grid_config as Partial<GridConfig>) || {};
+          // Always enforce canonical currentSlotIndex regardless of what's stored in the DB
+          return { ...DEFAULT_GRID_CONFIG, ...raw, currentSlotIndex: DEFAULT_GRID_CONFIG.currentSlotIndex };
         },
         WORKSPACE_CACHE_TTL_MS,
         { force: force || Boolean(cached) }
@@ -849,6 +863,21 @@ function CustomerWorkspacePageContent() {
       clearClientCache(customerCacheKey);
     } catch (err) {
       console.error('Error saving brief:', err);
+    }
+  };
+
+  // Soft tempo cadence — saves posting_weekdays to brief JSONB (display-only, never writes to planned_publish_at)
+  const handleSaveTempoWeekdays = async (weekdays: number[]) => {
+    setBrief(prev => ({ ...prev, posting_weekdays: weekdays }));
+    try {
+      await fetch(`/api/studio-v2/customers/${customerId}/brief`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ posting_weekdays: weekdays })
+      });
+      clearClientCache(customerCacheKey);
+    } catch (err) {
+      console.error('Error saving tempo weekdays:', err);
     }
   };
 
@@ -1331,9 +1360,11 @@ function CustomerWorkspacePageContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Historik-hämtning misslyckades');
-      setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
+      const imported = data.imported ?? 0;
+      setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported, skipped: data.skipped ?? 0 });
       setHistoryHasMore(data.has_more ?? false);
       setHistoryNextCursor(data.cursor ?? null);
+      // Cue is derived from backend via the customer profile effect — no direct set needed here.
       await Promise.all([fetchCustomer(true), fetchConcepts(true)]);
     } catch (err) {
       setProfileHistoryFetchError((err as Error).message);
@@ -1342,7 +1373,37 @@ function CustomerWorkspacePageContent() {
     }
   };
 
-  const handleLoadMoreHistory = async () => {
+  const handleAdvancePlan = async () => {
+    if (!customerId || advancingPlan) return;
+    setAdvancingPlan(true);
+    try {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/advance-plan`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Kunde inte flytta planen');
+      setPendingAdvanceCue(null); // optimistic local clear; fetchCustomer below will confirm
+      await Promise.all([fetchCustomer(true), fetchConcepts(true)]);
+    } catch (err) {
+      console.error('Advance plan error:', err);
+    } finally {
+      setAdvancingPlan(false);
+    }
+  };
+
+  // Dismiss the nudge without advancing. Clears local state immediately (optimistic),
+  // then persists the acknowledgement to the backend so the cue does not reappear on reload.
+  // The pending_history_advance signal is kept on the server — evidence is not erased.
+  const handleDismissAdvanceCue = () => {
+    setPendingAdvanceCue(null);
+    if (customerId) {
+      void fetch(`/api/studio-v2/customers/${customerId}/profile`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acknowledge_advance_cue: true }),
+      }).catch((err) => console.error('Acknowledge advance cue error:', err));
+    }
+  };
+
+  const handleLoadMoreHistory = async (count = 6) => {
     if (!customerId || fetchingProfileHistory || !historyNextCursor) return;
     setProfileHistoryFetchError(null);
     setFetchingProfileHistory(true);
@@ -1350,7 +1411,7 @@ function CustomerWorkspacePageContent() {
       const res = await fetch(`/api/studio-v2/customers/${customerId}/fetch-profile-history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ count: 10, cursor: historyNextCursor }),
+        body: JSON.stringify({ count, cursor: historyNextCursor }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Historik-hämtning misslyckades');
@@ -1378,6 +1439,7 @@ function CustomerWorkspacePageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Synk misslyckades');
       setSyncHistoryResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
+      // Cue is derived from backend via the customer profile effect — no direct set needed here.
       await fetchCustomer(true);
       await fetchConcepts(true);
     } catch (err) {
@@ -1984,16 +2046,43 @@ function CustomerWorkspacePageContent() {
               handleAssignToSlot={handleAssignToSlot}
               onOpenConcept={handleOpenConceptFromFeed}
               onSlotClick={(slot, concept, details) => {
-                setSlotPopupData({ slot, concept, details });
+                // Acknowledge unread upload regardless of which action follows
                 if (concept && hasUnreadUploadMarker(concept)) {
                   void handleUpdateConcept(concept.id, {
                     content_loaded_seen_at: new Date().toISOString()
                   });
                 }
+                // Empty kommande/nu slot → direct to concept picker, no modal
+                if (!concept && slot.feedOrder >= 0) {
+                  setSelectedFeedSlot(slot.feedOrder);
+                  setShowFeedSlotPanel(true);
+                  return;
+                }
+                // Empty past slot (historik) → no-op
+                if (!concept) return;
+                // Historik — context menu handled directly in FeedSlot onClick; no-op here
+                if (slot.type === 'history') return;
+                // Nu card — card + context menu is self-sufficient after E87; suppress modal
+                if (slot.type === 'current') return;
+                // Kommande — open concept detail directly (planning view)
+                if (slot.type === 'planned') {
+                  handleOpenConceptFromFeed(concept.id);
+                  return;
+                }
               }}
               showTagManager={showTagManager}
               setShowTagManager={setShowTagManager}
               refreshCmTags={fetchCmTags}
+              historyHasMore={historyHasMore}
+              fetchingProfileHistory={fetchingProfileHistory}
+              onLoadMoreHistory={handleLoadMoreHistory}
+              pendingAdvanceCue={pendingAdvanceCue}
+              onAdvancePlan={handleAdvancePlan}
+              advancingPlan={advancingPlan}
+              onDismissAdvanceCue={handleDismissAdvanceCue}
+              tempoWeekdays={brief.posting_weekdays != null ? brief.posting_weekdays : DEFAULT_TEMPO_WEEKDAYS}
+              isTempoExplicit={brief.posting_weekdays != null}
+              onTempoWeekdaysChange={handleSaveTempoWeekdays}
             />
           )}
 
@@ -2571,212 +2660,23 @@ function CustomerWorkspacePageContent() {
         onSave={handleUpdateConcept}
       />
 
-      {slotPopupData && (
-        <SlotPopupModal
-          slotData={slotPopupData}
-          onClose={() => setSlotPopupData(null)}
-          onAddConcept={() => {
-            setSelectedFeedSlot(slotPopupData.slot.feedOrder);
-            setShowFeedSlotPanel(true);
-          }}
-        />
-      )}
 
       {/* Import TikTok History Modal */}
-      {showImportHistoryModal && (
-        <div
-          onClick={e => { if (e.target === e.currentTarget) setShowImportHistoryModal(false); }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.45)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24,
-          }}
-        >
-          <div style={{
-            background: '#fff',
-            borderRadius: LeTrendRadius.lg,
-            padding: 28,
-            width: '100%',
-            maxWidth: 560,
-            maxHeight: '85vh',
-            overflowY: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 16,
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 700, color: LeTrendColors.brownDark, margin: 0 }}>
-                  Importera TikTok-historik
-                </h3>
-                <p style={{ fontSize: 13, color: LeTrendColors.textSecondary, margin: '4px 0 0' }}>
-                  Klistra in en JSON-array med klipp. Nyaste klipp = slot #6 (feed_order -1).
-                </p>
-              </div>
-              <button
-                onClick={() => setShowImportHistoryModal(false)}
-                style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: LeTrendColors.textMuted, padding: '0 4px' }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* JSON format hint */}
-            <div style={{
-              background: LeTrendColors.surface,
-              borderRadius: LeTrendRadius.md,
-              padding: '10px 14px',
-              fontSize: 11,
-              color: LeTrendColors.textSecondary,
-              fontFamily: 'monospace',
-              lineHeight: 1.6,
-            }}>
-              {'['}<br />
-              {'  { "tiktok_url": "https://tiktok.com/@...", "tiktok_thumbnail_url": "...",'}
-              <br />
-              {'    "tiktok_views": 12000, "tiktok_likes": 500, "tiktok_comments": 30,'}
-              <br />
-              {'    "description": "Klippbeskrivning", "published_at": "2025-03-15" }'}
-              <br />
-              {']'}
-            </div>
-
-            {/* Hämta från hagen */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <button
-                onClick={() => void handleFetchFromHagen()}
-                disabled={fetchingFromHagen}
-                style={{
-                  padding: '7px 14px',
-                  background: LeTrendColors.surface,
-                  border: `1px solid ${LeTrendColors.borderMedium}`,
-                  borderRadius: LeTrendRadius.md,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: LeTrendColors.textSecondary,
-                  cursor: fetchingFromHagen ? 'not-allowed' : 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                {fetchingFromHagen ? 'Hämtar...' : 'Hämta från hagen'}
-              </button>
-              {fetchFromHagenError && (
-                <span style={{ fontSize: 12, color: LeTrendColors.error }}>{fetchFromHagenError}</span>
-              )}
-            </div>
-
-            {fetchedFromUsernames.length > 0 && (
-              <div style={{ fontSize: 12, color: LeTrendColors.textSecondary }}>
-                Konton i hagen: {fetchedFromUsernames.map(u => `@${u}`).join(', ')}
-              </div>
-            )}
-
-            <textarea
-              value={importHistoryJson}
-              onChange={e => {
-                setImportHistoryJson(e.target.value);
-                setImportHistoryError(null);
-              }}
-              placeholder='[{ "tiktok_url": "...", "tiktok_views": 12000, ... }]'
-              rows={10}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                borderRadius: LeTrendRadius.md,
-                border: `1px solid ${importHistoryError ? LeTrendColors.error : LeTrendColors.borderMedium}`,
-                fontSize: 12,
-                fontFamily: 'monospace',
-                resize: 'vertical',
-                color: LeTrendColors.textPrimary,
-                boxSizing: 'border-box',
-              }}
-            />
-
-            {importHistoryError && (
-              <div style={{ fontSize: 12, color: LeTrendColors.error }}>
-                {importHistoryError}
-              </div>
-            )}
-
-            {importHistoryResult && (
-              <div style={{
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: LeTrendRadius.md,
-                padding: '10px 14px',
-                fontSize: 13,
-                color: '#166534',
-              }}>
-                Import klar — {importHistoryResult.imported} klipp importerade
-                {importHistoryResult.skipped > 0 && `, ${importHistoryResult.skipped} hoppades över (redan finns)`}
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-              {importHistoryResult ? (
-                <button
-                  onClick={() => {
-                    setShowImportHistoryModal(false);
-                    setImportHistoryResult(null);
-                  }}
-                  style={{
-                    padding: '9px 16px',
-                    background: LeTrendColors.brownLight,
-                    border: 'none',
-                    borderRadius: LeTrendRadius.md,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: LeTrendColors.cream,
-                    cursor: 'pointer',
-                  }}
-                >
-                  Klar
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={() => void handleImportHistory(true)}
-                    disabled={importingHistory || !importHistoryJson.trim()}
-                    style={{
-                      padding: '9px 16px',
-                      background: LeTrendColors.surface,
-                      border: `1px solid ${LeTrendColors.borderMedium}`,
-                      borderRadius: LeTrendRadius.md,
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: LeTrendColors.textSecondary,
-                      cursor: importingHistory ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    Ersätt historik
-                  </button>
-                  <button
-                    onClick={() => void handleImportHistory(false)}
-                    disabled={importingHistory || !importHistoryJson.trim()}
-                    style={{
-                      padding: '9px 16px',
-                      background: LeTrendColors.brownLight,
-                      border: 'none',
-                      borderRadius: LeTrendRadius.md,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: LeTrendColors.cream,
-                      cursor: importingHistory ? 'not-allowed' : 'pointer',
-                    }}
-                  >
-                    {importingHistory ? 'Importerar...' : 'Lägg till historik'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <CustomerImportHistoryModal
+        isOpen={showImportHistoryModal}
+        importHistoryJson={importHistoryJson}
+        setImportHistoryJson={setImportHistoryJson}
+        importingHistory={importingHistory}
+        importHistoryError={importHistoryError}
+        importHistoryResult={importHistoryResult}
+        clearError={() => setImportHistoryError(null)}
+        onClose={() => { setShowImportHistoryModal(false); setImportHistoryResult(null); }}
+        onImportHistory={handleImportHistory}
+        onFetchFromHagen={handleFetchFromHagen}
+        fetchingFromHagen={fetchingFromHagen}
+        fetchFromHagenError={fetchFromHagenError ?? null}
+        fetchedFromUsernames={fetchedFromUsernames}
+      />
     </div>
   );
 }
@@ -2836,6 +2736,17 @@ interface FeedPlannerSectionProps {
   showTagManager: boolean;
   setShowTagManager: (show: boolean) => void;
   refreshCmTags: (force?: boolean) => Promise<void>;
+  // History motor integration
+  historyHasMore: boolean;
+  fetchingProfileHistory: boolean;
+  onLoadMoreHistory: (count?: number) => Promise<void>;
+  pendingAdvanceCue: { imported: number; kind: MotorSignalKind } | null;
+  onAdvancePlan: () => Promise<void>;
+  advancingPlan: boolean;
+  onDismissAdvanceCue: () => void;
+  tempoWeekdays: number[];
+  isTempoExplicit: boolean;
+  onTempoWeekdaysChange: (weekdays: number[]) => Promise<void>;
 }
 
 interface FeedSlotProps {
@@ -2845,6 +2756,7 @@ interface FeedSlotProps {
   spanCoverage?: number;
   spanColor?: string | null;
   showSpanCoverageLabels?: boolean;
+  projectedDate?: Date | null;
   getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
   onMarkProduced: (conceptId: string, tiktokUrl?: string) => Promise<void>;
   onRemoveFromSlot: (conceptId: string) => Promise<void>;
@@ -3303,6 +3215,7 @@ function KonceptSection({
   const [addingConceptNoteForConcept, setAddingConceptNoteForConcept] = React.useState<string | null>(null);
   const [localConceptNoteText, setLocalConceptNoteText] = React.useState('');
   const [savingConceptNote, setSavingConceptNote] = React.useState(false);
+  const [showProducedSection, setShowProducedSection] = React.useState(false);
 
   const startWhyItFitsEdit = (conceptId: string, currentText: string | null) => {
     setEditingWhyItFitsForConcept(conceptId);
@@ -3354,6 +3267,26 @@ function KonceptSection({
       }
     }
   }, [justAddedConceptId, concepts]);
+
+  // Only LeTrend-origin rows belong in this tab.
+  // Imported profile-history rows (row_kind='imported_history') are read-only
+  // TikTok scrapes; they live in feedplan historik, not here.
+  const assignmentConcepts = concepts.filter(isStudioAssignedCustomerConcept);
+
+  // Lifecycle split — grounded in current fields, no new backend state needed:
+  //   active   = draft + sent  (utkast / planerad / nu — still in CM workflow)
+  //   produced = produced status (producerad / publicerad — cycle complete)
+  //   archived rows are suppressed from both areas (out of workflow)
+  const activeConcepts = assignmentConcepts.filter(
+    (c) => c.assignment.status !== 'produced' && c.assignment.status !== 'archived'
+  );
+  const producedConcepts = assignmentConcepts
+    .filter((c) => c.assignment.status === 'produced')
+    .sort((a, b) => {
+      const tA = a.result.produced_at ? new Date(a.result.produced_at).getTime() : 0;
+      const tB = b.result.produced_at ? new Date(b.result.produced_at).getTime() : 0;
+      return tB - tA; // most recent first
+    });
 
   return (
     <div style={{
@@ -3422,7 +3355,7 @@ function KonceptSection({
         )}
       </div>
 
-      {concepts.length === 0 ? (
+      {activeConcepts.length === 0 && producedConcepts.length === 0 ? (
         <div style={{
           textAlign: 'center',
           padding: 60,
@@ -3438,7 +3371,7 @@ function KonceptSection({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {concepts.map((concept: CustomerConcept) => {
+          {activeConcepts.map((concept) => {
             const details = getWorkspaceConceptDetails(concept, getConceptDetails);
             const sourceConceptId = getStudioCustomerConceptSourceConceptId(concept);
             const resolved = resolveConceptContent(concept, details ?? null);
@@ -3817,6 +3750,114 @@ function KonceptSection({
               </div>
             );
           })}
+
+          {/* ── Producerade / publicerade ───────────────────────────── */}
+          {producedConcepts.length > 0 && (
+            <div style={{ marginTop: activeConcepts.length > 0 ? 8 : 0 }}>
+              <button
+                onClick={() => setShowProducedSection((p) => !p)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  background: 'none',
+                  border: `1px solid ${LeTrendColors.border}`,
+                  borderRadius: LeTrendRadius.md,
+                  padding: '10px 14px',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: LeTrendColors.textSecondary,
+                  textAlign: 'left',
+                }}
+              >
+                <span style={{ flex: 1 }}>
+                  Producerade &amp; publicerade ({producedConcepts.length})
+                </span>
+                <span style={{ fontSize: 11 }}>{showProducedSection ? '▲' : '▼'}</span>
+              </button>
+
+              {showProducedSection && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                  {producedConcepts.map((concept) => {
+                    const details = getWorkspaceConceptDetails(concept, getConceptDetails);
+                    return (
+                      <div
+                        key={concept.id}
+                        style={{
+                          background: LeTrendColors.surface,
+                          borderRadius: LeTrendRadius.md,
+                          padding: '10px 14px',
+                          border: `1px solid ${LeTrendColors.border}`,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: LeTrendColors.brownDark,
+                            marginBottom: 6,
+                            overflow: 'hidden',
+                            whiteSpace: 'nowrap',
+                            textOverflow: 'ellipsis',
+                          }}>
+                            {getWorkspaceConceptTitle(concept, details ?? null)}
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, fontSize: 12, color: LeTrendColors.textSecondary, alignItems: 'center' }}>
+                            {concept.result.produced_at && (
+                              <span>Producerad {formatDate(concept.result.produced_at)}</span>
+                            )}
+                            {concept.result.tiktok_url ? (
+                              <a
+                                href={concept.result.tiktok_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: '#166534', fontWeight: 600, textDecoration: 'none' }}
+                              >
+                                Publicerad{concept.result.published_at ? ` ${formatDate(concept.result.published_at)}` : ''} ↗
+                              </a>
+                            ) : concept.result.published_at ? (
+                              <span style={{ color: '#166534' }}>
+                                Publicerad {formatDate(concept.result.published_at)}
+                              </span>
+                            ) : null}
+                            {concept.result.tiktok_views && concept.result.tiktok_views > 0 && (
+                              <span style={{ color: LeTrendColors.textMuted }}>
+                                {formatCompactViews(concept.result.tiktok_views)} visningar
+                              </span>
+                            )}
+                            {concept.result.tiktok_likes && concept.result.tiktok_likes > 0 && (
+                              <span style={{ color: LeTrendColors.textMuted }}>
+                                {formatCompactViews(concept.result.tiktok_likes)} gilla
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {concept.result.tiktok_thumbnail_url && (
+                          <img
+                            src={concept.result.tiktok_thumbnail_url}
+                            alt=""
+                            style={{
+                              width: 36,
+                              height: 64,
+                              objectFit: 'cover',
+                              borderRadius: LeTrendRadius.sm,
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -3842,13 +3883,99 @@ function FeedPlannerSection({
   onSlotClick,
   showTagManager,
   setShowTagManager,
-  refreshCmTags
+  refreshCmTags,
+  historyHasMore,
+  fetchingProfileHistory,
+  onLoadMoreHistory,
+  pendingAdvanceCue,
+  onAdvancePlan,
+  advancingPlan,
+  onDismissAdvanceCue,
+  tempoWeekdays,
+  isTempoExplicit,
+  onTempoWeekdaysChange,
 }: FeedPlannerSectionProps) {
   const gridRef = React.useRef<HTMLDivElement>(null);
+  const gridWrapperRef = React.useRef<HTMLDivElement>(null);
   const [eelPath, setEelPath] = React.useState('');
   const [eelSegments, setEelSegments] = React.useState<string[]>([]);
   const [eelGradients, setEelGradients] = React.useState<PositionedEelGradient[]>([]);
-  const maxExtraHistorySlots = gridConfig.columns * 4; // support going back ~12 clips
+  const [markingProducedFromCue, setMarkingProducedFromCue] = React.useState(false);
+  const maxExtraHistorySlots = gridConfig.columns * 8; // support going back ~24 clips (8 rows)
+  const maxForwardSlots = gridConfig.columns * 5;      // allow planning up to 5 extra rows forward (~13 clips at 3 cols)
+
+  // Wheel scroll: stable ref pattern so the DOM listener never needs re-attaching.
+  // Fetch is NOT triggered here — a separate useEffect handles threshold-based load-more.
+  const wheelCbRef = React.useRef<(e: WheelEvent) => void>(() => {});
+  React.useEffect(() => {
+    const cooldown = { active: false };
+    wheelCbRef.current = (e: WheelEvent) => {
+      e.preventDefault();
+      if (scrollLockedRef.current) return;
+      if (cooldown.active) return;
+      cooldown.active = true;
+      setTimeout(() => { cooldown.active = false; }, 400);
+      if (e.deltaY > 0) {
+        // Gate: do not advance into historik while a fetch is already in flight
+        if (fetchingProfileHistory) return;
+        setHistoryOffset(prev => Math.min(prev + gridConfig.columns, maxExtraHistorySlots));
+      } else if (e.deltaY < 0) {
+        setHistoryOffset(prev => Math.max(prev - gridConfig.columns, -maxForwardSlots));
+      }
+    };
+  }, [gridConfig, maxExtraHistorySlots, maxForwardSlots, fetchingProfileHistory, setHistoryOffset]);
+  React.useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const cb = (e: WheelEvent) => wheelCbRef.current(e);
+    el.addEventListener('wheel', cb, { passive: false });
+    return () => el.removeEventListener('wheel', cb);
+  }, []);
+
+  // Threshold-based history fetch gate.
+  // Fires onLoadMoreHistory (debounced 500 ms) when the visible planner bottom
+  // is within one row of the deepest currently-loaded historik clip.
+  // Never fires from inside a state mutation; runs as a separate effect.
+  const loadMoreDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(() => {
+    // Always cancel any pending debounce before evaluating new conditions
+    if (loadMoreDebounceRef.current !== null) {
+      clearTimeout(loadMoreDebounceRef.current);
+      loadMoreDebounceRef.current = null;
+    }
+
+    // Do nothing if there is no more data, a fetch is already running, or we
+    // haven't scrolled into historik at all yet
+    if (!historyHasMore || fetchingProfileHistory || historyOffset <= 0) return;
+
+    // Deepest feed_order currently loaded (most-negative value, or 0 if none)
+    const deepestLoadedOrder = concepts
+      .map(c => c.placement.feed_order)
+      .filter((v): v is number => typeof v === 'number' && v < 0)
+      .reduce<number>((min, v) => Math.min(min, v), 0);
+
+    if (deepestLoadedOrder === 0) return; // no historik rows in memory yet
+
+    // feed_order of the bottom-right slot in the current window:
+    //   feedOrder = currentSlotIndex − (totalSlots − 1) − historyOffset
+    const visibleBottomFeedOrder =
+      gridConfig.currentSlotIndex - (gridConfig.columns * gridConfig.rows - 1) - historyOffset;
+
+    // Schedule fetch when the visible bottom is within one row of the loaded edge
+    if (visibleBottomFeedOrder <= deepestLoadedOrder + gridConfig.columns) {
+      loadMoreDebounceRef.current = setTimeout(() => {
+        loadMoreDebounceRef.current = null;
+        void onLoadMoreHistory(10);
+      }, 500);
+    }
+
+    return () => {
+      if (loadMoreDebounceRef.current !== null) {
+        clearTimeout(loadMoreDebounceRef.current);
+        loadMoreDebounceRef.current = null;
+      }
+    };
+  }, [historyOffset, historyHasMore, fetchingProfileHistory, concepts, gridConfig, onLoadMoreHistory]);
 
   // Spans state
   const [spans, setSpans] = React.useState<FeedSpan[]>([]);
@@ -3866,10 +3993,13 @@ function FeedPlannerSection({
   const [editTitle, setEditTitle] = React.useState('');
   const [editBody, setEditBody] = React.useState('');
   const [nextColorIdx, setNextColorIdx] = React.useState(0);
-  const [showCoverageLabels, setShowCoverageLabels] = React.useState(true);
   const [eelHovered, setEelHovered] = React.useState(false);
-  const [lastCreatedSpanId, setLastCreatedSpanId] = React.useState<string | null>(null);
+  const [editingPeriod, setEditingPeriod] = React.useState(false);
   const [showConceptPicker, setShowConceptPicker] = React.useState(false);
+  const [showTempoModal, setShowTempoModal] = React.useState(false);
+  const [scrollLocked, setScrollLocked] = React.useState(false);
+  const scrollLockedRef = React.useRef(false);
+  React.useEffect(() => { scrollLockedRef.current = scrollLocked; }, [scrollLocked]);
   const [slotAnchors, setSlotAnchors] = React.useState<Array<{
     yTop: number;
     yMid: number;
@@ -3906,6 +4036,31 @@ function FeedPlannerSection({
     ),
     [concepts, gridConfig, historyOffset]
   );
+
+  // Soft tempo projection — display-only, never written to DB.
+  // Anchor: planned_publish_at on the current slot (feed_order=0) if it is in the
+  // future, otherwise today. published_at is intentionally excluded — it is always
+  // historical and would produce past projected dates for upcoming slots (E112).
+  const tempoAnchor = React.useMemo(() => {
+    const today = new Date();
+    const nowConcept = concepts.find((c) => c.placement.feed_order === 0);
+    if (nowConcept?.result?.planned_publish_at) {
+      const d = new Date(nowConcept.result.planned_publish_at);
+      return d > today ? d : today;
+    }
+    return today;
+  }, [concepts]);
+
+  const tempoDateMap = React.useMemo(() => {
+    const map = new Map<number, Date>();
+    for (const slot of slotMap) {
+      if (slot.feedOrder > 0) {
+        const d = projectTempoDate(slot.feedOrder, tempoAnchor, tempoWeekdays);
+        if (d) map.set(slot.feedOrder, d);
+      }
+    }
+    return map;
+  }, [slotMap, tempoAnchor, tempoWeekdays]);
   /**
    * Position-based slot selection.
    *
@@ -4101,10 +4256,10 @@ function FeedPlannerSection({
   // Ref-based span handlers - avoids stale closures and listener churn
   const getGridElement = React.useCallback(() => gridRef.current, []);
   const spanHandlerRefs = React.useRef<SpanHandlerRefs>({
-    spans, slotAnchors, drag, activeSpan, nextColorIdx, fracOffset
+    spans, slotAnchors, drag, activeSpan, nextColorIdx, fracOffset, reloadSpans: reloadSpansFromServer
   });
   // Keep refs in sync
-  spanHandlerRefs.current = { spans, slotAnchors, drag, activeSpan, nextColorIdx, fracOffset };
+  spanHandlerRefs.current = { spans, slotAnchors, drag, activeSpan, nextColorIdx, fracOffset, reloadSpans: reloadSpansFromServer };
 
   const stableHandlers = React.useMemo(
     () =>
@@ -4136,7 +4291,7 @@ function FeedPlannerSection({
   // Stable event listeners - no churn on drag/spans state changes
   React.useEffect(() => {
     const onMove = (e: MouseEvent) => stableHandlers.onMove(e);
-    const onUp = () => { void stableHandlers.onUp(); };
+    const onUp = () => { stableHandlers.onUp(); };
 
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
@@ -4193,19 +4348,39 @@ function FeedPlannerSection({
     return coverageMap;
   }, [spans, slotAnchors, touchedSlots, drag, fracOffset]);
 
-  // Track newly created spans for undo
-  const prevSpanCountRef = React.useRef(spans.length);
-  React.useEffect(() => {
-    if (spans.length > prevSpanCountRef.current && spans.length > 0) {
-      setLastCreatedSpanId(spans[spans.length - 1].id);
-    }
-    prevSpanCountRef.current = spans.length;
-  }, [spans.length, spans]);
+  // Reset period edit mode when a different span is opened
+  React.useEffect(() => { setEditingPeriod(false); }, [editingSpan]);
 
   const animatedCountRef = React.useRef(0);
   React.useEffect(() => {
     animatedCountRef.current = animatedCount;
   }, [animatedCount]);
+
+  // Auto-save title/body if dirty when the edit panel is closed or a different span is opened.
+  // Fire-and-forget: optimistic local update first, PATCH async, reload on failure.
+  const saveCurrentSpanTextIfDirty = React.useCallback(async () => {
+    if (!editingSpan) return;
+    const span = spans.find((s) => s.id === editingSpan);
+    if (!span) return;
+    if (editTitle === span.title && editBody === span.body) return;
+    setSpans((prev) =>
+      prev.map((s) => s.id === editingSpan ? { ...s, title: editTitle, body: editBody } : s)
+    );
+    try {
+      const res = await fetch(`/api/studio-v2/feed-spans/${editingSpan}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: editTitle, body: editBody }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `PATCH failed (${res.status})`);
+      }
+    } catch (err) {
+      console.error('[åliden] auto-save title/body failed:', err);
+      void reloadSpansFromServer();
+    }
+  }, [editingSpan, editTitle, editBody, spans, reloadSpansFromServer]);
 
   React.useEffect(() => {
     const countSpan = editingSpan
@@ -4238,6 +4413,36 @@ function FeedPlannerSection({
     return () => cancelAnimationFrame(frameId);
   }, [editingSpan, spans, visSpanData, slotAnchors, touchedSlots]);
 
+  // Y position of the edit panel — centered at the editing span's visual midpoint
+  const editPanelY = React.useMemo(() => {
+    if (!editingSpan) return null;
+    const span = spans.find(s => s.id === editingSpan);
+    if (!span) return null;
+    if (slotAnchors.length === 0) return 200; // fallback before grid is measured
+    const midFrac = (span.frac_start + span.frac_end) / 2 - fracOffset;
+    const clampedMid = Math.max(0.05, Math.min(0.95, midFrac));
+    return fracToY(clampedMid, slotAnchors);
+  }, [editingSpan, spans, slotAnchors, fracOffset, fracToY]);
+
+  // True when at least one LeTrend-managed concept is placed in nu (0) or kommande (>0).
+  // Used both in the toolbar header (standalone advance affordance) and in the cue block.
+  const hasActivePlan = concepts.some(
+    (c) =>
+      c.row_kind === 'assignment' &&
+      typeof c.placement.feed_order === 'number' &&
+      c.placement.feed_order >= 0
+  );
+
+  // The LeTrend concept currently at nu (feed_order === 0), if any.
+  // Only derived for fresh_activity signals — backfill does not imply a LeTrend concept was produced.
+  // Used in the motor cue to bridge external publication evidence with the internal production path.
+  const nuConcept =
+    pendingAdvanceCue?.kind === 'fresh_activity'
+      ? (concepts.find(
+          (c) => c.row_kind === 'assignment' && c.placement.feed_order === 0
+        ) ?? null)
+      : null;
+
   return (
     <div style={{
       background: LeTrendColors.cream,
@@ -4246,7 +4451,7 @@ function FeedPlannerSection({
       border: `1px solid ${LeTrendColors.border}`
     }}>
       {/* Header med Hantera taggar-länk */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <h2 style={{
           fontSize: 22,
           fontWeight: 700,
@@ -4255,99 +4460,414 @@ function FeedPlannerSection({
         }}>
           Feed-planerare
         </h2>
-        <button
-          onClick={() => setShowTagManager(true)}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: LeTrendColors.brownLight,
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            textDecoration: 'underline'
-          }}
-        >
-          Hantera taggar
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {hasActivePlan && (
+            <button
+              onClick={() => void onAdvancePlan()}
+              disabled={advancingPlan}
+              style={{
+                background: 'none',
+                border: '1px solid #9ca3af',
+                borderRadius: LeTrendRadius.md,
+                fontSize: 12,
+                color: '#4b5563',
+                cursor: advancingPlan ? 'not-allowed' : 'pointer',
+                padding: '3px 10px',
+                fontWeight: 400,
+              }}
+            >
+              {advancingPlan ? 'Flyttar...' : 'Flytta planen framåt'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowTagManager(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: LeTrendColors.brownLight,
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+              textDecoration: 'underline'
+            }}
+          >
+            Hantera taggar
+          </button>
+        </div>
       </div>
 
-      {/* Color picker för nästa span */}
-      <div
-        style={{
+      {/* History controls removed from planner surface — auto-loads on workspace open;
+          manual import/fetch available in the Demo-förberedelse tab */}
+
+      {/* Rytm: compact summary trigger — opens TempoModal for full picker */}
+      {(() => {
+        const tempoSortedKey = [...tempoWeekdays].sort().join(',');
+        const matchedPreset = TEMPO_PRESETS.find(
+          (p) => [...p.weekdays].sort().join(',') === tempoSortedKey
+        );
+        const DAY_LABELS = ['Mån','Tis','Ons','Tor','Fre','Lör','Sön'];
+        const tempoLabel = tempoWeekdays.length === 0
+          ? 'Ingen rytm'
+          : matchedPreset
+            ? matchedPreset.label
+            : tempoWeekdays.map((d) => DAY_LABELS[d]).join(' · ');
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+            <span style={{ fontSize: 11, color: LeTrendColors.textMuted, fontWeight: 500 }}>Rytm:</span>
+            <button
+              onClick={() => setShowTempoModal(true)}
+              style={{
+                padding: '2px 10px',
+                borderRadius: 999,
+                border: `1px solid ${isTempoExplicit ? LeTrendColors.brownLight : LeTrendColors.border}`,
+                background: isTempoExplicit ? LeTrendColors.brownLight : 'transparent',
+                color: isTempoExplicit ? 'white' : LeTrendColors.textMuted,
+                fontSize: 11,
+                fontWeight: isTempoExplicit ? 500 : 400,
+                cursor: 'pointer',
+                opacity: isTempoExplicit ? 1 : 0.65,
+              }}
+            >
+              {isTempoExplicit ? tempoLabel : `${tempoLabel} (standard)`}
+            </button>
+          </div>
+        );
+      })()}
+
+      {/* TempoModal — preset + free-form weekday picker */}
+      {showTempoModal && (() => {
+        const DAY_LABELS = ['Mån','Tis','Ons','Tor','Fre','Lör','Sön'];
+        const tempoSortedKey = [...tempoWeekdays].sort().join(',');
+        const matchedPreset = TEMPO_PRESETS.find(
+          (p) => [...p.weekdays].sort().join(',') === tempoSortedKey
+        );
+        const tempoLabel = tempoWeekdays.length === 0
+          ? 'Ingen projektion'
+          : matchedPreset
+            ? `~${matchedPreset.label}`
+            : `~${tempoWeekdays.map((d) => DAY_LABELS[d]).join('/')}`;
+
+        const toggleWeekday = (day: number) => {
+          const next = tempoWeekdays.includes(day)
+            ? tempoWeekdays.filter((d) => d !== day)
+            : [...tempoWeekdays, day].sort((a, b) => a - b);
+          void onTempoWeekdaysChange(next);
+        };
+
+        return (
+          <div
+            onClick={() => setShowTempoModal(false)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 95,
+              display: 'grid',
+              placeItems: 'center',
+              background: 'rgba(26,22,18,0.32)',
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: 'min(480px, calc(100vw - 32px))',
+                background: '#fff',
+                borderRadius: 16,
+                padding: 24,
+                boxShadow: '0 20px 60px rgba(26,22,18,0.18)',
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                <h3 style={{ margin: 0, fontSize: 18, color: '#4A2F18' }}>Postningsrytm</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowTempoModal(false)}
+                  style={{ border: 'none', background: 'transparent', fontSize: 24, cursor: 'pointer', color: LeTrendColors.textMuted }}
+                >×</button>
+              </div>
+
+              {/* Presets */}
+              <div style={{ fontSize: 11, fontWeight: 600, color: LeTrendColors.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Förinställningar
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+                {TEMPO_PRESETS.map((preset) => {
+                  const isActive = [...preset.weekdays].sort().join(',') === tempoSortedKey;
+                  return (
+                    <button
+                      key={preset.key}
+                      type="button"
+                      onClick={() => void onTempoWeekdaysChange(preset.weekdays)}
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: 999,
+                        border: `1px solid ${isActive ? '#4A2F18' : 'rgba(74,47,24,0.18)'}`,
+                        background: isActive ? '#4A2F18' : 'transparent',
+                        color: isActive ? 'white' : LeTrendColors.textMuted,
+                        fontSize: 12,
+                        fontWeight: isActive ? 600 : 400,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Free-form weekday picker */}
+              <div style={{ fontSize: 11, fontWeight: 600, color: LeTrendColors.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Anpassade dagar
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+                {DAY_LABELS.map((label, idx) => {
+                  const active = tempoWeekdays.includes(idx);
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => toggleWeekday(idx)}
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 8,
+                        border: `1px solid ${active ? '#4A2F18' : 'rgba(74,47,24,0.18)'}`,
+                        background: active ? '#4A2F18' : 'transparent',
+                        color: active ? 'white' : LeTrendColors.textMuted,
+                        fontSize: 11,
+                        fontWeight: active ? 700 : 400,
+                        cursor: 'pointer',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {label.slice(0, 2)}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Live preview */}
+              <div style={{ fontSize: 11, color: LeTrendColors.textMuted, fontStyle: 'italic', opacity: 0.7 }}>
+                {tempoLabel}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Advancement cue — shown when new clips appear in the customer's historik */}
+      {pendingAdvanceCue && (
+        <div style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: 8,
+          alignItems: 'flex-start',
+          gap: 10,
           marginBottom: 16,
           padding: '10px 14px',
-          background: 'rgba(74,47,24,0.04)',
-          borderRadius: LeTrendRadius.md
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11,
-            color: LeTrendColors.textMuted,
-            fontWeight: 600
-          }}
-        >
-          Nästa tematiskt spann:
-        </span>
-        {SPAN_COLOR_PALETTE.map((p, i) => (
-          <div
-            key={i}
-            onClick={() => setNextColorIdx(i)}
-            style={{
-              width: i === nextColorIdx ? 14 : 10,
-              height: i === nextColorIdx ? 14 : 10,
-              borderRadius: '50%',
-              background: p.color,
-              cursor: 'pointer',
-              outline: i === nextColorIdx ? `2px solid ${p.color}` : 'none',
-              outlineOffset: 2,
-              transition: 'all 0.15s',
-              opacity: i === nextColorIdx ? 1 : 0.4
-            }}
-            title={p.name}
-          />
-        ))}
-        <button
-          type="button"
-          onClick={() => setShowCoverageLabels((prev) => !prev)}
-          aria-pressed={showCoverageLabels}
-          style={{
-            marginLeft: 'auto',
-            padding: '5px 9px',
-            borderRadius: LeTrendRadius.sm,
-            border: `1px solid ${LeTrendColors.border}`,
-            background: showCoverageLabels ? 'white' : 'transparent',
-            color: showCoverageLabels ? LeTrendColors.brownDark : LeTrendColors.textMuted,
-            fontSize: 10,
-            fontWeight: 700,
-            cursor: 'pointer',
-            lineHeight: 1
-          }}
-          title="Visa/dölj selekterade slots"
-        >
-          {showCoverageLabels ? 'Selektion: På' : 'Selektion: Av'}
-        </button>
-      </div>
-
-      <div
-        style={{
-          marginBottom: 18,
-          padding: '10px 14px',
-          background: 'rgba(74,47,24,0.04)',
+          background: '#f0fdf4',
+          border: '1px solid #bbf7d0',
           borderRadius: LeTrendRadius.md,
-          fontSize: 11,
-          color: LeTrendColors.textMuted,
-          lineHeight: 1.6
-        }}
-      >
-        <strong style={{ color: LeTrendColors.brownDark }}>Dra</strong> längs åliden för att skapa
-        ett tematiskt spann. <strong style={{ color: LeTrendColors.brownDark }}>Klicka</strong> på
-        pricken för att redigera. Dra i <strong style={{ color: LeTrendColors.brownDark }}>ändpunkterna</strong> för
-        att justera längd. Åliden lyser upp vid hover. Tomma kommande slots tar odelade kunduppdrag, nu-slot är det som ska produceras härnäst och historik används bara för redan publicerade klipp.
-      </div>
+          fontSize: 13,
+        }}>
+          {(() => {
+            return (
+              <>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: '#166534', fontWeight: 600 }}>
+              {pendingAdvanceCue.kind === 'fresh_activity'
+                ? `${pendingAdvanceCue.imported} nya klipp i historiken`
+                : `${pendingAdvanceCue.imported} historiska klipp importerade`}
+            </div>
+            <div style={{ color: '#166534', fontSize: 11, opacity: 0.75, marginTop: 2 }}>
+              {pendingAdvanceCue.kind === 'fresh_activity'
+                ? (nuConcept
+                    ? 'Var det nu-konceptet som publicerades?'
+                    : (hasActivePlan
+                        ? 'Kunden publicerade nytt – flytta kommande och nu ett steg framåt.'
+                        : 'Placera ett koncept i planen för att kunna flytta framåt.'))
+                : (hasActivePlan
+                    ? 'Äldre innehåll – granska historiken innan du flyttar planen.'
+                    : 'Äldre innehåll importerat till historiken.')}
+            </div>
+            {/* Nu-concept reference — shows the active nu concept when the signal is fresh_activity.
+                Bridges the external evidence (imported clips) with the LeTrend production path. */}
+            {nuConcept && (
+              <div style={{ marginTop: 6, fontSize: 11, color: '#166534', opacity: 0.8 }}>
+                Nu: <span style={{ fontWeight: 600 }}>
+                  {nuConcept.content.content_overrides?.headline ?? 'Aktivt koncept'}
+                </span>
+              </div>
+            )}
+            {/* History glimpse — up to 3 most-recent imported_history rows */}
+            {(() => {
+              const glimpse = concepts
+                .filter((c) => c.row_kind === 'imported_history')
+                .sort((a, b) => {
+                  const tA = a.result.published_at ? new Date(a.result.published_at).getTime() : 0;
+                  const tB = b.result.published_at ? new Date(b.result.published_at).getTime() : 0;
+                  if (tB !== tA) return tB - tA;
+                  // Tie-break: less-negative feed_order = more recent
+                  return (b.placement.feed_order ?? -9999) - (a.placement.feed_order ?? -9999);
+                })
+                .slice(0, 3);
+              if (glimpse.length === 0) return null;
+              return (
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  {glimpse.map((clip) => {
+                    const caption = clip.content.content_overrides?.script ?? null;
+                    const date = clip.result.published_at
+                      ? new Date(clip.result.published_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })
+                      : null;
+                    return (
+                      <div
+                        key={clip.id}
+                        style={{
+                          display: 'flex',
+                          gap: 5,
+                          alignItems: 'flex-start',
+                          flex: 1,
+                          minWidth: 0,
+                          background: 'rgba(255,255,255,0.55)',
+                          borderRadius: LeTrendRadius.sm,
+                          padding: '5px 6px',
+                        }}
+                      >
+                        {clip.result.tiktok_thumbnail_url && (
+                          <img
+                            src={clip.result.tiktok_thumbnail_url}
+                            alt=""
+                            style={{ width: 20, height: 35, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }}
+                          />
+                        )}
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          {caption && (
+                            <div style={{
+                              fontSize: 10,
+                              color: '#166534',
+                              opacity: 0.85,
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis',
+                              lineHeight: 1.3,
+                              marginBottom: 2,
+                            }}>
+                              {caption}
+                            </div>
+                          )}
+                          <div style={{ fontSize: 10, color: '#166534', opacity: 0.6, lineHeight: 1.3 }}>
+                            {date ?? '—'}
+                            {clip.result.tiktok_views && clip.result.tiktok_views > 0
+                              ? ` · ${formatCompactViews(clip.result.tiktok_views)}`
+                              : ''}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+          {nuConcept ? (
+            // fresh_activity + nu concept exists: offer Markera och flytta as primary,
+            // Flytta ändå as secondary (organic content case — CM wants to advance without closing the concept cycle)
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  void (async () => {
+                    setMarkingProducedFromCue(true);
+                    try {
+                      await handleMarkProduced(nuConcept.id);
+                      onDismissAdvanceCue(); // consume motor signal (acknowledge) and clear local cue
+                    } finally {
+                      setMarkingProducedFromCue(false);
+                    }
+                  })();
+                }}
+                disabled={markingProducedFromCue || advancingPlan}
+                style={{
+                  padding: '5px 12px',
+                  background: '#16a34a',
+                  border: 'none',
+                  borderRadius: LeTrendRadius.md,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: markingProducedFromCue || advancingPlan ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {markingProducedFromCue ? 'Markerar...' : 'Markera och flytta'}
+              </button>
+              <button
+                onClick={() => void onAdvancePlan()}
+                disabled={advancingPlan || markingProducedFromCue}
+                style={{
+                  padding: '3px 10px',
+                  background: 'none',
+                  border: '1px solid #9ca3af',
+                  borderRadius: LeTrendRadius.md,
+                  fontSize: 11,
+                  fontWeight: 400,
+                  color: '#4b5563',
+                  cursor: advancingPlan || markingProducedFromCue ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {advancingPlan ? 'Flyttar...' : 'Flytta ändå'}
+              </button>
+            </div>
+          ) : hasActivePlan ? (
+            // No nu concept (only kommande) or backfill: keep existing advance-only CTA
+            <button
+              onClick={() => void onAdvancePlan()}
+              disabled={advancingPlan}
+              style={pendingAdvanceCue.kind === 'fresh_activity' ? {
+                padding: '5px 12px',
+                background: '#16a34a',
+                border: 'none',
+                borderRadius: LeTrendRadius.md,
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#fff',
+                cursor: advancingPlan ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              } : {
+                padding: '5px 12px',
+                background: 'none',
+                border: '1px solid #9ca3af',
+                borderRadius: LeTrendRadius.md,
+                fontSize: 12,
+                fontWeight: 400,
+                color: '#4b5563',
+                cursor: advancingPlan ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {advancingPlan ? 'Flyttar...' : 'Flytta planen framåt'}
+            </button>
+          ) : (
+            <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap', paddingTop: 3 }}>
+              Inget kommande i planen
+            </span>
+          )}
+          <button
+            onClick={onDismissAdvanceCue}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: 16,
+              cursor: 'pointer',
+              color: '#6b7280',
+              padding: '0 2px',
+            }}
+          >
+            ×
+          </button>
+        </>
+      );
+    })()}
+        </div>
+      )}
+
 
       {/* Koncept-väljare dropdown */}
       {getDraftConcepts().length > 0 && (
@@ -4444,7 +4964,7 @@ function FeedPlannerSection({
       )}
 
       {/* Grid med Åliden till vänster */}
-      <div style={{ position: 'relative', paddingLeft: 70 }}>
+      <div ref={gridWrapperRef} style={{ position: 'relative', paddingLeft: 70 }}>
         {/* Åliden SVG - till vänster om grid via padding */}
         {eelPath && (
           <svg
@@ -4553,14 +5073,11 @@ function FeedPlannerSection({
                 const yMid = (yStart + yEnd) / 2;
                 const col = SPAN_COLOR_PALETTE[span.color_index].color;
                 const isVis = visSpan === span.id;
-                const viewClim = span.climax !== null ? span.climax - fracOffset : null;
-                // Clamp klimax to the visible part of the span
-                const clampedClim = viewClim !== null
-                  ? Math.max(clampedStart, Math.min(clampedEnd, viewClim))
-                  : null;
-                const yClim = clampedClim !== null && clampedEnd > clampedStart
-                  ? fracToY(clampedClim, slotAnchors)
-                  : null;
+                // Climax mark disabled — functionality TBD
+                // const climaxGlobalFrac = span.climax_date
+                //   ? climaxDateToGlobalFrac(new Date(span.climax_date), tempoAnchor, tempoWeekdays, gridConfig)
+                //   : null;
+                // const yClim = climaxGlobalFrac !== null ? fracToY(Math.max(0,Math.min(1,climaxGlobalFrac-fracOffset)),slotAnchors) : null;
 
                 return (
                   <g key={`span-${span.id}`}>
@@ -4602,62 +5119,27 @@ function FeedPlannerSection({
                           cx={18} cy={yStart} r={4}
                           fill="white" stroke={col} strokeWidth={1.5}
                           style={{ cursor: 'ns-resize', pointerEvents: 'all' }}
+                          onMouseDown={(e) => { e.stopPropagation(); stableHandlers.openSpan(span.id); stableHandlers.beginResize(span.id, 'start'); }}
                         />
                         <circle
                           cx={18} cy={yEnd} r={4}
                           fill="white" stroke={col} strokeWidth={1.5}
                           style={{ cursor: 'ns-resize', pointerEvents: 'all' }}
+                          onMouseDown={(e) => { e.stopPropagation(); stableHandlers.openSpan(span.id); stableHandlers.beginResize(span.id, 'end'); }}
                         />
                       </>
                     )}
 
-                    {/* Climax mark with date */}
-                    {yClim !== null && (
-                      <g>
-                        <line
-                          x1={8} y1={yClim} x2={28} y2={yClim}
-                          stroke={col} strokeWidth={2} opacity={0.9}
-                        />
-                        <circle
-                          cx={18} cy={yClim} r={isVis ? 5 : 3}
-                          fill="white" stroke={col} strokeWidth={1.5}
-                          style={{ cursor: 'pointer', pointerEvents: 'all' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveSpan(span.id);
-                            setEditingSpan(span.id);
-                            setEditTitle(span.title);
-                            setEditBody(span.body);
-                          }}
-                        />
-                        {/* Date label */}
-                        {span.climax_date && (
-                          <text
-                            x={32} y={yClim + 3}
-                            fontSize={8} fill={col} fontWeight="700"
-                            fontFamily="DM Sans, system-ui"
-                            style={{ pointerEvents: 'none' }}
-                          >
-                            {new Date(span.climax_date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
-                          </text>
-                        )}
-                        {isVis && !span.climax_date && (
-                          <text
-                            x={32} y={yClim + 3}
-                            fontSize={7} fill={LeTrendColors.textMuted}
-                            fontFamily="DM Sans, system-ui"
-                            style={{ pointerEvents: 'none' }}
-                          >
-                            klicka för datum
-                          </text>
-                        )}
-                      </g>
-                    )}
+                    {/* Climax mark disabled */}
 
                     {/* Center dot — always visible, opens edit on click */}
                     <g
+                      onMouseDown={(e) => e.stopPropagation()}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (editingSpan && editingSpan !== span.id) {
+                          void saveCurrentSpanTextIfDirty();
+                        }
                         setActiveSpan(span.id);
                         setEditingSpan(span.id);
                         setEditTitle(span.title);
@@ -4758,7 +5240,8 @@ function FeedPlannerSection({
               config={gridConfig}
               spanCoverage={spanData?.coverage ?? 0}
               spanColor={spanData?.color ?? null}
-              showSpanCoverageLabels={showCoverageLabels && (eelHovered || !!activeSpan || !!editingSpan || !!drag)}
+              showSpanCoverageLabels={eelHovered || !!activeSpan || !!editingSpan || !!drag}
+              projectedDate={tempoDateMap.get(slot.feedOrder) ?? null}
               getConceptDetails={getConceptDetails}
               onMarkProduced={handleMarkProduced}
               onRemoveFromSlot={handleRemoveFromSlot}
@@ -4773,6 +5256,213 @@ function FeedPlannerSection({
             );
           })}
         </div>
+
+        {/* Floating edit panel — positioned over grid, centered at span midpoint */}
+        {editingSpan && editPanelY !== null && (() => {
+          const span = spans.find(s => s.id === editingSpan);
+          if (!span) return null;
+          const col = SPAN_COLOR_PALETTE[span.color_index].color;
+          const count = slotAnchors.length ? touchedSlots(span, slotAnchors).length : 0;
+          const countToDisplay = editingSpan === span.id ? animatedCount : count;
+          const isDirty = editTitle !== span.title || editBody !== span.body;
+
+          return (
+            <div
+              style={{
+                position: 'absolute',
+                left: 78,
+                right: 0,
+                top: editPanelY,
+                transform: 'translateY(-50%)',
+                zIndex: 10,
+                pointerEvents: 'none',
+              }}
+            >
+              <div
+                style={{
+                  width: 'min(300px, 100%)',
+                  background: '#fff',
+                  borderRadius: LeTrendRadius.lg,
+                  padding: '14px 16px',
+                  boxShadow: '0 6px 28px rgba(74,47,24,0.16)',
+                  borderTop: `3px solid ${col}`,
+                  pointerEvents: 'all',
+                }}
+              >
+                {/* Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: col }} />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: col, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      {SPAN_COLOR_PALETTE[span.color_index].name}
+                    </span>
+                    <span style={{ fontSize: 10, color: LeTrendColors.textMuted }}>· {countToDisplay} klipp</span>
+                    {isDirty && (
+                      <span style={{ fontSize: 9, color: '#d97706', fontWeight: 600, background: '#fef3c7', borderRadius: 4, padding: '1px 5px' }}>
+                        Osparad
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      // Close without saving — restore to last saved values
+                      setEditTitle(span.title);
+                      setEditBody(span.body);
+                      setEditingSpan(null);
+                      setActiveSpan(null);
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: LeTrendColors.textMuted, fontSize: 18, lineHeight: 1 }}
+                  >×</button>
+                </div>
+
+                <input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Rubrik — t.ex. Alla hjärtans dag"
+                  style={{
+                    width: '100%', padding: '7px 9px', borderRadius: LeTrendRadius.md,
+                    border: `1.5px solid ${col}44`, fontSize: 12, fontWeight: 600,
+                    color: LeTrendColors.brownDark, background: LeTrendColors.cream,
+                    outline: 'none', marginBottom: 7, boxSizing: 'border-box', fontFamily: 'inherit'
+                  }}
+                />
+
+                <textarea
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  placeholder="Strategi och innehållstankar för detta spann..."
+                  rows={3}
+                  style={{
+                    width: '100%', padding: '7px 9px', borderRadius: LeTrendRadius.md,
+                    border: `1.5px solid ${LeTrendColors.border}`, fontSize: 11, lineHeight: 1.5,
+                    color: LeTrendColors.brownDark, background: '#fff', outline: 'none',
+                    resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit'
+                  }}
+                />
+
+                {/* Färgval */}
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 10, color: LeTrendColors.textMuted, fontWeight: 600, flexShrink: 0 }}>Färg:</span>
+                  {SPAN_COLOR_PALETTE.map((p, i) => (
+                    <div
+                      key={i}
+                      title={p.name}
+                      onClick={() => {
+                        setSpans(prev => prev.map(s => s.id === span.id ? { ...s, color_index: i } : s));
+                        setNextColorIdx(i);
+                        void fetch(`/api/studio-v2/feed-spans/${span.id}`, {
+                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ color_index: i })
+                        }).catch(() => void reloadSpansFromServer());
+                      }}
+                      style={{
+                        width: i === span.color_index ? 14 : 10,
+                        height: i === span.color_index ? 14 : 10,
+                        borderRadius: '50%',
+                        background: p.color,
+                        cursor: 'pointer',
+                        outline: i === span.color_index ? `2px solid ${p.color}` : 'none',
+                        outlineOffset: 2,
+                        opacity: i === span.color_index ? 1 : 0.4,
+                        transition: 'all 0.12s',
+                        flexShrink: 0,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Spandatum — visar range, klicka "ändra" för att editera */}
+                {(() => {
+                  const startDate = globalFracToProjectedDate(span.frac_start, tempoAnchor, tempoWeekdays, gridConfig);
+                  const endDate   = globalFracToProjectedDate(span.frac_end,   tempoAnchor, tempoWeekdays, gridConfig);
+                  if (!startDate && !endDate) return null;
+                  const fmt = (d: Date | null) => d ? d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) : '?';
+                  const toVal = (d: Date | null) => d ? d.toISOString().slice(0, 10) : '';
+                  const fromInput = (val: string, fallback: number) => {
+                    if (!val) return fallback;
+                    const f = dateToGlobalFrac(new Date(val), tempoAnchor, tempoWeekdays, gridConfig);
+                    return f ?? fallback;
+                  };
+                  return (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 10, color: LeTrendColors.textMuted, fontWeight: 600, flexShrink: 0 }}>Period:</span>
+                        {!editingPeriod ? (
+                          <>
+                            <span style={{ fontSize: 11, color: col, fontWeight: 500 }}>{fmt(startDate)} – {fmt(endDate)}</span>
+                            <button type="button" onClick={() => setEditingPeriod(true)}
+                              style={{ fontSize: 9, color: LeTrendColors.textMuted, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', padding: 0, flexShrink: 0 }}>
+                              ändra
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <input type="date" defaultValue={toVal(startDate)} key={`start-${span.id}`}
+                              onBlur={(e) => {
+                                const newFrac = fromInput(e.target.value, span.frac_start);
+                                if (Math.abs(newFrac - span.frac_start) < 0.001) return;
+                                setSpans(prev => prev.map(s => s.id === span.id ? { ...s, frac_start: Math.min(newFrac, s.frac_end - 0.01) } : s));
+                                void fetch(`/api/studio-v2/feed-spans/${span.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frac_start: Math.min(newFrac, span.frac_end - 0.01) }) }).catch(() => void reloadSpansFromServer());
+                              }}
+                              style={{ fontSize: 10, padding: '3px 6px', borderRadius: LeTrendRadius.sm, border: `1px solid ${col}44`, color: col, background: `${col}0d`, outline: 'none', cursor: 'pointer' }}
+                            />
+                            <span style={{ fontSize: 9, color: LeTrendColors.textMuted }}>–</span>
+                            <input type="date" defaultValue={toVal(endDate)} key={`end-${span.id}`}
+                              onBlur={(e) => {
+                                const newFrac = fromInput(e.target.value, span.frac_end);
+                                if (Math.abs(newFrac - span.frac_end) < 0.001) return;
+                                setSpans(prev => prev.map(s => s.id === span.id ? { ...s, frac_end: Math.max(newFrac, s.frac_start + 0.01) } : s));
+                                void fetch(`/api/studio-v2/feed-spans/${span.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frac_end: Math.max(newFrac, span.frac_start + 0.01) }) }).catch(() => void reloadSpansFromServer());
+                              }}
+                              style={{ fontSize: 10, padding: '3px 6px', borderRadius: LeTrendRadius.sm, border: `1px solid ${col}44`, color: col, background: `${col}0d`, outline: 'none', cursor: 'pointer' }}
+                            />
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Klimaxdatum — inaktiverat */}
+
+                {/* Footer actions */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'space-between' }}>
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Ta bort detta spann?')) return;
+                      try {
+                        await fetch(`/api/studio-v2/feed-spans/${span.id}`, { method: 'DELETE' });
+                        setSpans(prev => prev.filter(s => s.id !== span.id));
+                        setEditingSpan(null); setActiveSpan(null);
+                      } catch { alert('Kunde inte ta bort spann'); }
+                    }}
+                    style={{ fontSize: 10, padding: '5px 10px', borderRadius: LeTrendRadius.sm, background: 'transparent', border: `1px solid ${LeTrendColors.border}`, color: LeTrendColors.textMuted, cursor: 'pointer' }}
+                  >
+                    Ta bort spann
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setSpans(prev => prev.map(s => s.id === span.id ? { ...s, title: editTitle, body: editBody } : s));
+                      try {
+                        await fetch(`/api/studio-v2/feed-spans/${span.id}`, {
+                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ title: editTitle, body: editBody })
+                        });
+                        setEditingSpan(null); setActiveSpan(null);
+                      } catch {
+                        alert('Kunde inte spara spann');
+                        void reloadSpansFromServer();
+                      }
+                    }}
+                    style={{ fontSize: 10, padding: '5px 14px', borderRadius: LeTrendRadius.sm, background: LeTrendColors.brownDark, color: LeTrendColors.cream, border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                  >
+                    Godkänn
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Scroll controls + undo */}
@@ -4783,23 +5473,41 @@ function FeedPlannerSection({
         alignItems: 'center',
         flexWrap: 'wrap'
       }}>
-        {/* Scroll forward (see more future) */}
+        {/* Scroll forward (see more kommande/future) — capped at maxForwardSlots */}
         <button
-          onClick={() => setHistoryOffset(prev => prev - gridConfig.columns)}
-          disabled={historyOffset <= -gridConfig.columns * 2}
+          onClick={() => setHistoryOffset(prev => Math.max(prev - gridConfig.columns, -maxForwardSlots))}
+          disabled={historyOffset <= -maxForwardSlots}
           style={{
             padding: '8px 14px',
             background: 'white',
             border: `1px solid ${LeTrendColors.border}`,
             borderRadius: LeTrendRadius.md,
-            cursor: historyOffset <= -gridConfig.columns * 2 ? 'default' : 'pointer',
+            cursor: historyOffset <= -maxForwardSlots ? 'default' : 'pointer',
             fontSize: 12,
             fontWeight: 600,
             color: LeTrendColors.brownDark,
-            opacity: historyOffset <= -gridConfig.columns * 2 ? 0.4 : 1
+            opacity: historyOffset <= -maxForwardSlots ? 0.4 : 1
           }}
         >
-          Framtid →
+          ⬆ Framåt
+        </button>
+
+        {/* Scroll lock toggle */}
+        <button
+          onClick={() => setScrollLocked(p => !p)}
+          title={scrollLocked ? 'Skroll låst — klicka för att låsa upp' : 'Lås skroll'}
+          style={{
+            padding: '8px 14px',
+            background: scrollLocked ? LeTrendColors.brownDark : 'white',
+            border: `1px solid ${scrollLocked ? LeTrendColors.brownDark : LeTrendColors.border}`,
+            borderRadius: LeTrendRadius.md,
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 600,
+            color: scrollLocked ? 'white' : LeTrendColors.textMuted,
+          }}
+        >
+          {scrollLocked ? '🔒' : '🔓'}
         </button>
 
         {/* Back to now */}
@@ -4817,28 +5525,54 @@ function FeedPlannerSection({
               color: 'white'
             }}
           >
-            Tillbaka till NU
+            ↻ Nu
           </button>
         )}
 
-        {/* Scroll back (see more history) — always available up to 12 extra slots */}
+        {/* Scroll back (see more historik) — fetch is handled by threshold useEffect, not here */}
         <button
-          onClick={() => setHistoryOffset(prev => prev + gridConfig.columns)}
-          disabled={historyOffset >= maxExtraHistorySlots}
+          onClick={() => {
+            // Gate: don't move viewport deeper while a fetch is in flight
+            if (fetchingProfileHistory) return;
+            setHistoryOffset(prev => Math.min(prev + gridConfig.columns, maxExtraHistorySlots));
+          }}
+          disabled={historyOffset >= maxExtraHistorySlots || fetchingProfileHistory}
           style={{
             padding: '8px 14px',
             background: 'white',
             border: `1px solid ${LeTrendColors.border}`,
             borderRadius: LeTrendRadius.md,
-            cursor: historyOffset >= maxExtraHistorySlots ? 'default' : 'pointer',
+            cursor: (historyOffset >= maxExtraHistorySlots || fetchingProfileHistory) ? 'default' : 'pointer',
             fontSize: 12,
             fontWeight: 600,
             color: LeTrendColors.brownDark,
-            opacity: historyOffset >= maxExtraHistorySlots ? 0.4 : 1
+            opacity: (historyOffset >= maxExtraHistorySlots || fetchingProfileHistory) ? 0.4 : 1
           }}
         >
-          ← Äldre historik
+          {fetchingProfileHistory ? 'Laddar historik…' : 'Historik ⬇'}
         </button>
+        {!historyHasMore && historyOffset > 0 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: LeTrendColors.textMuted, fontStyle: 'italic' }}>
+              Äldsta klipp visas
+            </span>
+            <button
+              onClick={() => void reloadSpansFromServer()}
+              style={{
+                padding: '4px 10px',
+                background: 'transparent',
+                border: `1px solid ${LeTrendColors.border}`,
+                borderRadius: LeTrendRadius.md,
+                cursor: 'pointer',
+                fontSize: 11,
+                fontWeight: 500,
+                color: LeTrendColors.textMuted,
+              }}
+            >
+              Ladda äldre historik
+            </button>
+          </span>
+        )}
 
         {historyOffset !== 0 && (
           <span style={{ fontSize: 11, color: LeTrendColors.textMuted }}>
@@ -4846,34 +5580,6 @@ function FeedPlannerSection({
           </span>
         )}
 
-        {/* Undo last span creation */}
-        {lastCreatedSpanId && spans.some(s => s.id === lastCreatedSpanId) && (
-          <button
-            onClick={async () => {
-              const id = lastCreatedSpanId;
-              setLastCreatedSpanId(null);
-              setSpans(prev => prev.filter(s => s.id !== id));
-              if (activeSpan === id) setActiveSpan(null);
-              if (editingSpan === id) setEditingSpan(null);
-              try {
-                await fetch(`/api/studio-v2/feed-spans/${id}`, { method: 'DELETE' });
-              } catch { /* ignore */ }
-            }}
-            style={{
-              marginLeft: 'auto',
-              padding: '8px 14px',
-              background: 'transparent',
-              border: `1px solid ${LeTrendColors.border}`,
-              borderRadius: LeTrendRadius.md,
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: 500,
-              color: LeTrendColors.textMuted
-            }}
-          >
-            Ångra senaste spann
-          </button>
-        )}
       </div>
 
       {/* Passive span body preview — visible on center-dot hover, hides when editing */}
@@ -4902,279 +5608,6 @@ function FeedPlannerSection({
         );
       })()}
 
-      {/* Edit Panel för Spans */}
-      {editingSpan &&
-        (() => {
-          const span = spans.find((s) => s.id === editingSpan);
-          if (!span) return null;
-
-          const col = SPAN_COLOR_PALETTE[span.color_index].color;
-          const count = slotAnchors.length
-            ? touchedSlots(span, slotAnchors).length
-            : 0;
-          const countToDisplay = editingSpan === span.id ? animatedCount : count;
-
-          return (
-            <div
-              style={{
-                marginTop: 16,
-                background: '#fff',
-                borderRadius: LeTrendRadius.lg,
-                padding: '16px 18px',
-                boxShadow: '0 4px 20px rgba(74,47,24,0.1)',
-                borderTop: `3px solid ${col}`
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 12
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div
-                    style={{
-                      width: 10,
-                      height: 10,
-                      borderRadius: '50%',
-                      background: col
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: col,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.08em'
-                    }}
-                  >
-                    {SPAN_COLOR_PALETTE[span.color_index].name}
-                  </span>
-                  <span style={{ fontSize: 10, color: LeTrendColors.textMuted }}>
-                    · {countToDisplay} klipp
-                  </span>
-                </div>
-                <button
-                  onClick={() => { setEditingSpan(null); setActiveSpan(null); }}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: LeTrendColors.textMuted,
-                    fontSize: 18,
-                    lineHeight: 1
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-
-              <input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-                placeholder="Rubrik — t.ex. Alla hjärtans dag"
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  borderRadius: LeTrendRadius.md,
-                  border: `1.5px solid ${col}44`,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: LeTrendColors.brownDark,
-                  background: LeTrendColors.cream,
-                  outline: 'none',
-                  marginBottom: 8,
-                  boxSizing: 'border-box',
-                  fontFamily: 'inherit'
-                }}
-              />
-
-              <textarea
-                value={editBody}
-                onChange={(e) => setEditBody(e.target.value)}
-                placeholder="Beskriv innehållet, strategi och tankar för detta spann..."
-                rows={4}
-                style={{
-                  width: '100%',
-                  padding: '8px 10px',
-                  borderRadius: LeTrendRadius.md,
-                  border: `1.5px solid ${LeTrendColors.border}`,
-                  fontSize: 11.5,
-                  lineHeight: 1.6,
-                  color: LeTrendColors.brownDark,
-                  background: '#fff',
-                  outline: 'none',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                  fontFamily: 'inherit'
-                }}
-              />
-
-              {/* Klimax controls */}
-              <div
-                style={{
-                  marginTop: 10,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  flexWrap: 'wrap'
-                }}
-              >
-                <button
-                  onClick={() => {
-                    if (span.climax !== null) {
-                      setSpans((prev) =>
-                        prev.map((s) =>
-                          s.id === span.id ? { ...s, climax: null, climax_date: null } : s
-                        )
-                      );
-                      void fetch(`/api/studio-v2/feed-spans/${span.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ climax: null, climax_date: null })
-                      }).catch(() => void reloadSpansFromServer());
-                    } else {
-                      const newClimaxFrac = (span.frac_start + span.frac_end) / 2;
-                      setSpans((prev) =>
-                        prev.map((s) =>
-                          s.id === span.id ? { ...s, climax: newClimaxFrac, climax_date: null } : s
-                        )
-                      );
-                      void fetch(`/api/studio-v2/feed-spans/${span.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ climax: newClimaxFrac, climax_date: null })
-                      }).catch(() => void reloadSpansFromServer());
-                    }
-                  }}
-                  style={{
-                    fontSize: 10,
-                    padding: '4px 10px',
-                    borderRadius: LeTrendRadius.sm,
-                    background:
-                      span.climax !== null ? `${col}22` : LeTrendColors.surface,
-                    color:
-                      span.climax !== null ? col : LeTrendColors.textMuted,
-                    border: `1px solid ${span.climax !== null ? `${col}44` : LeTrendColors.border}`,
-                    cursor: 'pointer',
-                    fontWeight: 600
-                  }}
-                >
-                  {span.climax !== null
-                    ? 'Ta bort klimax'
-                    : 'Sätt klimax-punkt'}
-                </button>
-                {span.climax !== null && (
-                  <input
-                    type="date"
-                    value={span.climax_date ? span.climax_date.slice(0, 10) : ''}
-                    onChange={(e) => {
-                      const newDate = e.target.value || null;
-                      setSpans(prev => prev.map(s =>
-                        s.id === span.id ? { ...s, climax_date: newDate } : s
-                      ));
-                      void fetch(`/api/studio-v2/feed-spans/${span.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ climax_date: newDate })
-                      }).catch(() => {});
-                    }}
-                    style={{
-                      fontSize: 10,
-                      padding: '3px 7px',
-                      borderRadius: LeTrendRadius.sm,
-                      border: `1px solid ${col}44`,
-                      color: col,
-                      background: `${col}0d`,
-                      outline: 'none',
-                      cursor: 'pointer'
-                    }}
-                  />
-                )}
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  marginTop: 12,
-                  justifyContent: 'space-between'
-                }}
-              >
-                <button
-                  onClick={async () => {
-                    if (!confirm('Ta bort detta spann?')) return;
-
-                    try {
-                      await fetch(`/api/studio-v2/feed-spans/${span.id}`, {
-                        method: 'DELETE'
-                      });
-                      setSpans((prev) => prev.filter((s) => s.id !== span.id));
-                      setEditingSpan(null);
-                      setActiveSpan(null);
-                    } catch (error) {
-                      console.error('Error deleting span:', error);
-                      alert('Kunde inte ta bort spann');
-                    }
-                  }}
-                  style={{
-                    fontSize: 10,
-                    padding: '5px 12px',
-                    borderRadius: LeTrendRadius.sm,
-                    background: 'transparent',
-                    border: `1px solid ${LeTrendColors.border}`,
-                    color: LeTrendColors.textMuted,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Ta bort spann
-                </button>
-
-                <button
-                  onClick={async () => {
-                    setSpans((prev) =>
-                      prev.map((s) =>
-                        s.id === span.id
-                          ? { ...s, title: editTitle, body: editBody }
-                          : s
-                      )
-                    );
-
-                    try {
-                      await fetch(`/api/studio-v2/feed-spans/${span.id}`, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ title: editTitle, body: editBody })
-                      });
-                      setEditingSpan(null);
-                      setActiveSpan(null);
-                    } catch (error) {
-                      console.error('Error saving span:', error);
-                      alert('Kunde inte spara spann');
-                      void reloadSpansFromServer();
-                    }
-                  }}
-                  style={{
-                    fontSize: 10,
-                    padding: '5px 16px',
-                    borderRadius: LeTrendRadius.sm,
-                    background: LeTrendColors.brownDark,
-                    color: LeTrendColors.cream,
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontWeight: 600
-                  }}
-                >
-                  Spara
-                </button>
-              </div>
-            </div>
-          );
-        })()}
-
       {/* Tag Manager Modal */}
       {showTagManager && (
         <TagManager
@@ -5195,6 +5628,7 @@ function FeedSlot({
   spanCoverage = 0,
   spanColor = null,
   showSpanCoverageLabels = true,
+  projectedDate = null,
   getConceptDetails,
   onMarkProduced,
   onRemoveFromSlot,
@@ -5208,12 +5642,38 @@ function FeedSlot({
 }: FeedSlotProps) {
   const [isHovered, setIsHovered] = React.useState(false);
   const [showContextMenu, setShowContextMenu] = React.useState(false);
+  const menuBtnRef = React.useRef<HTMLButtonElement>(null);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = React.useState<{
+    top: number; left: number;
+    triggerBottom: number; triggerTop: number;
+  } | null>(null);
+
+  // After menu renders: flip upward if height overflows bottom; clamp left if width overflows right
+  React.useLayoutEffect(() => {
+    if (!showContextMenu || !menuRef.current || !menuPos) return;
+    const menuEl = menuRef.current;
+    const { width: menuWidth, height: menuHeight } = menuEl.getBoundingClientRect();
+    // Vertical flip
+    if (menuPos.triggerBottom + menuHeight + 8 > window.innerHeight) {
+      menuEl.style.top = `${Math.max(8, menuPos.triggerTop - menuHeight - 4)}px`;
+    }
+    // Horizontal clamp: shift left if right edge overflows viewport
+    const rightOverflow = menuPos.left + menuWidth + 8 - window.innerWidth;
+    if (rightOverflow > 0) {
+      menuEl.style.left = `${Math.max(8, menuPos.left - rightOverflow)}px`;
+    }
+  }, [showContextMenu, menuPos]);
   const [showTagPicker, setShowTagPicker] = React.useState(false);
   const [editingNote, setEditingNote] = React.useState(false);
   const [editingTikTok, setEditingTikTok] = React.useState(false);
   const [editingMetadata, setEditingMetadata] = React.useState(false);
+  const [editingPlannedDate, setEditingPlannedDate] = React.useState(false);
+  const [editingPublishedDate, setEditingPublishedDate] = React.useState(false);
   const [localNote, setLocalNote] = React.useState('');
   const [localTikTokUrl, setLocalTikTokUrl] = React.useState('');
+  const [localPlannedDate, setLocalPlannedDate] = React.useState('');
+  const [localPublishedDate, setLocalPublishedDate] = React.useState('');
   const [localThumbnailUrl, setLocalThumbnailUrl] = React.useState('');
   const [localViews, setLocalViews] = React.useState('');
   const [localLikes, setLocalLikes] = React.useState('');
@@ -5236,9 +5696,13 @@ function FeedSlot({
     setLocalLikes(result?.tiktok_likes != null ? String(result.tiktok_likes) : '');
     setLocalComments(result?.tiktok_comments != null ? String(result.tiktok_comments) : '');
     setLocalWatchTime(result?.tiktok_watch_time_seconds != null ? String(result.tiktok_watch_time_seconds) : '');
+    setLocalPlannedDate(result?.planned_publish_at ? result.planned_publish_at.slice(0, 10) : '');
+    setLocalPublishedDate(result?.published_at ? result.published_at.slice(0, 10) : '');
     setEditingNote(false);
     setEditingTikTok(false);
     setEditingMetadata(false);
+    setEditingPlannedDate(false);
+    setEditingPublishedDate(false);
     setShowTagPicker(false);
   }, [
     concept?.id,
@@ -5248,7 +5712,9 @@ function FeedSlot({
     result?.tiktok_views,
     result?.tiktok_likes,
     result?.tiktok_comments,
-    result?.tiktok_watch_time_seconds
+    result?.tiktok_watch_time_seconds,
+    result?.planned_publish_at,
+    result?.published_at
   ]);
 
   const formatMetric = (value: number | null) => {
@@ -5278,24 +5744,30 @@ function FeedSlot({
     return Math.round(parsed);
   };
 
-  const requestDateIso = (title: string, currentValue: string | null): string | null | undefined => {
-    const currentDate = currentValue ? new Date(currentValue) : null;
-    const defaultValue =
-      currentDate && !Number.isNaN(currentDate.getTime())
-        ? `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')} ${String(currentDate.getHours()).padStart(2, '0')}:${String(currentDate.getMinutes()).padStart(2, '0')}`
-        : '';
-    const value = prompt(`${title} (YYYY-MM-DD HH:mm). Lämna tomt för att rensa.`, defaultValue);
-    if (value === null) return undefined;
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-
-    const normalized = trimmed.replace(' ', 'T');
-    const parsed = new Date(normalized);
-    if (Number.isNaN(parsed.getTime())) {
-      throw new Error('Ogiltigt datumformat. Använd YYYY-MM-DD HH:mm');
+  const handleSavePlannedDate = async () => {
+    if (!concept) return;
+    try {
+      const value = localPlannedDate ? new Date(localPlannedDate).toISOString() : null;
+      await onPatchConcept(concept.id, { planned_publish_at: value });
+      setEditingPlannedDate(false);
+      setShowContextMenu(false);
+    } catch {
+      alert('Kunde inte spara planerat datum');
     }
-    return parsed.toISOString();
   };
+
+  const handleSavePublishedDate = async () => {
+    if (!concept) return;
+    try {
+      const value = localPublishedDate ? new Date(localPublishedDate).toISOString() : null;
+      await onPatchConcept(concept.id, { published_at: value });
+      setEditingPublishedDate(false);
+      setShowContextMenu(false);
+    } catch {
+      alert('Kunde inte spara publicerat datum');
+    }
+  };
+
 
   const handleToggleTag = async (tagName: string) => {
     if (!concept) return;
@@ -5349,30 +5821,6 @@ function FeedSlot({
     } catch (error) {
       console.error('Error updating TikTok metadata:', error);
       alert(error instanceof Error ? error.message : 'Kunde inte spara TikTok-metadata');
-    }
-  };
-
-  const handleSetPlannedPublishAt = async () => {
-    if (!concept) return;
-    try {
-      const nextValue = requestDateIso('Planerad publicering', result?.planned_publish_at ?? null);
-      if (nextValue === undefined) return;
-      await onPatchConcept(concept.id, { planned_publish_at: nextValue });
-      setShowContextMenu(false);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Kunde inte spara planerat datum');
-    }
-  };
-
-  const handleSetPublishedAt = async () => {
-    if (!concept) return;
-    try {
-      const nextValue = requestDateIso('Publicerad', result?.published_at ?? null);
-      if (nextValue === undefined) return;
-      await onPatchConcept(concept.id, { published_at: nextValue });
-      setShowContextMenu(false);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Kunde inte spara publicerat datum');
     }
   };
 
@@ -5510,9 +5958,19 @@ function FeedSlot({
           />
         )}
         {canAddConcept ? (
-          <span style={{ fontSize: 32, color: LeTrendColors.textMuted, opacity: 0.5 }}>+</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, pointerEvents: 'none', userSelect: 'none' }}>
+            <span style={{ fontSize: 32, color: LeTrendColors.textMuted, opacity: 0.5 }}>+</span>
+            {projectedDate && (
+              <span style={{ fontSize: 9, color: LeTrendColors.textMuted, opacity: 0.38, fontStyle: 'italic', letterSpacing: '0.02em', textAlign: 'center', lineHeight: 1.2 }}>
+                ~{projectedDate.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })}
+              </span>
+            )}
+          </div>
         ) : isPastSlot ? (
-          <span style={{ fontSize: 11, color: LeTrendColors.textMuted, opacity: 0.4 }}>tom</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, pointerEvents: 'none', userSelect: 'none' }}>
+            <span style={{ fontSize: 16, color: LeTrendColors.textMuted, opacity: 0.2, lineHeight: 1 }}>◦</span>
+            <span style={{ fontSize: 9, color: LeTrendColors.textMuted, opacity: 0.35, fontStyle: 'italic', letterSpacing: '0.04em' }}>historik</span>
+          </div>
         ) : null}
       </div>
     );
@@ -5551,7 +6009,22 @@ function FeedSlot({
         cursor: 'pointer',
         boxShadow: spanOutline
       }}
-      onClick={() => onSlotClick(slot, concept, details)}
+      onClick={(e) => {
+        // Historik — always open context menu; activate URL editor only when no link exists yet
+        if (type === 'history' && concept) {
+          const rect = e.currentTarget.getBoundingClientRect();
+          setMenuPos({
+            top: rect.top + 8,
+            left: Math.max(8, rect.right - 196),
+            triggerBottom: rect.bottom,
+            triggerTop: rect.top + 8,
+          });
+          setShowContextMenu(true);
+          if (!result?.tiktok_url) setEditingTikTok(true);
+          return;
+        }
+        onSlotClick(slot, concept, details);
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -5611,9 +6084,19 @@ function FeedSlot({
       {/* Context menu icon */}
       {concept && (isHovered || showContextMenu) && (
         <button
+          ref={menuBtnRef}
           onClick={(e) => {
             e.stopPropagation();
-            setShowContextMenu(!showContextMenu);
+            if (!showContextMenu && menuBtnRef.current) {
+              const rect = menuBtnRef.current.getBoundingClientRect();
+              setMenuPos({
+                top: rect.bottom + 4,
+                left: Math.max(8, rect.right - 196),
+                triggerBottom: rect.bottom,
+                triggerTop: rect.top,
+              });
+            }
+            setShowContextMenu(v => !v);
           }}
           style={{
             position: 'absolute',
@@ -5626,7 +6109,7 @@ function FeedSlot({
             color: LeTrendColors.textMuted
           }}
         >
-          ?
+          ⋯
         </button>
       )}
 
@@ -5649,7 +6132,61 @@ function FeedSlot({
         </div>
       )}
 
-      {/* TikTok play indicator for history */}
+      {/* Historik origin signal — non-interactive, distinguishes LeTrend-produced from imported */}
+      {type === 'history' && concept && concept.row_kind === 'assignment' && hasThumbnail && (
+        <img
+          src="/lt-transparent.png"
+          alt=""
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            bottom: 6,
+            left: 6,
+            width: 20,
+            height: 20,
+            objectFit: 'contain',
+            opacity: 0.65,
+            pointerEvents: 'none',
+            userSelect: 'none',
+            filter: 'brightness(10)',
+          }}
+        />
+      )}
+      {type === 'history' && concept && concept.row_kind === 'assignment' && !hasThumbnail && (
+        <div style={{
+          position: 'absolute',
+          bottom: 8,
+          left: 8,
+          fontSize: 8,
+          fontWeight: 700,
+          letterSpacing: '0.05em',
+          color: LeTrendColors.brownLight,
+          opacity: 0.7,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}>
+          LT
+        </div>
+      )}
+      {type === 'history' && concept && concept.row_kind === 'imported_history' && (
+        <div style={{
+          position: 'absolute',
+          bottom: 8,
+          left: 8,
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          color: hasThumbnail ? 'rgba(255,255,255,0.65)' : LeTrendColors.textMuted,
+          opacity: 0.8,
+          pointerEvents: 'none',
+          userSelect: 'none',
+          textShadow: hasThumbnail ? '0 1px 2px rgba(0,0,0,0.5)' : undefined,
+        }}>
+          ↓ ext
+        </div>
+      )}
+
+      {/* TikTok play indicator for history with URL */}
       {type === 'history' && result?.tiktok_url && (
         <div
           style={{
@@ -5663,7 +6200,24 @@ function FeedSlot({
             pointerEvents: 'none'
           }}
         >
-          ?
+          ▶
+        </div>
+      )}
+
+      {/* Signal: historik card has no TikTok link — reads as incomplete result */}
+      {type === 'history' && !result?.tiktok_url && !hasThumbnail && (
+        <div style={{
+          position: 'absolute',
+          bottom: 28,
+          left: 0,
+          right: 0,
+          display: 'flex',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}>
+          <span style={{ fontSize: 9, color: LeTrendColors.textMuted, opacity: 0.45, fontStyle: 'italic' }}>
+            ingen länk
+          </span>
         </div>
       )}
 
@@ -5685,16 +6239,51 @@ function FeedSlot({
             )}
           </div>
 
-          {(result?.planned_publish_at || result?.content_loaded_at) && (
+          {(result?.planned_publish_at || result?.content_loaded_at) ? (
             <div style={{ marginTop: 6, fontSize: 10, color: LeTrendColors.textMuted, lineHeight: 1.3 }}>
               {result?.planned_publish_at ? <div>{`Plan: ${formatDate(result.planned_publish_at)}`}</div> : null}
               {result?.content_loaded_at ? <div>{`In: ${formatDate(result.content_loaded_at)}`}</div> : null}
             </div>
-          )}
+          ) : type === 'planned' && projectedDate ? (
+            <div style={{ marginTop: 6, fontSize: 9, color: LeTrendColors.textMuted, opacity: 0.42, fontStyle: 'italic', lineHeight: 1.3 }}>
+              ~{projectedDate.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })}
+            </div>
+          ) : null}
 
           {type === 'history' && (result?.tiktok_views || result?.tiktok_likes || result?.tiktok_comments) && (
-            <div style={{ marginTop: 6, fontSize: 10, color: LeTrendColors.textSecondary }}>
-              {`Visn ${formatMetric(result?.tiktok_views ?? null)} · Likes ${formatMetric(result?.tiktok_likes ?? null)} · Komm ${formatMetric(result?.tiktok_comments ?? null)}`}
+            <div style={{
+              position: 'absolute',
+              right: 5,
+              bottom: 28,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              gap: 3,
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}>
+              {([
+                { icon: '▶', value: result?.tiktok_views ?? null },
+                { icon: '♥', value: result?.tiktok_likes ?? null },
+                { icon: '◎', value: result?.tiktok_comments ?? null },
+              ] as { icon: string; value: number | null }[])
+                .filter(({ value }) => typeof value === 'number')
+                .map(({ icon, value }) => (
+                  <div key={icon} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    fontSize: 9,
+                    fontWeight: 600,
+                    color: hasThumbnail ? 'rgba(255,255,255,0.9)' : LeTrendColors.textSecondary,
+                    textShadow: hasThumbnail ? '0 1px 2px rgba(0,0,0,0.6)' : undefined,
+                    lineHeight: 1,
+                  }}>
+                    <span style={{ opacity: 0.8 }}>{icon}</span>
+                    <span>{formatMetric(value)}</span>
+                  </div>
+                ))
+              }
             </div>
           )}
         </div>
@@ -5725,488 +6314,290 @@ function FeedSlot({
             ) : null;
           })}
           {markers.assignment_note && (
-            <div
-              title={markers.assignment_note}
-              style={{
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: '#d97706',
-                opacity: type === 'history' ? 0.6 : 1,
-                flexShrink: 0
-              }}
-            />
+            type === 'history' && markers.assignment_note.length < 60 ? (
+              <div
+                title={markers.assignment_note}
+                style={{
+                  fontSize: 9,
+                  color: '#d97706',
+                  fontStyle: 'italic',
+                  lineHeight: 1.3,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 1,
+                  opacity: 0.85,
+                }}
+              >
+                {markers.assignment_note}
+              </div>
+            ) : (
+              <div
+                title={markers.assignment_note}
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: '#d97706',
+                  opacity: type === 'history' ? 0.6 : 1,
+                  flexShrink: 0
+                }}
+              />
+            )
           )}
         </div>
       )}
 
-      {/* Markera som producerat (current slot) */}
+      {/* Markera som producerat — demoted: small text-link, no prompt */}
       {type === 'current' && concept && (
         <button
           onClick={(e) => {
             e.stopPropagation();
-            const url = prompt('TikTok-länk (valfritt):');
-            onMarkProduced(concept.id, url || undefined);
+            void onMarkProduced(concept.id);
           }}
           style={{
             marginTop: 8,
-            padding: '6px',
-            background: LeTrendColors.success,
+            padding: '2px 0',
+            background: 'none',
             border: 'none',
-            color: 'white',
-            borderRadius: LeTrendRadius.sm,
-            fontSize: 11,
-            fontWeight: 600,
+            color: LeTrendColors.textSecondary,
+            fontSize: 10,
             cursor: 'pointer',
-            width: '100%'
+            textAlign: 'left',
+            opacity: 0.7,
+            textDecoration: 'underline',
+            textDecorationColor: 'rgba(0,0,0,0.15)',
           }}
         >
-          ? Markera producerat
+          ✓ Markera som producerad
         </button>
       )}
 
-      {/* Context menu */}
-      {showContextMenu && concept && (
+      {/* Context menu — viewport-fixed positioning, backdrop for click-outside */}
+      {showContextMenu && concept && menuPos && (<>
         <div
+          style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+          onClick={(e) => { e.stopPropagation(); setShowContextMenu(false); }}
+        />
+        <div
+          ref={menuRef}
           style={{
-            position: 'absolute',
-            top: 32,
-            right: 8,
+            position: 'fixed',
+            top: menuPos.top,
+            left: menuPos.left,
             background: 'white',
             border: `1px solid ${LeTrendColors.border}`,
             borderRadius: LeTrendRadius.md,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            zIndex: 10,
-            minWidth: 160
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            zIndex: 100,
+            minWidth: 192,
+            maxHeight: 'min(360px, 55vh)',
+            overflowY: 'auto',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenConcept(concept.id, ['script', 'instructions', 'fit']);
-              setShowContextMenu(false);
-            }}
-            style={{
-              width: '100%',
-              padding: 8,
-              background: 'none',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: 12
-            }}
-          >
-            Redigera instruktioner
-          </button>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowTagPicker((prev) => !prev);
-            }}
-            style={{
-              width: '100%',
-              padding: 8,
-              background: 'none',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: 12
-            }}
-          >
-            {showTagPicker ? 'Dölj taggar' : 'Hantera taggar'}
-          </button>
-
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleSetPlannedPublishAt();
-            }}
-            style={{
-              width: '100%',
-              padding: 8,
-              background: 'none',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: 12
-            }}
-          >
-            Sätt planerad publicering
-          </button>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleMarkContentLoadedNow();
-            }}
-            style={{
-              width: '100%',
-              padding: 8,
-              background: 'none',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: 12
-            }}
-          >
-            Markera innehåll uppladdat
-          </button>
-
-          {hasUnreadUpload && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                void handleAcknowledgeUpload();
-              }}
-              style={{
-                width: '100%',
-                padding: 8,
-                background: 'none',
-                border: 'none',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontSize: 12
-              }}
-            >
-              Markera uppladdning sedd
+          {/* ── KOMMANDE ── */}
+          {type === 'planned' && (<>
+            <button onClick={(e) => { e.stopPropagation(); onOpenConcept(concept.id, ['script', 'instructions', 'fit']); setShowContextMenu(false); }} style={feedSlotMenuBtnStyle}>
+              Redigera koncept
             </button>
-          )}
-
-          <button
-            onClick={(e) => {
+            <button onClick={(e) => {
               e.stopPropagation();
-              void handleSetPublishedAt();
-            }}
-            style={{
-              width: '100%',
-              padding: 8,
-              background: 'none',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: 12
-            }}
-          >
-            Sätt publicerat datum
-          </button>
-
-          {concept && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingNote((prev) => !prev);
-              }}
-              style={{
-                width: '100%',
-                padding: 8,
-                background: 'none',
-                border: 'none',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontSize: 12
-              }}
-            >
+              if (!editingPlannedDate && !result?.planned_publish_at && projectedDate) {
+                setLocalPlannedDate(projectedDate.toISOString().slice(0, 10));
+              }
+              setEditingPlannedDate(p => !p);
+            }} style={feedSlotMenuBtnStyle}>
+              {editingPlannedDate
+                ? 'Avbryt'
+                : result?.planned_publish_at
+                  ? 'Redigera planerad publicering'
+                  : projectedDate
+                    ? `Sätt planerad publicering (~${projectedDate.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })})`
+                    : 'Sätt planerad publicering'}
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); setShowTagPicker(p => !p); }} style={feedSlotMenuBtnStyle}>
+              {showTagPicker ? 'Dölj taggar' : 'Hantera taggar'}
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
               {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
             </button>
-          )}
-
-          {type === 'history' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingTikTok((prev) => !prev);
-              }}
-              style={{
-                width: '100%',
-                padding: 8,
-                background: 'none',
-                border: 'none',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontSize: 12
-              }}
-            >
-              {editingTikTok ? 'Avbryt TikTok-länk' : 'Redigera TikTok-länk'}
+            <button onClick={(e) => { e.stopPropagation(); void onRemoveFromSlot(concept.id); setShowContextMenu(false); }} style={{ ...feedSlotMenuBtnStyle, color: '#b91c1c' }}>
+              Ta bort från flödet
             </button>
-          )}
+          </>)}
 
+          {/* ── NU ── */}
+          {type === 'current' && (<>
+            <button onClick={(e) => { e.stopPropagation(); onOpenConcept(concept.id, ['script', 'instructions', 'fit']); setShowContextMenu(false); }} style={feedSlotMenuBtnStyle}>
+              Redigera koncept
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); void handleMarkContentLoadedNow(); }} style={feedSlotMenuBtnStyle}>
+              Markera innehåll uppladdat
+            </button>
+            {hasUnreadUpload && (
+              <button onClick={(e) => { e.stopPropagation(); void handleAcknowledgeUpload(); }} style={feedSlotMenuBtnStyle}>
+                Markera uppladdning sedd
+              </button>
+            )}
+            <button onClick={(e) => {
+              e.stopPropagation();
+              if (!editingPlannedDate && !result?.planned_publish_at && projectedDate) {
+                setLocalPlannedDate(projectedDate.toISOString().slice(0, 10));
+              }
+              setEditingPlannedDate(p => !p);
+            }} style={feedSlotMenuBtnStyle}>
+              {editingPlannedDate
+                ? 'Avbryt'
+                : result?.planned_publish_at
+                  ? 'Redigera planerad publicering'
+                  : projectedDate
+                    ? `Sätt planerad publicering (~${projectedDate.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })})`
+                    : 'Sätt planerad publicering'}
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
+              {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); void onRemoveFromSlot(concept.id); setShowContextMenu(false); }} style={{ ...feedSlotMenuBtnStyle, color: '#b91c1c' }}>
+              Ta bort från flödet
+            </button>
+          </>)}
 
-          {type === 'history' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditingMetadata((prev) => !prev);
-              }}
-              style={{
-                width: '100%',
-                padding: 8,
-                background: 'none',
-                border: 'none',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontSize: 12
-              }}
-            >
+          {/* ── HISTORIK ── */}
+          {type === 'history' && (<>
+            {result?.tiktok_url && (
+              <button onClick={(e) => { e.stopPropagation(); window.open(result.tiktok_url!, '_blank', 'noopener,noreferrer'); setShowContextMenu(false); }} style={feedSlotMenuBtnStyle}>
+                Öppna TikTok ↗
+              </button>
+            )}
+            {concept.row_kind === 'assignment' && (
+              <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
+                {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
+              </button>
+            )}
+            <button onClick={(e) => { e.stopPropagation(); setEditingTikTok(p => !p); }} style={feedSlotMenuBtnStyle}>
+              {editingTikTok ? 'Avbryt' : result?.tiktok_url ? 'Redigera TikTok-länk' : 'Lägg till TikTok-länk'}
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); setEditingMetadata(p => !p); }} style={feedSlotMenuBtnStyle}>
               {editingMetadata ? 'Avbryt metadata' : 'Redigera TikTok-metadata'}
             </button>
-          )}
+            {concept.row_kind !== 'assignment' && (
+              <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
+                {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
+              </button>
+            )}
+            <button onClick={(e) => { e.stopPropagation(); setEditingPublishedDate(p => !p); }} style={feedSlotMenuBtnStyle}>
+              {editingPublishedDate ? 'Avbryt' : result?.published_at ? 'Redigera publicerat datum' : 'Sätt publicerat datum'}
+            </button>
+          </>)}
 
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onRemoveFromSlot(concept.id);
-              setShowContextMenu(false);
-            }}
-            style={{
-              width: '100%',
-              padding: 8,
-              background: 'none',
-              border: 'none',
-              textAlign: 'left',
-              cursor: 'pointer',
-              fontSize: 12
-            }}
-          >
-            Ta bort från flödet
-          </button>
-
-          {showTagPicker && (
-            <div
-              style={{
-                borderTop: `1px solid ${LeTrendColors.border}`,
-                maxHeight: 180,
-                overflowY: 'auto'
-              }}
-            >
+          {/* Shared: tag picker (kommande + nu only) */}
+          {showTagPicker && type !== 'history' && (
+            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, maxHeight: 160, overflowY: 'auto' }}>
               {tags.length === 0 ? (
-                <div style={{ padding: 8, fontSize: 12, color: LeTrendColors.textMuted }}>
-                  Inga taggar skapade ännu
-                </div>
-              ) : (
-                tags.map((tag) => {
-                  const selected = (markers?.tags ?? []).includes(tag.name);
-                  return (
-                    <button
-                      key={tag.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void handleToggleTag(tag.name);
-                      }}
-                      style={{
-                        width: '100%',
-                        padding: '8px 10px',
-                        border: 'none',
-                        background: selected ? 'rgba(74, 47, 24, 0.08)' : 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        cursor: 'pointer',
-                        fontSize: 12
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          background: tag.color,
-                          display: 'inline-block'
-                        }}
-                      />
-                      <span style={{ flex: 1, textAlign: 'left' }}>{tag.name}</span>
-                      <span style={{ opacity: selected ? 1 : 0.25 }}>?</span>
-                    </button>
-                  );
-                })
-              )}
+                <div style={{ padding: 8, fontSize: 12, color: LeTrendColors.textMuted }}>Inga taggar skapade ännu</div>
+              ) : tags.map((tag) => {
+                const selected = (markers?.tags ?? []).includes(tag.name);
+                return (
+                  <button key={tag.id} onClick={(e) => { e.stopPropagation(); void handleToggleTag(tag.name); }}
+                    style={{ width: '100%', padding: '8px 10px', border: 'none', background: selected ? 'rgba(74,47,24,0.08)' : 'white', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: tag.color, display: 'inline-block' }} />
+                    <span style={{ flex: 1, textAlign: 'left' }}>{tag.name}</span>
+                    <span style={{ opacity: selected ? 1 : 0.25 }}>✓</span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
-          {editingNote && concept && (
-            <div
-              style={{
-                borderTop: `1px solid ${LeTrendColors.border}`,
-                padding: 8
-              }}
-            >
-              <textarea
-                value={localNote}
-                onChange={(e) => setLocalNote(e.target.value)}
-                rows={3}
-                placeholder="Intern notering..."
-                style={{
-                  width: '100%',
-                  border: `1px solid ${LeTrendColors.border}`,
-                  borderRadius: LeTrendRadius.sm,
-                  padding: 6,
-                  fontSize: 12,
-                  resize: 'vertical'
-                }}
-              />
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleSaveNote();
-                }}
-                style={{
-                  marginTop: 8,
-                  width: '100%',
-                  padding: 6,
-                  border: 'none',
-                  borderRadius: LeTrendRadius.sm,
-                  background: LeTrendColors.brownLight,
-                  color: 'white',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
+          {/* Shared: note editor */}
+          {editingNote && (
+            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8 }}>
+              <textarea value={localNote} onChange={(e) => setLocalNote(e.target.value)} rows={3} placeholder="Intern notering..."
+                style={{ width: '100%', border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, padding: 6, fontSize: 12, resize: 'vertical' }} />
+              <button onClick={(e) => { e.stopPropagation(); void handleSaveNote(); }}
+                style={{ marginTop: 8, width: '100%', padding: 6, border: 'none', borderRadius: LeTrendRadius.sm, background: LeTrendColors.brownLight, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Spara notering
               </button>
             </div>
           )}
 
+          {/* Historik: TikTok URL editor */}
           {editingTikTok && type === 'history' && (
-            <div
-              style={{
-                borderTop: `1px solid ${LeTrendColors.border}`,
-                padding: 8
-              }}
-            >
-              <input
-                value={localTikTokUrl}
-                onChange={(e) => setLocalTikTokUrl(e.target.value)}
-                placeholder="https://www.tiktok.com/..."
-                style={{
-                  width: '100%',
-                  border: `1px solid ${LeTrendColors.border}`,
-                  borderRadius: LeTrendRadius.sm,
-                  padding: 6,
-                  fontSize: 12
-                }}
-              />
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleSaveTikTok();
-                }}
-                style={{
-                  marginTop: 8,
-                  width: '100%',
-                  padding: 6,
-                  border: 'none',
-                  borderRadius: LeTrendRadius.sm,
-                  background: LeTrendColors.brownLight,
-                  color: 'white',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
+            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8 }}>
+              <input value={localTikTokUrl} onChange={(e) => setLocalTikTokUrl(e.target.value)} placeholder="https://www.tiktok.com/..."
+                style={{ width: '100%', border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, padding: 6, fontSize: 12 }} />
+              <button onClick={(e) => { e.stopPropagation(); void handleSaveTikTok(); }}
+                style={{ marginTop: 8, width: '100%', padding: 6, border: 'none', borderRadius: LeTrendRadius.sm, background: LeTrendColors.brownLight, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Spara TikTok-länk
               </button>
             </div>
           )}
 
+          {/* Historik: metadata editor */}
           {editingMetadata && type === 'history' && (
-            <div
-              style={{
-                borderTop: `1px solid ${LeTrendColors.border}`,
-                padding: 8,
-                display: 'grid',
-                gap: 6
-              }}
-            >
-              <input
-                value={localThumbnailUrl}
-                onChange={(e) => setLocalThumbnailUrl(e.target.value)}
-                placeholder="Thumbnail URL"
-                style={{
-                  width: '100%',
-                  border: `1px solid ${LeTrendColors.border}`,
-                  borderRadius: LeTrendRadius.sm,
-                  padding: 6,
-                  fontSize: 12
-                }}
-              />
-              <input
-                value={localViews}
-                onChange={(e) => setLocalViews(e.target.value)}
-                placeholder="Visningar"
-                style={{
-                  width: '100%',
-                  border: `1px solid ${LeTrendColors.border}`,
-                  borderRadius: LeTrendRadius.sm,
-                  padding: 6,
-                  fontSize: 12
-                }}
-              />
-              <input
-                value={localLikes}
-                onChange={(e) => setLocalLikes(e.target.value)}
-                placeholder="Likes"
-                style={{
-                  width: '100%',
-                  border: `1px solid ${LeTrendColors.border}`,
-                  borderRadius: LeTrendRadius.sm,
-                  padding: 6,
-                  fontSize: 12
-                }}
-              />
-              <input
-                value={localComments}
-                onChange={(e) => setLocalComments(e.target.value)}
-                placeholder="Kommentarer"
-                style={{
-                  width: '100%',
-                  border: `1px solid ${LeTrendColors.border}`,
-                  borderRadius: LeTrendRadius.sm,
-                  padding: 6,
-                  fontSize: 12
-                }}
-              />
-              <input
-                value={localWatchTime}
-                onChange={(e) => setLocalWatchTime(e.target.value)}
-                placeholder="Watch time (sek)"
-                style={{
-                  width: '100%',
-                  border: `1px solid ${LeTrendColors.border}`,
-                  borderRadius: LeTrendRadius.sm,
-                  padding: 6,
-                  fontSize: 12
-                }}
-              />
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleSaveTikTokMetadata();
-                }}
-                style={{
-                  marginTop: 4,
-                  width: '100%',
-                  padding: 6,
-                  border: 'none',
-                  borderRadius: LeTrendRadius.sm,
-                  background: LeTrendColors.brownLight,
-                  color: 'white',
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
+            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8, display: 'grid', gap: 6 }}>
+              {([
+                [localThumbnailUrl, setLocalThumbnailUrl, 'Thumbnail URL'],
+                [localViews,        setLocalViews,        'Visningar'],
+                [localLikes,        setLocalLikes,        'Likes'],
+                [localComments,     setLocalComments,     'Kommentarer'],
+                [localWatchTime,    setLocalWatchTime,    'Watch time (sek)'],
+              ] as [string, (v: string) => void, string][]).map(([val, setter, ph]) => (
+                <input key={ph} value={val} onChange={(e) => setter(e.target.value)} placeholder={ph}
+                  style={{ width: '100%', border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, padding: 6, fontSize: 12 }} />
+              ))}
+              <button onClick={(e) => { e.stopPropagation(); void handleSaveTikTokMetadata(); }}
+                style={{ marginTop: 4, width: '100%', padding: 6, border: 'none', borderRadius: LeTrendRadius.sm, background: LeTrendColors.brownLight, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Spara metadata
               </button>
             </div>
           )}
+
+          {/* Planerat datum editor — kommande + nu */}
+          {editingPlannedDate && (type === 'planned' || type === 'current') && (
+            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8 }}>
+              <input type="date" value={localPlannedDate} onChange={(e) => setLocalPlannedDate(e.target.value)}
+                style={{ width: '100%', border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, padding: 6, fontSize: 12 }} />
+              {!result?.planned_publish_at && projectedDate && localPlannedDate === projectedDate.toISOString().slice(0, 10) && (
+                <div style={{ fontSize: 9, color: LeTrendColors.textMuted, opacity: 0.55, fontStyle: 'italic', marginTop: 3 }}>
+                  Förslag från rytm
+                </div>
+              )}
+              <button onClick={(e) => { e.stopPropagation(); void handleSavePlannedDate(); }}
+                style={{ marginTop: 8, width: '100%', padding: 6, border: 'none', borderRadius: LeTrendRadius.sm, background: LeTrendColors.brownLight, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                Spara datum
+              </button>
+            </div>
+          )}
+
+          {/* Publicerat datum editor — historik */}
+          {editingPublishedDate && type === 'history' && (
+            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8 }}>
+              <input type="date" value={localPublishedDate} onChange={(e) => setLocalPublishedDate(e.target.value)}
+                style={{ width: '100%', border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, padding: 6, fontSize: 12 }} />
+              <button onClick={(e) => { e.stopPropagation(); void handleSavePublishedDate(); }}
+                style={{ marginTop: 8, width: '100%', padding: 6, border: 'none', borderRadius: LeTrendRadius.sm, background: LeTrendColors.brownLight, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                Spara datum
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </>)}
     </div>
   );
 }
+
+const feedSlotMenuBtnStyle: React.CSSProperties = {
+  width: '100%',
+  padding: 8,
+  background: 'none',
+  border: 'none',
+  textAlign: 'left',
+  cursor: 'pointer',
+  fontSize: 12,
+};
 
 function KommunikationSection({
   customer,

@@ -7,9 +7,14 @@ interface CustomerImportHistoryModalProps {
   setImportHistoryJson: (value: string) => void;
   importingHistory: boolean;
   importHistoryError: string | null;
+  importHistoryResult: { imported: number; skipped: number } | null;
   clearError: () => void;
   onClose: () => void;
   onImportHistory: (replace: boolean) => Promise<void>;
+  onFetchFromHagen?: () => Promise<void>;
+  fetchingFromHagen?: boolean;
+  fetchFromHagenError?: string | null;
+  fetchedFromUsernames?: string[];
 }
 
 export function CustomerImportHistoryModal({
@@ -18,9 +23,14 @@ export function CustomerImportHistoryModal({
   setImportHistoryJson,
   importingHistory,
   importHistoryError,
+  importHistoryResult,
   clearError,
   onClose,
   onImportHistory,
+  onFetchFromHagen,
+  fetchingFromHagen = false,
+  fetchFromHagenError,
+  fetchedFromUsernames = [],
 }: CustomerImportHistoryModalProps) {
   if (!isOpen) return null;
 
@@ -60,7 +70,7 @@ export function CustomerImportHistoryModal({
               Importera TikTok-historik
             </h3>
             <p style={{ fontSize: 13, color: LeTrendColors.textSecondary, margin: '4px 0 0' }}>
-              Klistra in en JSON-array med klipp. Nyaste klipp = slot #6 (feed_order -1).
+              Klistra in en JSON-array med klipp. Nyaste klipp placeras närmast nu i historik.
             </p>
           </div>
           <button
@@ -102,6 +112,37 @@ export function CustomerImportHistoryModal({
           {']'}
         </div>
 
+        {onFetchFromHagen && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => void onFetchFromHagen()}
+              disabled={fetchingFromHagen}
+              style={{
+                padding: '7px 14px',
+                background: LeTrendColors.surface,
+                border: `1px solid ${LeTrendColors.borderMedium}`,
+                borderRadius: LeTrendRadius.md,
+                fontSize: 12,
+                fontWeight: 500,
+                color: LeTrendColors.textSecondary,
+                cursor: fetchingFromHagen ? 'not-allowed' : 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              {fetchingFromHagen ? 'Hämtar...' : 'Hämta från hagen'}
+            </button>
+            {fetchFromHagenError && (
+              <span style={{ fontSize: 12, color: LeTrendColors.error }}>{fetchFromHagenError}</span>
+            )}
+          </div>
+        )}
+
+        {fetchedFromUsernames.length > 0 && (
+          <div style={{ fontSize: 12, color: LeTrendColors.textSecondary }}>
+            Konton i hagen: {fetchedFromUsernames.map(u => `@${u}`).join(', ')}
+          </div>
+        )}
+
         <textarea
           value={importHistoryJson}
           onChange={(event) => {
@@ -123,41 +164,79 @@ export function CustomerImportHistoryModal({
           }}
         />
 
-        {importHistoryError && <div style={{ fontSize: 12, color: LeTrendColors.error }}>{importHistoryError}</div>}
+        {importHistoryError && (
+          <div style={{ fontSize: 12, color: LeTrendColors.error }}>{importHistoryError}</div>
+        )}
+
+        {importHistoryResult && (
+          <div
+            style={{
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: LeTrendRadius.md,
+              padding: '10px 14px',
+              fontSize: 13,
+              color: '#166534',
+            }}
+          >
+            Import klar — {importHistoryResult.imported} klipp importerade
+            {importHistoryResult.skipped > 0 && `, ${importHistoryResult.skipped} hoppades över (redan finns)`}
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button
-            onClick={() => void onImportHistory(true)}
-            disabled={importingHistory || !importHistoryJson.trim()}
-            style={{
-              padding: '9px 16px',
-              background: LeTrendColors.surface,
-              border: `1px solid ${LeTrendColors.borderMedium}`,
-              borderRadius: LeTrendRadius.md,
-              fontSize: 13,
-              fontWeight: 500,
-              color: LeTrendColors.textSecondary,
-              cursor: importingHistory ? 'not-allowed' : 'pointer',
-            }}
-          >
-            Ersätt historik
-          </button>
-          <button
-            onClick={() => void onImportHistory(false)}
-            disabled={importingHistory || !importHistoryJson.trim()}
-            style={{
-              padding: '9px 16px',
-              background: LeTrendColors.brownLight,
-              border: 'none',
-              borderRadius: LeTrendRadius.md,
-              fontSize: 13,
-              fontWeight: 600,
-              color: LeTrendColors.cream,
-              cursor: importingHistory ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {importingHistory ? 'Importerar...' : 'Lägg till historik'}
-          </button>
+          {importHistoryResult ? (
+            <button
+              onClick={onClose}
+              style={{
+                padding: '9px 16px',
+                background: LeTrendColors.brownLight,
+                border: 'none',
+                borderRadius: LeTrendRadius.md,
+                fontSize: 13,
+                fontWeight: 600,
+                color: LeTrendColors.cream,
+                cursor: 'pointer',
+              }}
+            >
+              Klar
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => void onImportHistory(true)}
+                disabled={importingHistory || !importHistoryJson.trim()}
+                style={{
+                  padding: '9px 16px',
+                  background: LeTrendColors.surface,
+                  border: `1px solid ${LeTrendColors.borderMedium}`,
+                  borderRadius: LeTrendRadius.md,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: LeTrendColors.textSecondary,
+                  cursor: importingHistory ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Ersätt historik
+              </button>
+              <button
+                onClick={() => void onImportHistory(false)}
+                disabled={importingHistory || !importHistoryJson.trim()}
+                style={{
+                  padding: '9px 16px',
+                  background: LeTrendColors.brownLight,
+                  border: 'none',
+                  borderRadius: LeTrendRadius.md,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: LeTrendColors.cream,
+                  cursor: importingHistory ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {importingHistory ? 'Importerar...' : 'Lägg till historik'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

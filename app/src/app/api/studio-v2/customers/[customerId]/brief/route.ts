@@ -10,7 +10,7 @@ function extractBriefPatch(body: Record<string, unknown>) {
     ? body.brief as Record<string, unknown>
     : body;
 
-  const patch = Object.fromEntries(
+  const patch: Record<string, unknown> = Object.fromEntries(
     directKeys.flatMap((key) => {
       const value = briefSource[key];
       if (typeof value !== 'string') {
@@ -20,6 +20,14 @@ function extractBriefPatch(body: Record<string, unknown>) {
       return [[key, value]];
     })
   );
+
+  // posting_weekdays: array of 0-based day indices (0=Mon…6=Sun) or null to clear
+  if ('posting_weekdays' in briefSource) {
+    const val = briefSource.posting_weekdays;
+    if (val === null || (Array.isArray(val) && val.every((n) => typeof n === 'number'))) {
+      patch.posting_weekdays = val;
+    }
+  }
 
   if (Object.keys(patch).length > 0) {
     return patch;

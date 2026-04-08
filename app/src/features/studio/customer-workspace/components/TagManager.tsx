@@ -50,11 +50,28 @@ export function TagManager({ tags, onClose, onTagsUpdated }: TagManagerProps) {
             placeholder="New tag"
             style={{ flex: 1, borderRadius: 10, border: '1px solid rgba(74,47,24,0.12)', padding: '10px 12px' }}
           />
-          <select value={color} onChange={(event) => setColor(event.target.value)} style={{ borderRadius: 10, border: '1px solid rgba(74,47,24,0.12)', padding: '10px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 10, border: '1px solid rgba(74,47,24,0.12)' }}>
             {PRESET_TAG_COLORS.map((value) => (
-              <option key={value} value={value}>{value}</option>
+              <button
+                key={value}
+                type="button"
+                onClick={() => setColor(value)}
+                title={value}
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: value,
+                  border: color === value ? '2px solid #4A2F18' : '2px solid transparent',
+                  cursor: 'pointer',
+                  padding: 0,
+                  flexShrink: 0,
+                  outline: color === value ? '2px solid rgba(74,47,24,0.25)' : 'none',
+                  outlineOffset: 1,
+                }}
+              />
             ))}
-          </select>
+          </div>
           <button
             type="button"
             onClick={async () => {

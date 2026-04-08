@@ -1,0 +1,42 @@
+name: Sync customer TikTok history
+
+# Calls the internal sync-history-all route on a daily schedule.
+# The route fetches recent TikTok clips for all eligible customers and
+# writes motor signals for any customer where new clips are found.
+#
+# Required GitHub configuration:
+#   Repository secret:   CRON_SECRET   — must match the deployed CRON_SECRET env var
+#   Repository variable: APP_URL       — deployed app base URL, e.g. https://app.letrend.se
+#
+# The route returns: { processed, signaled, skipped, errors }
+# The job fails and surfaces the response if the HTTP status is not 200.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # daily at 06:00 UTC
+  workflow_dispatch:       # allow manual run from GitHub Actions UI
+
+jobs:
+  sync:
+    name: sync-history-all
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: POST /api/studio-v2/internal/sync-history-all
+        run: |
+          http_status=$(curl -s \
+            -o /tmp/sync_response.json \
+            -w "%{http_code}" \
+            -X POST "${{ vars.APP_URL }}/api/studio-v2/internal/sync-history-all" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+
+          echo "HTTP status: $http_status"
+          echo "Response:"
+          cat /tmp/sync_response.json
+
+          if [ "$http_status" != "200" ]; then
+            echo "Sync failed — expected 200, got $http_status"
+            exit 1
+          fi

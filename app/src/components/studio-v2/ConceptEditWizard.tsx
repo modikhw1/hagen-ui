@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CustomerConcept } from '@/types/studio-v2';
 import type { TranslatedConcept } from '@/lib/translator';
 import type { ConceptSectionKey } from '@/lib/studio-v2-concept-content';
@@ -28,7 +28,9 @@ export function ConceptEditWizard({
   const [whyItFits, setWhyItFits] = useState('');
   const [instructions, setInstructions] = useState('');
   const [saving, setSaving] = useState(false);
+  const scriptRef = useRef<HTMLTextAreaElement>(null);
 
+  // Reset form when concept/details change
   useEffect(() => {
     if (!concept) return;
     const overrides = (concept.content_overrides || {}) as Record<string, string | undefined>;
@@ -36,15 +38,25 @@ export function ConceptEditWizard({
     setScript(overrides.script || details?.script_sv || '');
     setWhyItFits(overrides.why_it_fits || details?.whyItWorks_sv || '');
     setInstructions(overrides.filming_instructions || '');
-  }, [concept, details, initialSections]);
+  }, [concept?.id, details]);
+
+  // When opening for a planning-relevant concept, scroll to and focus the script field
+  useEffect(() => {
+    if (!isOpen || !initialSections?.includes('script')) return;
+    const timer = setTimeout(() => {
+      scriptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      scriptRef.current?.focus({ preventScroll: true });
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [isOpen, concept?.id, initialSections]);
 
   if (!concept) return null;
 
   return (
-    <SidePanel isOpen={isOpen} onClose={onClose} title="Edit concept">
+    <SidePanel isOpen={isOpen} onClose={onClose} title="Redigera koncept">
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#7D6E5D' }}>
-          Headline
+          Rubrik
           <input
             value={headline}
             onChange={(event) => setHeadline(event.target.value)}
@@ -52,8 +64,9 @@ export function ConceptEditWizard({
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#7D6E5D' }}>
-          Script
+          Manus
           <textarea
+            ref={scriptRef}
             rows={7}
             value={script}
             onChange={(event) => setScript(event.target.value)}
@@ -61,7 +74,7 @@ export function ConceptEditWizard({
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#7D6E5D' }}>
-          Why it works
+          Varför det funkar
           <textarea
             rows={4}
             value={whyItFits}
@@ -70,7 +83,7 @@ export function ConceptEditWizard({
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#7D6E5D' }}>
-          Filming instructions
+          Filminstruktioner
           <textarea
             rows={4}
             value={instructions}
@@ -109,7 +122,7 @@ export function ConceptEditWizard({
             }}
             disabled={saving}
           >
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Sparar…' : 'Spara'}
           </button>
           <button
             type="button"
@@ -124,7 +137,7 @@ export function ConceptEditWizard({
               cursor: 'pointer',
             }}
           >
-            Cancel
+            Avbryt
           </button>
         </div>
       </div>
