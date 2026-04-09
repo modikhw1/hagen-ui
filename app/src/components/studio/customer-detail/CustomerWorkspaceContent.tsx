@@ -6159,11 +6159,11 @@ function FeedSlot({
     },
     planned: {
       bg: 'white',
-      border: `1px solid ${LeTrendColors.border}`,
+      border: `1px solid rgba(74,47,24,0.1)`,
       opacity: 1
     },
     current: {
-      bg: 'rgba(107, 68, 35, 0.05)',
+      bg: 'rgba(74,47,24,0.035)',
       border: `2px solid ${LeTrendColors.brownDark}`,
       opacity: 1
     },
@@ -6283,7 +6283,7 @@ function FeedSlot({
   const hasThumbnail = type === 'history' && thumbnailUrl;
   const slotBackgroundColor = style.bg;
   const slotBackgroundImage = hasThumbnail
-    ? `linear-gradient(rgba(0,0,0,0.35), rgba(0,0,0,0.55)), url(${thumbnailUrl})`
+    ? `linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 30%, rgba(0,0,0,0.22) 58%, rgba(0,0,0,0.80) 100%), url(${thumbnailUrl})`
     : spanTint
       ? `linear-gradient(${spanTint}, ${spanTint})`
       : 'none';
@@ -6309,9 +6309,12 @@ function FeedSlot({
         position: 'relative',
         opacity: isFreshEvidence && type === 'history' ? 1 : style.opacity,
         cursor: 'pointer',
+        filter: type === 'history' ? (isHovered ? 'saturate(1)' : 'saturate(0.82)') : undefined,
+        transition: type === 'history' ? 'filter 0.2s' : undefined,
         boxShadow: [
           spanOutline,
-          isFreshEvidence && type === 'history' ? '0 0 0 3px rgba(22, 101, 52, 0.15)' : null
+          isFreshEvidence && type === 'history' ? '0 0 0 3px rgba(22, 101, 52, 0.15)' : null,
+          hasThumbnail ? 'inset 0 0 0 1px rgba(255,255,255,0.07)' : null,
         ].filter(Boolean).join(', ') || undefined
       }}
       onClick={(e) => {
@@ -6337,7 +6340,7 @@ function FeedSlot({
         <div
           style={{
             position: 'absolute',
-            top: type === 'current' ? 32 : 8,
+            top: 8,
             left: 8,
             width: 8,
             height: 8,
@@ -6369,29 +6372,12 @@ function FeedSlot({
         </div>
       )}
 
-      {/* Current-badge */}
-      {type === 'current' && (
-        <div style={{
-          position: 'absolute',
-          top: 8,
-          left: 8,
-          background: LeTrendColors.brownDark,
-          color: 'white',
-          padding: '2px 8px',
-          borderRadius: LeTrendRadius.sm,
-          fontSize: 10,
-          fontWeight: 700
-        }}>
-          NU
-        </div>
-      )}
-
       {result?.content_loaded_at && (
         <div
           style={{
             position: 'absolute',
-            top: type === 'current' ? 8 : 26,
-            left: type === 'current' ? 44 : 8,
+            top: 8,
+            left: 8,
             background: hasUnreadUpload ? 'rgba(16, 185, 129, 0.14)' : 'rgba(107,114,128,0.12)',
             color: hasUnreadUpload ? '#047857' : '#4b5563',
             padding: '2px 8px',
@@ -6438,266 +6424,284 @@ function FeedSlot({
         </button>
       )}
 
-      {type === 'history' && (result?.produced_at || result?.published_at) && (
-        <div
-          style={{
-            position: 'absolute',
-            right: 8,
-            bottom: 8,
-            fontSize: 10,
-            color: LeTrendColors.textMuted,
-            textAlign: 'right',
-            lineHeight: 1.2
-          }}
-        >
-          {result?.produced_at ? `Prod: ${formatDate(result.produced_at)}` : null}
-          {result?.published_at ? (
-            <div>{`Pub: ${formatDate(result.published_at)}`}</div>
-          ) : null}
-        </div>
-      )}
-
-      {/* Historik origin signal — non-interactive, distinguishes LeTrend-produced from imported */}
-      {type === 'history' && concept && concept.row_kind === 'assignment' && hasThumbnail && (
-        <img
-          src="/lt-transparent.png"
-          alt=""
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            bottom: 6,
-            left: 6,
-            width: 20,
-            height: 20,
-            objectFit: 'contain',
-            opacity: 0.65,
-            pointerEvents: 'none',
-            userSelect: 'none',
-            filter: 'brightness(10)',
-          }}
-        />
-      )}
-      {type === 'history' && concept && concept.row_kind === 'assignment' && !hasThumbnail && (
-        <div style={{
-          position: 'absolute',
-          bottom: 8,
-          left: 8,
-          fontSize: 8,
-          fontWeight: 700,
-          letterSpacing: '0.05em',
-          color: LeTrendColors.brownLight,
-          opacity: 0.7,
-          pointerEvents: 'none',
-          userSelect: 'none',
-        }}>
-          LT
-        </div>
-      )}
-      {type === 'history' && concept && concept.row_kind === 'imported_history' && (
-        <div style={{
-          position: 'absolute',
-          bottom: 8,
-          left: 8,
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: '0.04em',
-          color: hasThumbnail ? 'rgba(255,255,255,0.65)' : LeTrendColors.textMuted,
-          opacity: 0.8,
-          pointerEvents: 'none',
-          userSelect: 'none',
-          textShadow: hasThumbnail ? '0 1px 2px rgba(0,0,0,0.5)' : undefined,
-        }}>
-          ↓ ext
-        </div>
-      )}
-
-      {/* TikTok play indicator for history with URL */}
-      {type === 'history' && result?.tiktok_url && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            fontSize: 16,
-            color: LeTrendColors.brownDark,
-            opacity: 0.55,
-            pointerEvents: 'none'
-          }}
-        >
-          ▶
-        </div>
-      )}
-
-      {/* Signal: historik card has no TikTok link — reads as incomplete result */}
-      {type === 'history' && !result?.tiktok_url && !hasThumbnail && (
-        <div style={{
-          position: 'absolute',
-          bottom: 28,
-          left: 0,
-          right: 0,
-          display: 'flex',
-          justifyContent: 'center',
-          pointerEvents: 'none',
-        }}>
-          <span style={{ fontSize: 9, color: LeTrendColors.textMuted, opacity: 0.45, fontStyle: 'italic' }}>
-            ingen länk
-          </span>
-        </div>
-      )}
-
-      {/* Koncept-rubrik */}
-      {concept && (
-        <div>
-          <div style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: hasThumbnail ? 'white' : LeTrendColors.brownDark,
-            lineHeight: 1.3,
-            maxHeight: 32,
-            overflow: 'hidden',
-            textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.5)' : undefined
-          }}>
-            {getStudioCustomerConceptDisplayTitle(
-              concept,
-              details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null
+      {/* Koncept-innehåll — v2 layout för planned/current och history */}
+      {concept && (type === 'planned' || type === 'current') ? (
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minHeight: 0 }}>
+          {/* Övre: Nu-badge (current) + titel */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {type === 'current' && (
+              <div style={{
+                alignSelf: 'flex-start',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                background: '#4A2F18',
+                color: '#FAF8F5',
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: '0.09em',
+                textTransform: 'uppercase',
+                padding: '3px 7px 3px 5px',
+                borderRadius: 5,
+              }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#C4813A', flexShrink: 0 }} />
+                Nu
+              </div>
             )}
+            <div style={{
+              fontSize: 12.5,
+              fontWeight: 600,
+              color: '#1a1008',
+              lineHeight: 1.35,
+              overflow: 'hidden',
+              display: '-webkit-box',
+              WebkitLineClamp: type === 'current' ? 3 : 4,
+              WebkitBoxOrient: 'vertical' as const,
+            }}>
+              {getStudioCustomerConceptDisplayTitle(
+                concept,
+                details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null
+              )}
+            </div>
           </div>
 
-          {(result?.planned_publish_at || result?.content_loaded_at) ? (
-            <div style={{ marginTop: 6, fontSize: 10, color: LeTrendColors.textMuted, lineHeight: 1.3 }}>
-              {result?.planned_publish_at ? <div>{`Plan: ${formatDate(result.planned_publish_at)}`}</div> : null}
-              {result?.content_loaded_at ? <div>{`In: ${formatDate(result.content_loaded_at)}`}</div> : null}
-            </div>
-          ) : type === 'planned' && projectedDate ? (
-            <div style={{ marginTop: 6, fontSize: 9, color: LeTrendColors.textMuted, opacity: 0.42, fontStyle: 'italic', lineHeight: 1.3 }}>
-              ~{projectedDate.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })}
-            </div>
-          ) : null}
+          {/* Nedre: taggar + notering + datum + markera-knapp */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {/* Taggar som pills */}
+            {markers && markers.tags.length > 0 && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {markers.tags.slice(0, 2).map((tagName) => {
+                  const tag = tags.find(t => t.name === tagName);
+                  if (!tag) return null;
+                  return (
+                    <span key={tagName} style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 3,
+                      borderRadius: 5,
+                      padding: '2px 6px 2px 4px',
+                      fontSize: 9.5,
+                      fontWeight: 500,
+                      whiteSpace: 'nowrap',
+                      background: `${tag.color}1a`,
+                      color: tag.color,
+                    }}>
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: tag.color, flexShrink: 0, display: 'inline-block' }} />
+                      {tagName}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
 
-          {type === 'history' && (result?.tiktok_views || result?.tiktok_likes || result?.tiktok_comments) && (
-            <div style={{
-              position: 'absolute',
-              right: 5,
-              bottom: 28,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-end',
-              gap: 3,
-              pointerEvents: 'none',
-              userSelect: 'none',
-            }}>
-              {([
-                { icon: '▶', value: result?.tiktok_views ?? null },
-                { icon: '♥', value: result?.tiktok_likes ?? null },
-                { icon: '◎', value: result?.tiktok_comments ?? null },
-              ] as { icon: string; value: number | null }[])
-                .filter(({ value }) => typeof value === 'number')
-                .map(({ icon, value }) => (
-                  <div key={icon} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    fontSize: 9,
-                    fontWeight: 600,
-                    color: hasThumbnail ? 'rgba(255,255,255,0.9)' : LeTrendColors.textSecondary,
-                    textShadow: hasThumbnail ? '0 1px 2px rgba(0,0,0,0.6)' : undefined,
-                    lineHeight: 1,
-                  }}>
-                    <span style={{ opacity: 0.8 }}>{icon}</span>
-                    <span>{formatMetric(value)}</span>
+            {/* Notering — ikon + trunkerad text + title-tooltip */}
+            {markers?.assignment_note && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5 }}>
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0, marginTop: 1, opacity: 0.35, color: '#4A2F18' }}>
+                  <rect x="1.5" y="1.5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.2"/>
+                  <line x1="3.5" y1="4.5" x2="9.5" y2="4.5" stroke="currentColor" strokeWidth="1"/>
+                  <line x1="3.5" y1="6.5" x2="7.5" y2="6.5" stroke="currentColor" strokeWidth="1"/>
+                </svg>
+                <span
+                  title={markers.assignment_note}
+                  style={{
+                    fontSize: 10,
+                    color: '#9CA3AF',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    lineHeight: 1.3,
+                  }}
+                >
+                  {markers.assignment_note}
+                </span>
+              </div>
+            )}
+
+            {/* Datum */}
+            {(() => {
+              const realDate = result?.planned_publish_at ?? result?.content_loaded_at ?? null;
+              if (realDate) {
+                return (
+                  <div style={{ fontSize: 11.5, fontWeight: 500, color: '#6B7280' }}>
+                    {new Date(realDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
                   </div>
-                ))
+                );
               }
-            </div>
-          )}
-        </div>
-      )}
+              if (projectedDate) {
+                return (
+                  <div style={{ fontSize: 11, fontStyle: 'italic', color: '#9CA3AF' }}>
+                    ~{projectedDate.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
-      {/* Taggar + note indicator */}
-      {concept && markers && (markers.tags.length > 0 || markers.assignment_note) && (
-        <div style={{
-          display: 'flex',
-          gap: 2,
-          marginTop: 8,
-          alignItems: 'center'
-        }}>
-          {markers.tags.slice(0, 3).map((tagName) => {
-            const tag = tags.find(t => t.name === tagName);
-            return tag ? (
-              <div
-                key={tagName}
-                title={tagName}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: tag.color,
-                  opacity: type === 'history' ? 0.6 : 1
+            {/* Markera-knapp — bara på Nu-kort */}
+            {type === 'current' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onMarkProduced(concept.id);
                 }}
-              />
-            ) : null;
-          })}
-          {markers.assignment_note && (
-            type === 'history' && markers.assignment_note.length < 60 ? (
-              <div
-                title={markers.assignment_note}
                 style={{
-                  fontSize: 9,
-                  color: '#d97706',
-                  fontStyle: 'italic',
-                  lineHeight: 1.3,
-                  maxWidth: '100%',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 1,
-                  opacity: 0.85,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  border: '1px solid rgba(74,47,24,0.18)',
+                  background: 'transparent',
+                  borderRadius: 7,
+                  padding: '6px 9px',
+                  cursor: 'pointer',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  fontFamily: 'inherit',
                 }}
               >
-                {markers.assignment_note}
-              </div>
-            ) : (
-              <div
-                title={markers.assignment_note}
-                style={{
-                  width: 8,
-                  height: 8,
+                <div style={{
+                  width: 15,
+                  height: 15,
                   borderRadius: '50%',
-                  background: '#d97706',
-                  opacity: type === 'history' ? 0.6 : 1,
-                  flexShrink: 0
-                }}
-              />
-            )
-          )}
+                  background: '#4A2F18',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <svg width="8" height="6" viewBox="0 0 8 6">
+                    <polyline points="1,3 3,5 7,1" stroke="#FAF8F5" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: '#4A2F18', whiteSpace: 'nowrap' }}>
+                  Markera som gjord
+                </span>
+              </button>
+            )}
+          </div>
         </div>
-      )}
+      ) : concept && type === 'history' ? (
+        /* History layout v2 — logo+date top, tags+title+note+stats bottom */
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minHeight: 0 }}>
+          {/* Top row: logo left + date right */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            {concept.row_kind === 'assignment' ? (
+              <img
+                src="/lt-logo.png"
+                alt="LeTrend"
+                aria-hidden="true"
+                style={{ width: 21, height: 21, opacity: hasThumbnail ? 0.88 : 0.6, filter: hasThumbnail ? 'brightness(10)' : undefined, objectFit: 'contain', pointerEvents: 'none', userSelect: 'none', flexShrink: 0 }}
+              />
+            ) : (
+              <svg viewBox="0 0 24 24" style={{ width: 16, height: 16, flexShrink: 0, opacity: hasThumbnail ? 0.78 : 0.55 }} fill={hasThumbnail ? 'rgba(255,255,255,0.75)' : LeTrendColors.textMuted}>
+                <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001.002.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.329 6.329 0 0 0-5.394 10.692 6.33 6.33 0 0 0 10.857-4.424V8.687a8.182 8.182 0 0 0 4.773 1.526V6.79a4.831 4.831 0 0 1-1.003-.104z"/>
+              </svg>
+            )}
+            {(() => {
+              const d = result?.published_at ?? result?.produced_at ?? result?.content_loaded_at ?? null;
+              if (!d) return null;
+              return (
+                <span style={{ fontSize: 10, fontWeight: 500, color: hasThumbnail ? 'rgba(255,255,255,0.6)' : LeTrendColors.textMuted, lineHeight: 1 }}>
+                  {new Date(d).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
+                </span>
+              );
+            })()}
+          </div>
 
-      {/* Markera som producerat — demoted: small text-link, no prompt */}
-      {type === 'current' && concept && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            void onMarkProduced(concept.id);
-          }}
-          style={{
-            marginTop: 8,
-            padding: '2px 0',
-            background: 'none',
-            border: 'none',
-            color: LeTrendColors.textSecondary,
-            fontSize: 10,
-            cursor: 'pointer',
-            textAlign: 'left',
-            opacity: 0.7,
-            textDecoration: 'underline',
-            textDecorationColor: 'rgba(0,0,0,0.15)',
-          }}
-        >
-          ✓ Markera som producerad
-        </button>
-      )}
+          {/* Bottom: tags + title + note + StatRow */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {/* Tag pills */}
+            {markers && markers.tags.length > 0 && (
+              <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                {markers.tags.slice(0, 2).map((tagName) => {
+                  const tag = tags.find(t => t.name === tagName);
+                  return (
+                    <span key={tagName} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 2.5,
+                      background: hasThumbnail ? 'rgba(255,255,255,0.1)' : `${tag?.color ?? '#999'}1a`,
+                      borderRadius: 4, padding: '1.5px 5px 1.5px 3.5px',
+                      fontSize: 9, fontWeight: 500,
+                      color: hasThumbnail ? 'rgba(255,255,255,0.75)' : (tag?.color ?? LeTrendColors.textMuted),
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {tag && <span style={{ width: 5, height: 5, borderRadius: '50%', background: tag.color, flexShrink: 0, display: 'inline-block' }} />}
+                      {tagName}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {/* Title — TikTok clips show video description, LeTrend shows concept headline */}
+            <div style={{
+              fontSize: 12, fontWeight: 600,
+              color: hasThumbnail ? '#fff' : LeTrendColors.brownDark,
+              lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box',
+              WebkitLineClamp: concept.row_kind === 'imported_history' ? 4 : 3,
+              WebkitBoxOrient: 'vertical' as const,
+              textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.5)' : undefined,
+            }}>
+              {concept.row_kind === 'imported_history'
+                ? (((concept as Record<string, any>).content?.content_overrides?.script as string | undefined) ?? getStudioCustomerConceptDisplayTitle(concept, details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null))
+                : getStudioCustomerConceptDisplayTitle(concept, details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null)
+              }
+            </div>
+            {/* Note preview */}
+            {markers?.assignment_note && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ width: 3, height: 3, borderRadius: '50%', background: hasThumbnail ? 'rgba(255,255,255,0.35)' : 'rgba(74,47,24,0.35)', flexShrink: 0 }} />
+                <span title={markers.assignment_note} style={{
+                  fontSize: 9.5, color: hasThumbnail ? 'rgba(255,255,255,0.42)' : '#9CA3AF',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                  maxWidth: 118, fontStyle: 'italic',
+                }}>
+                  {markers.assignment_note}
+                </span>
+              </div>
+            )}
+            {/* StatRow: views | likes | comments */}
+            {(() => {
+              const statItems = [
+                result?.tiktok_views != null ? { key: 'views', value: result.tiktok_views } : null,
+                result?.tiktok_likes != null ? { key: 'likes', value: result.tiktok_likes } : null,
+                result?.tiktok_comments != null ? { key: 'comments', value: result.tiktok_comments } : null,
+              ].filter((s): s is { key: string; value: number } => s !== null);
+              if (statItems.length === 0) return null;
+              const iconColor = hasThumbnail ? 'rgba(255,255,255,0.7)' : LeTrendColors.textMuted;
+              const dividerColor = hasThumbnail ? 'rgba(255,255,255,0.12)' : 'rgba(74,47,24,0.12)';
+              const textColor = hasThumbnail ? '#fff' : LeTrendColors.brownDark;
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${hasThumbnail ? 'rgba(255,255,255,0.1)' : 'rgba(74,47,24,0.1)'}`, paddingTop: 6, gap: 2 }}>
+                  {statItems.map((stat, idx) => (
+                    <React.Fragment key={stat.key}>
+                      {idx > 0 && <div style={{ width: 1, height: 11, background: dividerColor, margin: '0 3px', flexShrink: 0 }} />}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3, flex: 1, minWidth: 0 }}>
+                        {stat.key === 'views' && (
+                          <svg style={{ width: 12, height: 12, opacity: 0.65, flexShrink: 0 }} viewBox="0 0 13 13" fill="none">
+                            <polygon points="3,2 11,6.5 3,11" fill={iconColor} />
+                          </svg>
+                        )}
+                        {stat.key === 'likes' && (
+                          <svg style={{ width: 12, height: 12, opacity: 0.65, flexShrink: 0 }} viewBox="0 0 13 13" fill="none">
+                            <path d="M6.5 10.5C6.5 10.5 1.5 7 1.5 4.5a2.5 2.5 0 015 0 2.5 2.5 0 015 0c0 2.5-5 6-5 6z" fill={iconColor} />
+                          </svg>
+                        )}
+                        {stat.key === 'comments' && (
+                          <svg style={{ width: 12, height: 12, opacity: 0.65, flexShrink: 0 }} viewBox="0 0 13 13" fill="none">
+                            <path d="M2 2.5Q2 1.5 3 1.5h7Q11 1.5 11 2.5V8Q11 9 10 9H7L5.5 11 4 9H3Q2 9 2 8Z" stroke={iconColor} strokeWidth="1.1" strokeLinejoin="round" fill="none" />
+                          </svg>
+                        )}
+                        <span style={{ fontSize: 10.5, fontWeight: 600, color: textColor, lineHeight: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {formatMetric(stat.value)}
+                        </span>
+                      </div>
+                    </React.Fragment>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      ) : null}
 
       {/* Context menu — viewport-fixed positioning, backdrop for click-outside */}
       {showContextMenu && concept && menuPos && (<>
