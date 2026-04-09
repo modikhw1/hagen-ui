@@ -65,16 +65,17 @@ export async function importClipsForCustomer(
   });
 
   // ── Find anchor for temp positions (most-negative existing feed_order) ────
-  const { data: existingImportedRows } = await supabase
+  // Query ALL historik rows (not just imported concept_id IS NULL) so that
+  // provisional temp positions don't collide with existing LeTrend historik rows.
+  const { data: allHistorikRows } = await supabase
     .from('customer_concepts')
     .select('feed_order')
     .eq('customer_profile_id', customerId)
-    .is('concept_id', null)
     .lt('feed_order', 0)
     .order('feed_order', { ascending: true })
     .limit(1);
 
-  const mostNegativeFeedOrder = (existingImportedRows?.[0]?.feed_order as number | undefined) ?? 0;
+  const mostNegativeFeedOrder = (allHistorikRows?.[0]?.feed_order as number | undefined) ?? 0;
   const tempStartOrder = mostNegativeFeedOrder - 1;
 
   // ── Insert at temporary positions ─────────────────────────────────────────
@@ -103,8 +104,10 @@ export async function importClipsForCustomer(
 
   // ── Renumber all imported-history rows chronologically ────────────────────
   //
-  // Re-read ALL imported-history rows and assign feed_order = -1, -2, …, -N so
-  // that the most-recently-published clip is always closest to "nu".
+  // Re-read ALL imported-history rows and assign feed_order = -(offset+1), …, -(offset+N)
+  // where offset = |deepest LeTrend historik row| so imported TikTok rows never
+  // collide with LeTrend historik rows that also occupy negative feed_orders.
+  //
   // Scope: concept_id IS NULL AND feed_order < 0 (imported profile history only).
   //
   const { data: allImported } = await supabase
@@ -114,6 +117,19 @@ export async function importClipsForCustomer(
     .is('concept_id', null)
     .lt('feed_order', 0);
 
+  // Find deepest LeTrend historik row to establish floor for TikTok renumbering
+  const { data: letrEndHistorikRows } = await supabase
+    .from('customer_concepts')
+    .select('feed_order')
+    .eq('customer_profile_id', customerId)
+    .not('concept_id', 'is', null)
+    .lt('feed_order', 0)
+    .order('feed_order', { ascending: true })
+    .limit(1);
+
+  const letrEndFloor = (letrEndHistorikRows?.[0]?.feed_order as number | undefined) ?? 0;
+  const renumberOffset = letrEndFloor < 0 ? Math.abs(letrEndFloor) : 0;
+
   const chronological = (allImported ?? []).sort((a, b) => {
     const dateA = a.published_at ? new Date(a.published_at as string).getTime() : 0;
     const dateB = b.published_at ? new Date(b.published_at as string).getTime() : 0;
@@ -122,7 +138,7 @@ export async function importClipsForCustomer(
   });
 
   const renumberUpdates = chronological
-    .map((row, i) => ({ id: row.id as string, from: row.feed_order as number, to: -(i + 1) }))
+    .map((row, i) => ({ id: row.id as string, from: row.feed_order as number, to: -(renumberOffset + i + 1) }))
     .filter((u) => u.from !== u.to);
 
   if (renumberUpdates.length > 0) {
@@ -140,13 +156,39 @@ export async function importClipsForCustomer(
   const importedCount = insertedRows?.length ?? 0;
   // sortedNewClips is DESC by published_at — index 0 is the most recently published.
   const latestPublishedAt = sortedNewClips[0]?.published_at ?? null;
-  await supabase
-    .from('customer_profiles')
-    .update({
-      last_history_sync_at: new Date().toISOString(),
-      ...(importedCount > 0 ? motorSignalNewEvidence(importedCount, latestPublishedAt) : {}),
-    })
-    .eq('id', customerId);
+
+  if (importedCount > 0) {
+    // Read existing signal before writing to accumulate count rather than overwrite.
+    // Without this, daily cron runs that each find one new clip would always show
+    // "1 nya klipp" instead of the true total since the CM last acted.
+    const { data: currentProfile } = await supabase
+      .from('customer_profiles')
+      .select('pending_history_advance, pending_history_advance_published_at')
+      .eq('id', customerId)
+      .maybeSingle();
+
+    const existingCount = (currentProfile?.pending_history_advance as number | null) ?? 0;
+    const existingPublishedAt = (currentProfile?.pending_history_advance_published_at as string | null) ?? null;
+
+    // Keep the more recent published_at across the existing signal and the new batch.
+    const accumulatedPublishedAt =
+      latestPublishedAt && existingPublishedAt
+        ? (latestPublishedAt > existingPublishedAt ? latestPublishedAt : existingPublishedAt)
+        : (latestPublishedAt ?? existingPublishedAt);
+
+    await supabase
+      .from('customer_profiles')
+      .update({
+        last_history_sync_at: new Date().toISOString(),
+        ...motorSignalNewEvidence(existingCount + importedCount, accumulatedPublishedAt),
+      })
+      .eq('id', customerId);
+  } else {
+    await supabase
+      .from('customer_profiles')
+      .update({ last_history_sync_at: new Date().toISOString() })
+      .eq('id', customerId);
+  }
 
   return { imported: importedCount, skipped };
 }

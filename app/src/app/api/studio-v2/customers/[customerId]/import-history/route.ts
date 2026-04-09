@@ -153,9 +153,9 @@ async function insertClips(
 
   // ── Chronological renumber ────────────────────────────────────────────────
   //
-  // Re-read ALL imported-history rows and assign feed_order = -1, -2, …, -N so
-  // that the most-recently-published clip is always closest to "nu" regardless
-  // of the order clips were pasted or whether this import filled a gap.
+  // Re-read ALL imported-history rows and assign feed_order = -(offset+1), …, -(offset+N)
+  // where offset = |deepest LeTrend historik row| so TikTok rows never collide with
+  // LeTrend historik rows that also live at negative feed_orders.
   //
   // Scope: concept_id IS NULL AND feed_order < 0 (imported profile history only).
   // LeTrend-managed rows (concept_id NOT NULL) are never touched.
@@ -171,6 +171,19 @@ async function insertClips(
     .is('concept_id', null)
     .lt('feed_order', 0);
 
+  // Find deepest LeTrend historik row to establish floor for TikTok renumbering
+  const { data: letrEndHistorikRows } = await supabase
+    .from('customer_concepts')
+    .select('feed_order')
+    .eq('customer_profile_id', customerId)
+    .not('concept_id', 'is', null)
+    .lt('feed_order', 0)
+    .order('feed_order', { ascending: true })
+    .limit(1);
+
+  const letrEndFloor = (letrEndHistorikRows?.[0]?.feed_order as number | undefined) ?? 0;
+  const renumberOffset = letrEndFloor < 0 ? Math.abs(letrEndFloor) : 0;
+
   const chronological = (allImported ?? []).sort((a, b) => {
     const dateA = a.published_at ? new Date(a.published_at as string).getTime() : 0;
     const dateB = b.published_at ? new Date(b.published_at as string).getTime() : 0;
@@ -179,7 +192,7 @@ async function insertClips(
   });
 
   const renumberUpdates = chronological
-    .map((row, i) => ({ id: row.id as string, from: row.feed_order as number, to: -(i + 1) }))
+    .map((row, i) => ({ id: row.id as string, from: row.feed_order as number, to: -(renumberOffset + i + 1) }))
     .filter(u => u.from !== u.to);
 
   if (renumberUpdates.length > 0) {
@@ -194,7 +207,7 @@ async function insertClips(
   }
 
   // Build final feed_orders for the response (post-renumber)
-  const finalFeedOrders = new Map(chronological.map((row, i) => [row.id as string, -(i + 1)]));
+  const finalFeedOrders = new Map(chronological.map((row, i) => [row.id as string, -(renumberOffset + i + 1)]));
   const insertedIdSet = new Set((insertedRows ?? []).map(r => r.id as string));
   const finalSlots = chronological
     .filter(row => insertedIdSet.has(row.id as string))

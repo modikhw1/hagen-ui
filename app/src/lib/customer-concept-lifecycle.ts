@@ -241,6 +241,7 @@ export const getStudioAssignmentStatusLabel = getCustomerConceptAssignmentLabel;
  */
 export function buildMarkProducedPayload(input: {
   tiktok_url?: string | null;
+  published_at?: string | null;
   now: string;
   nextHistoryOrder: number;
 }): {
@@ -253,7 +254,9 @@ export function buildMarkProducedPayload(input: {
   return {
     status: 'produced',
     produced_at: input.now,
-    published_at: input.tiktok_url ? input.now : null,
+    // Use the clip's real published_at when provided; fall back to now when URL is present
+    // but date is unknown; null when no URL (concept produced but not yet published on TikTok).
+    published_at: input.tiktok_url ? (input.published_at ?? input.now) : null,
     tiktok_url: input.tiktok_url ?? null,
     feed_order: input.nextHistoryOrder,
   };

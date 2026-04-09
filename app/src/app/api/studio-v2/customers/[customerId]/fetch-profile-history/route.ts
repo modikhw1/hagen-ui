@@ -161,24 +161,20 @@ export const POST = withAuth(
       return NextResponse.json({ fetched, imported: 0, skipped, has_more: providerHasMore, cursor: providerCursor, message: 'All fetched videos already present' });
     }
 
-    // ── 6. Read existing imported-history timeline context ─────────────────
-    // Needed to place new clips correctly relative to what is already known.
-    // concept_id IS NULL = imported rows (LeTrend-managed rows carry a concept_id).
-    const { data: existingImportedRows } = await supabase
+    // ── 6. Read anchor for temp insertion positions ────────────────────────
+    // Query ALL historik rows (not just imported concept_id IS NULL) so that
+    // provisional temp positions don't collide with existing LeTrend historik rows.
+    const { data: allHistorikAnchorRows } = await supabase
       .from('customer_concepts')
-      .select('id, feed_order, published_at')
+      .select('feed_order')
       .eq('customer_profile_id', customerId)
-      .is('concept_id', null)
       .lt('feed_order', 0)
-      .order('feed_order', { ascending: false }); // least-negative (most recent) first
+      .order('feed_order', { ascending: true })
+      .limit(1);
 
-    const importedRows = existingImportedRows ?? [];
-
-    // Most-negative (oldest) feed_order among existing imported rows — used as
-    // the temporary insertion anchor so new rows land safely in negative territory.
-    const mostNegativeFeedOrder = importedRows.length > 0
-      ? Math.min(...importedRows.map((r) => r.feed_order as number))
-      : 0;
+    // Most-negative (oldest) feed_order across ALL historik — used as the
+    // temporary insertion anchor so new rows land safely below everything.
+    const mostNegativeFeedOrder = (allHistorikAnchorRows?.[0]?.feed_order as number | undefined) ?? 0;
 
     // ── 7. Sort new clips newest-first ─────────────────────────────────────
     const sortedNewClips = [...newClips].sort((a, b) => {
@@ -225,10 +221,9 @@ export const POST = withAuth(
     // ── 9. Renumber all imported-history rows in chronological order ──────────
     //
     // After any insert — whether newer clips, backfill, or gap-fill — re-read
-    // ALL imported-history rows and assign feed_order = -1, -2, …, -N so that:
-    //   - the clip closest to "nu" always has feed_order = -1
-    //   - deeper historik contains progressively older clips
-    //   - gap-fill clips inserted between already-loaded rows land correctly
+    // ALL imported-history rows and assign feed_order = -(offset+1), …, -(offset+N)
+    // where offset = |deepest LeTrend historik row| so TikTok rows never collide
+    // with LeTrend historik rows that also occupy negative feed_orders.
     //
     // Scope: concept_id IS NULL AND feed_order < 0 (imported profile history only).
     // LeTrend-managed rows (concept_id NOT NULL) are never touched.
@@ -244,6 +239,19 @@ export const POST = withAuth(
       .is('concept_id', null)
       .lt('feed_order', 0);
 
+    // Find deepest LeTrend historik row to establish floor for TikTok renumbering
+    const { data: letrEndHistorikRows } = await supabase
+      .from('customer_concepts')
+      .select('feed_order')
+      .eq('customer_profile_id', customerId)
+      .not('concept_id', 'is', null)
+      .lt('feed_order', 0)
+      .order('feed_order', { ascending: true })
+      .limit(1);
+
+    const letrEndFloor = (letrEndHistorikRows?.[0]?.feed_order as number | undefined) ?? 0;
+    const renumberOffset = letrEndFloor < 0 ? Math.abs(letrEndFloor) : 0;
+
     const chronological = (allImported ?? []).sort((a, b) => {
       const dateA = a.published_at ? new Date(a.published_at as string).getTime() : 0;
       const dateB = b.published_at ? new Date(b.published_at as string).getTime() : 0;
@@ -252,7 +260,7 @@ export const POST = withAuth(
     });
 
     const renumberUpdates = chronological
-      .map((row, i) => ({ id: row.id as string, from: row.feed_order as number, to: -(i + 1) }))
+      .map((row, i) => ({ id: row.id as string, from: row.feed_order as number, to: -(renumberOffset + i + 1) }))
       .filter(u => u.from !== u.to);
 
     if (renumberUpdates.length > 0) {
@@ -267,7 +275,7 @@ export const POST = withAuth(
     }
 
     // Build final feed_orders for the response (post-renumber)
-    const finalFeedOrders = new Map(chronological.map((row, i) => [row.id as string, -(i + 1)]));
+    const finalFeedOrders = new Map(chronological.map((row, i) => [row.id as string, -(renumberOffset + i + 1)]));
     const insertedIdSet = new Set((insertedRows ?? []).map(r => r.id as string));
     const finalSlots = chronological
       .filter(row => insertedIdSet.has(row.id as string))

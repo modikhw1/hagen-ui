@@ -9,6 +9,7 @@ export const POST = withAuth(async (request) => {
   const supabase = createSupabaseAdmin();
   const conceptId = typeof body?.concept_id === 'string' ? body.concept_id.trim() : '';
   const customerId = typeof body?.customer_id === 'string' ? body.customer_id.trim() : '';
+  const clipPublishedAt = typeof body?.published_at === 'string' ? body.published_at : null;
   const now = new Date().toISOString();
 
   if (!conceptId) {
@@ -35,7 +36,7 @@ export const POST = withAuth(async (request) => {
   // and moves placement to next historical slot (keeping concept in timeline)
   const { data, error } = await supabase
     .from('customer_concepts')
-    .update(buildMarkProducedPayload({ tiktok_url: body?.tiktok_url, now, nextHistoryOrder }))
+    .update(buildMarkProducedPayload({ tiktok_url: body?.tiktok_url, published_at: clipPublishedAt, now, nextHistoryOrder }))
     .eq('id', conceptId)
     .eq('customer_profile_id', customerId)
     .select(`

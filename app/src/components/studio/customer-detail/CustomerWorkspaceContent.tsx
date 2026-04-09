@@ -313,6 +313,9 @@ function CustomerWorkspacePageContent() {
   const [addConceptSearch, setAddConceptSearch] = useState('');
   const [showFeedSlotPanel, setShowFeedSlotPanel] = useState(false);
   const [selectedFeedSlot, setSelectedFeedSlot] = useState<number | null>(null);
+  // When CM enters the library panel via "Lägg till nytt koncept" from a slot, this
+  // remembers the target slot so the new concept can be placed immediately on add.
+  const [slotAddTargetFeedOrder, setSlotAddTargetFeedOrder] = useState<number | null>(null);
 
   // Feed planner state (nya)
   const [gridConfig, setGridConfig] = useState<GridConfig>(DEFAULT_GRID_CONFIG);
@@ -350,7 +353,7 @@ function CustomerWorkspacePageContent() {
   const [profileHistoryFetchError, setProfileHistoryFetchError] = useState<string | null>(null);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyNextCursor, setHistoryNextCursor] = useState<number | null>(null);
-  const [pendingAdvanceCue, setPendingAdvanceCue] = useState<{ imported: number; kind: MotorSignalKind } | null>(null);
+  const [pendingAdvanceCue, setPendingAdvanceCue] = useState<{ imported: number; kind: MotorSignalKind; publishedAt: string | null } | null>(null);
   const [advancingPlan, setAdvancingPlan] = useState(false);
 
   // Derive cue from backend truth whenever the customer profile changes.
@@ -360,7 +363,7 @@ function CustomerWorkspacePageContent() {
   useEffect(() => {
     if (customer?.pending_history_advance && !customer.pending_history_advance_seen_at) {
       const kind = classifyMotorSignal(customer) ?? 'fresh_activity';
-      setPendingAdvanceCue({ imported: customer.pending_history_advance, kind });
+      setPendingAdvanceCue({ imported: customer.pending_history_advance, kind, publishedAt: customer.pending_history_advance_published_at ?? null });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer?.pending_history_advance, customer?.pending_history_advance_seen_at, customer?.pending_history_advance_published_at]);
@@ -553,7 +556,7 @@ function CustomerWorkspacePageContent() {
   // Subsequent refreshes and load-more are explicit CM actions to preserve API budget.
   useEffect(() => {
     if (!customerId || !customer) return;
-    if (!customer.tiktok_profile_url) return;
+    if (!customer.tiktok_profile_url || !customer.tiktok_handle) return;
     if (profileHistoryAutoFetchRef.current) return;
     // Only fire when history has never been fetched for this customer
     if (customer.last_history_sync_at) return;
@@ -940,7 +943,7 @@ function CustomerWorkspacePageContent() {
   };
 
   // Concept handlers
-  const handleAddConcept = async (conceptId: string) => {
+  const handleAddConcept = async (conceptId: string, targetFeedOrder?: number) => {
     try {
       const response = await fetch(`/api/studio-v2/customers/${customerId}/concepts`, {
         method: 'POST',
@@ -954,8 +957,18 @@ function CustomerWorkspacePageContent() {
         throw new Error(data?.error || 'Failed to add concept');
       }
 
+      // Slot-aware path: if a target slot was provided, place the new concept there
+      // immediately. The PATCH writes feed_order to the DB before fetchConcepts so the
+      // refetch returns the concept already placed. Local setConcepts in handleUpdateConcept
+      // is a no-op here (concept not in state yet) but the DB write is correct.
+      if (targetFeedOrder !== undefined && data?.concept?.id) {
+        await handleUpdateConcept(data.concept.id, { feed_order: targetFeedOrder });
+        setSlotAddTargetFeedOrder(null);
+      }
+
       await fetchConcepts(true);
       setShowAddConceptPanel(false);
+      setAddConceptSearch('');
 
       // Auto-expand the new concept and signal post-add note nudge
       if (data?.concept?.id) {
@@ -1040,7 +1053,7 @@ function CustomerWorkspacePageContent() {
     await handleUpdateConcept(conceptId, { feed_order: feedOrder });
   };
 
-  const handleMarkProduced = async (conceptId: string, tiktokUrl?: string) => {
+  const handleMarkProduced = async (conceptId: string, tiktokUrl?: string, publishedAt?: string) => {
     try {
       const response = await fetch('/api/studio-v2/feed/mark-produced', {
         method: 'POST',
@@ -1048,7 +1061,8 @@ function CustomerWorkspacePageContent() {
         body: JSON.stringify({
           concept_id: conceptId,
           customer_id: customerId,
-          tiktok_url: tiktokUrl
+          tiktok_url: tiktokUrl,
+          published_at: publishedAt,
         })
       });
 
@@ -2029,8 +2043,61 @@ function CustomerWorkspacePageContent() {
           )}
 
           {activeSection === 'feed' && (
-            <FeedPlannerSection
-              customerId={customerId}
+            <>
+              {!customer.tiktok_profile_url && (
+                <div style={{
+                  padding: '20px 24px',
+                  background: '#fffbeb',
+                  border: '1px solid #f59e0b',
+                  borderRadius: LeTrendRadius.md,
+                  marginBottom: 20,
+                }}>
+                  <div style={{ fontWeight: 600, fontSize: 15, color: '#92400e', marginBottom: 4 }}>
+                    Koppla TikTok-profil
+                  </div>
+                  <div style={{ fontSize: 13, color: '#b45309', marginBottom: 14, opacity: 0.85 }}>
+                    LeTrend hämtar kundens klipp automatiskt och skapar motor-signaler när profil-URL:en är satt.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder="https://www.tiktok.com/@kund"
+                      value={tiktokProfileUrlInput}
+                      onChange={e => setTiktokProfileUrlInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') void handleSaveTikTokProfile(); }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        border: '1px solid #f59e0b',
+                        borderRadius: LeTrendRadius.md,
+                        fontSize: 13,
+                        outline: 'none',
+                        background: '#fff',
+                      }}
+                    />
+                    <button
+                      onClick={() => void handleSaveTikTokProfile()}
+                      disabled={savingTiktokProfile || !tiktokProfileUrlInput.trim()}
+                      style={{
+                        padding: '8px 18px',
+                        background: '#b45309',
+                        border: 'none',
+                        borderRadius: LeTrendRadius.md,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: '#fff',
+                        cursor: savingTiktokProfile || !tiktokProfileUrlInput.trim() ? 'not-allowed' : 'pointer',
+                        opacity: savingTiktokProfile || !tiktokProfileUrlInput.trim() ? 0.6 : 1,
+                        whiteSpace: 'nowrap' as const,
+                      }}
+                    >
+                      {savingTiktokProfile ? 'Sparar...' : 'Koppla profil'}
+                    </button>
+                  </div>
+                </div>
+              )}
+              <FeedPlannerSection
+                customerId={customerId}
               concepts={concepts}
               cmTags={cmTags}
               gridConfig={gridConfig}
@@ -2084,6 +2151,7 @@ function CustomerWorkspacePageContent() {
               isTempoExplicit={brief.posting_weekdays != null}
               onTempoWeekdaysChange={handleSaveTempoWeekdays}
             />
+            </>
           )}
 
           {activeSection === 'kommunikation' && (
@@ -2469,9 +2537,23 @@ function CustomerWorkspacePageContent() {
       {/* Add Concept Side Panel */}
       <SidePanel
         isOpen={showAddConceptPanel}
-        onClose={() => { setShowAddConceptPanel(false); setAddConceptSearch(''); }}
+        onClose={() => { setShowAddConceptPanel(false); setAddConceptSearch(''); setSlotAddTargetFeedOrder(null); }}
         title="Lägg till koncept"
       >
+        {/* Slot context header — shown when CM arrived via the slot-aware entry point */}
+        {slotAddTargetFeedOrder !== null && (
+          <div style={{
+            marginBottom: 12,
+            padding: '6px 10px',
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            borderRadius: LeTrendRadius.md,
+            fontSize: 12,
+            color: '#166534',
+          }}>
+            Väljer för <strong>{getStudioFeedOrderLabel(slotAddTargetFeedOrder)}</strong> — konceptet placeras direkt i den sloten
+          </div>
+        )}
         <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: LeTrendRadius.md, background: LeTrendColors.surface, border: `1px solid ${LeTrendColors.border}`, fontSize: 12, lineHeight: 1.5 }}>
           {(brief.tone || brief.current_focus || brief.constraints) ? (
             <div style={{ color: LeTrendColors.textSecondary }}>
@@ -2561,7 +2643,7 @@ function CustomerWorkspacePageContent() {
                   </p>
                 )}
                 <button
-                  onClick={() => handleAddConcept(concept.id)}
+                  onClick={() => handleAddConcept(concept.id, slotAddTargetFeedOrder ?? undefined)}
                   style={{
                     width: '100%',
                     padding: '8px',
@@ -2574,7 +2656,7 @@ function CustomerWorkspacePageContent() {
                     cursor: 'pointer'
                   }}
                 >
-                  + Lägg till koncept
+                  {slotAddTargetFeedOrder !== null ? `+ Lägg till i ${getStudioFeedOrderLabel(slotAddTargetFeedOrder)}` : '+ Lägg till koncept'}
                 </button>
               </div>
             ))}
@@ -2649,6 +2731,33 @@ function CustomerWorkspacePageContent() {
           })}
         </div>
         )}
+        {/* Secondary entry point: add a brand-new concept from the library directly
+            into this slot. Stores the target feed_order before opening the library
+            panel so the add action can place the concept immediately on creation. */}
+        <div style={{ marginTop: 16, borderTop: `1px solid ${LeTrendColors.border}`, paddingTop: 12 }}>
+          <button
+            onClick={() => {
+              if (selectedFeedSlot === null) return;
+              setSlotAddTargetFeedOrder(selectedFeedSlot);
+              setShowFeedSlotPanel(false);
+              setSelectedFeedSlot(null);
+              setShowAddConceptPanel(true);
+            }}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              background: 'none',
+              border: `1px dashed ${LeTrendColors.border}`,
+              borderRadius: LeTrendRadius.md,
+              fontSize: 13,
+              color: LeTrendColors.textSecondary,
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+          >
+            + Lägg till nytt koncept från biblioteket
+          </button>
+        </div>
       </SidePanel>
 
       <ConceptEditWizard
@@ -2728,7 +2837,7 @@ interface FeedPlannerSectionProps {
   handleUpdateCmNote: (conceptId: string, note: string) => Promise<void>;
   handleUpdateTikTokUrl: (conceptId: string, url: string) => Promise<void>;
   handlePatchConcept: (conceptId: string, updates: Partial<CustomerConcept>) => Promise<void>;
-  handleMarkProduced: (conceptId: string, tiktokUrl?: string) => Promise<void>;
+  handleMarkProduced: (conceptId: string, tiktokUrl?: string, publishedAt?: string) => Promise<void>;
   handleRemoveFromSlot: (conceptId: string) => Promise<void>;
   handleAssignToSlot: (conceptId: string, feedOrder: number) => Promise<void>;
   onOpenConcept: (conceptId: string, sections?: ConceptSectionKey[]) => void;
@@ -2740,7 +2849,7 @@ interface FeedPlannerSectionProps {
   historyHasMore: boolean;
   fetchingProfileHistory: boolean;
   onLoadMoreHistory: (count?: number) => Promise<void>;
-  pendingAdvanceCue: { imported: number; kind: MotorSignalKind } | null;
+  pendingAdvanceCue: { imported: number; kind: MotorSignalKind; publishedAt: string | null } | null;
   onAdvancePlan: () => Promise<void>;
   advancingPlan: boolean;
   onDismissAdvanceCue: () => void;
@@ -2757,8 +2866,9 @@ interface FeedSlotProps {
   spanColor?: string | null;
   showSpanCoverageLabels?: boolean;
   projectedDate?: Date | null;
+  isFreshEvidence?: boolean;
   getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
-  onMarkProduced: (conceptId: string, tiktokUrl?: string) => Promise<void>;
+  onMarkProduced: (conceptId: string, tiktokUrl?: string, publishedAt?: string) => Promise<void>;
   onRemoveFromSlot: (conceptId: string) => Promise<void>;
   onAssignToSlot?: (conceptId: string, feedOrder: number) => Promise<void>;
   onUpdateTags: (conceptId: string, tags: string[]) => Promise<void>;
@@ -3901,6 +4011,19 @@ function FeedPlannerSection({
   const [eelSegments, setEelSegments] = React.useState<string[]>([]);
   const [eelGradients, setEelGradients] = React.useState<PositionedEelGradient[]>([]);
   const [markingProducedFromCue, setMarkingProducedFromCue] = React.useState(false);
+  // Purely local defer — hides the cue for this session without writing pending_history_advance_seen_at.
+  // The signal stays unresolved on the backend: next page load will show the cue again.
+  // Use "Inte nu" when the CM wants to think about it; use × for explicit acknowledgement.
+  const [deferredAdvanceCue, setDeferredAdvanceCue] = React.useState(false);
+  // Local focus state: set of imported-history concept IDs identified as fresh evidence for the
+  // current motor cue. Populated when CM clicks "Granska historiken".
+  // Pure UI — never written to backend. Used to apply a thin visual treatment in historik.
+  const [focusedEvidenceIds, setFocusedEvidenceIds] = React.useState<ReadonlySet<string>>(new Set());
+  // Auto-clear focusedEvidenceIds when the motor signal is resolved (pendingAdvanceCue → null).
+  // Prevents stale "nytt" badges from persisting after the cue is acknowledged via an action button.
+  React.useEffect(() => {
+    if (!pendingAdvanceCue) setFocusedEvidenceIds(new Set());
+  }, [pendingAdvanceCue]);
   const maxExtraHistorySlots = gridConfig.columns * 8; // support going back ~24 clips (8 rows)
   const maxForwardSlots = gridConfig.columns * 5;      // allow planning up to 5 extra rows forward (~13 clips at 3 cols)
 
@@ -4443,6 +4566,37 @@ function FeedPlannerSection({
         ) ?? null)
       : null;
 
+  // Derive the ordered list and ID-set of imported-history clips that constitute fresh evidence
+  // for the current motor cue. Both the cue glimpse and the historik highlight use the same source
+  // so the CM always sees the same evidence in both surfaces.
+  //
+  // Primary path: any imported clip with published_at >= pending_history_advance_published_at
+  //   (the seam stored by the sync engine for the triggering batch).
+  // Fallback: when no seam is available, the N most-recent imported clips (N = signal count).
+  // Conservative: only rows present in memory. Never invents a match.
+  const { freshImportedConcepts, freshImportedIds } = React.useMemo(() => {
+    if (!pendingAdvanceCue) return { freshImportedConcepts: [] as typeof concepts, freshImportedIds: new Set<string>() as ReadonlySet<string> };
+    const imported = concepts
+      .filter(c => c.row_kind === 'imported_history')
+      .sort((a, b) => {
+        const tA = a.result.published_at ? new Date(a.result.published_at).getTime() : 0;
+        const tB = b.result.published_at ? new Date(b.result.published_at).getTime() : 0;
+        return tB - tA; // newest first
+      });
+    let fresh: typeof imported;
+    if (pendingAdvanceCue.publishedAt) {
+      const seam = new Date(pendingAdvanceCue.publishedAt).getTime();
+      fresh = imported.filter(c => c.result.published_at ? new Date(c.result.published_at).getTime() >= seam : false);
+    } else {
+      // No seam: fall back to the N most-recent imported clips where N = imported signal count
+      fresh = imported.slice(0, pendingAdvanceCue.imported);
+    }
+    return {
+      freshImportedConcepts: fresh,
+      freshImportedIds: new Set(fresh.map(c => c.id)) as ReadonlySet<string>,
+    };
+  }, [pendingAdvanceCue, concepts]);
+
   return (
     <div style={{
       background: LeTrendColors.cream,
@@ -4654,8 +4808,10 @@ function FeedPlannerSection({
         );
       })()}
 
-      {/* Advancement cue — shown when new clips appear in the customer's historik */}
-      {pendingAdvanceCue && (
+      {/* Advancement cue — shown when new clips appear in the customer's historik.
+          Hidden when deferredAdvanceCue is true (session-local only, no backend write).
+          Hidden when pendingAdvanceCue is null (signal resolved or not yet arrived). */}
+      {pendingAdvanceCue && !deferredAdvanceCue && (
         <div style={{
           display: 'flex',
           alignItems: 'flex-start',
@@ -4696,86 +4852,130 @@ function FeedPlannerSection({
                 </span>
               </div>
             )}
-            {/* History glimpse — up to 3 most-recent imported_history rows */}
-            {(() => {
-              const glimpse = concepts
-                .filter((c) => c.row_kind === 'imported_history')
-                .sort((a, b) => {
-                  const tA = a.result.published_at ? new Date(a.result.published_at).getTime() : 0;
-                  const tB = b.result.published_at ? new Date(b.result.published_at).getTime() : 0;
-                  if (tB !== tA) return tB - tA;
-                  // Tie-break: less-negative feed_order = more recent
-                  return (b.placement.feed_order ?? -9999) - (a.placement.feed_order ?? -9999);
-                })
-                .slice(0, 3);
-              if (glimpse.length === 0) return null;
+            {/* History glimpse — the same fresh-evidence set that will be highlighted in historik.
+                Uses freshImportedConcepts (same derivation as focusedEvidenceIds) so glimpse
+                and historik highlight always show the same clips. */}
+            {freshImportedConcepts.length > 0 && (() => {
+              const glimpse = freshImportedConcepts.slice(0, 3);
               return (
-                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  {glimpse.map((clip) => {
-                    const caption = clip.content.content_overrides?.script ?? null;
-                    const date = clip.result.published_at
-                      ? new Date(clip.result.published_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })
-                      : null;
-                    return (
-                      <div
-                        key={clip.id}
-                        style={{
-                          display: 'flex',
-                          gap: 5,
-                          alignItems: 'flex-start',
-                          flex: 1,
-                          minWidth: 0,
-                          background: 'rgba(255,255,255,0.55)',
-                          borderRadius: LeTrendRadius.sm,
-                          padding: '5px 6px',
-                        }}
-                      >
-                        {clip.result.tiktok_thumbnail_url && (
-                          <img
-                            src={clip.result.tiktok_thumbnail_url}
-                            alt=""
-                            style={{ width: 20, height: 35, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }}
-                          />
-                        )}
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          {caption && (
-                            <div style={{
-                              fontSize: 10,
-                              color: '#166534',
-                              opacity: 0.85,
-                              overflow: 'hidden',
-                              whiteSpace: 'nowrap',
-                              textOverflow: 'ellipsis',
-                              lineHeight: 1.3,
-                              marginBottom: 2,
-                            }}>
-                              {caption}
-                            </div>
+                <>
+                  <div style={{ fontSize: 10, color: '#166534', opacity: 0.55, marginTop: 8, marginBottom: 3, fontWeight: 600, letterSpacing: '0.03em' }}>
+                    {freshImportedConcepts.length} {freshImportedConcepts.length === 1 ? 'nytt klipp' : 'nya klipp'}
+                    {freshImportedConcepts.length > 3 ? ` · visar ${glimpse.length}` : ''}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {glimpse.map((clip) => {
+                      const caption = clip.content.content_overrides?.script ?? null;
+                      const date = clip.result.published_at
+                        ? new Date(clip.result.published_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })
+                        : null;
+                      return (
+                        <div
+                          key={clip.id}
+                          style={{
+                            display: 'flex',
+                            gap: 5,
+                            alignItems: 'flex-start',
+                            flex: 1,
+                            minWidth: 0,
+                            background: 'rgba(255,255,255,0.55)',
+                            borderRadius: LeTrendRadius.sm,
+                            padding: '5px 6px',
+                          }}
+                        >
+                          {clip.result.tiktok_thumbnail_url && (
+                            <img
+                              src={clip.result.tiktok_thumbnail_url}
+                              alt=""
+                              style={{ width: 20, height: 35, objectFit: 'cover', borderRadius: 2, flexShrink: 0 }}
+                            />
                           )}
-                          <div style={{ fontSize: 10, color: '#166534', opacity: 0.6, lineHeight: 1.3 }}>
-                            {date ?? '—'}
-                            {clip.result.tiktok_views && clip.result.tiktok_views > 0
-                              ? ` · ${formatCompactViews(clip.result.tiktok_views)}`
-                              : ''}
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            {caption && (
+                              <div style={{
+                                fontSize: 10,
+                                color: '#166534',
+                                opacity: 0.85,
+                                overflow: 'hidden',
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis',
+                                lineHeight: 1.3,
+                                marginBottom: 2,
+                              }}>
+                                {caption}
+                              </div>
+                            )}
+                            <div style={{ fontSize: 10, color: '#166534', opacity: 0.6, lineHeight: 1.3 }}>
+                              {date ?? '—'}
+                              {clip.result.tiktok_views && clip.result.tiktok_views > 0
+                                ? ` · ${formatCompactViews(clip.result.tiktok_views)}`
+                                : ''}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                </>
               );
             })()}
+            {/* Tertiary cue actions — no backend writes, purely local navigation aids.
+                Granska: scrolls the grid into historik and marks the same fresh-evidence clips
+                         shown in the glimpse above — so the CM can review them in context.
+                Inte nu: defers the cue locally for this session without acknowledging the signal. */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => {
+                  setHistoryOffset(gridConfig.columns);
+                  setFocusedEvidenceIds(freshImportedIds);
+                }}
+                style={{
+                  background: 'none', border: 'none', fontSize: 11,
+                  color: '#166534', opacity: 0.75, cursor: 'pointer',
+                  padding: 0, textDecoration: 'underline', textUnderlineOffset: 2,
+                }}
+              >
+                {freshImportedIds.size > 0
+                  ? `Granska ${freshImportedIds.size} klipp i historiken`
+                  : 'Granska historiken'}
+              </button>
+              {/* Post-click confirmation: appears once focusedEvidenceIds is set */}
+              {focusedEvidenceIds.size > 0 && (
+                <span style={{ fontSize: 10, color: '#166534', opacity: 0.5 }}>
+                  ↓ markerade nedan
+                </span>
+              )}
+              <span style={{ fontSize: 10, color: '#166534', opacity: 0.35 }}>·</span>
+              <button
+                onClick={() => setDeferredAdvanceCue(true)}
+                style={{
+                  background: 'none', border: 'none', fontSize: 11,
+                  color: '#6b7280', opacity: 0.75, cursor: 'pointer',
+                  padding: 0, textDecoration: 'underline', textUnderlineOffset: 2,
+                }}
+              >
+                Inte nu
+              </button>
+            </div>
           </div>
           {nuConcept ? (
             // fresh_activity + nu concept exists: offer Markera och flytta as primary,
-            // Flytta ändå as secondary (organic content case — CM wants to advance without closing the concept cycle)
+            // Flytta utan länk as secondary (advance without closing the concept cycle / without linking URL)
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
               <button
                 onClick={() => {
                   void (async () => {
                     setMarkingProducedFromCue(true);
                     try {
-                      await handleMarkProduced(nuConcept.id);
+                      // If fresh evidence clips are present, attach the newest clip's TikTok URL.
+                      // The CM has already reviewed these clips in the glimpse above — linking the
+                      // freshest one closes the concept cycle with real publication proof.
+                      const linkClip = freshImportedConcepts.length > 0 ? freshImportedConcepts[0] : null;
+                      await handleMarkProduced(
+                        nuConcept.id,
+                        linkClip?.result.tiktok_url ?? undefined,
+                        linkClip?.result.published_at ?? undefined,
+                      );
                       onDismissAdvanceCue(); // consume motor signal (acknowledge) and clear local cue
                     } finally {
                       setMarkingProducedFromCue(false);
@@ -4797,6 +4997,16 @@ function FeedPlannerSection({
               >
                 {markingProducedFromCue ? 'Markerar...' : 'Markera och flytta'}
               </button>
+              {/* Inline signal: shows which clip will be linked when CM confirms.
+                  Only rendered when the freshest clip has a URL (no URL = no link label). */}
+              {freshImportedConcepts.length > 0 && freshImportedConcepts[0].result.tiktok_url && (
+                <div style={{ fontSize: 10, color: '#166534', opacity: 0.55, textAlign: 'right' }}>
+                  {'↑ länkar klippet'}
+                  {freshImportedConcepts[0].result.published_at
+                    ? ` · ${new Date(freshImportedConcepts[0].result.published_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`
+                    : ''}
+                </div>
+              )}
               <button
                 onClick={() => void onAdvancePlan()}
                 disabled={advancingPlan || markingProducedFromCue}
@@ -4812,7 +5022,7 @@ function FeedPlannerSection({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {advancingPlan ? 'Flyttar...' : 'Flytta ändå'}
+                {advancingPlan ? 'Flyttar...' : 'Flytta utan länk'}
               </button>
             </div>
           ) : hasActivePlan ? (
@@ -4868,6 +5078,41 @@ function FeedPlannerSection({
         </div>
       )}
 
+      {/* Deferred cue indicator — visible when CM clicked "Inte nu" and has not entered review mode.
+          Reminds them the motor signal is still pending and will return on next page load.
+          Keeps "I have deferred the cue" distinguishable from "cue resolved" or "reviewing". */}
+      {pendingAdvanceCue && deferredAdvanceCue && focusedEvidenceIds.size === 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginBottom: 12,
+          padding: '5px 10px',
+          background: 'rgba(107,114,128,0.06)',
+          border: '1px solid rgba(107,114,128,0.18)',
+          borderRadius: LeTrendRadius.sm,
+          fontSize: 11,
+          color: '#6b7280',
+        }}>
+          <span style={{ opacity: 0.8 }}>
+            Signal pausad – återkommer vid nästa inläsning
+            <span style={{ opacity: 0.6, marginLeft: 4 }}>
+              ({pendingAdvanceCue.imported} {pendingAdvanceCue.kind === 'fresh_activity' ? 'nya' : 'historiska'} klipp)
+            </span>
+          </span>
+          <button
+            onClick={() => setDeferredAdvanceCue(false)}
+            style={{
+              background: 'none', border: 'none', fontSize: 11,
+              color: '#6b7280', cursor: 'pointer', padding: 0,
+              textDecoration: 'underline', textUnderlineOffset: 2, whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            Återuppta
+          </button>
+        </div>
+      )}
 
       {/* Koncept-väljare dropdown */}
       {getDraftConcepts().length > 0 && (
@@ -4960,6 +5205,61 @@ function FeedPlannerSection({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Granskningsläge-banner — visible when CM is reviewing fresh evidence in historik.
+          Self-sufficient: shows signal context and kind even when the cue block is not visible
+          (e.g. cue deferred). Includes a re-open path when the cue has been deferred.
+          Dismissable: × clears focusedEvidenceIds without resolving the cue. */}
+      {focusedEvidenceIds.size > 0 && pendingAdvanceCue && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+          marginBottom: 6,
+          padding: '5px 10px',
+          background: 'rgba(22,101,52,0.06)',
+          border: '1px solid rgba(22,101,52,0.18)',
+          borderRadius: LeTrendRadius.sm,
+          fontSize: 11,
+          color: '#166534',
+        }}>
+          <span style={{ opacity: 0.75, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <span>
+              Granskningsläge
+              {' · '}
+              {focusedEvidenceIds.size} {pendingAdvanceCue.kind === 'fresh_activity' ? 'nya' : 'historiska'} klipp markerade med <strong style={{ fontWeight: 700 }}>nytt</strong>
+            </span>
+            {/* When cue is deferred: signal the deferred state and offer to re-open the cue */}
+            {deferredAdvanceCue && (
+              <>
+                <span style={{ opacity: 0.4 }}>·</span>
+                <span style={{ opacity: 0.6 }}>signal pausad</span>
+                <button
+                  onClick={() => setDeferredAdvanceCue(false)}
+                  style={{
+                    background: 'none', border: 'none', fontSize: 11,
+                    color: '#166534', cursor: 'pointer', padding: 0,
+                    textDecoration: 'underline', textUnderlineOffset: 2,
+                  }}
+                >
+                  Återuppta
+                </button>
+              </>
+            )}
+          </span>
+          <button
+            onClick={() => setFocusedEvidenceIds(new Set())}
+            style={{
+              background: 'none', border: 'none', fontSize: 13, lineHeight: 1,
+              color: '#166534', opacity: 0.45, cursor: 'pointer', padding: 0, flexShrink: 0,
+            }}
+            title="Stäng granskningsläge"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -5242,6 +5542,7 @@ function FeedPlannerSection({
               spanColor={spanData?.color ?? null}
               showSpanCoverageLabels={eelHovered || !!activeSpan || !!editingSpan || !!drag}
               projectedDate={tempoDateMap.get(slot.feedOrder) ?? null}
+              isFreshEvidence={slot.concept != null && focusedEvidenceIds.has(slot.concept.id)}
               getConceptDetails={getConceptDetails}
               onMarkProduced={handleMarkProduced}
               onRemoveFromSlot={handleRemoveFromSlot}
@@ -5629,6 +5930,7 @@ function FeedSlot({
   spanColor = null,
   showSpanCoverageLabels = true,
   projectedDate = null,
+  isFreshEvidence = false,
   getConceptDetails,
   onMarkProduced,
   onRemoveFromSlot,
@@ -5998,16 +6300,19 @@ function FeedSlot({
         backgroundSize: hasThumbnail ? 'cover' : 'auto',
         backgroundPosition: hasThumbnail ? 'center' : '0% 0%',
         backgroundRepeat: hasThumbnail ? 'no-repeat' : 'repeat',
-        border: style.border,
+        border: isFreshEvidence && type === 'history' ? '2px solid rgba(22, 101, 52, 0.55)' : style.border,
         borderRadius: LeTrendRadius.lg,
         padding: 12,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         position: 'relative',
-        opacity: style.opacity,
+        opacity: isFreshEvidence && type === 'history' ? 1 : style.opacity,
         cursor: 'pointer',
-        boxShadow: spanOutline
+        boxShadow: [
+          spanOutline,
+          isFreshEvidence && type === 'history' ? '0 0 0 3px rgba(22, 101, 52, 0.15)' : null
+        ].filter(Boolean).join(', ') || undefined
       }}
       onClick={(e) => {
         // Historik — always open context menu; activate URL editor only when no link exists yet
@@ -6042,6 +6347,26 @@ function FeedSlot({
             pointerEvents: 'none'
           }}
         />
+      )}
+
+      {/* Fresh-evidence badge — shown when CM arrived via "Granska historiken" from the motor cue */}
+      {isFreshEvidence && type === 'history' && (
+        <div style={{
+          position: 'absolute',
+          top: 6,
+          right: 6,
+          background: '#166534',
+          color: 'rgba(255,255,255,0.92)',
+          padding: '1px 5px',
+          borderRadius: LeTrendRadius.sm,
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          pointerEvents: 'none',
+          zIndex: 3,
+        }}>
+          nytt
+        </div>
       )}
 
       {/* Current-badge */}

@@ -21,6 +21,8 @@ interface CustomerProfile {
   };
   pending_history_advance?: number | null;
   pending_history_advance_seen_at?: string | null;
+  tiktok_handle?: string | null;
+  last_history_sync_at?: string | null;
 }
 
 type CustomerStatusFilter = 'all' | CustomerProfile['status'];
@@ -295,7 +297,7 @@ export default function StudioCustomersPage() {
                         borderRadius: '999px', padding: '1px 6px',
                         lineHeight: 1.4, flexShrink: 0,
                       }}>
-                        {customer.pending_history_advance} nya
+                        {customer.pending_history_advance} nya klipp
                       </span>
                     ) : null}
                   </div>
@@ -307,6 +309,17 @@ export default function StudioCustomersPage() {
                     <div style={{ fontSize: '12px', color: '#9ca3af' }}>
                       {customer.monthly_price > 0 ? `${customer.monthly_price} kr/man` : 'Pris ej satt'}
                     </div>
+                  )}
+                  {customer.status !== 'archived' && (
+                    !customer.tiktok_handle ? (
+                      <div style={{ fontSize: '11px', color: '#b45309', marginTop: '3px' }}>
+                        ! Profil saknas
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '3px' }}>
+                        @{customer.tiktok_handle} · {formatSyncRecency(customer.last_history_sync_at)}
+                      </div>
+                    )
                   )}
                   <ConceptStatBadges stats={stats} />
                 </div>
@@ -405,6 +418,20 @@ function formatLastEmail(isoString: string | undefined): string {
   if (daysDiff === 1) return 'Senaste mail: igår';
   if (daysDiff < 14) return `Senaste mail: ${daysDiff} dagar sedan`;
   return `Senaste mail: ${sent.getDate()} ${MONTHS_SV[sent.getMonth()]}`;
+}
+
+function formatSyncRecency(isoString: string | null | undefined): string {
+  if (!isoString) return 'Aldrig observerad';
+  const synced = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - synced.getTime();
+  const diffH = Math.floor(diffMs / (1000 * 60 * 60));
+  if (diffH < 1) return 'Obs: just nu';
+  if (diffH < 24) return `Obs: ${diffH}h sedan`;
+  const diffD = Math.floor(diffH / 24);
+  if (diffD === 1) return 'Obs: igår';
+  if (diffD < 14) return `Obs: ${diffD}d sedan`;
+  return `Obs: ${synced.getDate()} ${MONTHS_SV[synced.getMonth()]}`;
 }
 
 function WorkspaceLink({ href, label }: { href: string; label: string }) {
