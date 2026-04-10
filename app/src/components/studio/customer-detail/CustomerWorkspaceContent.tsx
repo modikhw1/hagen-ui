@@ -4031,33 +4031,8 @@ function FeedPlannerSection({
   const maxExtraHistorySlots = gridConfig.columns * 8; // support going back ~24 clips (8 rows)
   const maxForwardSlots = gridConfig.columns * 5;      // allow planning up to 5 extra rows forward (~13 clips at 3 cols)
 
-  // Wheel scroll: stable ref pattern so the DOM listener never needs re-attaching.
-  // Fetch is NOT triggered here — a separate useEffect handles threshold-based load-more.
-  const wheelCbRef = React.useRef<(e: WheelEvent) => void>(() => {});
-  React.useEffect(() => {
-    const cooldown = { active: false };
-    wheelCbRef.current = (e: WheelEvent) => {
-      e.preventDefault();
-      if (scrollLockedRef.current) return;
-      if (cooldown.active) return;
-      cooldown.active = true;
-      setTimeout(() => { cooldown.active = false; }, 400);
-      if (e.deltaY > 0) {
-        // Gate: do not advance into historik while a fetch is already in flight
-        if (fetchingProfileHistory) return;
-        setHistoryOffset(prev => Math.min(prev + gridConfig.columns, maxExtraHistorySlots));
-      } else if (e.deltaY < 0) {
-        setHistoryOffset(prev => Math.max(prev - gridConfig.columns, -maxForwardSlots));
-      }
-    };
-  }, [gridConfig, maxExtraHistorySlots, maxForwardSlots, fetchingProfileHistory, setHistoryOffset]);
-  React.useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return;
-    const cb = (e: WheelEvent) => wheelCbRef.current(e);
-    el.addEventListener('wheel', cb, { passive: false });
-    return () => el.removeEventListener('wheel', cb);
-  }, []);
+  // Wheel scroll removed — the page now scrolls normally over the planner.
+  // historyOffset is still set programmatically (e.g. "Granska historiken" button).
 
   // Threshold-based history fetch gate.
   // Fires onLoadMoreHistory (debounced 500 ms) when the visible planner bottom
@@ -4841,7 +4816,7 @@ function FeedPlannerSection({
                 ? (nuConcept
                     ? 'Var det nu-konceptet som publicerades?'
                     : (hasActivePlan
-                        ? 'Kunden publicerade nytt – flytta kommande och nu ett steg framåt.'
+                        ? 'Kunden publicerade nytt – granska historiken och flytta planen om det stämmer.'
                         : 'Placera ett koncept i planen för att kunna flytta framåt.'))
                 : (hasActivePlan
                     ? 'Äldre innehåll – granska historiken innan du flyttar planen.'

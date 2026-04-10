@@ -66,8 +66,10 @@ export function CustomerFeedSlot({
   const [isMarkingProduced, setIsMarkingProduced] = React.useState(false);
 
   // menuPos holds the fixed-position coordinates for the portaled context menu.
-  // Computed from the ⋯ button's getBoundingClientRect() when the menu opens.
-  const [menuPos, setMenuPos] = React.useState<{ top: number; right: number } | null>(null);
+  // Uses left (not right) for x-axis so a negative right value (button near viewport
+  // edge or in a horizontally overflowing container) can never push the menu off-screen.
+  // Uses bottom instead of top when the button is in the lower 40% of the viewport.
+  const [menuPos, setMenuPos] = React.useState<{ top?: number; bottom?: number; left: number } | null>(null);
 
   const slotContainerRef = React.useRef<HTMLDivElement>(null);
   const menuButtonRef = React.useRef<HTMLButtonElement>(null);
@@ -291,11 +293,18 @@ export function CustomerFeedSlot({
     event.stopPropagation();
     if (!showContextMenu && menuButtonRef.current) {
       const rect = menuButtonRef.current.getBoundingClientRect();
-      // Position menu below the button, right-aligned to button's right edge.
-      // Clamp top so the menu doesn't start above the viewport.
-      const top = Math.max(4, rect.bottom + 4);
-      const right = window.innerWidth - rect.right;
-      setMenuPos({ top, right });
+      const MENU_W = 200;
+      // Right-align menu to button's right edge, then clamp so it stays within viewport.
+      // Using CSS `left` (not `right`) avoids negative values when rect.right is near or
+      // beyond the viewport edge (e.g. in a horizontally overflowing container).
+      const rawLeft = rect.right - MENU_W;
+      const left = Math.max(8, Math.min(rawLeft, window.innerWidth - MENU_W - 8));
+      // Open upward when button is in the lower 40% of the viewport.
+      if (rect.bottom > window.innerHeight * 0.6) {
+        setMenuPos({ bottom: window.innerHeight - rect.top + 4, left });
+      } else {
+        setMenuPos({ top: Math.max(4, rect.bottom + 4), left });
+      }
     }
     setShowContextMenu((prev) => !prev);
   };
@@ -439,15 +448,18 @@ export function CustomerFeedSlot({
           style={{
             position: 'fixed',
             top: menuPos.top,
-            right: menuPos.right,
+            bottom: menuPos.bottom,
+            left: menuPos.left,
             background: 'white',
             border: `1px solid ${LeTrendColors.border}`,
             borderRadius: LeTrendRadius.md,
             boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
             zIndex: 9999,
-            width: 220,
-            maxHeight: '70vh',
+            width: 200,
+            boxSizing: 'border-box',
+            overflowX: 'hidden',
             overflowY: 'auto',
+            maxHeight: '70vh',
           }}
           onClick={(event) => event.stopPropagation()}
         >
@@ -719,7 +731,7 @@ export function CustomerFeedSlot({
           cursor: type === 'planned' ? 'pointer' : 'default',
           boxShadow: spanOutline,
         }}
-        onClick={() => onSlotClick(slot, concept, details)}
+        onClick={() => { if (type !== 'history') onSlotClick(slot, concept, details); }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -808,12 +820,14 @@ export function CustomerFeedSlot({
               top: 8,
               right: 8,
               background: showContextMenu
-                ? 'rgba(107,68,35,0.1)'
+                ? (hasThumbnail ? 'rgba(255,255,255,0.2)' : 'rgba(107,68,35,0.1)')
                 : 'none',
               border: 'none',
               cursor: 'pointer',
               fontSize: 16,
-              color: LeTrendColors.textMuted,
+              // White on dark thumbnail backgrounds — LeTrendColors.textMuted is nearly
+              // invisible against the dark gradient overlay.
+              color: hasThumbnail ? 'rgba(255,255,255,0.85)' : LeTrendColors.textMuted,
               borderRadius: 4,
               padding: '0 2px',
               lineHeight: 1,
@@ -844,7 +858,7 @@ export function CustomerFeedSlot({
           <div
             style={{
               position: 'absolute',
-              right: 8,
+              left: 8,
               bottom: 8,
               fontSize: 10,
               color: hasThumbnail ? 'rgba(255,255,255,0.7)' : LeTrendColors.textMuted,
@@ -896,11 +910,11 @@ export function CustomerFeedSlot({
               </div>
             )}
 
-            {type === 'history' && (result?.tiktok_views || result?.tiktok_likes || result?.tiktok_comments) && (
-              <div style={{ marginTop: 6, fontSize: 10, color: LeTrendColors.textSecondary }}>
-                {`Visn ${formatMetric(result?.tiktok_views ?? null)} · Likes ${formatMetric(
+            {type === 'history' && (
+              <div style={{ marginTop: 6, fontSize: 10, color: hasThumbnail ? 'rgba(255,255,255,0.6)' : LeTrendColors.textSecondary }}>
+                {`${formatMetric(result?.tiktok_views ?? null)} visn · ${formatMetric(
                   result?.tiktok_likes ?? null
-                )} · Komm ${formatMetric(result?.tiktok_comments ?? null)}`}
+                )} likes · ${formatMetric(result?.tiktok_comments ?? null)} komm`}
               </div>
             )}
           </div>
