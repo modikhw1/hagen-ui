@@ -40,13 +40,37 @@ export async function importClipsForCustomer(
   // ── Deduplicate against existing tiktok_urls ──────────────────────────────
   const { data: existing } = await supabase
     .from('customer_concepts')
-    .select('tiktok_url')
+    .select('id, tiktok_url')
     .eq('customer_profile_id', customerId)
     .not('tiktok_url', 'is', null);
 
-  const existingUrls = new Set((existing ?? []).map((r) => r.tiktok_url as string));
-  const newClips = clips.filter((c) => !existingUrls.has(c.tiktok_url));
+  const existingByUrl = new Map(
+    (existing ?? []).map((r) => [r.tiktok_url as string, r.id as string])
+  );
+  const newClips = clips.filter((c) => !existingByUrl.has(c.tiktok_url));
+  const duplicateClips = clips.filter((c) => existingByUrl.has(c.tiktok_url));
   const skipped = clips.length - newClips.length;
+
+  // ── Refresh stats on already-imported rows ────────────────────────────────
+  // Views, likes, and comments grow over time. Re-stamp them on every sync so
+  // CMs see current engagement numbers without waiting for a new clip to appear.
+  if (duplicateClips.length > 0) {
+    const now = new Date().toISOString();
+    await Promise.all(
+      duplicateClips.map((clip) => {
+        const rowId = existingByUrl.get(clip.tiktok_url)!;
+        return supabase
+          .from('customer_concepts')
+          .update({
+            tiktok_views: clip.tiktok_views,
+            tiktok_likes: clip.tiktok_likes,
+            tiktok_comments: clip.tiktok_comments,
+            tiktok_last_synced_at: now,
+          })
+          .eq('id', rowId);
+      })
+    );
+  }
 
   if (newClips.length === 0) {
     await supabase

@@ -144,13 +144,37 @@ export const POST = withAuth(
     // ── 5. Deduplicate against existing customer history ───────────────────
     const { data: existing } = await supabase
       .from('customer_concepts')
-      .select('tiktok_url')
+      .select('id, tiktok_url')
       .eq('customer_profile_id', customerId)
       .not('tiktok_url', 'is', null);
 
-    const existingUrls = new Set((existing ?? []).map((r) => r.tiktok_url as string));
-    const newClips = clips.filter((c) => !existingUrls.has(c.tiktok_url));
+    const existingByUrl = new Map(
+      (existing ?? []).map((r) => [r.tiktok_url as string, r.id as string])
+    );
+    const newClips = clips.filter((c) => !existingByUrl.has(c.tiktok_url));
+    const duplicateClips = clips.filter((c) => existingByUrl.has(c.tiktok_url));
     const skipped = fetched - newClips.length;
+
+    // ── 5a. Refresh stats on already-imported rows ─────────────────────────
+    // Views, likes, and comments grow over time. Re-stamp them on each manual
+    // fetch so the CM sees current engagement without needing a new clip.
+    if (duplicateClips.length > 0) {
+      const now = new Date().toISOString();
+      await Promise.all(
+        duplicateClips.map((clip) => {
+          const rowId = existingByUrl.get(clip.tiktok_url)!;
+          return supabase
+            .from('customer_concepts')
+            .update({
+              tiktok_views: clip.tiktok_views,
+              tiktok_likes: clip.tiktok_likes,
+              tiktok_comments: clip.tiktok_comments,
+              tiktok_last_synced_at: now,
+            })
+            .eq('id', rowId);
+        })
+      );
+    }
 
     if (newClips.length === 0) {
       await supabase
@@ -285,13 +309,32 @@ export const POST = withAuth(
     const importedCount = insertedRows?.length ?? 0;
     // sortedNewClips is DESC by published_at — index 0 is the most recently published clip in this batch.
     const latestPublishedAt = sortedNewClips[0]?.published_at ?? null;
-    const profileUpdate = {
-      last_history_sync_at: new Date().toISOString(),
-      ...(importedCount > 0 ? motorSignalNewEvidence(importedCount, latestPublishedAt) : {}),
-    };
+
+    // Accumulate rather than overwrite the motor signal count so that a manual fetch
+    // and a cron run finding clips on the same customer both contribute to "N nya klipp".
+    // Without this read+add, a manual fetch finding M clips would silently reset a
+    // cron-written count of N to M, losing evidence of the earlier batch.
+    let motorFields = {};
+    if (importedCount > 0) {
+      const { data: currentProfile } = await supabase
+        .from('customer_profiles')
+        .select('pending_history_advance, pending_history_advance_published_at')
+        .eq('id', customerId)
+        .maybeSingle();
+
+      const existingCount = (currentProfile?.pending_history_advance as number | null) ?? 0;
+      const existingPublishedAt = (currentProfile?.pending_history_advance_published_at as string | null) ?? null;
+      const accumulatedPublishedAt =
+        latestPublishedAt && existingPublishedAt
+          ? (latestPublishedAt > existingPublishedAt ? latestPublishedAt : existingPublishedAt)
+          : (latestPublishedAt ?? existingPublishedAt);
+
+      motorFields = motorSignalNewEvidence(existingCount + importedCount, accumulatedPublishedAt);
+    }
+
     await supabase
       .from('customer_profiles')
-      .update(profileUpdate)
+      .update({ last_history_sync_at: new Date().toISOString(), ...motorFields })
       .eq('id', customerId);
 
     return NextResponse.json({

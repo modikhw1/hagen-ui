@@ -4,6 +4,32 @@ import { buildMarkProducedPayload } from '@/lib/customer-concept-lifecycle';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/studio-v2/feed/mark-produced
+//
+// Marks the current nu concept (feed_order 0) as produced and advances
+// the planning window. Uses the same two-phase strategy as advance-plan:
+//
+//   Phase 1 — shift ALL other LeTrend rows (concept_id IS NOT NULL,
+//              id != produced_id, feed_order IS NOT NULL) by -1:
+//     +1 (kommande)  →  0  (new nu)
+//     +2             → +1
+//     -1 (historik)  → -2  (pushed deeper, no pile-up)
+//
+//   Phase 2 — shift ALL imported-history rows (concept_id IS NULL,
+//              feed_order < 0) by -1:
+//     -1 (newest TikTok) → -2
+//     -2                 → -3
+//     (prevents collision: Phase 1 produced row lands at -1;
+//      without Phase 2 the TikTok row already at -1 would collide)
+//
+//   Phase 3 — update the produced row: set metadata + feed_order = -1
+//     (most-recent historik position, directly adjacent to the new nu)
+//
+// This guarantees LeTrend historik always sits closer to nu than imported
+// TikTok history — the same invariant maintained by advance-plan.
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const POST = withAuth(async (request) => {
   const body = await request.json().catch(() => ({}));
   const supabase = createSupabaseAdmin();
@@ -20,23 +46,90 @@ export const POST = withAuth(async (request) => {
     return NextResponse.json({ error: 'customer_id is required' }, { status: 400 });
   }
 
-  // Determine next available historical slot for this customer.
-  // Most-recent history is -1; each older entry is one step further negative.
-  const { data: historySlots } = await supabase
+  // ── Phase 1: shift all other LeTrend rows by -1 ──────────────────────────
+  // Scope: concept_id IS NOT NULL (LeTrend-managed), id != produced row,
+  //        feed_order IS NOT NULL (placed in timeline).
+  // Includes both kommande/nu (≥0) and existing LeTrend historik (<0) so that
+  // historik remains internally ordered across repeated advances.
+  const { data: letrEndRows, error: letrEndFetchError } = await supabase
     .from('customer_concepts')
-    .select('feed_order')
+    .select('id, feed_order')
     .eq('customer_profile_id', customerId)
-    .lt('feed_order', 0)
-    .order('feed_order', { ascending: true })
-    .limit(1);
-  const currentMostNegative = historySlots?.[0]?.feed_order ?? 0;
-  const nextHistoryOrder = Math.min(currentMostNegative - 1, -1);
+    .not('concept_id', 'is', null)
+    .neq('id', conceptId)
+    .not('feed_order', 'is', null);
 
-  // result boundary write: sets produced/published timestamps, TikTok URL,
-  // and moves placement to next historical slot (keeping concept in timeline)
+  if (letrEndFetchError) {
+    return NextResponse.json({ error: letrEndFetchError.message }, { status: 500 });
+  }
+
+  const letrEndToShift = (letrEndRows ?? []).filter(
+    (r): r is { id: string; feed_order: number } =>
+      typeof r.id === 'string' && typeof r.feed_order === 'number'
+  );
+
+  if (letrEndToShift.length > 0) {
+    const shiftResults = await Promise.all(
+      letrEndToShift.map((r) =>
+        supabase
+          .from('customer_concepts')
+          .update({ feed_order: r.feed_order - 1 })
+          .eq('id', r.id)
+      )
+    );
+    const shiftErrors = shiftResults.map((r) => r.error).filter(Boolean);
+    if (shiftErrors.length > 0) {
+      return NextResponse.json(
+        { error: shiftErrors[0]?.message ?? 'LeTrend shift failed' },
+        { status: 500 }
+      );
+    }
+  }
+
+  // ── Phase 2: shift imported-history rows by -1 ────────────────────────────
+  // Prevents collision with the produced row that is about to land at -1.
+  const { data: importedRows, error: importedFetchError } = await supabase
+    .from('customer_concepts')
+    .select('id, feed_order')
+    .eq('customer_profile_id', customerId)
+    .is('concept_id', null)
+    .lt('feed_order', 0);
+
+  if (importedFetchError) {
+    return NextResponse.json({ error: importedFetchError.message }, { status: 500 });
+  }
+
+  const importedToShift = (importedRows ?? []).filter(
+    (r): r is { id: string; feed_order: number } =>
+      typeof r.id === 'string' && typeof r.feed_order === 'number'
+  );
+
+  if (importedToShift.length > 0) {
+    const importedShiftResults = await Promise.all(
+      importedToShift.map((r) =>
+        supabase
+          .from('customer_concepts')
+          .update({ feed_order: r.feed_order - 1 })
+          .eq('id', r.id)
+      )
+    );
+    const importedShiftErrors = importedShiftResults.map((r) => r.error).filter(Boolean);
+    if (importedShiftErrors.length > 0) {
+      return NextResponse.json(
+        { error: importedShiftErrors[0]?.message ?? 'TikTok history shift failed' },
+        { status: 500 }
+      );
+    }
+  }
+
+  // ── Phase 3: stamp the produced row at feed_order -1 ─────────────────────
+  // feed_order -1 = most-recent historik slot, adjacent to the new nu (0).
   const { data, error } = await supabase
     .from('customer_concepts')
-    .update(buildMarkProducedPayload({ tiktok_url: body?.tiktok_url, published_at: clipPublishedAt, now, nextHistoryOrder }))
+    .update({
+      ...buildMarkProducedPayload({ tiktok_url: body?.tiktok_url, published_at: clipPublishedAt, now }),
+      feed_order: -1,
+    })
     .eq('id', conceptId)
     .eq('customer_profile_id', customerId)
     .select(`
@@ -77,73 +170,10 @@ export const POST = withAuth(async (request) => {
     return NextResponse.json({ error: 'Concept assignment not found' }, { status: 404 });
   }
 
-  // ── Advance planning window ───────────────────────────────────────────────
-  // Advance the active LeTrend plan window: decrement feed_order by 1 for
-  // kommande/nu assignment rows so the next kommande concept becomes nu.
-  //
-  // Scope: concept_id IS NOT NULL   — LeTrend-managed rows only
-  //        feed_order >= 0          — active plan (kommande + nu) only
-  //        id != conceptId          — exclude the row we just produced
-  //
-  // Why feed_order >= 0 (not all placed rows):
-  //   nextHistoryOrder is computed as most-negative - 1, so the produced row A
-  //   lands directly below the deepest existing historik row (e.g. C at -1
-  //   means A lands at -2). If we also shifted C by -1, C would move to -2 and
-  //   collide with A. Restricting the advance to feed_order >= 0 avoids this:
-  //   A lands at (most-negative - 1) and C stays where it is — no collision.
-  //   LeTrend historik rows are already in the past and do not need to shift
-  //   when the active plan advances one cycle.
-  //
-  // Why concept_id IS NOT NULL:
-  //   Imported profile-history rows (concept_id IS NULL) are ordered by their
-  //   own chronological renumber pass and must never be touched here.
-  //
-  // Note: neq(id) is defense-in-depth. After step 2, the produced row already
-  //   has a negative feed_order so gte(0) would exclude it anyway.
-  const { data: planRows, error: planFetchError } = await supabase
-    .from('customer_concepts')
-    .select('id, feed_order')
-    .eq('customer_profile_id', customerId)
-    .not('concept_id', 'is', null)
-    .neq('id', conceptId)
-    .gte('feed_order', 0);
-
-  let advanceApplied = false;
-  let advanceError: string | null = null;
-
-  if (planFetchError) {
-    advanceError = planFetchError.message;
-  } else {
-    const toShift = (planRows ?? []).filter(
-      (r): r is { id: string; feed_order: number } =>
-        typeof r.id === 'string' && typeof r.feed_order === 'number'
-    );
-
-    if (toShift.length > 0) {
-      const shiftResults = await Promise.all(
-        toShift.map((r) =>
-          supabase
-            .from('customer_concepts')
-            .update({ feed_order: r.feed_order - 1 })
-            .eq('id', r.id)
-        )
-      );
-      const shiftErrors = shiftResults.map((r) => r.error).filter(Boolean);
-      if (shiftErrors.length > 0) {
-        advanceError = shiftErrors[0]?.message ?? 'Plan advance partially failed';
-      } else {
-        advanceApplied = true;
-      }
-    } else {
-      // No other placed LeTrend rows — nothing to advance, still a success
-      advanceApplied = true;
-    }
-  }
-
   return NextResponse.json({
     success: true,
     concept: normalizeStudioCustomerConcept(data),
-    advance_applied: advanceApplied,
-    ...(advanceError ? { advance_error: advanceError } : {}),
+    letrend_shifted: letrEndToShift.length,
+    imported_shifted: importedToShift.length,
   });
 }, ['admin', 'content_manager']);

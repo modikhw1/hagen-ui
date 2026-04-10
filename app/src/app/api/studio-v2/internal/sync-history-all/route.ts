@@ -15,7 +15,7 @@ import { importClipsForCustomer } from '@/lib/studio/history-import';
 // Eligible criteria:
 //   - status IN ('active', 'agreed')
 //   - tiktok_handle IS NOT NULL AND tiktok_handle != ''
-//   - last_history_sync_at IS NULL OR last_history_sync_at < NOW() - 23h
+//   - last_history_sync_at IS NULL OR last_history_sync_at < NOW() - 1h
 //
 // Per-customer flow:
 //   1. Call tiktok-scraper7 for the most recent SYNC_COUNT clips
@@ -35,7 +35,11 @@ import { importClipsForCustomer } from '@/lib/studio/history-import';
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SYNC_COUNT_PER_CUSTOMER = 10;
-const STALENESS_HOURS = 23;
+// 1-hour gate: each customer is processed at most once per cron cycle.
+// Matches the hourly workflow schedule — a customer synced at 10:00 passes
+// the gate again at 11:00, giving near-hourly observation during business hours.
+// Previously 23 (daily), which made the hourly schedule a no-op.
+const STALENESS_HOURS = 1;
 
 export const POST = async (request: NextRequest): Promise<NextResponse> => {
   // ── 1. Validate CRON_SECRET ───────────────────────────────────────────────
@@ -101,7 +105,19 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
         .map((v) => normalizeVideo(v, handle))
         .filter((c): c is NonNullable<typeof c> => c !== null);
 
-      // No clips from provider — stamp sync time and move on
+      // Provider returned videos but all failed normalization — likely an API format
+      // change or unexpected data shape. Do NOT stamp last_history_sync_at so this
+      // customer is retried next cycle. Surface as a named error for log visibility.
+      if (videos.length > 0 && clips.length === 0) {
+        errors.push({
+          customerId: customer.id,
+          error: `normalization_failure: provider returned ${videos.length} video(s) for @${handle} but all failed normalization`,
+        });
+        continue;
+      }
+
+      // Provider returned no videos — empty feed or brand-new account.
+      // Stamp sync time so we don't retry until the 23h gate expires.
       if (clips.length === 0) {
         await supabase
           .from('customer_profiles')

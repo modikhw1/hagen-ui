@@ -1,4 +1,5 @@
 import React from 'react';
+import ReactDOM from 'react-dom';
 import type { TranslatedConcept } from '@/lib/translator';
 import type { ConceptSectionKey } from '@/lib/studio-v2-concept-content';
 import {
@@ -62,6 +63,30 @@ export function CustomerFeedSlot({
   const [localComments, setLocalComments] = React.useState('');
   const [localWatchTime, setLocalWatchTime] = React.useState('');
   const [dragOver, setDragOver] = React.useState(false);
+  const [isMarkingProduced, setIsMarkingProduced] = React.useState(false);
+
+  // menuPos holds the fixed-position coordinates for the portaled context menu.
+  // Computed from the ⋯ button's getBoundingClientRect() when the menu opens.
+  const [menuPos, setMenuPos] = React.useState<{ top: number; right: number } | null>(null);
+
+  const slotContainerRef = React.useRef<HTMLDivElement>(null);
+  const menuButtonRef = React.useRef<HTMLButtonElement>(null);
+  const contextMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // Close the portaled context menu when the user clicks outside both the card
+  // and the menu itself. We must check both because the portaled menu is rendered
+  // at document.body — it is NOT a DOM child of slotContainerRef.
+  React.useEffect(() => {
+    if (!showContextMenu) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      const inCard = slotContainerRef.current?.contains(target) ?? false;
+      const inMenu = contextMenuRef.current?.contains(target) ?? false;
+      if (!inCard && !inMenu) setShowContextMenu(false);
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showContextMenu]);
 
   const { concept, type } = slot;
   const sourceConceptId = concept ? getStudioCustomerConceptSourceConceptId(concept) : null;
@@ -259,6 +284,22 @@ export function CustomerFeedSlot({
     }
   };
 
+  // Compute the fixed position for the portaled menu from the ⋯ button's screen rect.
+  // Anchors to the button's right edge so it always appears adjacent to the button,
+  // regardless of the card's position in the grid or scroll position.
+  const handleMenuToggle = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!showContextMenu && menuButtonRef.current) {
+      const rect = menuButtonRef.current.getBoundingClientRect();
+      // Position menu below the button, right-aligned to button's right edge.
+      // Clamp top so the menu doesn't start above the viewport.
+      const top = Math.max(4, rect.bottom + 4);
+      const right = window.innerWidth - rect.right;
+      setMenuPos({ top, right });
+    }
+    setShowContextMenu((prev) => !prev);
+  };
+
   const slotStyles = {
     empty: {
       bg: LeTrendColors.cream,
@@ -275,10 +316,15 @@ export function CustomerFeedSlot({
       border: `2px solid ${LeTrendColors.brownDark}`,
       opacity: 1,
     },
+    // History cards intentionally do NOT use opacity < 1.
+    // opacity < 1 on a positioned element creates a CSS stacking context, which traps
+    // the portaled context menu inside the card's paint layer — making the menu appear
+    // behind sibling grid cells. The visual dimming is instead achieved via a slightly
+    // muted background color (equivalent to #F0EDE8 @ 0.85 on white).
     history: {
-      bg: '#F0EDE8',
+      bg: '#F2F0EB',
       border: `1px solid ${LeTrendColors.border}`,
-      opacity: 0.85,
+      opacity: 1,
     },
   };
 
@@ -383,253 +429,25 @@ export function CustomerFeedSlot({
       ? `linear-gradient(${spanTint}, ${spanTint})`
       : 'none';
 
-  return (
-    <div
-      data-slot-index={slot.slotIndex}
-      style={{
-        aspectRatio: '9/16',
-        maxHeight: 280,
-        backgroundColor: slotBackgroundColor,
-        backgroundImage: slotBackgroundImage,
-        backgroundSize: hasThumbnail ? 'cover' : 'auto',
-        backgroundPosition: hasThumbnail ? 'center' : '0% 0%',
-        backgroundRepeat: hasThumbnail ? 'no-repeat' : 'repeat',
-        border: style.border,
-        borderRadius: LeTrendRadius.lg,
-        padding: 12,
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        position: 'relative',
-        opacity: style.opacity,
-        cursor: 'pointer',
-        boxShadow: spanOutline,
-      }}
-      onClick={() => onSlotClick(slot, concept, details)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {showSpanCoveragePill && (
+  // The context menu is portaled to document.body to escape any ancestor stacking
+  // context (CSS grid z-index, eel SVG z-index, etc.). It renders at position:fixed
+  // so it's always visible regardless of scroll position or overflow:hidden ancestors.
+  const contextMenuPortal = showContextMenu && concept && menuPos && typeof document !== 'undefined'
+    ? ReactDOM.createPortal(
         <div
+          ref={contextMenuRef}
           style={{
-            position: 'absolute',
-            top: type === 'current' ? 32 : 8,
-            left: 8,
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            background: spanColor || LeTrendColors.textMuted,
-            boxShadow: `0 0 0 2px ${hexToRgba(spanColor || '#999', 0.3)}`,
-            pointerEvents: 'none',
-          }}
-        />
-      )}
-
-      {type === 'current' && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            background: LeTrendColors.brownDark,
-            color: 'white',
-            padding: '2px 8px',
-            borderRadius: LeTrendRadius.sm,
-            fontSize: 10,
-            fontWeight: 700,
-          }}
-        >
-          NU
-        </div>
-      )}
-
-      {type === 'history' && concept?.row_kind === 'imported_history' && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 8,
-            left: 8,
-            background: hasThumbnail ? 'rgba(0,0,0,0.45)' : 'rgba(219,234,254,0.85)',
-            color: hasThumbnail ? '#bfdbfe' : '#1d4ed8',
-            border: hasThumbnail ? '1px solid rgba(191,219,254,0.25)' : '1px solid #bfdbfe',
-            padding: '2px 7px',
-            borderRadius: LeTrendRadius.sm,
-            fontSize: 10,
-            fontWeight: 600,
-            letterSpacing: '0.03em',
-          }}
-        >
-          Importerad
-        </div>
-      )}
-
-      {result?.content_loaded_at && (
-        <div
-          style={{
-            position: 'absolute',
-            top: type === 'current' ? 8 : 26,
-            left: type === 'current' ? 44 : 8,
-            background: hasUnreadUpload ? 'rgba(16, 185, 129, 0.14)' : 'rgba(107,114,128,0.12)',
-            color: hasUnreadUpload ? '#047857' : '#4b5563',
-            padding: '2px 8px',
-            borderRadius: 999,
-            fontSize: 10,
-            fontWeight: 700,
-            border: hasUnreadUpload
-              ? '1px solid rgba(16, 185, 129, 0.45)'
-              : '1px solid rgba(107,114,128,0.25)',
-          }}
-          title={hasUnreadUpload ? 'Ny uppladdning' : 'Uppladdning sedd'}
-        >
-          {hasUnreadUpload ? 'Ny uppladdning' : 'Uppladdning sedd'}
-        </div>
-      )}
-
-      {concept && (isHovered || showContextMenu) && (
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            setShowContextMenu((prev) => !prev);
-          }}
-          style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 16,
-            color: LeTrendColors.textMuted,
-          }}
-        >
-          ⋯
-        </button>
-      )}
-
-      {type === 'history' && (result?.produced_at || result?.published_at) && (
-        <div
-          style={{
-            position: 'absolute',
-            right: 8,
-            bottom: 8,
-            fontSize: 10,
-            color: LeTrendColors.textMuted,
-            textAlign: 'right',
-            lineHeight: 1.2,
-          }}
-        >
-          {result?.produced_at ? `Prod: ${formatDate(result.produced_at)}` : null}
-          {result?.published_at ? <div>{`Pub: ${formatDate(result.published_at)}`}</div> : null}
-        </div>
-      )}
-
-      {type === 'history' && result?.tiktok_url && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            fontSize: 16,
-            color: LeTrendColors.brownDark,
-            opacity: 0.55,
-            pointerEvents: 'none',
-          }}
-        >
-          ▶
-        </div>
-      )}
-
-      {concept && (
-        <div>
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: hasThumbnail ? 'white' : LeTrendColors.brownDark,
-              lineHeight: 1.3,
-              maxHeight: 32,
-              overflow: 'hidden',
-              textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.5)' : undefined,
-            }}
-          >
-            {conceptTitle}
-          </div>
-
-          {(result?.planned_publish_at || result?.content_loaded_at) && (
-            <div style={{ marginTop: 6, fontSize: 10, color: LeTrendColors.textMuted, lineHeight: 1.3 }}>
-              {result?.planned_publish_at ? <div>{`Plan: ${formatDate(result.planned_publish_at)}`}</div> : null}
-              {result?.content_loaded_at ? <div>{`In: ${formatDate(result.content_loaded_at)}`}</div> : null}
-            </div>
-          )}
-
-          {type === 'history' && (result?.tiktok_views || result?.tiktok_likes || result?.tiktok_comments) && (
-            <div style={{ marginTop: 6, fontSize: 10, color: LeTrendColors.textSecondary }}>
-              {`Visn ${formatMetric(result?.tiktok_views ?? null)} · Likes ${formatMetric(
-                result?.tiktok_likes ?? null
-              )} · Komm ${formatMetric(result?.tiktok_comments ?? null)}`}
-            </div>
-          )}
-        </div>
-      )}
-
-      {concept && markers && markers.tags.length > 0 && (
-        <div style={{ display: 'flex', gap: 2, marginTop: 8 }}>
-          {markers.tags.slice(0, 3).map((tagName) => {
-            const tag = tags.find((item) => item.name === tagName);
-            return tag ? (
-              <div
-                key={tagName}
-                title={tagName}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: tag.color,
-                  opacity: type === 'history' ? 0.6 : 1,
-                }}
-              />
-            ) : null;
-          })}
-        </div>
-      )}
-
-      {type === 'current' && concept && (
-        <button
-          onClick={(event) => {
-            event.stopPropagation();
-            const url = prompt('TikTok-länk (valfritt):');
-            void onMarkProduced(concept.id, url || undefined);
-          }}
-          style={{
-            marginTop: 8,
-            padding: '6px',
-            background: LeTrendColors.success,
-            border: 'none',
-            color: 'white',
-            borderRadius: LeTrendRadius.sm,
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: 'pointer',
-            width: '100%',
-          }}
-        >
-          ✓ Markera producerat
-        </button>
-      )}
-
-      {showContextMenu && concept && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 32,
-            right: 8,
+            position: 'fixed',
+            top: menuPos.top,
+            right: menuPos.right,
             background: 'white',
             border: `1px solid ${LeTrendColors.border}`,
             borderRadius: LeTrendRadius.md,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            zIndex: 10,
-            minWidth: 160,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+            zIndex: 9999,
+            width: 220,
+            maxHeight: '70vh',
+            overflowY: 'auto',
           }}
           onClick={(event) => event.stopPropagation()}
         >
@@ -738,7 +556,7 @@ export function CustomerFeedSlot({
               void onRemoveFromSlot(concept.id);
               setShowContextMenu(false);
             }}
-            style={menuButtonStyle}
+            style={{ ...menuButtonStyle, color: '#b91c1c' }}
           >
             Ta bort från flödet
           </button>
@@ -784,6 +602,7 @@ export function CustomerFeedSlot({
                           borderRadius: '50%',
                           background: tag.color,
                           display: 'inline-block',
+                          flexShrink: 0,
                         }}
                       />
                       <span style={{ flex: 1, textAlign: 'left' }}>{tag.name}</span>
@@ -804,6 +623,7 @@ export function CustomerFeedSlot({
                 placeholder="Intern notering..."
                 style={{
                   width: '100%',
+                  boxSizing: 'border-box',
                   border: `1px solid ${LeTrendColors.border}`,
                   borderRadius: LeTrendRadius.sm,
                   padding: 6,
@@ -868,26 +688,300 @@ export function CustomerFeedSlot({
               </button>
             </div>
           )}
-        </div>
-      )}
-    </div>
+        </div>,
+        document.body
+      )
+    : null;
+
+  return (
+    <>
+      <div
+        ref={slotContainerRef}
+        data-slot-index={slot.slotIndex}
+        style={{
+          aspectRatio: '9/16',
+          maxHeight: 280,
+          backgroundColor: slotBackgroundColor,
+          backgroundImage: slotBackgroundImage,
+          backgroundSize: hasThumbnail ? 'cover' : 'auto',
+          backgroundPosition: hasThumbnail ? 'center' : '0% 0%',
+          backgroundRepeat: hasThumbnail ? 'no-repeat' : 'repeat',
+          border: style.border,
+          borderRadius: LeTrendRadius.lg,
+          padding: 12,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          position: 'relative',
+          opacity: style.opacity,
+          // planned cards navigate to the concept editor on click — pointer is correct.
+          // current and history card clicks are no-ops; their actions live inside the card.
+          cursor: type === 'planned' ? 'pointer' : 'default',
+          boxShadow: spanOutline,
+        }}
+        onClick={() => onSlotClick(slot, concept, details)}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {showSpanCoveragePill && (
+          <div
+            style={{
+              position: 'absolute',
+              top: type === 'current' ? 32 : 8,
+              left: 8,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: spanColor || LeTrendColors.textMuted,
+              boxShadow: `0 0 0 2px ${hexToRgba(spanColor || '#999', 0.3)}`,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+
+        {type === 'current' && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              background: LeTrendColors.brownDark,
+              color: 'white',
+              padding: '2px 8px',
+              borderRadius: LeTrendRadius.sm,
+              fontSize: 10,
+              fontWeight: 700,
+            }}
+          >
+            NU
+          </div>
+        )}
+
+        {type === 'history' && concept?.row_kind === 'imported_history' && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 8,
+              left: 8,
+              background: hasThumbnail ? 'rgba(0,0,0,0.45)' : 'rgba(219,234,254,0.85)',
+              color: hasThumbnail ? '#bfdbfe' : '#1d4ed8',
+              border: hasThumbnail ? '1px solid rgba(191,219,254,0.25)' : '1px solid #bfdbfe',
+              padding: '2px 7px',
+              borderRadius: LeTrendRadius.sm,
+              fontSize: 10,
+              fontWeight: 600,
+              letterSpacing: '0.03em',
+            }}
+          >
+            Importerad
+          </div>
+        )}
+
+        {result?.content_loaded_at && (
+          <div
+            style={{
+              position: 'absolute',
+              top: type === 'current' ? 8 : 26,
+              left: type === 'current' ? 44 : 8,
+              background: hasUnreadUpload ? 'rgba(16, 185, 129, 0.14)' : 'rgba(107,114,128,0.12)',
+              color: hasUnreadUpload ? '#047857' : '#4b5563',
+              padding: '2px 8px',
+              borderRadius: 999,
+              fontSize: 10,
+              fontWeight: 700,
+              border: hasUnreadUpload
+                ? '1px solid rgba(16, 185, 129, 0.45)'
+                : '1px solid rgba(107,114,128,0.25)',
+            }}
+            title={hasUnreadUpload ? 'Ny uppladdning' : 'Uppladdning sedd'}
+          >
+            {hasUnreadUpload ? 'Ny uppladdning' : 'Uppladdning sedd'}
+          </div>
+        )}
+
+        {concept && (isHovered || showContextMenu) && (
+          <button
+            ref={menuButtonRef}
+            onClick={handleMenuToggle}
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              background: showContextMenu
+                ? 'rgba(107,68,35,0.1)'
+                : 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 16,
+              color: LeTrendColors.textMuted,
+              borderRadius: 4,
+              padding: '0 2px',
+              lineHeight: 1,
+            }}
+          >
+            ⋯
+          </button>
+        )}
+
+        {type === 'planned' && concept && isHovered && (
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              right: 8,
+              fontSize: 9,
+              color: LeTrendColors.textMuted,
+              opacity: 0.65,
+              pointerEvents: 'none',
+              letterSpacing: '0.02em',
+            }}
+          >
+            Öppna →
+          </div>
+        )}
+
+        {type === 'history' && result?.published_at && (
+          <div
+            style={{
+              position: 'absolute',
+              right: 8,
+              bottom: 8,
+              fontSize: 10,
+              color: hasThumbnail ? 'rgba(255,255,255,0.7)' : LeTrendColors.textMuted,
+              pointerEvents: 'none',
+            }}
+          >
+            {formatDate(result.published_at)}
+          </div>
+        )}
+
+        {type === 'history' && result?.tiktok_url && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              fontSize: 16,
+              color: LeTrendColors.brownDark,
+              opacity: 0.55,
+              pointerEvents: 'none',
+            }}
+          >
+            ▶
+          </div>
+        )}
+
+        {concept && (
+          <div>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: hasThumbnail ? 'white' : LeTrendColors.brownDark,
+                lineHeight: 1.3,
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.5)' : undefined,
+              }}
+            >
+              {conceptTitle}
+            </div>
+
+            {result?.planned_publish_at && (
+              <div style={{ marginTop: 4, fontSize: 10, color: LeTrendColors.textMuted, lineHeight: 1.3 }}>
+                {`Plan: ${formatDate(result.planned_publish_at)}`}
+              </div>
+            )}
+
+            {type === 'history' && (result?.tiktok_views || result?.tiktok_likes || result?.tiktok_comments) && (
+              <div style={{ marginTop: 6, fontSize: 10, color: LeTrendColors.textSecondary }}>
+                {`Visn ${formatMetric(result?.tiktok_views ?? null)} · Likes ${formatMetric(
+                  result?.tiktok_likes ?? null
+                )} · Komm ${formatMetric(result?.tiktok_comments ?? null)}`}
+              </div>
+            )}
+          </div>
+        )}
+
+        {concept && markers && markers.tags.length > 0 && (
+          <div style={{ display: 'flex', gap: 2, marginTop: 8 }}>
+            {markers.tags.slice(0, 3).map((tagName) => {
+              const tag = tags.find((item) => item.name === tagName);
+              return tag ? (
+                <div
+                  key={tagName}
+                  title={tagName}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: tag.color,
+                    opacity: type === 'history' ? 0.6 : 1,
+                  }}
+                />
+              ) : null;
+            })}
+          </div>
+        )}
+
+        {type === 'current' && concept && (
+          <button
+            disabled={isMarkingProduced}
+            onClick={async (event) => {
+              event.stopPropagation();
+              const url = prompt('TikTok-länk (valfritt):');
+              setIsMarkingProduced(true);
+              try {
+                await onMarkProduced(concept.id, url || undefined);
+              } finally {
+                setIsMarkingProduced(false);
+              }
+            }}
+            style={{
+              marginTop: 8,
+              padding: '6px',
+              background: isMarkingProduced ? '#6b9f6b' : LeTrendColors.success,
+              border: 'none',
+              color: 'white',
+              borderRadius: LeTrendRadius.sm,
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: isMarkingProduced ? 'default' : 'pointer',
+              width: '100%',
+              opacity: isMarkingProduced ? 0.75 : 1,
+            }}
+          >
+            {isMarkingProduced ? 'Markerar...' : '✓ Markera producerat'}
+          </button>
+        )}
+      </div>
+
+      {/* Context menu rendered at document.body via portal so it escapes all
+          ancestor stacking contexts (grid z-index, eel SVG, opacity layers). */}
+      {contextMenuPortal}
+    </>
   );
 }
 
 const menuButtonStyle: React.CSSProperties = {
   width: '100%',
-  padding: 8,
+  padding: '8px 12px',
   background: 'none',
   border: 'none',
   textAlign: 'left',
   cursor: 'pointer',
   fontSize: 12,
+  color: '#1a1a2e',
 };
 
 const contextInputStyle: React.CSSProperties = {
   width: '100%',
-  border: `1px solid ${LeTrendColors.border}`,
-  borderRadius: LeTrendRadius.sm,
+  boxSizing: 'border-box',
+  border: `1px solid #d1cdc7`,
+  borderRadius: 4,
   padding: 6,
   fontSize: 12,
 };
@@ -897,8 +991,8 @@ const contextSaveButtonStyle: React.CSSProperties = {
   width: '100%',
   padding: 6,
   border: 'none',
-  borderRadius: LeTrendRadius.sm,
-  background: LeTrendColors.brownLight,
+  borderRadius: 4,
+  background: '#6b4423',
   color: 'white',
   fontSize: 12,
   fontWeight: 600,

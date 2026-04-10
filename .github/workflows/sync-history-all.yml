@@ -1,8 +1,12 @@
 name: Sync customer TikTok history
 
-# Calls the internal sync-history-all route on a daily schedule.
-# The route fetches recent TikTok clips for all eligible customers and
-# writes motor signals for any customer where new clips are found.
+# Calls the internal sync-history-all route on an hourly schedule during
+# Stockholm business hours (Mon–Fri, 06:00–17:00 UTC ≈ 08:00–19:00 CEST /
+# 07:00–18:00 CET). The route fetches recent TikTok clips for all eligible
+# customers and writes motor signals for any customer where new clips are found.
+#
+# The route's STALENESS_HOURS = 1 gate means each customer is processed at
+# most once per hour regardless of how often the workflow fires.
 #
 # Required GitHub configuration:
 #   Repository secret:   CRON_SECRET   — must match the deployed CRON_SECRET env var
@@ -13,8 +17,8 @@ name: Sync customer TikTok history
 
 on:
   schedule:
-    - cron: '0 6 * * *'  # daily at 06:00 UTC
-  workflow_dispatch:       # allow manual run from GitHub Actions UI
+    - cron: '0 6-17 * * 1-5'  # hourly, Mon–Fri, 06:00–17:00 UTC
+  workflow_dispatch:            # allow manual run from GitHub Actions UI
 
 jobs:
   sync:
@@ -34,7 +38,7 @@ jobs:
 
           echo "HTTP status: $http_status"
           echo "Response:"
-          cat /tmp/sync_response.json
+          jq '.' /tmp/sync_response.json 2>/dev/null || cat /tmp/sync_response.json
 
           if [ "$http_status" != "200" ]; then
             echo "Sync failed — expected 200, got $http_status"

@@ -230,26 +230,22 @@ export const getStudioAssignmentStatusLabel = getCustomerConceptAssignmentLabel;
 // ── Boundary-specific write payload builders ───────────────────────────────
 
 /**
- * Builds the result + placement boundary payload for the mark-produced action.
+ * Builds the result boundary payload for the mark-produced action.
  *
- * Boundary: result (produced/published timestamps, TikTok URL) + placement
- * (feed_order moves to next available historical slot, keeping the concept
- * visible in the timeline history zone instead of disappearing).
- *
- * nextHistoryOrder: the negative feed_order to assign (e.g. -1, -2, …).
- * Caller is responsible for computing this from the customer's current slots.
+ * Boundary: result (produced/published timestamps, TikTok URL).
+ * feed_order is NOT included here — the route is responsible for shifting
+ * all other rows by -1 first, after which the produced row sits at -1
+ * (the most-recent historik position, nearest to nu).
  */
 export function buildMarkProducedPayload(input: {
   tiktok_url?: string | null;
   published_at?: string | null;
   now: string;
-  nextHistoryOrder: number;
 }): {
   status: CustomerConceptAssignmentStatus;
   produced_at: string;
   published_at: string | null;
   tiktok_url: string | null;
-  feed_order: number;
 } {
   return {
     status: 'produced',
@@ -258,7 +254,6 @@ export function buildMarkProducedPayload(input: {
     // but date is unknown; null when no URL (concept produced but not yet published on TikTok).
     published_at: input.tiktok_url ? (input.published_at ?? input.now) : null,
     tiktok_url: input.tiktok_url ?? null,
-    feed_order: input.nextHistoryOrder,
   };
 }
 

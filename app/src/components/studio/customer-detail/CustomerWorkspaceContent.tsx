@@ -364,6 +364,10 @@ function CustomerWorkspacePageContent() {
     if (customer?.pending_history_advance && !customer.pending_history_advance_seen_at) {
       const kind = classifyMotorSignal(customer) ?? 'fresh_activity';
       setPendingAdvanceCue({ imported: customer.pending_history_advance, kind, publishedAt: customer.pending_history_advance_published_at ?? null });
+    } else {
+      // Signal absent or already acknowledged — clear any stale local cue so the
+      // workspace stays in sync with backend truth after a refetch or dismiss.
+      setPendingAdvanceCue(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer?.pending_history_advance, customer?.pending_history_advance_seen_at, customer?.pending_history_advance_published_at]);
