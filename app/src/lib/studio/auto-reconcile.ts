@@ -98,5 +98,67 @@ export async function autoReconcileAndAdvance(
     return { advanced: false, reason: 'produce_failed', detail: result.error };
   }
 
+  // ── 5. Remove reconciled clip from the grid sequence ─────────────────────
+  // After performMarkProduced, the reconciled clip sits at -2 (Phase 2 shifted
+  // it there). The concepts API hides it, but the gap at -2 would leave an
+  // empty slot between the new LeTrend card at -1 and the next TikTok card.
+  // Setting feed_order = null takes it out of the numbered sequence entirely
+  // while keeping it available for the in-memory stats join in the concepts API.
+  await supabase
+    .from('customer_concepts')
+    .update({ feed_order: null })
+    .eq('id', importedRow.id);
+
+  // ── 6. Renumber unreconciled imported clips to fill the gap ───────────────
+  // Finds the deepest LeTrend historik row (after the produce shift), derives
+  // the offset, and assigns consecutive feed_orders to unreconciled clips so
+  // they sit flush below the LeTrend historik block with no empty slots.
+  const { data: letrEndHistorik } = await supabase
+    .from('customer_concepts')
+    .select('feed_order')
+    .eq('customer_profile_id', customerId)
+    .not('concept_id', 'is', null)
+    .lt('feed_order', 0)
+    .order('feed_order', { ascending: true })
+    .limit(1);
+
+  const letrEndFloor = (letrEndHistorik?.[0]?.feed_order as number | undefined) ?? -1;
+  const renumberOffset = Math.abs(letrEndFloor);
+
+  const { data: unreconciled } = await supabase
+    .from('customer_concepts')
+    .select('id, feed_order, published_at, tiktok_url')
+    .eq('customer_profile_id', customerId)
+    .is('concept_id', null)
+    .is('reconciled_customer_concept_id', null)
+    .not('feed_order', 'is', null)
+    .lt('feed_order', 0);
+
+  const sorted = (unreconciled ?? []).sort((a, b) => {
+    const dateA = a.published_at ? new Date(a.published_at as string).getTime() : 0;
+    const dateB = b.published_at ? new Date(b.published_at as string).getTime() : 0;
+    if (dateB !== dateA) return dateB - dateA;
+    return (a.tiktok_url as string).localeCompare(b.tiktok_url as string);
+  });
+
+  const renumberUpdates = sorted
+    .map((row, i) => ({
+      id: row.id as string,
+      from: row.feed_order as number,
+      to: -(renumberOffset + i + 1),
+    }))
+    .filter((u) => u.from !== u.to);
+
+  if (renumberUpdates.length > 0) {
+    await Promise.all(
+      renumberUpdates.map((u) =>
+        supabase
+          .from('customer_concepts')
+          .update({ feed_order: u.to })
+          .eq('id', u.id)
+      )
+    );
+  }
+
   return { advanced: true, nuConceptId: nuRow.id, importedClipId: importedRow.id };
 }
