@@ -1096,6 +1096,66 @@ function CustomerWorkspacePageContent() {
     await handleUpdateConcept(conceptId, { tiktok_url: url.trim() || null });
   };
 
+  const handleReconcileHistory = async (
+    historyConceptId: string,
+    options: { mode?: 'use_now_slot'; linkedCustomerConceptId?: string } = {}
+  ) => {
+    try {
+      const response = await fetch('/api/studio-v2/history/reconciliation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          history_concept_id: historyConceptId,
+          ...(options.mode === 'use_now_slot'
+            ? { mode: 'use_now_slot' }
+            : { linked_customer_concept_id: options.linkedCustomerConceptId }),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error || 'Failed to reconcile history');
+      }
+
+      const data = await response.json();
+      if (data?.concept) {
+        setConcepts((prev) =>
+          prev.map((concept) => (concept.id === historyConceptId ? data.concept : concept))
+        );
+      }
+      clearClientCache(conceptsCacheKey);
+    } catch (err) {
+      console.error('Error reconciling history:', err);
+      alert(err instanceof Error ? err.message : 'Kunde inte koppla historiken');
+    }
+  };
+
+  const handleUndoHistoryReconciliation = async (historyConceptId: string) => {
+    try {
+      const response = await fetch('/api/studio-v2/history/reconciliation', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history_concept_id: historyConceptId }),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error || 'Failed to remove reconciliation');
+      }
+
+      const data = await response.json();
+      if (data?.concept) {
+        setConcepts((prev) =>
+          prev.map((concept) => (concept.id === historyConceptId ? data.concept : concept))
+        );
+      }
+      clearClientCache(conceptsCacheKey);
+    } catch (err) {
+      console.error('Error removing history reconciliation:', err);
+      alert(err instanceof Error ? err.message : 'Kunde inte ta bort kopplingen');
+    }
+  };
+
   const setWorkspaceSection = (section: Section) => {
     setActiveSection(section);
     router.replace(buildStudioWorkspaceHref(customerId, section));
@@ -2113,6 +2173,8 @@ function CustomerWorkspacePageContent() {
               handleUpdateTikTokUrl={handleUpdateTikTokUrl}
               handlePatchConcept={handleUpdateConcept}
               handleMarkProduced={handleMarkProduced}
+              handleReconcileHistory={handleReconcileHistory}
+              handleUndoHistoryReconciliation={handleUndoHistoryReconciliation}
               handleRemoveFromSlot={handleRemoveFromSlot}
               handleAssignToSlot={handleAssignToSlot}
               onOpenConcept={handleOpenConceptFromFeed}
@@ -2842,6 +2904,11 @@ interface FeedPlannerSectionProps {
   handleUpdateTikTokUrl: (conceptId: string, url: string) => Promise<void>;
   handlePatchConcept: (conceptId: string, updates: Partial<CustomerConcept>) => Promise<void>;
   handleMarkProduced: (conceptId: string, tiktokUrl?: string, publishedAt?: string) => Promise<void>;
+  handleReconcileHistory: (
+    historyConceptId: string,
+    options?: { mode?: 'use_now_slot'; linkedCustomerConceptId?: string }
+  ) => Promise<void>;
+  handleUndoHistoryReconciliation: (historyConceptId: string) => Promise<void>;
   handleRemoveFromSlot: (conceptId: string) => Promise<void>;
   handleAssignToSlot: (conceptId: string, feedOrder: number) => Promise<void>;
   onOpenConcept: (conceptId: string, sections?: ConceptSectionKey[]) => void;
@@ -2866,6 +2933,8 @@ interface FeedSlotProps {
   slot: FeedSlot;
   tags: CmTag[];
   config: GridConfig;
+  historyReconciliationTargets: CustomerConcept[];
+  currentHistoryDefaultTarget: CustomerConcept | null;
   spanCoverage?: number;
   spanColor?: string | null;
   showSpanCoverageLabels?: boolean;
@@ -2873,6 +2942,11 @@ interface FeedSlotProps {
   isFreshEvidence?: boolean;
   getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
   onMarkProduced: (conceptId: string, tiktokUrl?: string, publishedAt?: string) => Promise<void>;
+  onReconcileHistory: (
+    historyConceptId: string,
+    options?: { mode?: 'use_now_slot'; linkedCustomerConceptId?: string }
+  ) => Promise<void>;
+  onUndoHistoryReconciliation: (historyConceptId: string) => Promise<void>;
   onRemoveFromSlot: (conceptId: string) => Promise<void>;
   onAssignToSlot?: (conceptId: string, feedOrder: number) => Promise<void>;
   onUpdateTags: (conceptId: string, tags: string[]) => Promise<void>;
@@ -3991,6 +4065,8 @@ function FeedPlannerSection({
   handleUpdateTikTokUrl,
   handlePatchConcept,
   handleMarkProduced,
+  handleReconcileHistory,
+  handleUndoHistoryReconciliation,
   handleRemoveFromSlot,
   handleAssignToSlot,
   onOpenConcept,
@@ -4030,6 +4106,19 @@ function FeedPlannerSection({
   }, [pendingAdvanceCue]);
   const maxExtraHistorySlots = gridConfig.columns * 8; // support going back ~24 clips (8 rows)
   const maxForwardSlots = gridConfig.columns * 5;      // allow planning up to 5 extra rows forward (~13 clips at 3 cols)
+  const historyReconciliationTargets = React.useMemo(
+    () =>
+      concepts.filter(
+        (concept): concept is CustomerConcept =>
+          concept.row_kind === 'assignment' && isStudioAssignedCustomerConcept(concept)
+      ),
+    [concepts]
+  );
+  const currentHistoryDefaultTarget = React.useMemo(
+    () =>
+      historyReconciliationTargets.find((concept) => concept.placement.feed_order === 0) ?? null,
+    [historyReconciliationTargets]
+  );
 
   // Wheel scroll removed — the page now scrolls normally over the planner.
   // historyOffset is still set programmatically (e.g. "Granska historiken" button).
@@ -5522,8 +5611,12 @@ function FeedPlannerSection({
               showSpanCoverageLabels={eelHovered || !!activeSpan || !!editingSpan || !!drag}
               projectedDate={tempoDateMap.get(slot.feedOrder) ?? null}
               isFreshEvidence={slot.concept != null && focusedEvidenceIds.has(slot.concept.id)}
+              historyReconciliationTargets={historyReconciliationTargets}
+              currentHistoryDefaultTarget={currentHistoryDefaultTarget}
               getConceptDetails={getConceptDetails}
               onMarkProduced={handleMarkProduced}
+              onReconcileHistory={handleReconcileHistory}
+              onUndoHistoryReconciliation={handleUndoHistoryReconciliation}
               onRemoveFromSlot={handleRemoveFromSlot}
               onAssignToSlot={handleAssignToSlot}
               onUpdateTags={handleUpdateConceptTags}
@@ -5905,6 +5998,8 @@ function FeedPlannerSection({
 function FeedSlot({
   slot,
   tags,
+  historyReconciliationTargets,
+  currentHistoryDefaultTarget,
   spanCoverage = 0,
   spanColor = null,
   showSpanCoverageLabels = true,
@@ -5912,6 +6007,8 @@ function FeedSlot({
   isFreshEvidence = false,
   getConceptDetails,
   onMarkProduced,
+  onReconcileHistory,
+  onUndoHistoryReconciliation,
   onRemoveFromSlot,
   onAssignToSlot,
   onUpdateTags,
@@ -5924,33 +6021,16 @@ function FeedSlot({
   const [isHovered, setIsHovered] = React.useState(false);
   const [showContextMenu, setShowContextMenu] = React.useState(false);
   const menuBtnRef = React.useRef<HTMLButtonElement>(null);
-  const menuRef = React.useRef<HTMLDivElement>(null);
-  const [menuPos, setMenuPos] = React.useState<{
-    top: number; left: number;
-    triggerBottom: number; triggerTop: number;
-  } | null>(null);
-
-  // After menu renders: flip upward if height overflows bottom; clamp left if width overflows right
-  React.useLayoutEffect(() => {
-    if (!showContextMenu || !menuRef.current || !menuPos) return;
-    const menuEl = menuRef.current;
-    const { width: menuWidth, height: menuHeight } = menuEl.getBoundingClientRect();
-    // Vertical flip
-    if (menuPos.triggerBottom + menuHeight + 8 > window.innerHeight) {
-      menuEl.style.top = `${Math.max(8, menuPos.triggerTop - menuHeight - 4)}px`;
-    }
-    // Horizontal clamp: shift left if right edge overflows viewport
-    const rightOverflow = menuPos.left + menuWidth + 8 - window.innerWidth;
-    if (rightOverflow > 0) {
-      menuEl.style.left = `${Math.max(8, menuPos.left - rightOverflow)}px`;
-    }
-  }, [showContextMenu, menuPos]);
+  const [menuPos, setMenuPos] = React.useState<{ top: number; left: number } | null>(null);
   const [showTagPicker, setShowTagPicker] = React.useState(false);
   const [editingNote, setEditingNote] = React.useState(false);
   const [editingTikTok, setEditingTikTok] = React.useState(false);
   const [editingMetadata, setEditingMetadata] = React.useState(false);
   const [editingPlannedDate, setEditingPlannedDate] = React.useState(false);
   const [editingPublishedDate, setEditingPublishedDate] = React.useState(false);
+  const [showReconciliationPicker, setShowReconciliationPicker] = React.useState(false);
+  const [selectedReconciliationTargetId, setSelectedReconciliationTargetId] = React.useState('');
+  const [savingReconciliation, setSavingReconciliation] = React.useState(false);
   const [localNote, setLocalNote] = React.useState('');
   const [localTikTokUrl, setLocalTikTokUrl] = React.useState('');
   const [localPlannedDate, setLocalPlannedDate] = React.useState('');
@@ -5968,6 +6048,80 @@ function FeedSlot({
   const isPastSlot = slot.feedOrder < 0;
   const canAddConcept = type === 'empty' && !isPastSlot;
   const hasUnreadUpload = hasUnreadUploadMarker(concept);
+  const linkedHistoryConcept =
+    concept?.reconciliation.linked_customer_concept_id != null
+      ? historyReconciliationTargets.find(
+          (item) => item.id === concept.reconciliation.linked_customer_concept_id
+        ) ?? null
+      : null;
+  const effectiveNowSlotTarget =
+    currentHistoryDefaultTarget && currentHistoryDefaultTarget.id !== concept?.id
+      ? currentHistoryDefaultTarget
+      : null;
+  const linkedHistoryDetails = linkedHistoryConcept
+    ? getWorkspaceConceptDetails(linkedHistoryConcept, getConceptDetails) ?? null
+    : null;
+  const linkedHistoryTitle = linkedHistoryConcept
+    ? getStudioCustomerConceptDisplayTitle(
+        linkedHistoryConcept,
+        linkedHistoryDetails?.headline_sv?.substring(0, 60) ?? linkedHistoryDetails?.headline ?? null
+      )
+    : null;
+  const historyPrimaryTitle =
+    concept?.row_kind === 'imported_history'
+      ? typeof concept.content.content_overrides?.script === 'string' &&
+        concept.content.content_overrides.script.trim()
+        ? concept.content.content_overrides.script.trim()
+        : getStudioCustomerConceptDisplayTitle(
+            concept,
+            details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null
+          )
+      : concept
+        ? getStudioCustomerConceptDisplayTitle(
+            concept,
+            details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null
+          )
+        : null;
+  const selectableHistoryTargets = historyReconciliationTargets
+    .filter((item) => item.id !== concept?.id)
+    .sort((a, b) => {
+      const feedOrderA = a.placement.feed_order ?? Number.NEGATIVE_INFINITY;
+      const feedOrderB = b.placement.feed_order ?? Number.NEGATIVE_INFINITY;
+      if (feedOrderA !== feedOrderB) return feedOrderB - feedOrderA;
+      return a.added_at.localeCompare(b.added_at);
+    });
+  const effectiveNowSlotDetails = effectiveNowSlotTarget
+    ? getWorkspaceConceptDetails(effectiveNowSlotTarget, getConceptDetails) ?? null
+    : null;
+  const effectiveNowSlotTitle = effectiveNowSlotTarget
+    ? getStudioCustomerConceptDisplayTitle(
+        effectiveNowSlotTarget,
+        effectiveNowSlotDetails?.headline_sv?.substring(0, 60) ?? effectiveNowSlotDetails?.headline ?? null
+      )
+    : null;
+  const historyDateLabel = (() => {
+    if (type !== 'history') return null;
+    const dateValue = result?.published_at ?? result?.produced_at ?? result?.content_loaded_at ?? null;
+    if (!dateValue) return null;
+    return new Date(dateValue).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+  })();
+  const openContextMenuFromButton = () => {
+    if (!menuBtnRef.current) return;
+    const rect = menuBtnRef.current.getBoundingClientRect();
+    const menuWidth = 220;
+    const estimatedMenuHeight = type === 'history' ? 320 : 260;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const prefersAbove = spaceBelow < estimatedMenuHeight && rect.top > spaceBelow;
+    const top = prefersAbove
+      ? Math.max(8, rect.top - estimatedMenuHeight - 6)
+      : Math.max(8, Math.min(window.innerHeight - estimatedMenuHeight - 8, rect.bottom + 6));
+    const left = Math.min(
+      Math.max(8, rect.right - menuWidth),
+      Math.max(8, window.innerWidth - menuWidth - 8)
+    );
+    setMenuPos({ top, left });
+    setShowContextMenu(true);
+  };
 
   React.useEffect(() => {
     setLocalNote(markers?.assignment_note ?? '');
@@ -5984,6 +6138,8 @@ function FeedSlot({
     setEditingMetadata(false);
     setEditingPlannedDate(false);
     setEditingPublishedDate(false);
+    setShowReconciliationPicker(false);
+    setSelectedReconciliationTargetId(concept?.reconciliation.linked_customer_concept_id ?? '');
     setShowTagPicker(false);
   }, [
     concept?.id,
@@ -5995,24 +6151,13 @@ function FeedSlot({
     result?.tiktok_comments,
     result?.tiktok_watch_time_seconds,
     result?.planned_publish_at,
-    result?.published_at
+    result?.published_at,
+    concept?.reconciliation.linked_customer_concept_id
   ]);
 
   const formatMetric = (value: number | null) => {
     if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
     return new Intl.NumberFormat('sv-SE', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
-  };
-
-  const formatDate = (value: string | null) => {
-    if (!value) return '-';
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return '-';
-    return parsed.toLocaleDateString('sv-SE', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const parseInputNumber = (value: string): number | null => {
@@ -6126,6 +6271,45 @@ function FeedSlot({
       });
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Kunde inte markera uppladdning som sedd');
+    }
+  };
+
+  const handleSaveHistoryReconciliation = async () => {
+    if (!concept || concept.row_kind !== 'imported_history' || !selectedReconciliationTargetId) return;
+    setSavingReconciliation(true);
+    try {
+      await onReconcileHistory(concept.id, {
+        linkedCustomerConceptId: selectedReconciliationTargetId,
+      });
+      setShowReconciliationPicker(false);
+    } finally {
+      setSavingReconciliation(false);
+    }
+  };
+
+  const handleMarkHistoryAsLeTrend = async () => {
+    if (!concept || concept.row_kind !== 'imported_history') return;
+    if (!effectiveNowSlotTarget) {
+      setShowReconciliationPicker(true);
+      return;
+    }
+    setSavingReconciliation(true);
+    try {
+      await onReconcileHistory(concept.id, { mode: 'use_now_slot' });
+    } finally {
+      setSavingReconciliation(false);
+    }
+  };
+
+  const handleUndoLinkedHistory = async () => {
+    if (!concept || concept.row_kind !== 'imported_history' || !concept.reconciliation.is_reconciled) return;
+    setSavingReconciliation(true);
+    try {
+      await onUndoHistoryReconciliation(concept.id);
+      setShowReconciliationPicker(false);
+      setSelectedReconciliationTargetId('');
+    } finally {
+      setSavingReconciliation(false);
     }
   };
 
@@ -6296,17 +6480,10 @@ function FeedSlot({
           hasThumbnail ? 'inset 0 0 0 1px rgba(255,255,255,0.07)' : null,
         ].filter(Boolean).join(', ') || undefined
       }}
-      onClick={(e) => {
+      onClick={() => {
         // Historik — always open context menu; activate URL editor only when no link exists yet
         if (type === 'history' && concept) {
-          const rect = e.currentTarget.getBoundingClientRect();
-          setMenuPos({
-            top: rect.top + 8,
-            left: Math.max(8, rect.right - 196),
-            triggerBottom: rect.bottom,
-            triggerTop: rect.top + 8,
-          });
-          setShowContextMenu(true);
+          openContextMenuFromButton();
           if (!result?.tiktok_url) setEditingTikTok(true);
           return;
         }
@@ -6355,7 +6532,7 @@ function FeedSlot({
         <div
           style={{
             position: 'absolute',
-            top: 8,
+            top: type === 'history' ? 32 : 8,
             left: 8,
             background: hasUnreadUpload ? 'rgba(16, 185, 129, 0.14)' : 'rgba(107,114,128,0.12)',
             color: hasUnreadUpload ? '#047857' : '#4b5563',
@@ -6377,14 +6554,9 @@ function FeedSlot({
           ref={menuBtnRef}
           onClick={(e) => {
             e.stopPropagation();
-            if (!showContextMenu && menuBtnRef.current) {
-              const rect = menuBtnRef.current.getBoundingClientRect();
-              setMenuPos({
-                top: rect.bottom + 4,
-                left: Math.max(8, rect.right - 196),
-                triggerBottom: rect.bottom,
-                triggerTop: rect.top,
-              });
+            if (!showContextMenu) {
+              openContextMenuFromButton();
+              return;
             }
             setShowContextMenu(v => !v);
           }}
@@ -6560,10 +6732,10 @@ function FeedSlot({
           </div>
         </div>
       ) : concept && type === 'history' ? (
-        /* History layout v2 — logo+date top, tags+title+note+stats bottom */
+        /* History layout v2 — logo top, tags+title+date+note+stats bottom */
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minHeight: 0 }}>
-          {/* Top row: logo left + date right */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          {/* Top row: source identity */}
+          <div style={{ display: 'flex', alignItems: 'flex-start' }}>
             {concept.row_kind === 'assignment' ? (
               <img
                 src="/lt-logo.png"
@@ -6576,18 +6748,9 @@ function FeedSlot({
                 <path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001.002.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.329 6.329 0 0 0-5.394 10.692 6.33 6.33 0 0 0 10.857-4.424V8.687a8.182 8.182 0 0 0 4.773 1.526V6.79a4.831 4.831 0 0 1-1.003-.104z"/>
               </svg>
             )}
-            {(() => {
-              const d = result?.published_at ?? result?.produced_at ?? result?.content_loaded_at ?? null;
-              if (!d) return null;
-              return (
-                <span style={{ fontSize: 10, fontWeight: 500, color: hasThumbnail ? 'rgba(255,255,255,0.6)' : LeTrendColors.textMuted, lineHeight: 1 }}>
-                  {new Date(d).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
-                </span>
-              );
-            })()}
           </div>
 
-          {/* Bottom: tags + title + note + StatRow */}
+          {/* Bottom: tags + title + date + note + StatRow */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
             {/* Tag pills */}
             {markers && markers.tags.length > 0 && (
@@ -6619,11 +6782,46 @@ function FeedSlot({
               WebkitBoxOrient: 'vertical' as const,
               textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.5)' : undefined,
             }}>
-              {concept.row_kind === 'imported_history'
-                ? (((concept as Record<string, any>).content?.content_overrides?.script as string | undefined) ?? getStudioCustomerConceptDisplayTitle(concept, details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null))
-                : getStudioCustomerConceptDisplayTitle(concept, details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null)
-              }
+              {historyPrimaryTitle}
             </div>
+            {historyDateLabel && (
+              <div
+                style={{
+                  fontSize: 10,
+                  fontWeight: 500,
+                  color: hasThumbnail ? 'rgba(255,255,255,0.62)' : LeTrendColors.textMuted,
+                  lineHeight: 1.1,
+                  textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.35)' : undefined,
+                }}
+              >
+                {historyDateLabel}
+              </div>
+            )}
+            {concept.row_kind === 'imported_history' && linkedHistoryTitle && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 9.5,
+                  fontWeight: 600,
+                  color: hasThumbnail ? 'rgba(204,251,241,0.88)' : '#0f766e',
+                  lineHeight: 1.35,
+                  textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.45)' : undefined,
+                }}
+              >
+                <span style={{ opacity: 0.72 }}>LeTrend:</span>
+                <span
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {linkedHistoryTitle}
+                </span>
+              </div>
+            )}
             {/* Note preview */}
             {markers?.assignment_note && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -6637,7 +6835,7 @@ function FeedSlot({
                 </span>
               </div>
             )}
-            {/* StatRow: views | likes | comments */}
+            {/* StatRow: views | likes | comments — shown for both LeTrend and TikTok cards when stats are available */}
             {(() => {
               const statItems = [
                 result?.tiktok_views != null ? { key: 'views', value: result.tiktok_views } : null,
@@ -6689,7 +6887,6 @@ function FeedSlot({
           onClick={(e) => { e.stopPropagation(); setShowContextMenu(false); }}
         />
         <div
-          ref={menuRef}
           style={{
             position: 'fixed',
             top: menuPos.top,
@@ -6699,7 +6896,8 @@ function FeedSlot({
             borderRadius: LeTrendRadius.md,
             boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
             zIndex: 100,
-            minWidth: 192,
+            width: 220,
+            maxWidth: 'calc(100vw - 16px)',
             maxHeight: 'min(360px, 55vh)',
             overflowY: 'auto',
           }}
@@ -6779,9 +6977,61 @@ function FeedSlot({
                 Öppna TikTok ↗
               </button>
             )}
+            {linkedHistoryConcept && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenConcept(linkedHistoryConcept.id, ['script', 'instructions', 'fit']);
+                  setShowContextMenu(false);
+                }}
+                style={feedSlotMenuBtnStyle}
+              >
+                Öppna kopplat LeTrend-koncept
+              </button>
+            )}
             {concept.row_kind === 'assignment' && (
               <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
                 {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
+              </button>
+            )}
+            {concept.row_kind === 'imported_history' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (concept.reconciliation.is_reconciled) {
+                    void handleUndoLinkedHistory();
+                    return;
+                  }
+                  void handleMarkHistoryAsLeTrend();
+                }}
+                disabled={savingReconciliation}
+                style={{
+                  ...feedSlotMenuBtnStyle,
+                  opacity: savingReconciliation ? 0.6 : 1,
+                  cursor: savingReconciliation ? 'default' : 'pointer',
+                }}
+              >
+                {savingReconciliation
+                  ? 'Sparar...'
+                  : concept.reconciliation.is_reconciled
+                    ? 'Markera som TikTok'
+                    : 'Markera som LeTrend'}
+              </button>
+            )}
+            {concept.row_kind === 'imported_history' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowReconciliationPicker((prev) => !prev);
+                  if (!selectedReconciliationTargetId) {
+                    setSelectedReconciliationTargetId(
+                      linkedHistoryConcept?.id ?? effectiveNowSlotTarget?.id ?? ''
+                    );
+                  }
+                }}
+                style={feedSlotMenuBtnStyle}
+              >
+                {showReconciliationPicker ? 'Dölj konceptval' : 'Välj LeTrend-koncept...'}
               </button>
             )}
             <button onClick={(e) => { e.stopPropagation(); setEditingTikTok(p => !p); }} style={feedSlotMenuBtnStyle}>
@@ -6799,6 +7049,70 @@ function FeedSlot({
               {editingPublishedDate ? 'Avbryt' : result?.published_at ? 'Redigera publicerat datum' : 'Sätt publicerat datum'}
             </button>
           </>)}
+
+          {showReconciliationPicker && type === 'history' && concept.row_kind === 'imported_history' && (
+            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8, display: 'grid', gap: 8 }}>
+              <div style={{ fontSize: 11, color: LeTrendColors.textSecondary, lineHeight: 1.5 }}>
+                {effectiveNowSlotTitle
+                  ? `Nu-slot används normalt som default: ${effectiveNowSlotTitle}. Välj annat koncept bara om uppladdningen inte gäller nu-slotten.`
+                  : 'Inget aktivt nu-slot-koncept hittades. Välj LeTrend-koncept manuellt om klippet ska behandlas som LeTrend.'}
+              </div>
+              <select
+                value={selectedReconciliationTargetId}
+                onChange={(e) => setSelectedReconciliationTargetId(e.target.value)}
+                style={{
+                  width: '100%',
+                  border: `1px solid ${LeTrendColors.border}`,
+                  borderRadius: LeTrendRadius.sm,
+                  padding: 6,
+                  fontSize: 12,
+                  background: '#fff',
+                }}
+              >
+                <option value="">Välj LeTrend-koncept...</option>
+                {selectableHistoryTargets.map((target) => {
+                  const targetDetails = getWorkspaceConceptDetails(target, getConceptDetails) ?? null;
+                  const targetTitle = getStudioCustomerConceptDisplayTitle(
+                    target,
+                    targetDetails?.headline_sv?.substring(0, 60) ?? targetDetails?.headline ?? null
+                  );
+                  return (
+                    <option key={target.id} value={target.id}>
+                      {`${targetTitle} · ${getStudioFeedOrderLabel(target.placement.feed_order)}`}
+                    </option>
+                  );
+                })}
+              </select>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleSaveHistoryReconciliation();
+                }}
+                disabled={!selectedReconciliationTargetId || savingReconciliation}
+                style={{
+                  width: '100%',
+                  padding: 6,
+                  border: 'none',
+                  borderRadius: LeTrendRadius.sm,
+                  background:
+                    !selectedReconciliationTargetId || savingReconciliation
+                      ? 'rgba(107,68,35,0.35)'
+                      : '#0f766e',
+                  color: 'white',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor:
+                    !selectedReconciliationTargetId || savingReconciliation ? 'default' : 'pointer',
+                }}
+              >
+                {savingReconciliation
+                  ? 'Sparar koppling...'
+                  : concept.reconciliation.is_reconciled
+                    ? 'Spara ny koppling'
+                    : 'Spara koppling'}
+              </button>
+            </div>
+          )}
 
           {/* Shared: tag picker (kommande + nu only) */}
           {showTagPicker && type !== 'history' && (

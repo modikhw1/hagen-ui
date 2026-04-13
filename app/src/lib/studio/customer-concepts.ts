@@ -100,6 +100,9 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
   const tiktokComments = readNumber(row.tiktok_comments);
   const tiktokWatchTimeSeconds = readNumber(row.tiktok_watch_time_seconds);
   const tiktokLastSyncedAt = readString(row.tiktok_last_synced_at);
+  const reconciledCustomerConceptId = readString(row.reconciled_customer_concept_id);
+  const reconciledByCmId = readString(row.reconciled_by_cm_id);
+  const reconciledAt = readString(row.reconciled_at);
 
   const normalizedConcept = {
     ...row,
@@ -119,6 +122,9 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
     tiktok_comments: tiktokComments,
     tiktok_watch_time_seconds: tiktokWatchTimeSeconds,
     tiktok_last_synced_at: tiktokLastSyncedAt,
+    reconciled_customer_concept_id: reconciledCustomerConceptId,
+    reconciled_by_cm_id: reconciledByCmId,
+    reconciled_at: reconciledAt,
     content_overrides: normalizedContentOverrides,
     feed_order: feedOrder,
     tags,
@@ -164,6 +170,12 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
       tiktok_comments: tiktokComments,
       tiktok_watch_time_seconds: tiktokWatchTimeSeconds,
       tiktok_last_synced_at: tiktokLastSyncedAt,
+    },
+    reconciliation: {
+      linked_customer_concept_id: reconciledCustomerConceptId,
+      linked_by_cm_id: reconciledByCmId,
+      linked_at: reconciledAt,
+      is_reconciled: Boolean(reconciledCustomerConceptId),
     },
     markers: {
       tags,

@@ -1,33 +1,15 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
-import { buildMarkProducedPayload } from '@/lib/customer-concept-lifecycle';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
+import { performMarkProduced } from '@/lib/studio/perform-mark-produced';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/studio-v2/feed/mark-produced
 //
 // Marks the current nu concept (feed_order 0) as produced and advances
-// the planning window. Uses the same two-phase strategy as advance-plan:
-//
-//   Phase 1 — shift ALL other LeTrend rows (concept_id IS NOT NULL,
-//              id != produced_id, feed_order IS NOT NULL) by -1:
-//     +1 (kommande)  →  0  (new nu)
-//     +2             → +1
-//     -1 (historik)  → -2  (pushed deeper, no pile-up)
-//
-//   Phase 2 — shift ALL imported-history rows (concept_id IS NULL,
-//              feed_order < 0) by -1:
-//     -1 (newest TikTok) → -2
-//     -2                 → -3
-//     (prevents collision: Phase 1 produced row lands at -1;
-//      without Phase 2 the TikTok row already at -1 would collide)
-//
-//   Phase 3 — update the produced row: set metadata + feed_order = -1
-//     (most-recent historik position, directly adjacent to the new nu)
-//
-// This guarantees LeTrend historik always sits closer to nu than imported
-// TikTok history — the same invariant maintained by advance-plan.
+// the planning window. Delegates to performMarkProduced (three-phase logic
+// shared with the cron auto-advance path).
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const POST = withAuth(async (request) => {
@@ -46,92 +28,21 @@ export const POST = withAuth(async (request) => {
     return NextResponse.json({ error: 'customer_id is required' }, { status: 400 });
   }
 
-  // ── Phase 1: shift all other LeTrend rows by -1 ──────────────────────────
-  // Scope: concept_id IS NOT NULL (LeTrend-managed), id != produced row,
-  //        feed_order IS NOT NULL (placed in timeline).
-  // Includes both kommande/nu (≥0) and existing LeTrend historik (<0) so that
-  // historik remains internally ordered across repeated advances.
-  const { data: letrEndRows, error: letrEndFetchError } = await supabase
+  const result = await performMarkProduced(supabase, {
+    customerId,
+    conceptId,
+    tiktok_url: typeof body?.tiktok_url === 'string' ? body.tiktok_url : null,
+    published_at: clipPublishedAt,
+    now,
+  });
+
+  if (!result.success) {
+    return NextResponse.json({ error: result.error }, { status: 500 });
+  }
+
+  // Fetch the produced row to return a normalized concept in the response.
+  const { data, error: fetchError } = await supabase
     .from('customer_concepts')
-    .select('id, feed_order')
-    .eq('customer_profile_id', customerId)
-    .not('concept_id', 'is', null)
-    .neq('id', conceptId)
-    .not('feed_order', 'is', null);
-
-  if (letrEndFetchError) {
-    return NextResponse.json({ error: letrEndFetchError.message }, { status: 500 });
-  }
-
-  const letrEndToShift = (letrEndRows ?? []).filter(
-    (r): r is { id: string; feed_order: number } =>
-      typeof r.id === 'string' && typeof r.feed_order === 'number'
-  );
-
-  if (letrEndToShift.length > 0) {
-    const shiftResults = await Promise.all(
-      letrEndToShift.map((r) =>
-        supabase
-          .from('customer_concepts')
-          .update({ feed_order: r.feed_order - 1 })
-          .eq('id', r.id)
-      )
-    );
-    const shiftErrors = shiftResults.map((r) => r.error).filter(Boolean);
-    if (shiftErrors.length > 0) {
-      return NextResponse.json(
-        { error: shiftErrors[0]?.message ?? 'LeTrend shift failed' },
-        { status: 500 }
-      );
-    }
-  }
-
-  // ── Phase 2: shift imported-history rows by -1 ────────────────────────────
-  // Prevents collision with the produced row that is about to land at -1.
-  const { data: importedRows, error: importedFetchError } = await supabase
-    .from('customer_concepts')
-    .select('id, feed_order')
-    .eq('customer_profile_id', customerId)
-    .is('concept_id', null)
-    .lt('feed_order', 0);
-
-  if (importedFetchError) {
-    return NextResponse.json({ error: importedFetchError.message }, { status: 500 });
-  }
-
-  const importedToShift = (importedRows ?? []).filter(
-    (r): r is { id: string; feed_order: number } =>
-      typeof r.id === 'string' && typeof r.feed_order === 'number'
-  );
-
-  if (importedToShift.length > 0) {
-    const importedShiftResults = await Promise.all(
-      importedToShift.map((r) =>
-        supabase
-          .from('customer_concepts')
-          .update({ feed_order: r.feed_order - 1 })
-          .eq('id', r.id)
-      )
-    );
-    const importedShiftErrors = importedShiftResults.map((r) => r.error).filter(Boolean);
-    if (importedShiftErrors.length > 0) {
-      return NextResponse.json(
-        { error: importedShiftErrors[0]?.message ?? 'TikTok history shift failed' },
-        { status: 500 }
-      );
-    }
-  }
-
-  // ── Phase 3: stamp the produced row at feed_order -1 ─────────────────────
-  // feed_order -1 = most-recent historik slot, adjacent to the new nu (0).
-  const { data, error } = await supabase
-    .from('customer_concepts')
-    .update({
-      ...buildMarkProducedPayload({ tiktok_url: body?.tiktok_url, published_at: clipPublishedAt, now }),
-      feed_order: -1,
-    })
-    .eq('id', conceptId)
-    .eq('customer_profile_id', customerId)
     .select(`
       id,
       customer_profile_id,
@@ -152,6 +63,9 @@ export const POST = withAuth(async (request) => {
       content_loaded_at,
       content_loaded_seen_at,
       published_at,
+      reconciled_customer_concept_id,
+      reconciled_by_cm_id,
+      reconciled_at,
       tiktok_url,
       tiktok_thumbnail_url,
       tiktok_views,
@@ -160,10 +74,12 @@ export const POST = withAuth(async (request) => {
       tiktok_watch_time_seconds,
       tiktok_last_synced_at
     `)
+    .eq('id', conceptId)
+    .eq('customer_profile_id', customerId)
     .maybeSingle();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
   }
 
   if (!data) {
@@ -173,7 +89,7 @@ export const POST = withAuth(async (request) => {
   return NextResponse.json({
     success: true,
     concept: normalizeStudioCustomerConcept(data),
-    letrend_shifted: letrEndToShift.length,
-    imported_shifted: importedToShift.length,
+    letrend_shifted: result.letrend_shifted,
+    imported_shifted: result.imported_shifted,
   });
 }, ['admin', 'content_manager']);

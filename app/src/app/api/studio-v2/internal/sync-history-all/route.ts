@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { fetchProviderVideos, normalizeVideo } from '@/lib/studio/tiktok-provider';
 import { importClipsForCustomer } from '@/lib/studio/history-import';
+import { autoReconcileAndAdvance } from '@/lib/studio/auto-reconcile';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/studio-v2/internal/sync-history-all
@@ -131,6 +132,10 @@ export const POST = async (request: NextRequest): Promise<NextResponse> => {
       const { imported } = await importClipsForCustomer(supabase, customer.id, clips);
 
       if (imported > 0) {
+        // Auto-match: link newest imported clip to nu-slot concept and advance plan.
+        // If there is no nu-slot (or all clips are already reconciled), the motor
+        // signal written by importClipsForCustomer remains as a CM nudge instead.
+        await autoReconcileAndAdvance(supabase, customer.id);
         signaled++;
       } else {
         skipped++;

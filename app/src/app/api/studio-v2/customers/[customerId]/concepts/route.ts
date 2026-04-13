@@ -29,6 +29,9 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
       content_loaded_at,
       content_loaded_seen_at,
       published_at,
+      reconciled_customer_concept_id,
+      reconciled_by_cm_id,
+      reconciled_at,
       tiktok_url,
       tiktok_thumbnail_url,
       tiktok_views,
@@ -44,7 +47,54 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ concepts: (data || []).map((row) => normalizeStudioCustomerConcept(row)) });
+  const rawData = data || [];
+
+  // ── Build a lookup: letrend_concept_id → reconciled imported row ──────────
+  // Used to inject live TikTok stats (views, likes, thumbnail) from the
+  // imported clip into the LeTrend history card at read-time. This keeps stats
+  // fresh — cron refreshes the imported row; LeTrend card always reflects it.
+  const reconciledByTarget = new Map<string, typeof rawData[number]>();
+  for (const row of rawData) {
+    if (!row.concept_id && row.reconciled_customer_concept_id) {
+      reconciledByTarget.set(row.reconciled_customer_concept_id, row);
+    }
+  }
+
+  // ── Filter + enrich ────────────────────────────────────────────────────────
+  // • LeTrend rows (concept_id IS NOT NULL): always kept; history rows enriched
+  //   with TikTok stats from their reconciled imported sibling when available.
+  // • Imported rows (concept_id IS NULL): kept only when unreconciled. Reconciled
+  //   imported rows are hidden from the grid — their identity is carried by the
+  //   enriched LeTrend history card instead.
+  const enrichedData = rawData
+    .filter((row) => {
+      if (row.concept_id) return true;
+      return !row.reconciled_customer_concept_id;
+    })
+    .map((row) => {
+      if (
+        row.concept_id &&
+        typeof row.feed_order === 'number' &&
+        row.feed_order < 0
+      ) {
+        const importedStats = reconciledByTarget.get(row.id as string);
+        if (importedStats) {
+          return {
+            ...row,
+            tiktok_url: importedStats.tiktok_url ?? row.tiktok_url,
+            tiktok_thumbnail_url: importedStats.tiktok_thumbnail_url ?? row.tiktok_thumbnail_url,
+            tiktok_views: importedStats.tiktok_views ?? row.tiktok_views,
+            tiktok_likes: importedStats.tiktok_likes ?? row.tiktok_likes,
+            tiktok_comments: importedStats.tiktok_comments ?? row.tiktok_comments,
+            tiktok_watch_time_seconds: importedStats.tiktok_watch_time_seconds ?? row.tiktok_watch_time_seconds,
+            tiktok_last_synced_at: importedStats.tiktok_last_synced_at ?? row.tiktok_last_synced_at,
+          };
+        }
+      }
+      return row;
+    });
+
+  return NextResponse.json({ concepts: enrichedData.map((row) => normalizeStudioCustomerConcept(row)) });
 }, ['admin', 'content_manager']);
 
 export const POST = withAuth(async (request, user, { params }: { params: Promise<{ customerId: string }> }) => {

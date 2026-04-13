@@ -458,6 +458,9 @@ export type Database = {
           planned_publish_at: string | null
           produced_at: string | null
           published_at: string | null
+          reconciled_at: string | null
+          reconciled_by_cm_id: string | null
+          reconciled_customer_concept_id: string | null
           sent_at: string | null
           status: string | null
           tags: string[] | null
@@ -499,6 +502,9 @@ export type Database = {
           planned_publish_at?: string | null
           produced_at?: string | null
           published_at?: string | null
+          reconciled_at?: string | null
+          reconciled_by_cm_id?: string | null
+          reconciled_customer_concept_id?: string | null
           sent_at?: string | null
           status?: string | null
           tags?: string[] | null
@@ -540,6 +546,9 @@ export type Database = {
           planned_publish_at?: string | null
           produced_at?: string | null
           published_at?: string | null
+          reconciled_at?: string | null
+          reconciled_by_cm_id?: string | null
+          reconciled_customer_concept_id?: string | null
           sent_at?: string | null
           status?: string | null
           tags?: string[] | null
@@ -566,6 +575,20 @@ export type Database = {
             columns: ["concept_id"]
             isOneToOne: false
             referencedRelation: "concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_concepts_reconciled_by_cm_id_fkey"
+            columns: ["reconciled_by_cm_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_concepts_reconciled_customer_concept_id_fkey"
+            columns: ["reconciled_customer_concept_id"]
+            isOneToOne: false
+            referencedRelation: "customer_concepts"
             referencedColumns: ["id"]
           },
           {

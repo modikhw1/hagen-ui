@@ -74,6 +74,13 @@ export interface CustomerConceptResultBoundary {
   tiktok_last_synced_at: string | null;
 }
 
+export interface CustomerConceptReconciliationBoundary {
+  linked_customer_concept_id: string | null;
+  linked_by_cm_id: string | null;
+  linked_at: string | null;
+  is_reconciled: boolean;
+}
+
 export interface CustomerConceptMarkerBoundary {
   tags: string[];
   collection_id: string | null;
@@ -106,6 +113,9 @@ interface CustomerConceptBase {
   tiktok_comments: number | null;
   tiktok_watch_time_seconds: number | null;
   tiktok_last_synced_at: string | null;
+  reconciled_customer_concept_id: string | null;
+  reconciled_by_cm_id: string | null;
+  reconciled_at: string | null;
   content_overrides: ConceptContentOverrides | null;
 
   // Feed planner
@@ -127,6 +137,7 @@ interface CustomerConceptBase {
   content: CustomerConceptContentBoundary;
   placement: CustomerConceptPlacementBoundary;
   result: CustomerConceptResultBoundary;
+  reconciliation: CustomerConceptReconciliationBoundary;
   markers: CustomerConceptMarkerBoundary;
 }
 
@@ -405,6 +416,9 @@ export interface UpdateConceptRequest {
   tiktok_comments?: number | null;
   tiktok_watch_time_seconds?: number | null;
   tiktok_last_synced_at?: string | null;
+  reconciled_customer_concept_id?: string | null;
+  reconciled_by_cm_id?: string | null;
+  reconciled_at?: string | null;
   status?: CustomerConceptAssignmentStatus;
   feed_order?: number | null;
   tags?: string[];
