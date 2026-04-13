@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { motorSignalNewEvidence } from '@/lib/studio/motor-signal';
+import { autoReconcileAndAdvance } from '@/lib/studio/auto-reconcile';
 import {
   fetchProviderVideos,
   normalizeVideo,
@@ -336,6 +337,12 @@ export const POST = withAuth(
       .from('customer_profiles')
       .update({ last_history_sync_at: new Date().toISOString(), ...motorFields })
       .eq('id', customerId);
+
+    // Auto-match: link newest imported clip to nu-slot concept and advance plan.
+    // Same logic as the cron path — ensures first-visit fetch behaves identically.
+    if (importedCount > 0) {
+      await autoReconcileAndAdvance(supabase, customerId);
+    }
 
     return NextResponse.json({
       fetched,
