@@ -391,6 +391,8 @@ export type Database = {
           is_active: boolean | null
           overrides: Json | null
           previous_version: Json | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           source: string
           updated_at: string | null
           version: number | null
@@ -403,6 +405,8 @@ export type Database = {
           is_active?: boolean | null
           overrides?: Json | null
           previous_version?: Json | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           source: string
           updated_at?: string | null
           version?: number | null
@@ -415,6 +419,8 @@ export type Database = {
           is_active?: boolean | null
           overrides?: Json | null
           previous_version?: Json | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           source?: string
           updated_at?: string | null
           version?: number | null
@@ -423,6 +429,13 @@ export type Database = {
           {
             foreignKeyName: "concepts_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concepts_reviewed_by_fkey"
+            columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]

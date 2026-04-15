@@ -10,21 +10,21 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 import { translateClipToConcept, type BackendClip, type TranslatedConcept, type ClipOverride } from './translator';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Create Supabase client (uses anon key for client-side, service key for server-side)
+// Create Supabase client.
+// Client-side: use createBrowserClient (reads auth cookies → satisfies RLS).
+// Server-side: use service role key if available, otherwise anon.
 function getSupabaseClient() {
   if (typeof window !== 'undefined') {
-    // Client-side: use anon key
-    return createClient(supabaseUrl, supabaseAnonKey);
-  } else {
-    // Server-side: prefer service key if available
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    return createClient(supabaseUrl, serviceKey || supabaseAnonKey);
+    return createBrowserClient(supabaseUrl, supabaseAnonKey);
   }
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return createClient(supabaseUrl, serviceKey || supabaseAnonKey);
 }
 
 /**
@@ -45,14 +45,129 @@ export async function loadConcepts(): Promise<TranslatedConcept[]> {
       return [];
     }
 
-    // Transform database rows to TranslatedConcept format
+    // Transform database rows to TranslatedConcept format.
+    // Use the Supabase row id (not backend_data.id) so that lookups keyed on
+    // customer_concepts.concept_id (which is concepts.id, a UUID) resolve correctly.
     return concepts.map(row => {
       const clip = row.backend_data as BackendClip;
       const override = row.overrides as ClipOverride;
-      return translateClipToConcept(clip, override);
+      const translated = translateClipToConcept(clip, override);
+      return { ...translated, id: row.id as string };
     });
   } catch (error) {
     console.error('[conceptLoaderDB] Fatal error:', error);
+    return [];
+  }
+}
+
+/**
+ * Load active concepts created by a specific CM.
+ */
+export async function loadMyConcepts(userId: string): Promise<TranslatedConcept[]> {
+  if (!userId) return [];
+
+  try {
+    const supabase = getSupabaseClient();
+
+    const { data: concepts, error } = await supabase
+      .from('concepts')
+      .select('*')
+      .eq('is_active', true)
+      .eq('created_by', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[conceptLoaderDB] Error loading my concepts:', error);
+      return [];
+    }
+
+    return concepts.map(row => {
+      const clip = row.backend_data as BackendClip;
+      const override = row.overrides as ClipOverride;
+      const translated = translateClipToConcept(clip, override);
+      return { ...translated, id: row.id as string };
+    });
+  } catch (error) {
+    console.error('[conceptLoaderDB] Fatal error in loadMyConcepts:', error);
+    return [];
+  }
+}
+
+/**
+ * Load concepts most recently assigned to the current CM's customers.
+ */
+export async function loadRecentlyAssigned(userId: string): Promise<TranslatedConcept[]> {
+  if (!userId) return [];
+
+  try {
+    const supabase = getSupabaseClient();
+
+    const { data: customers, error: customerError } = await supabase
+      .from('customer_profiles')
+      .select('id')
+      .eq('account_manager_profile_id', userId);
+
+    if (customerError) {
+      console.error('[conceptLoaderDB] Error loading CM customers:', customerError);
+      return [];
+    }
+
+    const customerIds = (customers || [])
+      .map(row => row.id as string)
+      .filter(Boolean);
+
+    if (customerIds.length === 0) {
+      return [];
+    }
+
+    const { data: assignments, error: assignmentError } = await supabase
+      .from('customer_concepts')
+      .select('concept_id, created_at')
+      .in('customer_profile_id', customerIds)
+      .order('created_at', { ascending: false });
+
+    if (assignmentError) {
+      console.error('[conceptLoaderDB] Error loading recent assignments:', assignmentError);
+      return [];
+    }
+
+    const recentConceptIds = Array.from(
+      new Set(
+        (assignments || [])
+          .map(row => row.concept_id as string)
+          .filter(Boolean)
+      )
+    );
+
+    if (recentConceptIds.length === 0) {
+      return [];
+    }
+
+    const { data: concepts, error: conceptsError } = await supabase
+      .from('concepts')
+      .select('*')
+      .in('id', recentConceptIds)
+      .eq('is_active', true);
+
+    if (conceptsError) {
+      console.error('[conceptLoaderDB] Error loading recently assigned concepts:', conceptsError);
+      return [];
+    }
+
+    const conceptMap = new Map(
+      (concepts || []).map(row => {
+        const clip = row.backend_data as BackendClip;
+        const override = row.overrides as ClipOverride;
+        const translated = translateClipToConcept(clip, override);
+        return [row.id as string, { ...translated, id: row.id as string }];
+      })
+    );
+
+    return recentConceptIds
+      .map(id => conceptMap.get(id))
+      .filter((concept): concept is TranslatedConcept => Boolean(concept));
+  } catch (error) {
+    console.error('[conceptLoaderDB] Fatal error in loadRecentlyAssigned:', error);
     return [];
   }
 }
@@ -88,7 +203,7 @@ export async function loadConceptById(id: string): Promise<TranslatedConcept | u
 /**
  * Get raw concepts (for admin/debug)
  */
-export async function getRawConcepts(): Promise<any[]> {
+export async function getRawConcepts(): Promise<unknown[]> {
   try {
     const supabase = getSupabaseClient();
 

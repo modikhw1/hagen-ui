@@ -9,11 +9,12 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
  * GET /api/admin/concepts
  * List all concepts
  */
-export const GET = withAuth(async (request: NextRequest, user) => {
+export const GET = withAuth(async (request: NextRequest, _user) => {
   try {
     const { searchParams } = new URL(request.url);
     const source = searchParams.get('source'); // Filter by source (hagen, cm_created)
     const isActive = searchParams.get('is_active'); // Filter by active status
+    const createdBy = searchParams.get('created_by'); // Filter by creator CM
     const limit = parseInt(searchParams.get('limit') || '100');
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
@@ -32,6 +33,10 @@ export const GET = withAuth(async (request: NextRequest, user) => {
       query = query.eq('is_active', isActive === 'true');
     }
 
+    if (createdBy) {
+      query = query.eq('created_by', createdBy);
+    }
+
     const { data: concepts, error } = await query;
 
     if (error) {
@@ -39,9 +44,10 @@ export const GET = withAuth(async (request: NextRequest, user) => {
     }
 
     return NextResponse.json({ concepts: concepts || [] });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[concepts] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }, ['admin', 'content_manager']);
 
@@ -78,12 +84,27 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       .single();
 
     if (error) {
+      if (error.code === '23505') {
+        const { data: existingConcept, error: existingError } = await supabaseAdmin
+          .from('concepts')
+          .select('*')
+          .eq('id', id)
+          .single();
+
+        if (existingError) {
+          return NextResponse.json({ error: existingError.message }, { status: 500 });
+        }
+
+        return NextResponse.json({ concept: existingConcept, reused: true });
+      }
+
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
     return NextResponse.json({ concept });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[concepts] POST error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }, ['admin', 'content_manager']);

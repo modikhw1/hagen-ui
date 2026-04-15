@@ -18,11 +18,11 @@ interface UploadConceptModalProps {
 
 type JsonRecord = Record<string, unknown>;
 
-type UploadStep = 'idle' | 'uploading' | 'analyzing' | 'saving';
+type UploadStep = 'idle' | 'analyzing' | 'enriching' | 'saving';
 
 const STEPS: Array<{ key: Exclude<UploadStep, 'idle'>; label: string }> = [
-  { key: 'uploading', label: 'Laddar upp' },
-  { key: 'analyzing', label: 'Analyserar' },
+  { key: 'analyzing', label: 'Laddar upp och analyserar' },
+  { key: 'enriching', label: 'Förädlar' },
   { key: 'saving', label: 'Sparar' },
 ];
 
@@ -46,25 +46,12 @@ async function readJsonResponse(response: Response) {
     stage?: string;
     upload?: { gcsUri?: string };
     analysis?: JsonRecord;
+    overrides?: Record<string, unknown>;
     concept?: { id?: string };
   };
 }
 
-function getNestedString(record: JsonRecord, path: string[]) {
-  let current: unknown = record;
-
-  for (const segment of path) {
-    if (!current || typeof current !== 'object' || !(segment in current)) {
-      return '';
-    }
-
-    current = (current as Record<string, unknown>)[segment];
-  }
-
-  return typeof current === 'string' ? current : '';
-}
-
-function getNestedRecord(record: JsonRecord, path: string[]): JsonRecord | null {
+function getNestedRecord(record: JsonRecord, path: string[]) {
   let current: unknown = record;
 
   for (const segment of path) {
@@ -78,15 +65,33 @@ function getNestedRecord(record: JsonRecord, path: string[]): JsonRecord | null 
   return current && typeof current === 'object' ? (current as JsonRecord) : null;
 }
 
-function getFirstNestedString(record: JsonRecord, paths: string[][]) {
+function getFirstString(record: JsonRecord, paths: string[][]) {
   for (const path of paths) {
-    const value = getNestedString(record, path);
-    if (value) {
-      return value;
+    let current: unknown = record;
+
+    for (const segment of path) {
+      if (!current || typeof current !== 'object' || !(segment in current)) {
+        current = null;
+        break;
+      }
+      current = (current as JsonRecord)[segment];
+    }
+
+    if (typeof current === 'string' && current.trim()) {
+      return current.trim();
     }
   }
 
   return '';
+}
+
+function slugFromVideo(videoUrl: string, fallback: string) {
+  const urlSegments = videoUrl.split('/').filter(Boolean);
+  return (
+    urlSegments[urlSegments.length - 1]?.replace(/[^a-zA-Z0-9_-]/g, '') ||
+    fallback.replace(/[^a-zA-Z0-9_-]/g, '') ||
+    Date.now().toString()
+  );
 }
 
 export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConceptModalProps) {
@@ -123,13 +128,9 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
     }
 
     setError(null);
-    let analyzeStepTimer: ReturnType<typeof setTimeout> | null = null;
 
     try {
-      setStep('uploading');
-      analyzeStepTimer = setTimeout(() => {
-        setStep((current) => (current === 'uploading' ? 'analyzing' : current));
-      }, 1200);
+      setStep('analyzing');
 
       const analyzeRes = await fetch('/api/studio/concepts/analyze', {
         method: 'POST',
@@ -144,39 +145,57 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         throw new Error(analyzePayload.error || 'Upload eller analys misslyckades');
       }
 
-      setStep('analyzing');
-      const gcsUri =
-        typeof analyzePayload.upload?.gcsUri === 'string' && analyzePayload.upload.gcsUri.trim()
-          ? analyzePayload.upload.gcsUri.trim()
-          : undefined;
       const analyzeEnvelope = analyzePayload.analysis;
-
       if (!analyzeEnvelope) {
         throw new Error('Analysen returnerade inget resultat.');
       }
 
       const analyzeData = getNestedRecord(analyzeEnvelope, ['analysis']) || analyzeEnvelope;
+      const gcsUri =
+        typeof analyzePayload.upload?.gcsUri === 'string' && analyzePayload.upload.gcsUri.trim()
+          ? analyzePayload.upload.gcsUri.trim()
+          : undefined;
 
-      if (analyzeStepTimer) {
-        clearTimeout(analyzeStepTimer);
-        analyzeStepTimer = null;
+      const baseId = getFirstString(analyzeData, [['videoId'], ['id']]);
+      const conceptId = `clip-${slugFromVideo(videoUrl, baseId)}`;
+      const backendData = {
+        ...analyzeData,
+        id: conceptId,
+        url: videoUrl,
+        source_url: videoUrl,
+        platform: platform?.key,
+        ...(gcsUri ? { gcs_uri: gcsUri } : {}),
+      };
+
+      setStep('enriching');
+      const enrichRes = await fetch('/api/studio/concepts/enrich', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          backend_data: backendData,
+        }),
+      });
+      const enrichPayload = await readJsonResponse(enrichRes);
+      if (!enrichRes.ok) {
+        throw new Error(enrichPayload.error || 'Kunde inte förädla konceptet');
       }
 
-      setStep('saving');
-      const headline =
-        getFirstNestedString(analyzeData, [
-          ['title'],
-          ['headline'],
+      const fallbackHeadline =
+        getFirstString(analyzeData, [
           ['script', 'conceptCore'],
           ['content', 'topic'],
           ['content', 'keyMessage'],
+          ['visual_analysis', 'content', 'headline'],
+          ['visual_analysis', 'content', 'conceptCore'],
           ['visual_analysis', 'content', 'keyMessage'],
         ]) || 'Nytt koncept';
-      const urlSegments = videoUrl.split('/').filter(Boolean);
-      const videoIdSegment =
-        urlSegments[urlSegments.length - 1]?.replace(/[^a-zA-Z0-9_-]/g, '') || Date.now().toString();
-      const conceptId = `clip-${videoIdSegment}`;
 
+      const overrides = {
+        headline_sv: fallbackHeadline,
+        ...enrichPayload.overrides,
+      };
+
+      setStep('saving');
       const saveRes = await fetch('/api/admin/concepts', {
         method: 'POST',
         headers: {
@@ -184,28 +203,8 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         },
         body: JSON.stringify({
           id: conceptId,
-          backend_data: {
-            ...analyzeData,
-            url: videoUrl,
-            source_url: videoUrl,
-            platform: platform?.key,
-            ...(gcsUri ? { gcs_uri: gcsUri } : {}),
-          },
-          overrides: {
-            headline_sv: headline,
-            description_sv: getFirstNestedString(analyzeData, [
-              ['content', 'keyMessage'],
-              ['visual_analysis', 'content', 'keyMessage'],
-            ]),
-            whyItWorks_sv: getFirstNestedString(analyzeData, [
-              ['script', 'humor', 'humorMechanism'],
-              ['humor_analysis', 'why'],
-            ]),
-            script_sv: getFirstNestedString(analyzeData, [
-              ['script', 'transcript'],
-              ['visual_analysis', 'script', 'transcript'],
-            ]),
-          },
+          backend_data: backendData,
+          overrides,
         }),
       });
       const saveData = await readJsonResponse(saveRes);
@@ -216,10 +215,12 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
       reset();
       onSuccess(saveData.concept?.id || conceptId);
     } catch (err) {
-      if (analyzeStepTimer) {
-        clearTimeout(analyzeStepTimer);
-      }
-      setError(err instanceof Error ? err.message : 'Nagot gick fel');
+      const message = err instanceof Error ? err.message : 'Nagot gick fel';
+      setError(
+        message.toLowerCase().includes('tog for lang tid')
+          ? `${message} Forsok igen med samma URL eller prova igen om en stund.`
+          : message
+      );
       setStep('idle');
     }
   };
@@ -278,7 +279,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
                 fontSize: LeTrendTypography.fontSize.sm,
               }}
             >
-              Klistra in en video-URL for att ladda upp och analysera.
+              Klistra in en video-URL for att ladda upp, analysera och skapa ett granskningsklart koncept.
             </p>
           </div>
           <button
@@ -349,58 +350,71 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         </div>
 
         {busy ? (
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-            {STEPS.map((currentStep, index) => {
-              const isActive = currentStep.key === step;
-              const isDone = stepIndex > index;
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+              {STEPS.map((currentStep, index) => {
+                const isActive = currentStep.key === step;
+                const isDone = stepIndex > index;
 
-              return (
-                <div key={currentStep.key} style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      height: 4,
-                      borderRadius: 999,
-                      background: isDone
-                        ? LeTrendColors.success
-                        : isActive
-                          ? LeTrendColors.brownLight
-                          : LeTrendColors.surfaceLight,
-                      marginBottom: 6,
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {isActive ? (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          background: `linear-gradient(90deg, transparent, ${LeTrendColors.cream}, transparent)`,
-                          animation: 'uploadShimmer 1.4s infinite',
-                          opacity: 0.45,
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                  <div
-                    style={{
-                      textAlign: 'center',
-                      fontSize: LeTrendTypography.fontSize.xs,
-                      color: isActive
-                        ? LeTrendColors.brownDark
-                        : isDone
+                return (
+                  <div key={currentStep.key} style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        height: 4,
+                        borderRadius: 999,
+                        background: isDone
                           ? LeTrendColors.success
-                          : LeTrendColors.textMuted,
-                      fontWeight: isActive
-                        ? LeTrendTypography.fontWeight.bold
-                        : LeTrendTypography.fontWeight.medium,
-                    }}
-                  >
-                    {currentStep.label}
+                          : isActive
+                            ? LeTrendColors.brownLight
+                            : LeTrendColors.surfaceLight,
+                        marginBottom: 6,
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {isActive ? (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: `linear-gradient(90deg, transparent, ${LeTrendColors.cream}, transparent)`,
+                            animation: 'uploadShimmer 1.4s infinite',
+                            opacity: 0.45,
+                          }}
+                        />
+                      ) : null}
+                    </div>
+                    <div
+                      style={{
+                        textAlign: 'center',
+                        fontSize: LeTrendTypography.fontSize.xs,
+                        color: isActive
+                          ? LeTrendColors.brownDark
+                          : isDone
+                            ? LeTrendColors.success
+                            : LeTrendColors.textMuted,
+                        fontWeight: isActive
+                          ? LeTrendTypography.fontWeight.bold
+                          : LeTrendTypography.fontWeight.medium,
+                      }}
+                    >
+                      {currentStep.label}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+            <div
+              style={{
+                padding: '10px 12px',
+                borderRadius: LeTrendRadius.md,
+                background: LeTrendColors.surface,
+                color: LeTrendColors.textSecondary,
+                fontSize: LeTrendTypography.fontSize.xs,
+              }}
+            >
+              Analys tar vanligtvis 15-30 sekunder. Lat fonstret vara oppet medan videon behandlas.
+            </div>
           </div>
         ) : null}
 
@@ -416,7 +430,27 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
               fontSize: LeTrendTypography.fontSize.sm,
             }}
           >
-            {error}
+            <div>{error}</div>
+            <button
+              type="button"
+              onClick={() => {
+                void handleSubmit();
+              }}
+              disabled={busy || !videoUrl.trim()}
+              style={{
+                marginTop: 10,
+                border: 'none',
+                background: 'none',
+                color: LeTrendColors.error,
+                cursor: busy || !videoUrl.trim() ? 'not-allowed' : 'pointer',
+                fontSize: LeTrendTypography.fontSize.xs,
+                fontWeight: LeTrendTypography.fontWeight.bold,
+                padding: 0,
+                textDecoration: 'underline',
+              }}
+            >
+              Forsok igen
+            </button>
           </div>
         ) : null}
 

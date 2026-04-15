@@ -16,7 +16,7 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     // Validate authentication
-    const user = await validateApiRequest(request, ['admin', 'content_manager']);
+    await validateApiRequest(request, ['admin', 'content_manager']);
 
     const { id } = await params;
 
@@ -40,9 +40,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json({ concept });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[concepts/[id]] GET error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -57,13 +58,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
     const body = await request.json();
-    const { backend_data, overrides, is_active, change_summary } = body;
+    const { backend_data, overrides, is_active, reviewed, change_summary } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Concept ID required' }, { status: 400 });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    const reviewedFields =
+      reviewed === undefined
+        ? {}
+        : reviewed
+          ? {
+              reviewed_at: new Date().toISOString(),
+              reviewed_by: user.id,
+            }
+          : {
+              reviewed_at: null,
+              reviewed_by: null,
+            };
 
     // If updating backend_data or overrides, use the version function
     if (backend_data || overrides) {
@@ -92,16 +106,49 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      return NextResponse.json({ concept: data });
+      if (is_active === undefined && reviewed === undefined) {
+        return NextResponse.json({ concept: data });
+      }
+
+      const postVersionUpdate: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+        ...reviewedFields,
+      };
+
+      if (is_active !== undefined) {
+        postVersionUpdate.is_active = is_active;
+        if (is_active === true && reviewed === undefined) {
+          postVersionUpdate.reviewed_at = new Date().toISOString();
+          postVersionUpdate.reviewed_by = user.id;
+        }
+      }
+
+      const { data: updatedConcept, error: updateError } = await supabaseAdmin
+        .from('concepts')
+        .update(postVersionUpdate)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ concept: updatedConcept });
     }
 
     // Simple update (e.g., is_active toggle)
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
+      ...reviewedFields,
     };
 
     if (is_active !== undefined) {
       updateData.is_active = is_active;
+      if (is_active === true && reviewed === undefined) {
+        updateData.reviewed_at = new Date().toISOString();
+        updateData.reviewed_by = user.id;
+      }
     }
 
     const { data: concept, error } = await supabaseAdmin
@@ -116,9 +163,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json({ concept });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[concepts/[id]] PUT error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -129,7 +177,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     // Validate authentication (only admin can delete)
-    const user = await validateApiRequest(request, ['admin']);
+    await validateApiRequest(request, ['admin']);
 
     const { id } = await params;
 
@@ -162,8 +210,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('[concepts/[id]] DELETE error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
