@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getOnboardingProfileId } from '@/lib/onboarding/session';
 import { loadStripe } from '@stripe/stripe-js';
 import {
   EmbeddedCheckoutProvider,
@@ -12,14 +13,7 @@ import {
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 interface CheckoutData {
-  email: string;
-  profileId?: string;
-  priceAmount: number;
-  productName: string;
-  customerName: string;
-  interval?: string;
-  scopeItems?: string[];
-  invoiceText?: string;
+  profileId: string;
 }
 
 export default function CheckoutPage() {
@@ -29,55 +23,15 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Get checkout data from localStorage
-    const email = localStorage.getItem('pending_agreement_email');
-    const profileId = localStorage.getItem('onboarding_customer_profile_id');
-    const priceStr = localStorage.getItem('onboarding_price');
-    const businessName = localStorage.getItem('onboarding_business_name');
-    const interval = localStorage.getItem('onboarding_interval');
-    const scopeItemsStr = localStorage.getItem('onboarding_scope_items');
-    const invoiceText = localStorage.getItem('onboarding_invoice_text');
+    const profileId = getOnboardingProfileId();
 
-    // Try to get from onboarding_data as fallback
-    const onboardingDataStr = localStorage.getItem('onboarding_data');
-    let onboardingData = null;
-    if (onboardingDataStr) {
-      try {
-        onboardingData = JSON.parse(onboardingDataStr);
-      } catch (e) {
-        console.error('Failed to parse onboarding data:', e);
-      }
-    }
-
-    const finalEmail = email || '';
-    const finalPrice = priceStr ? parseInt(priceStr) : onboardingData?.pricePerMonth || 0;
-    const finalBusinessName = businessName || onboardingData?.businessName || '';
-    const finalInterval = interval || onboardingData?.interval || 'month';
-    const finalScopeItems = scopeItemsStr ? JSON.parse(scopeItemsStr) : onboardingData?.scopeItems || [];
-    const finalInvoiceText = invoiceText || onboardingData?.invoiceText || '';
-
-    if (!finalEmail) {
-      setError('Ingen e-post hittades. Vänligen börja om från inbjudningslänken.');
+    if (!profileId) {
+      setError('Ingen kundprofil hittades. Vänligen börja om från inbjudningslänken.');
       setLoading(false);
       return;
     }
 
-    if (!finalPrice || finalPrice <= 0) {
-      setError('Inget pris konfigurerat. Kontakta support.');
-      setLoading(false);
-      return;
-    }
-
-    setCheckoutData({
-      email: finalEmail,
-      profileId: profileId || undefined,
-      priceAmount: finalPrice * 100, // Convert to öre
-      productName: 'LeTrend Prenumeration',
-      customerName: finalBusinessName,
-      interval: finalInterval,
-      scopeItems: finalScopeItems,
-      invoiceText: finalInvoiceText,
-    });
+    setCheckoutData({ profileId });
     setLoading(false);
   }, []);
 
@@ -248,86 +202,12 @@ export default function CheckoutPage() {
           boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
         }}>
           <h2 style={{ fontSize: '18px', color: '#1A1612', marginBottom: '20px' }}>
-            Din beställning
+            LeTrend Prenumeration
           </h2>
 
-          <div style={{
-            background: '#FAF8F5',
-            borderRadius: '12px',
-            padding: '16px',
-            marginBottom: '20px',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ color: '#5D4D3D', fontSize: '14px' }}>Företag</span>
-              <span style={{ color: '#1A1612', fontWeight: '500', fontSize: '14px' }}>
-                {checkoutData.customerName}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#5D4D3D', fontSize: '14px' }}>Produkt</span>
-              <span style={{ color: '#1A1612', fontWeight: '500', fontSize: '14px' }}>
-                {checkoutData.productName}
-              </span>
-            </div>
-          </div>
-
-          {/* Scope Items */}
-          {checkoutData.scopeItems && checkoutData.scopeItems.length > 0 && (
-            <div style={{ marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '14px', color: '#5D4D3D', marginBottom: '12px' }}>
-                Vad som ingår
-              </h3>
-              <ul style={{ margin: 0, paddingLeft: '16px' }}>
-                {checkoutData.scopeItems.map((item, index) => (
-                  <li key={index} style={{ color: '#1A1612', fontSize: '14px', marginBottom: '6px' }}>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Price Breakdown */}
-          <div style={{ borderTop: '1px solid #E8E0D8', paddingTop: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ color: '#5D4D3D' }}>Pris</span>
-              <span style={{ color: '#1A1612' }}>
-                {new Intl.NumberFormat('sv-SE', {
-                  style: 'currency',
-                  currency: 'SEK',
-                  minimumFractionDigits: 0,
-                }).format(checkoutData.priceAmount / 100)}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ color: '#5D4D3D' }}>Moms (25%)</span>
-              <span style={{ color: '#1A1612' }}>
-                {new Intl.NumberFormat('sv-SE', {
-                  style: 'currency',
-                  currency: 'SEK',
-                  minimumFractionDigits: 0,
-                }).format(checkoutData.priceAmount * 0.25 / 100)}
-              </span>
-            </div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              paddingTop: '12px',
-              borderTop: '1px dashed #E8E0D8',
-            }}>
-              <span style={{ fontWeight: '600', color: '#1A1612' }}>Totalt</span>
-              <span style={{ fontWeight: '700', color: '#6B4423', fontSize: '18px' }}>
-                {new Intl.NumberFormat('sv-SE', {
-                  style: 'currency',
-                  currency: 'SEK',
-                  minimumFractionDigits: 0,
-                }).format(checkoutData.priceAmount * 1.25 / 100)}
-              </span>
-            </div>
-            <p style={{ fontSize: '12px', color: '#9A8B7A', marginTop: '8px' }}>
-              per {checkoutData.interval === 'month' ? 'månad' : checkoutData.interval === 'quarter' ? 'kvartal' : 'år'}
-            </p>
-          </div>
+          <p style={{ color: '#5D4D3D', fontSize: '14px', lineHeight: '1.6', marginBottom: '20px' }}>
+            Slutpris inklusive moms beräknas i kassan baserat på din faktureringsadress.
+          </p>
 
           {/* Secure payment badge */}
           <div style={{
@@ -335,7 +215,6 @@ export default function CheckoutPage() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            marginTop: '20px',
             padding: '12px',
             background: '#F0FDF4',
             borderRadius: '8px',

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { stripe, isStripeTestMode } from '@/lib/stripe/dynamic-config';
+import Stripe from 'stripe';
+import { stripe, isStripeTestMode, stripeEnvironment } from '@/lib/stripe/dynamic-config';
 import { withAuth } from '@/lib/auth/api-auth';
+import { syncInvoiceLineItems } from '@/lib/stripe/mirror';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -10,25 +12,28 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
  * POST /api/studio/stripe/sync-invoices
  * Sync all invoices from Stripe to Supabase
  */
-export const POST = withAuth(async (request: NextRequest, user) => {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    const body = await request.json().catch(() => ({}));
+    const body = await request.json().catch(() => ({})) as {
+      customer_id?: string;
+      subscription_id?: string;
+    };
     const { customer_id, subscription_id } = body;
 
     console.log(`[sync-invoices] Starting sync from Stripe (${isStripeTestMode ? 'TEST' : 'LIVE'})`);
 
     // Fetch all invoices from Stripe
-    const invoices: any[] = [];
+    const invoices: Stripe.Invoice[] = [];
     let hasMore = true;
     let startingAfter: string | undefined;
 
     while (hasMore) {
-      const params: any = {
+      const params: Stripe.InvoiceListParams = {
         limit: 100,
         created: { gte: Math.floor(new Date('2024-01-01').getTime() / 1000) }, // From Jan 2024
       };
@@ -53,17 +58,28 @@ export const POST = withAuth(async (request: NextRequest, user) => {
 
     for (const invoice of invoices) {
       try {
+        const stripeCustomerId =
+          typeof invoice.customer === 'string'
+            ? invoice.customer
+            : invoice.customer?.id || null;
+        const stripeSubscriptionId =
+          typeof invoice.subscription === 'string'
+            ? invoice.subscription
+            : invoice.subscription?.id || null;
+
         // Find customer profile by stripe_customer_id
         let customerProfileId: string | null = null;
-        
-        const { data: customerProfile } = await supabaseAdmin
-          .from('customer_profiles')
-          .select('id')
-          .eq('stripe_customer_id', invoice.customer)
-          .maybeSingle();
 
-        if (customerProfile) {
-          customerProfileId = customerProfile.id;
+        if (stripeCustomerId) {
+          const { data: customerProfile } = await supabaseAdmin
+            .from('customer_profiles')
+            .select('id')
+            .eq('stripe_customer_id', stripeCustomerId)
+            .maybeSingle();
+
+          if (customerProfile) {
+            customerProfileId = customerProfile.id;
+          }
         }
 
         // Upsert invoice
@@ -71,8 +87,8 @@ export const POST = withAuth(async (request: NextRequest, user) => {
           .from('invoices')
           .upsert({
             stripe_invoice_id: invoice.id,
-            stripe_customer_id: invoice.customer,
-            stripe_subscription_id: invoice.subscription || null,
+            stripe_customer_id: stripeCustomerId,
+            stripe_subscription_id: stripeSubscriptionId,
             customer_profile_id: customerProfileId,
             amount_due: invoice.amount_due,
             amount_paid: invoice.amount_paid,
@@ -80,6 +96,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
             status: invoice.status,
             hosted_invoice_url: invoice.hosted_invoice_url,
             invoice_pdf: invoice.invoice_pdf,
+            environment: stripeEnvironment,
             due_date: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
             paid_at: invoice.status === 'paid' && invoice.payment_intent 
               ? new Date().toISOString() 
@@ -92,6 +109,12 @@ export const POST = withAuth(async (request: NextRequest, user) => {
           console.error(`[sync-invoices] Error upserting invoice ${invoice.id}:`, upsertError);
           errors++;
         } else {
+          await syncInvoiceLineItems({
+            supabaseAdmin,
+            invoiceId: invoice.id,
+            lineItems: invoice.lines?.data || [],
+            environment: stripeEnvironment,
+          });
           synced++;
         }
 
@@ -108,7 +131,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
             error_message: upsertError?.message || null,
           });
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`[sync-invoices] Error processing invoice ${invoice.id}:`, err);
         errors++;
       }
@@ -124,17 +147,20 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       mode: isStripeTestMode ? 'test' : 'live'
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[sync-invoices] Fatal error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
-}, ['admin', 'content_manager']);
+}, ['admin']);
 
 /**
  * GET /api/studio/stripe/sync-invoices
  * Get sync status
  */
-export const GET = withAuth(async (request: NextRequest, user) => {
+export const GET = withAuth(async () => {
   try {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     
@@ -161,8 +187,11 @@ export const GET = withAuth(async (request: NextRequest, user) => {
       invoiceStats: statusCounts,
     });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[sync-invoices] GET error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
-}, ['admin', 'content_manager']);
+}, ['admin']);

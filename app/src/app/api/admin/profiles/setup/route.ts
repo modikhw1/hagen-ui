@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized - Please log in' }, { status: 401 });
     }
 
-    const { userId, userEmail, businessName, customerProfileId, isTeamMember, role } = await request.json();
+    const { userId, userEmail, businessName, customerProfileId } = await request.json();
 
     if (!userId) {
       return NextResponse.json({ error: 'userId is required' }, { status: 400 });
@@ -40,6 +40,24 @@ export async function POST(request: NextRequest) {
     }
 
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Determine role server-side by checking team_members table — never trust client
+    const normalizedAuthEmail = (userEmail || session.user.email || '').trim().toLowerCase();
+    let isTeamMember = false;
+    let role: string | null = null;
+
+    if (normalizedAuthEmail) {
+      const { data: teamRow } = await supabaseAdmin
+        .from('team_members')
+        .select('role')
+        .ilike('email', normalizedAuthEmail)
+        .maybeSingle();
+
+      if (teamRow) {
+        isTeamMember = true;
+        role = teamRow.role || 'content_manager';
+      }
+    }
     const normalizedCustomerProfileId = typeof customerProfileId === 'string' && customerProfileId.trim()
       ? customerProfileId.trim()
       : null;
@@ -93,21 +111,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update customer_profiles status to active
+    // Link the user to the customer profile (but do NOT activate — activation
+    // happens in verify-checkout-session after confirmed payment).
     if (resolvedCustomerProfileId) {
-      const { error: cpError } = await supabaseAdmin
-        .from('customer_profiles')
-        .update({
-          status: 'active',
-          agreed_at: new Date().toISOString(),
-        })
-        .eq('id', resolvedCustomerProfileId);
-
-      if (cpError) {
-        console.error('Failed to update customer_profiles:', cpError);
-      } else {
-        console.log('Customer profile activated:', resolvedCustomerProfileId);
-      }
+      console.log('Customer profile linked:', resolvedCustomerProfileId);
     }
 
     // Check if profiles row exists
@@ -173,10 +180,11 @@ export async function POST(request: NextRequest) {
 
       // Link team_member if needed
       if (isTeamMember) {
+        const normalizedLinkEmail = typeof userEmail === 'string' ? userEmail.trim().toLowerCase() : '';
         const { error: linkError } = await supabaseAdmin
           .from('team_members')
           .update({ profile_id: userId })
-          .eq('email', userEmail);
+          .ilike('email', normalizedLinkEmail);
 
         if (linkError) {
           console.error('[PROFILE_SETUP] Failed to link team_member to profile:', linkError);
@@ -243,10 +251,11 @@ export async function POST(request: NextRequest) {
 
       // If this is a team member, link team_members.profile_id
       if (isTeamMember) {
+        const normalizedLinkEmail = typeof userEmail === 'string' ? userEmail.trim().toLowerCase() : '';
         const { error: linkError } = await supabaseAdmin
           .from('team_members')
           .update({ profile_id: userId })
-          .eq('email', userEmail);
+          .ilike('email', normalizedLinkEmail);
 
         if (linkError) {
           console.error('Failed to link team_member to profile:', linkError);

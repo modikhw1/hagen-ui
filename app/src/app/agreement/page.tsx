@@ -63,9 +63,6 @@ function AgreementContent() {
 
   useEffect(() => {
     const requireAuth = async () => {
-      const customerId = searchParams.get('customerId');
-      if (customerId) return;
-
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) return;
 
@@ -186,18 +183,6 @@ function AgreementContent() {
         setAgreement(data.agreement);
         setLoading(false);
         return;
-      }
-
-      // Try public agreement
-      const customerId = searchParams.get('customerId');
-      if (customerId) {
-        const publicRes = await fetch(`/api/stripe/public-agreement?customerId=${customerId}`);
-        const publicData = await publicRes.json();
-        if (publicData.agreement) {
-          setAgreement(publicData.agreement);
-          setLoading(false);
-          return;
-        }
       }
 
       // Fallback: try to get from customer_profiles
@@ -463,26 +448,12 @@ function AgreementContent() {
   }
 
   const price = agreement.pricePerMonth / 100; // Convert from öre
-  const vat = price * 0.25;
-  const total = price + vat;
 
   const priceDisplay = new Intl.NumberFormat('sv-SE', {
     style: 'currency',
     currency: 'SEK',
     minimumFractionDigits: 0,
   }).format(price);
-
-  const vatDisplay = new Intl.NumberFormat('sv-SE', {
-    style: 'currency',
-    currency: 'SEK',
-    minimumFractionDigits: 0,
-  }).format(vat);
-
-  const totalDisplay = new Intl.NumberFormat('sv-SE', {
-    style: 'currency',
-    currency: 'SEK',
-    minimumFractionDigits: 0,
-  }).format(total);
 
   return (
     <div style={{
@@ -566,11 +537,6 @@ function AgreementContent() {
             <span style={{ color: '#1A1612', fontWeight: '600' }}>{priceDisplay}</span>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ color: '#5D4D3D' }}>Moms (25%)</span>
-            <span style={{ color: '#1A1612', fontWeight: '600' }}>{vatDisplay}</span>
-          </div>
-
           {/* Scope Items */}
           {agreement.scopeItems && agreement.scopeItems.length > 0 && (
             <div style={{ marginBottom: '12px' }}>
@@ -593,14 +559,17 @@ function AgreementContent() {
             </div>
           )}
 
-          <div style={{ 
-            borderTop: '1px solid #E5E0DA', 
+          <div style={{
+            borderTop: '1px solid #E5E0DA',
             paddingTop: '12px',
-            display: 'flex', 
-            justifyContent: 'space-between' 
           }}>
-            <span style={{ color: '#1A1612', fontWeight: '600', fontSize: '16px' }}>Att betala</span>
-            <span style={{ color: '#6B4423', fontWeight: '700', fontSize: '18px' }}>{totalDisplay}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#1A1612', fontWeight: '600', fontSize: '16px' }}>Pris</span>
+              <span style={{ color: '#6B4423', fontWeight: '700', fontSize: '18px' }}>{priceDisplay}</span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#9A8B7A', margin: '4px 0 0' }}>
+              Exkl. moms. Slutpris beräknas vid betalning.
+            </p>
           </div>
         </div>
 

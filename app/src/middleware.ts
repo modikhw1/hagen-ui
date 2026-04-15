@@ -240,7 +240,7 @@ export async function middleware(request: NextRequest) {
     }
 
     if (isCustomerPage || isMobileCustomerPage) {
-      if (userRole !== 'customer') {
+      if (userRole !== 'customer' && userRole !== 'admin' && userRole !== 'content_manager') {
         const url = request.nextUrl.clone()
         url.search = ''
         if (userRole === 'user') {

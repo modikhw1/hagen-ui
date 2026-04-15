@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe, stripeWebhookSecret } from '@/lib/stripe/dynamic-config';
+import { stripe, stripeEnvironment, stripeWebhookSecret } from '@/lib/stripe/dynamic-config';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
+import { syncInvoiceLineItems } from '@/lib/stripe/mirror';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function getSupabaseAdmin() {
   return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+async function resolveCustomerProfileId(stripeCustomerId: string | null | undefined) {
+  if (!stripeCustomerId) return null;
+
+  const supabase = getSupabaseAdmin();
+  const { data } = await supabase
+    .from('customer_profiles')
+    .select('id')
+    .eq('stripe_customer_id', stripeCustomerId)
+    .maybeSingle();
+
+  return data?.id || null;
 }
 
 // Handles new Stripe API shape: invoice.parent.subscription_details.subscription
@@ -173,18 +187,27 @@ export async function POST(request: NextRequest) {
       case 'invoice.created': {
         const invoice = event.data.object;
         const subscriptionId = getInvoiceSubscriptionId(invoice);
+        const customerProfileId = await resolveCustomerProfileId(invoice.customer as string | null);
         console.log(`Processing invoice.created: ${invoice.id}`);
 
         await supabase.from('invoices').insert({
           stripe_invoice_id: invoice.id,
           stripe_subscription_id: subscriptionId,
           stripe_customer_id: invoice.customer as string,
+          customer_profile_id: customerProfileId,
           amount_due: invoice.amount_due,
           amount_paid: 0,
           currency: invoice.currency,
           status: invoice.status as string,
           hosted_invoice_url: invoice.hosted_invoice_url || null,
+          environment: stripeEnvironment,
           due_date: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
+        });
+        await syncInvoiceLineItems({
+          supabaseAdmin: supabase,
+          invoiceId: invoice.id,
+          lineItems: invoice.lines?.data || [],
+          environment: stripeEnvironment,
         });
 
         // Log successful sync
@@ -207,7 +230,14 @@ export async function POST(request: NextRequest) {
           status: invoice.status as string,
           hosted_invoice_url: invoice.hosted_invoice_url || null,
           invoice_pdf: invoice.invoice_pdf || null,
+          environment: stripeEnvironment,
         }).eq('stripe_invoice_id', invoice.id);
+        await syncInvoiceLineItems({
+          supabaseAdmin: supabase,
+          invoiceId: invoice.id,
+          lineItems: invoice.lines?.data || [],
+          environment: stripeEnvironment,
+        });
 
         await supabase.from('stripe_sync_log').insert({
           event_type: event.type,
@@ -230,7 +260,14 @@ export async function POST(request: NextRequest) {
           status: 'paid',
           amount_paid: invoice.amount_paid,
           paid_at: new Date().toISOString(),
+          environment: stripeEnvironment,
         }).eq('stripe_invoice_id', invoice.id);
+        await syncInvoiceLineItems({
+          supabaseAdmin: supabase,
+          invoiceId: invoice.id,
+          lineItems: invoice.lines?.data || [],
+          environment: stripeEnvironment,
+        });
 
         if (subscriptionId) {
           // Find user by subscription_id
@@ -288,6 +325,7 @@ export async function POST(request: NextRequest) {
         // Update invoice status
         await supabase.from('invoices').update({
           status: 'open', // or keep original status
+          environment: stripeEnvironment,
         }).eq('stripe_invoice_id', invoice.id);
 
         if (subscriptionId) {
@@ -328,6 +366,7 @@ export async function POST(request: NextRequest) {
 
         await supabase.from('invoices').update({
           status: 'void',
+          environment: stripeEnvironment,
         }).eq('stripe_invoice_id', invoice.id);
 
         await supabase.from('stripe_sync_log').insert({
@@ -374,6 +413,7 @@ export async function POST(request: NextRequest) {
             amount,
             interval,
             interval_count: intervalCount,
+            environment: stripeEnvironment,
             current_period_start: firstItem?.period?.start
               ? new Date(firstItem.period.start * 1000).toISOString()
               : null,
@@ -444,6 +484,7 @@ export async function POST(request: NextRequest) {
           .update({
             status: 'canceled',
             ended_at: new Date().toISOString(),
+            environment: stripeEnvironment,
           })
           .eq('stripe_subscription_id', subscription.id);
 

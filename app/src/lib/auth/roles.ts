@@ -50,5 +50,5 @@ type LegacyRoleInput = {
 export function resolveLegacyProfileRole(profile: LegacyRoleInput): AppRole {
   if (profile?.is_admin) return 'admin';
   const legacyRole = typeof profile?.role === 'string' ? profile.role : null;
-  return isAppRole(legacyRole || '') ? legacyRole as AppRole : 'user';
+  return isAppRole(legacyRole || '') ? legacyRole as AppRole : 'customer';
 }

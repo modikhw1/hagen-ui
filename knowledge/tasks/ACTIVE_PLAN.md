@@ -134,3 +134,74 @@ This likely means:
 - the target Studio model is coherent for both CM and admin perspectives
 - the first implementation slice is small, defensible, and reversible if needed
 - future intake/stepper and pre-invite work remain possible without major IA backtracking
+
+## Follow-up execution split — observation / planner refinement
+
+### Why this needs a separate split
+The observation loop is now live, but the next work is no longer "make cron run". The next risk is product ambiguity: imported TikTok history, LeTrend-produced history, and planner advancement are close enough in the UI that they can be misread as the same event. That should be corrected in small, low-regret slices rather than one broad refactor.
+
+### Slice 1 — runtime/UI hardening (small, fast, safe)
+Goal:
+- remove current friction in history-card actions and planner navigation without changing the underlying truth model
+
+In scope:
+- fix history-card context-menu hit area / z-index / overlay issues
+- fix dropdown sizing so width fits content more naturally
+- reduce or remove feed-planner wheel-trap behavior while preserving explicit planner navigation controls
+- add visible pending/loading feedback for "markera som gjord"
+- add bottom stats-banner parity treatment to LeTrend history cards (allowing empty/zero values for now if needed)
+- tighten labels/microcopy so cron observation vs manual advancement is easier to understand
+
+Out of scope:
+- no schema changes
+- no automatic matching between uploads and LeTrend concepts
+- no time-series stats storage yet
+
+Acceptance criteria:
+1. history-card more-menu is reliably clickable and visible
+2. dropdown no longer renders with excessive dead width
+3. page scrolling is not trapped by the planner in normal use
+4. mark-produced gives immediate interactive feedback while request is in flight
+5. LeTrend history cards visually support the same bottom stats region pattern as TikTok history
+
+### Slice 2 — explicit history truth/reconciliation model (product + implementation pass)
+Goal:
+- create an explicit CM-controlled way to say whether an observed/uploaded history clip should remain TikTok-native history or be treated as LeTrend-produced history
+
+Preferred direction:
+- do NOT infer this automatically from timing
+- add an explicit user action such as "Treat as LeTrend" / "Treat as TikTok" or "Match to planned concept"
+- preserve imported-history rows as imported truth unless the CM deliberately reconciles them
+
+Likely decisions needed:
+- whether reconciliation updates an imported row in place, links it to a concept, or creates a separate linkage record
+- whether unmatched planned concepts should remain in plan, move to skipped, or return to selectable pool
+- which metadata source wins after reconciliation (TikTok caption/stat fields vs LeTrend concept title/instructions)
+
+Out of scope for the first pass:
+- no fully automated matching heuristic
+- no broad object-model rewrite unless unavoidable
+
+### Slice 3 — post-publication stats tracking
+Goal:
+- extend observation from "new clip detected" to "performance snapshots captured over time"
+
+Candidate direction:
+- store snapshot points for views/likes/comments over the first 24-48h after publication
+- expose a simple hover/detail visualization later
+
+Prerequisite:
+- should only begin after slice 2 defines what a LeTrend-vs-TikTok history item means
+
+### Recommended order
+1. Slice 1 first — immediate UX/runtime quality and clarity
+2. Slice 2 second — explicit truth model for imported vs LeTrend history
+3. Slice 3 third — analytics enrichment once the meaning of history items is stable
+
+### No-regret product rule
+Until slice 2 exists, the system should continue to treat:
+- cron import as observation only
+- advance-plan as explicit planner movement
+- mark-produced as explicit assertion that the planned LeTrend concept was produced
+
+The product should not silently collapse those three into one inferred event.

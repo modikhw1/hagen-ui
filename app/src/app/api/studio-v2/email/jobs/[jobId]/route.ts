@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
-export const PATCH = withAuth(async (_request, _user, { params }: { params: Promise<{ jobId: string }> }) => {
+async function retryJob(_request: Request, _user: unknown, { params }: { params: Promise<{ jobId: string }> }) {
   const { jobId } = await params;
   const supabase = createSupabaseAdmin();
 
@@ -22,4 +22,7 @@ export const PATCH = withAuth(async (_request, _user, { params }: { params: Prom
   }
 
   return NextResponse.json({ job: data });
-}, ['admin', 'content_manager']);
+}
+
+export const PATCH = withAuth(retryJob, ['admin', 'content_manager']);
+export const POST = withAuth(retryJob, ['admin', 'content_manager']);

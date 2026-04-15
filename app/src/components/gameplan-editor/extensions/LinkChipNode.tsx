@@ -11,14 +11,6 @@ import {
   type LinkPlatform,
 } from '../utils/link-helpers';
 
-const PLATFORM_COLORS: Record<LinkPlatform, string> = {
-  tiktok: '#1a1612',
-  instagram: '#833ab4',
-  youtube: '#cc0000',
-  article: '#4a4239',
-  external: '#6b4423',
-};
-
 const PLATFORMS: ReadonlyArray<LinkPlatform> = ['tiktok', 'instagram', 'youtube', 'article', 'external'];
 
 function parsePlatformFromClassName(className: string): LinkPlatform | null {
@@ -129,7 +121,6 @@ function LinkChipView({ node }: NodeViewProps) {
         target="_blank"
         rel="noopener noreferrer"
         className={`gp-link-chip gp-link-chip--${platform}`}
-        style={{ color: PLATFORM_COLORS[platform] }}
         contentEditable={false}
         suppressContentEditableWarning
         data-gp-chip="1"
@@ -201,14 +192,13 @@ export const LinkChipNode = Node.create({
       baseAttrs.href = href;
     }
 
-    // Icons are rendered only by ReactNodeView; renderHTML is for serialization/clipboard.
-    // Wrap in span so parseHTML can find the anchor inside it.
     return [
       'span',
       { 'data-type': 'linkChip', style: 'display:inline;' },
       [
         'a',
         mergeAttributes(baseAttrs, HTMLAttributes),
+        ['span', { class: 'gp-link-chip__icon', 'aria-hidden': 'true' }, renderIconSpec(platform)],
         ['span', { class: 'gp-link-chip__label' }, label],
       ],
     ];

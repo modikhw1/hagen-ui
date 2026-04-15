@@ -1,60 +1,42 @@
 /**
- * Motor signal helpers for customer_profiles.
+ * Motor signal helpers.
  *
- * Three fields encode the profile-driven state motor:
- *   pending_history_advance              SMALLINT NULL    — evidence count (non-null = new clips arrived)
- *   pending_history_advance_seen_at      TIMESTAMPTZ NULL — acknowledgement (non-null = CM dismissed without advancing)
- *   pending_history_advance_published_at TIMESTAMPTZ NULL — freshness seam: MAX(published_at) of triggering batch
+ * Two persistence layers:
  *
- * Three distinct states:
- *   pending_history_advance IS NULL                       → nothing pending
- *   pending_history_advance IS NOT NULL, seen_at IS NULL  → evidence arrived, unacknowledged → show nudge
- *   pending_history_advance IS NOT NULL, seen_at IS NOT NULL → CM acknowledged, not yet advanced → suppress nudge
+ * 1. customer_profiles columns (legacy, still written for backward compat):
+ *    pending_history_advance              SMALLINT NULL    — evidence count
+ *    pending_history_advance_seen_at      TIMESTAMPTZ NULL — acknowledgement
+ *    pending_history_advance_published_at TIMESTAMPTZ NULL — freshness seam
  *
- * Rules:
- *   New external evidence → motorSignalNewEvidence(count, latestPublishedAt)  writes all three fields
- *   CM acknowledges/dismisses → set seen_at = NOW() only    (handled in profile PATCH, not here)
- *   CM advances plan  → motorSignalCleared()                clears all three fields
+ * 2. feed_motor_signals table (new, durable):
+ *    Rows are never deleted — instead auto_resolved_at and acknowledged_at
+ *    track the lifecycle so CM can see historical signals.
  *
- * Freshness seam:
- *   pending_history_advance_published_at = MAX(published_at) of newly imported clips in the triggering batch.
- *   Distinguishes fresh batches (recent published_at) from backfill imports (old published_at) without an extra
- *   DB read. Cleared on advance alongside the other two fields. Never touched by acknowledge/dismiss.
- *
- * Signal classification:
- *   classifyMotorSignal() derives 'fresh_activity' | 'backfill' from the freshness seam at read-time.
- *   Derived (not persisted) so the label always reflects the current clock — a persisted label would
- *   grow stale if the CM never advances. Available whenever pending_history_advance is non-null.
+ * Signal states (feed_motor_signals):
+ *   acknowledged_at IS NULL AND auto_resolved_at IS NULL  → active nudge (show to CM)
+ *   auto_resolved_at IS NOT NULL                          → auto-resolved (subtle badge)
+ *   acknowledged_at IS NOT NULL                           → CM acknowledged / dismissed
  */
+
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+
+type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
 // ── Classification ──────────────────────────────────────────────────────────
 
 /**
  * Semantic interpretation of a pending motor signal.
- *   fresh_activity — the triggering batch contained recently published TikTok content.
- *                    Advancing the plan is likely meaningful.
- *   backfill       — the triggering batch contained old content (historical import).
- *                    Advancing may be premature; the CM should verify.
+ *   fresh_activity — recent TikTok content; advancing the plan is likely meaningful.
+ *   backfill       — old content (historical import); CM should verify before advancing.
  */
 export type MotorSignalKind = 'fresh_activity' | 'backfill';
 
-/**
- * Clips published within this many days of now are considered fresh activity.
- * Older clips are classified as backfill (historical import).
- */
+/** Clips published within this many days are considered fresh activity. */
 const FRESH_ACTIVITY_THRESHOLD_DAYS = 90;
 
 /**
- * Derives the semantic classification of the current pending motor signal.
- *
- * Returns null when there is no pending signal (pending_history_advance is null/falsy).
- * Returns 'fresh_activity' when pending_history_advance_published_at is within
- * FRESH_ACTIVITY_THRESHOLD_DAYS of now, or when the published_at is unknown (null).
- * Returns 'backfill' when the newest clip in the triggering batch was published
- * more than FRESH_ACTIVITY_THRESHOLD_DAYS ago.
- *
- * Rule for null published_at: conservative default to 'fresh_activity' — better to
- * surface a potentially real signal than to silently suppress it.
+ * Derives the semantic classification of a pending motor signal.
+ * Returns null when there is no pending signal.
  */
 export function classifyMotorSignal(profile: {
   pending_history_advance?: number | null;
@@ -70,22 +52,113 @@ export function classifyMotorSignal(profile: {
   return ageDays <= FRESH_ACTIVITY_THRESHOLD_DAYS ? 'fresh_activity' : 'backfill';
 }
 
-// ── Write helpers ────────────────────────────────────────────────────────────
+// ── Column-based write helpers (customer_profiles) ──────────────────────────
 
-/** Fields to write when new imported_history rows arrive. */
+/** Fields to write when new imported_history rows arrive.
+ * @deprecated Still written for backward compat; migrate reads to feed_motor_signals.
+ */
 export function motorSignalNewEvidence(importedCount: number, latestPublishedAt: string | null) {
   return {
     pending_history_advance: importedCount,
+    // DEPRECATED: migrate to feed_motor_signals acknowledged_at
     pending_history_advance_seen_at: null,
     pending_history_advance_published_at: latestPublishedAt,
   } as const;
 }
 
-/** Fields to write when the CM advances the plan. Clears evidence, acknowledgement, and freshness seam. */
+/** Fields to write when the CM advances the plan. Clears evidence, acknowledgement, and freshness seam.
+ * @deprecated Still written for backward compat; migrate reads to feed_motor_signals.
+ */
 export function motorSignalCleared() {
   return {
     pending_history_advance: null,
+    // DEPRECATED: migrate to feed_motor_signals acknowledged_at
     pending_history_advance_seen_at: null,
     pending_history_advance_published_at: null,
   } as const;
+}
+
+// ── feed_motor_signals table helpers ────────────────────────────────────────
+
+export interface FeedMotorSignalPayload {
+  imported_count?: number;
+  latest_published_at?: string | null;
+  kind?: MotorSignalKind;
+  [key: string]: unknown;
+}
+
+/**
+ * Creates a new nudge row in feed_motor_signals for the customer.
+ * Only inserts if there is no existing unacknowledged, unresolved nudge.
+ *
+ * @returns The created signal id, or null if skipped (existing active nudge).
+ */
+export async function createMotorSignalNudge(
+  supabase: SupabaseAdmin,
+  customerId: string,
+  payload: FeedMotorSignalPayload
+): Promise<string | null> {
+  // Check for existing active (unacknowledged + unresolved) nudge
+  const { data: existing } = await supabase
+    .from('feed_motor_signals')
+    .select('id')
+    .eq('customer_id', customerId)
+    .eq('signal_type', 'nudge')
+    .is('acknowledged_at', null)
+    .is('auto_resolved_at', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    // Active nudge already exists — skip to avoid duplicates
+    return null;
+  }
+
+  const { data: inserted, error } = await supabase
+    .from('feed_motor_signals')
+    .insert({
+      customer_id: customerId,
+      signal_type: 'nudge',
+      payload,
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[motor-signal] failed to insert nudge:', error.message);
+    return null;
+  }
+
+  return inserted?.id ?? null;
+}
+
+/**
+ * Marks all active nudges for a customer as auto-resolved.
+ * Called by auto-reconcile when it successfully advances the plan.
+ */
+export async function autoResolveMotorSignals(
+  supabase: SupabaseAdmin,
+  customerId: string,
+  resolvedAt: string
+): Promise<void> {
+  await supabase
+    .from('feed_motor_signals')
+    .update({ auto_resolved_at: resolvedAt })
+    .eq('customer_id', customerId)
+    .is('acknowledged_at', null)
+    .is('auto_resolved_at', null);
+}
+
+/**
+ * Acknowledges a specific nudge signal (CM clicked "Bekräfta").
+ */
+export async function acknowledgeMotorSignal(
+  supabase: SupabaseAdmin,
+  signalId: string,
+  acknowledgedAt: string
+): Promise<void> {
+  await supabase
+    .from('feed_motor_signals')
+    .update({ acknowledged_at: acknowledgedAt })
+    .eq('id', signalId);
 }

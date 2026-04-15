@@ -1,12 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// importClipsForCustomer
+// history-import.ts
 //
-// Shared deduplicate → insert → renumber → motor signal helper.
-// Used by the automatic sync-history-all route so the new route does not
-// duplicate the per-customer insert semantics.
+// importClipsForCustomer: shared deduplicate → insert → renumber → motor signal.
+// updateClipStats: update engagement stats on already-imported clips (cheap, runs every cron).
+// importNewClips: fetch and insert clips not yet in DB (heavier, gated by last_history_sync_at).
 //
-// The per-customer fetch-profile-history and import-history routes manage
-// their own insert/renumber inline and are not affected by this module.
+// normalizeTikTokUrl: strips tracking params, normalises scheme/host/path for dedup.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
@@ -15,72 +14,96 @@ import type { NormalizedHistoryClip } from '@/lib/studio/tiktok-provider';
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
+const PAGE_SIZE = 1000;
+
+// ── normalizeTikTokUrl ────────────────────────────────────────────────────────
 /**
- * Deduplicates, inserts, renumbers, and writes the motor signal for a
- * batch of normalized history clips for one customer.
+ * Strips tracking query params, normalises www-prefix, lowercase, trailing slash.
+ * Used for deduplication when comparing incoming clips to existing DB rows.
  *
- * Always stamps `last_history_sync_at` — even when all clips are duplicates.
- * Only writes `motorSignalNewEvidence` when `imported > 0`.
- *
- * Throws on DB errors so the caller can catch and record per-customer failures.
+ * Handles:
+ *   https://www.tiktok.com/@brand/video/123?_r=1 → https://tiktok.com/@brand/video/123
+ *   https://tiktok.com/@brand/video/123/         → https://tiktok.com/@brand/video/123
  */
-export async function importClipsForCustomer(
+export function normalizeTikTokUrl(url: string): string {
+  try {
+    const u = new URL(url.toLowerCase());
+    // Remove all query params (tracking, referral, etc.)
+    u.search = '';
+    // Remove trailing slash from path
+    u.pathname = u.pathname.replace(/\/+$/, '');
+    // Normalise www: tiktok.com and www.tiktok.com are the same profile
+    const host = u.hostname.replace(/^www\./, '');
+    return `https://${host}${u.pathname}`;
+  } catch {
+    // Fallback for malformed URLs
+    return url.toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '');
+  }
+}
+
+// ── updateClipStats ───────────────────────────────────────────────────────────
+/**
+ * Updates engagement stats (views, likes, comments, watch time) for all clips
+ * that are already in the DB. Fast and cheap — runs every cron cycle.
+ *
+ * @param clips  Normalised clips from the provider (can include known + new).
+ * @returns      Number of rows updated.
+ */
+export async function updateClipStats(
+  supabase: SupabaseAdmin,
+  customerId: string,
+  clips: NormalizedHistoryClip[]
+): Promise<number> {
+  if (clips.length === 0) return 0;
+
+  // Fetch existing clips with pagination
+  const existingByUrl = await fetchExistingClipUrlMap(supabase, customerId);
+  const now = new Date().toISOString();
+
+  const updates = clips.filter((c) => existingByUrl.has(normalizeTikTokUrl(c.tiktok_url)));
+
+  if (updates.length === 0) return 0;
+
+  await Promise.all(
+    updates.map((clip) => {
+      const rowId = existingByUrl.get(normalizeTikTokUrl(clip.tiktok_url))!;
+      return supabase
+        .from('customer_concepts')
+        .update({
+          tiktok_views: clip.tiktok_views,
+          tiktok_likes: clip.tiktok_likes,
+          tiktok_comments: clip.tiktok_comments,
+          tiktok_last_synced_at: now,
+        })
+        .eq('id', rowId);
+    })
+  );
+
+  return updates.length;
+}
+
+// ── importNewClips ────────────────────────────────────────────────────────────
+/**
+ * Imports clips that are not yet in the DB as new rows with status='history_import'.
+ * Heavier than updateClipStats — only called when last_history_sync_at is stale.
+ *
+ * @returns { imported, skipped }
+ */
+export async function importNewClips(
   supabase: SupabaseAdmin,
   customerId: string,
   clips: NormalizedHistoryClip[]
 ): Promise<{ imported: number; skipped: number }> {
-  if (clips.length === 0) {
-    await supabase
-      .from('customer_profiles')
-      .update({ last_history_sync_at: new Date().toISOString() })
-      .eq('id', customerId);
-    return { imported: 0, skipped: 0 };
-  }
+  if (clips.length === 0) return { imported: 0, skipped: 0 };
 
-  // ── Deduplicate against existing tiktok_urls ──────────────────────────────
-  const { data: existing } = await supabase
-    .from('customer_concepts')
-    .select('id, tiktok_url')
-    .eq('customer_profile_id', customerId)
-    .not('tiktok_url', 'is', null);
+  const existingByUrl = await fetchExistingClipUrlMap(supabase, customerId);
 
-  const existingByUrl = new Map(
-    (existing ?? []).map((r) => [r.tiktok_url as string, r.id as string])
-  );
-  const newClips = clips.filter((c) => !existingByUrl.has(c.tiktok_url));
-  const duplicateClips = clips.filter((c) => existingByUrl.has(c.tiktok_url));
+  const newClips = clips.filter((c) => !existingByUrl.has(normalizeTikTokUrl(c.tiktok_url)));
   const skipped = clips.length - newClips.length;
 
-  // ── Refresh stats on already-imported rows ────────────────────────────────
-  // Views, likes, and comments grow over time. Re-stamp them on every sync so
-  // CMs see current engagement numbers without waiting for a new clip to appear.
-  if (duplicateClips.length > 0) {
-    const now = new Date().toISOString();
-    await Promise.all(
-      duplicateClips.map((clip) => {
-        const rowId = existingByUrl.get(clip.tiktok_url)!;
-        return supabase
-          .from('customer_concepts')
-          .update({
-            tiktok_views: clip.tiktok_views,
-            tiktok_likes: clip.tiktok_likes,
-            tiktok_comments: clip.tiktok_comments,
-            tiktok_last_synced_at: now,
-          })
-          .eq('id', rowId);
-      })
-    );
-  }
+  if (newClips.length === 0) return { imported: 0, skipped };
 
-  if (newClips.length === 0) {
-    await supabase
-      .from('customer_profiles')
-      .update({ last_history_sync_at: new Date().toISOString() })
-      .eq('id', customerId);
-    return { imported: 0, skipped };
-  }
-
-  // ── Sort newest-first for temp insertion order ────────────────────────────
+  // Sort newest-first for temp insertion order
   const sortedNewClips = [...newClips].sort((a, b) => {
     if (!a.published_at && !b.published_at) return 0;
     if (!a.published_at) return 1;
@@ -88,9 +111,7 @@ export async function importClipsForCustomer(
     return new Date(b.published_at).getTime() - new Date(a.published_at).getTime();
   });
 
-  // ── Find anchor for temp positions (most-negative existing feed_order) ────
-  // Query ALL historik rows (not just imported concept_id IS NULL) so that
-  // provisional temp positions don't collide with existing LeTrend historik rows.
+  // Find anchor: most-negative existing feed_order so temp positions don't collide
   const { data: allHistorikRows } = await supabase
     .from('customer_concepts')
     .select('feed_order')
@@ -102,12 +123,12 @@ export async function importClipsForCustomer(
   const mostNegativeFeedOrder = (allHistorikRows?.[0]?.feed_order as number | undefined) ?? 0;
   const tempStartOrder = mostNegativeFeedOrder - 1;
 
-  // ── Insert at temporary positions ─────────────────────────────────────────
+  // Insert at temporary positions
   const inserts = sortedNewClips.map((clip, i) => ({
     customer_profile_id: customerId,
     customer_id: customerId,
     concept_id: null,
-    status: 'produced',
+    status: 'history_import',
     feed_order: tempStartOrder - i,
     tiktok_url: clip.tiktok_url,
     tiktok_thumbnail_url: clip.tiktok_thumbnail_url,
@@ -126,22 +147,134 @@ export async function importClipsForCustomer(
 
   if (insertError) throw new Error(insertError.message);
 
-  // ── Renumber all imported-history rows chronologically ────────────────────
-  //
-  // Re-read ALL imported-history rows and assign feed_order = -(offset+1), …, -(offset+N)
-  // where offset = |deepest LeTrend historik row| so imported TikTok rows never
-  // collide with LeTrend historik rows that also occupy negative feed_orders.
-  //
-  // Scope: concept_id IS NULL AND feed_order < 0 (imported profile history only).
-  //
+  // Renumber all imported-history rows chronologically
+  await renumberImportedRows(supabase, customerId);
+
+  return { imported: insertedRows?.length ?? 0, skipped };
+}
+
+// ── importClipsForCustomer ────────────────────────────────────────────────────
+/**
+ * Full pipeline: dedup → insert → renumber → motor signal.
+ * Used by the sync-history-all cron (legacy entry point, calls importNewClips
+ * internally so both paths stay in sync).
+ *
+ * Always stamps last_history_sync_at.
+ * Only writes motorSignalNewEvidence when imported > 0.
+ */
+export async function importClipsForCustomer(
+  supabase: SupabaseAdmin,
+  customerId: string,
+  clips: NormalizedHistoryClip[],
+  options?: { tiktokHandle?: string | null }
+): Promise<{ imported: number; skipped: number; skippedReason?: string }> {
+  // Guard: no TikTok handle — nothing to import
+  if (options?.tiktokHandle !== undefined && !options.tiktokHandle) {
+    console.warn(`[importClips] customer ${customerId} skipped: no_tiktok_handle`);
+    return { imported: 0, skipped: 0, skippedReason: 'no_tiktok_handle' };
+  }
+
+  if (clips.length === 0) {
+    // API returned 0 clips — stamp sync time but don't crash
+    console.info(`[importClips] customer ${customerId}: clips_found=0, stamping last_history_sync_at`);
+    await supabase
+      .from('customer_profiles')
+      .update({ last_history_sync_at: new Date().toISOString() })
+      .eq('id', customerId);
+    return { imported: 0, skipped: 0 };
+  }
+
+  // Update stats on existing clips (always runs, cheap)
+  await updateClipStats(supabase, customerId, clips);
+
+  // Import new clips
+  const { imported, skipped } = await importNewClips(supabase, customerId, clips);
+
+  // Stamp sync time + motor signal
+  if (imported > 0) {
+    const sortedForSignal = [...clips]
+      .filter((c) => c.published_at)
+      .sort((a, b) => new Date(b.published_at!).getTime() - new Date(a.published_at!).getTime());
+    const latestPublishedAt = sortedForSignal[0]?.published_at ?? null;
+
+    // Accumulate count rather than overwrite so daily cron runs show true total.
+    const { data: currentProfile } = await supabase
+      .from('customer_profiles')
+      .select('pending_history_advance, pending_history_advance_published_at')
+      .eq('id', customerId)
+      .maybeSingle();
+
+    const existingCount = (currentProfile?.pending_history_advance as number | null) ?? 0;
+    const existingPublishedAt = (currentProfile?.pending_history_advance_published_at as string | null) ?? null;
+
+    const accumulatedPublishedAt =
+      latestPublishedAt && existingPublishedAt
+        ? (latestPublishedAt > existingPublishedAt ? latestPublishedAt : existingPublishedAt)
+        : (latestPublishedAt ?? existingPublishedAt);
+
+    await supabase
+      .from('customer_profiles')
+      .update({
+        last_history_sync_at: new Date().toISOString(),
+        ...motorSignalNewEvidence(existingCount + imported, accumulatedPublishedAt),
+      })
+      .eq('id', customerId);
+  } else {
+    await supabase
+      .from('customer_profiles')
+      .update({ last_history_sync_at: new Date().toISOString() })
+      .eq('id', customerId);
+  }
+
+  return { imported, skipped };
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/**
+ * Fetches all existing tiktok_url values for a customer with full pagination
+ * (handles >1000 rows). Returns a Map of normalized URL → row id.
+ */
+async function fetchExistingClipUrlMap(
+  supabase: SupabaseAdmin,
+  customerId: string
+): Promise<Map<string, string>> {
+  const allExisting: Array<{ id: string; tiktok_url: string }> = [];
+  let page = 0;
+
+  while (true) {
+    const { data } = await supabase
+      .from('customer_concepts')
+      .select('id, tiktok_url')
+      .eq('customer_profile_id', customerId)
+      .not('tiktok_url', 'is', null)
+      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+
+    const rows = (data ?? []) as Array<{ id: string; tiktok_url: string }>;
+    allExisting.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+    page++;
+  }
+
+  return new Map(allExisting.map((r) => [normalizeTikTokUrl(r.tiktok_url), r.id]));
+}
+
+/**
+ * Re-reads all imported-history rows for a customer and assigns sequential
+ * feed_orders below the deepest LeTrend historik row, sorted by published_at DESC.
+ */
+async function renumberImportedRows(
+  supabase: SupabaseAdmin,
+  customerId: string
+): Promise<void> {
   const { data: allImported } = await supabase
     .from('customer_concepts')
     .select('id, feed_order, published_at, tiktok_url')
     .eq('customer_profile_id', customerId)
     .is('concept_id', null)
+    .not('feed_order', 'is', null)
     .lt('feed_order', 0);
 
-  // Find deepest LeTrend historik row to establish floor for TikTok renumbering
   const { data: letrEndHistorikRows } = await supabase
     .from('customer_concepts')
     .select('feed_order')
@@ -175,44 +308,4 @@ export async function importClipsForCustomer(
       )
     );
   }
-
-  // ── Stamp sync time + motor signal ────────────────────────────────────────
-  const importedCount = insertedRows?.length ?? 0;
-  // sortedNewClips is DESC by published_at — index 0 is the most recently published.
-  const latestPublishedAt = sortedNewClips[0]?.published_at ?? null;
-
-  if (importedCount > 0) {
-    // Read existing signal before writing to accumulate count rather than overwrite.
-    // Without this, daily cron runs that each find one new clip would always show
-    // "1 nya klipp" instead of the true total since the CM last acted.
-    const { data: currentProfile } = await supabase
-      .from('customer_profiles')
-      .select('pending_history_advance, pending_history_advance_published_at')
-      .eq('id', customerId)
-      .maybeSingle();
-
-    const existingCount = (currentProfile?.pending_history_advance as number | null) ?? 0;
-    const existingPublishedAt = (currentProfile?.pending_history_advance_published_at as string | null) ?? null;
-
-    // Keep the more recent published_at across the existing signal and the new batch.
-    const accumulatedPublishedAt =
-      latestPublishedAt && existingPublishedAt
-        ? (latestPublishedAt > existingPublishedAt ? latestPublishedAt : existingPublishedAt)
-        : (latestPublishedAt ?? existingPublishedAt);
-
-    await supabase
-      .from('customer_profiles')
-      .update({
-        last_history_sync_at: new Date().toISOString(),
-        ...motorSignalNewEvidence(existingCount + importedCount, accumulatedPublishedAt),
-      })
-      .eq('id', customerId);
-  } else {
-    await supabase
-      .from('customer_profiles')
-      .update({ last_history_sync_at: new Date().toISOString() })
-      .eq('id', customerId);
-  }
-
-  return { imported: importedCount, skipped };
 }

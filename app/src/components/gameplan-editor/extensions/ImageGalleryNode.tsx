@@ -28,9 +28,18 @@ function getGalleryColumns(images: GalleryImage[]): number {
   return Math.max(1, Math.min(images.length || 1, 3));
 }
 
-function ImageGalleryView({ node }: NodeViewProps) {
+function ImageGalleryView({ node, updateAttributes }: NodeViewProps) {
   const images = normalizeImages(node.attrs.images);
   if (!images.length) return null;
+
+  const updateCaption = (index: number, caption: string) => {
+    const nextImages = images.map((image, currentIndex) => (
+      currentIndex === index
+        ? { ...image, caption }
+        : image
+    ));
+    updateAttributes({ images: nextImages });
+  };
 
   return (
     <NodeViewWrapper as="div" className="gp-image-gallery-node" draggable data-drag-handle>
@@ -49,29 +58,15 @@ function ImageGalleryView({ node }: NodeViewProps) {
             <img
               src={image.src}
               alt={image.caption || 'Game Plan image'}
-              style={{
-                width: '100%',
-                aspectRatio: '4 / 3',
-                objectFit: 'cover',
-                borderRadius: 6,
-                display: 'block',
-              }}
               loading="lazy"
               contentEditable={false}
             />
-            {image.caption ? (
-              <div
-                className="gp-image-grid__caption"
-                style={{
-                  fontSize: 11,
-                  color: '#9D8E7D',
-                  marginTop: 4,
-                  textAlign: 'center',
-                }}
-              >
-                {image.caption}
-              </div>
-            ) : null}
+            <input
+              className="gp-gallery-caption-input"
+              value={image.caption}
+              onChange={(event) => updateCaption(index, event.target.value)}
+              placeholder="Bildtext"
+            />
           </div>
         ))}
       </div>

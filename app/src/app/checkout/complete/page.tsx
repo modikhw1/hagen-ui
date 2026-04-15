@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getPrimaryRouteForRole } from '@/lib/auth/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { clearOnboardingSession, getOnboardingProfileId } from '@/lib/onboarding/session';
 
 function LoadingFallback() {
   return (
@@ -60,7 +61,7 @@ function CheckoutCompleteContent() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
 
-      const storedProfileId = localStorage.getItem('onboarding_customer_profile_id') || undefined;
+      const storedProfileId = getOnboardingProfileId() || undefined;
 
       await fetch('/api/admin/profiles/setup', {
         method: 'POST',
@@ -95,29 +96,13 @@ function CheckoutCompleteContent() {
           setCustomerName(resolvedName);
 
           // Clean up localStorage
-          localStorage.removeItem('onboarding_data');
-          localStorage.removeItem('onboarding_business_name');
-          localStorage.removeItem('onboarding_price');
-          localStorage.removeItem('onboarding_interval');
-          localStorage.removeItem('onboarding_scope_items');
-          localStorage.removeItem('onboarding_customer_profile_id');
-          localStorage.removeItem('onboarding_first_invoice_behavior');
-          localStorage.removeItem('onboarding_contract_start_date');
-          localStorage.removeItem('onboarding_billing_day_of_month');
-          localStorage.removeItem('pending_agreement_email');
-          localStorage.removeItem('agreement_accepted');
-          localStorage.removeItem('agreement_subscription_id');
-          localStorage.removeItem('agreement_accepted_time');
+          clearOnboardingSession();
         } else {
           setStatus('error');
         }
       } catch (err) {
         console.error('Error verifying session:', err);
-        // Even if verification fails, if we have a session_id we can assume success
-        const resolvedDashboardPath = await resolveDashboardPath();
-        setDashboardPath(resolvedDashboardPath);
-        setStatus('success');
-        setCustomerName(localStorage.getItem('onboarding_business_name') || '');
+        setStatus('error');
       }
     };
 

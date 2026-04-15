@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { validateApiRequest, AuthError } from '@/lib/auth/api-auth';
 
 // GET - Fetch invoice by ID or subscription
 export async function GET(request: NextRequest) {
   try {
+    await validateApiRequest(request);
+
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
@@ -78,6 +78,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ invoice: formattedInvoice });
 
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error('Error fetching invoice:', error);
     return NextResponse.json({ error: 'Failed to fetch invoice' }, { status: 500 });
   }

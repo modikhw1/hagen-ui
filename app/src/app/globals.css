@@ -170,14 +170,181 @@ body {
 /* GAMEPLAN EDITOR                              */
 /* ============================================ */
 
-/* Link chips – inline display and spacing */
+.gameplan-editor-shell {
+  background: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid rgba(74, 47, 24, 0.08);
+  overflow: hidden;
+}
+
+.gameplan-editor-toolbar::-webkit-scrollbar,
+.gameplan-editor-content::-webkit-scrollbar {
+  display: none;
+}
+
+.gameplan-editor-toolbar {
+  scrollbar-width: none;
+}
+
+.gp-rich-text,
+.gameplan-editor-content {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 14px;
+  color: #4A4239;
+  line-height: 1.6;
+}
+
+.gp-rich-text h3,
+.gameplan-editor-content h3 {
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1A1612;
+  margin: 20px 0 6px;
+}
+
+.gp-rich-text > :first-child,
+.gameplan-editor-content > :first-child {
+  margin-top: 0 !important;
+}
+
+.gp-rich-text p,
+.gameplan-editor-content p {
+  margin: 0 0 10px;
+  color: #4A4239;
+}
+
+.gp-rich-text ul,
+.gameplan-editor-content ul {
+  list-style: disc;
+  padding-left: 24px;
+  margin: 0 0 10px;
+}
+
+.gp-rich-text ol,
+.gameplan-editor-content ol {
+  list-style: decimal;
+  padding-left: 24px;
+  margin: 0 0 10px;
+}
+
+.gp-rich-text li,
+.gameplan-editor-content li {
+  margin-bottom: 4px;
+}
+
+.gp-rich-text li p,
+.gameplan-editor-content li p {
+  margin: 0;
+}
+
+.gp-rich-text a:not(.gp-link-chip),
+.gameplan-editor-content a:not(.gp-link-chip) {
+  color: #6B4423;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.gp-rich-text iframe,
+.gameplan-editor-content iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.gp-rich-text figure.gp-image,
+.gameplan-editor-content figure.gp-image {
+  width: 100%;
+  margin: 0 0 12px;
+}
+
+.gp-rich-text figure.gp-image img,
+.gameplan-editor-content figure.gp-image img {
+  width: 100%;
+  border-radius: 8px;
+  display: block;
+}
+
+.gp-rich-text figure.gp-image figcaption,
+.gameplan-editor-content figure.gp-image figcaption,
+.gp-image-caption {
+  margin-top: 6px;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  color: #7D6E5D;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.gp-rich-text .gp-image-grid,
+.gameplan-editor-content .gp-image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.gp-rich-text .gp-image-grid img,
+.gameplan-editor-content .gp-image-grid img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+}
+
+.gp-rich-text .gp-image-grid__caption,
+.gameplan-editor-content .gp-image-grid__caption {
+  margin-top: 4px;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px;
+  color: #9D8E7D;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.gp-rich-text [data-type="linkChip"],
+.gp-rich-text .gp-link-chip-wrapper,
 .gameplan-editor-content [data-type="linkChip"],
 .gameplan-editor-content .gp-link-chip-wrapper {
   display: inline !important;
-  white-space: normal;
+  white-space: nowrap;
   margin: 0 2px;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.gp-rich-text .gp-link-chip,
+.gameplan-editor-content .gp-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #F5F2EE;
+  border-radius: 6px;
+  border: 1px solid rgba(74, 47, 24, 0.04);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6B4423 !important;
+  text-decoration: none !important;
+  vertical-align: middle;
+}
+
+.gp-rich-text .gp-link-chip__icon,
+.gameplan-editor-content .gp-link-chip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #8B7355;
+  flex-shrink: 0;
+}
+
+.gp-rich-text .gp-link-chip__label,
+.gameplan-editor-content .gp-link-chip__label {
+  color: inherit;
 }
 
 .gameplan-editor-content .gp-link-chip-wrapper * {
@@ -185,7 +352,14 @@ body {
   -webkit-user-select: none;
 }
 
-/* Image resize handles */
+.gameplan-editor-content .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: #9D8E7D;
+}
+
 .gp-resize-handle {
   position: absolute;
   top: 0;
@@ -212,58 +386,57 @@ body {
   border-radius: 0 4px 4px 0;
 }
 
-/* Selected image outline */
 .gp-image--selected {
   outline: 2px solid rgba(107, 68, 35, 0.3);
   outline-offset: 4px;
   border-radius: 8px;
 }
 
-/* Image caption */
 .gp-image-caption-input {
   width: 100%;
   margin-top: 6px;
-  border: none;
-  border-bottom: 1px solid rgba(74, 47, 24, 0.15);
+  border: 1px solid rgba(74, 47, 24, 0.15);
+  border-radius: 8px;
   font-size: 12px;
   color: #7D6E5D;
   font-style: italic;
   outline: none;
-  background: transparent;
-  padding: 2px 0;
+  background: #FFFFFF;
+  padding: 8px 10px;
 }
 
 .gp-image-caption {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #7D6E5D;
-  font-style: italic;
   cursor: text;
   min-height: 18px;
 }
 
-/* Gapcursor */
 .gameplan-editor-content .ProseMirror-gapcursor::after {
   border-top: 2px solid #6B4423;
 }
 
-/* List styles */
-.gameplan-editor-content ul {
-  list-style: disc;
-  padding-left: 24px;
-  margin: 0 0 10px;
+.gp-gallery-caption-input {
+  width: 100%;
+  margin-top: 6px;
+  border: 1px solid rgba(74, 47, 24, 0.15);
+  border-radius: 8px;
+  background: #FFFFFF;
+  padding: 6px 8px;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px;
+  color: #7D6E5D;
+  text-align: center;
 }
 
-.gameplan-editor-content ol {
-  list-style: decimal;
-  padding-left: 24px;
-  margin: 0 0 10px;
+@media (max-width: 640px) {
+  .gp-rich-text .gp-image-grid,
+  .gameplan-editor-content .gp-image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
-.gameplan-editor-content li {
-  margin-bottom: 4px;
-}
-
-.gameplan-editor-content li p {
-  margin: 0;
+@media (max-width: 480px) {
+  .gp-rich-text .gp-image-grid,
+  .gameplan-editor-content .gp-image-grid {
+    grid-template-columns: 1fr;
+  }
 }

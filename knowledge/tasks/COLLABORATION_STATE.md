@@ -88,3 +88,118 @@
 - What exact data entities come from `hagen-main` versus local `hagen-ui` tables?
 - How should customer-uploaded content review and feedback sit alongside concept planning?
 - Which parts of structured editing data belong in Studio now versus later?
+
+## Latest user input classifications — Gemini / ingest architecture refinement
+
+### Observed issues
+- The current upload flow performs analysis too early and collapses ingest directly into `concepts`, leaving too little room for CM review/filtering before save.
+- AI-derived informational labels such as `headline`, `why it works`, and `summary` are valuable, but they should be generated reliably from deeper clip understanding rather than naively copied from raw metadata.
+- It is undesirable for a CM to micro-edit base concept data except in expected cases such as customer adaptation or occasional script rewrites.
+- The boundary between `hagen-main` (live external system / GCS / Gemini/Vertex-aligned backend) and `hagen-ui` (product workflow + customer-facing system) needs a more structurally durable contract.
+
+### Intended behavior
+- `hagen-main` should remain the analysis system of record connected to Gemini/Vertex/GCS.
+- Analysis quality should be pushed toward near-100% accuracy on key facts through prompt iteration and careful AI dataflow design.
+- Studio should provide a simple CM-facing control flow: ingest clip -> inspect/confirm important values -> approve/save -> later assign/adapt for customers.
+- Before save, the CM should have a lightweight approval/control step rather than being forced to accept an opaque fully-written concept.
+- Informational/customer-facing labels should be generated automatically where possible, ideally through a translation/enrichment layer that turns grounded analysis into useful product copy.
+- CM effort should focus mainly on confirmation, triage, and customer-specific adaptation, not manual field-by-field authoring of base concepts.
+- The concept interaction flow after save should cleanly support: library presence -> customer assignment -> feed-plan placement -> customer-facing adaptation/communication.
+
+### Constraints
+- The UI should not depend on expensive manual concept authoring for routine intake.
+- Generated product copy should be grounded in trustworthy extracted facts/signals, not hallucinated freewriting.
+- The architecture should remain sustainable if `hagen-main` stays live on its own deployment rather than being folded directly into `hagen-ui`.
+
+### Hypotheses
+- The product likely needs an explicit contract boundary where `hagen-main` owns raw analysis truth and `hagen-ui` owns workflow state, approvals, customer adaptation, and local product projections of that truth.
+- A two-step AI pipeline may be appropriate: grounded extraction/classification first, then a cheaper translation/enrichment pass for UI/customer-facing wording.
+- "Save" may need to mean promotion from reviewed ingest item into the local concept system, not immediate acceptance of every field as canonical truth.
+
+### Decision candidates
+- Keep `hagen-main` as a separately deployed analysis service/system of record rather than tightly coupling Gemini/Vertex logic into `hagen-ui`.
+- Introduce a lightweight review/approval state between ingest and persisted base concept.
+- Separate grounded analysis fields from generated presentation fields in the data model and UX.
+- Design CM flows around confirmation and downstream customer adaptation, not heavy authoring of raw concept metadata.
+
+## Latest user input classifications — observation / planner refinement pass
+
+### Observed issues
+- The current hourly observation flow is easy to misread as if cron will automatically advance the 3x3 planner, but the current implementation only imports TikTok history and raises motor signal.
+- Imported TikTok clips and LeTrend-produced clips are still represented as separate shapes in history, with no explicit user-controlled truth layer for matching them.
+- History cards have interaction problems in production: the context-menu trigger can be obscured, the page can shift, and the dropdown is not reliably usable.
+- Feed planner scroll behavior still traps mouse-wheel navigation in a way that makes the surrounding page frustrating to use.
+- Dropdown sizing appears visually wrong, with excessive horizontal dead space.
+- "Markera som gjord" lacks strong interaction feedback while the action is running.
+- LeTrend history cards do not yet present the same bottom stats banner treatment as TikTok-imported history cards.
+
+### Intended behavior
+- The system should clearly separate three actions: detecting a newly published TikTok clip, manually advancing the planner, and explicitly marking a LeTrend concept as produced.
+- Cron should remain an observation/import mechanism, not silently rewrite the plan.
+- After a new uploaded clip is observed, CM should eventually be able to classify or toggle whether that history item should be treated as a LeTrend-produced clip or as ordinary TikTok history.
+- The model should not automatically assume that every newly detected TikTok upload corresponds to the planned LeTrend concept.
+- If a planned LeTrend concept was skipped in reality, the product should preserve room for a later "skipped / unmatched / return to selectable pool" model rather than baking in incorrect assumptions now.
+- LeTrend and TikTok history cards should converge toward a common visual/stat treatment where appropriate, while still preserving their different metadata richness.
+- Observation should later support time-series stats capture for newly published videos (for example, first 48h performance), but that is a later step after the core truth model and UI are stable.
+
+### Constraints
+- Avoid introducing automatic matching logic between imported TikTok clips and planned LeTrend concepts before a clear truth model exists.
+- Preserve the current safe coexistence between hourly import and manual plan advancement/mark-produced flows.
+- Prefer low-risk UI fixes first where the runtime behavior is already understood.
+- Keep imported TikTok history and LeTrend concept history distinguishable at the data-model level until an explicit reconciliation action exists.
+
+### Decision candidates
+- Keep cron as observation-only in v1; do not auto-advance the planner on detected uploads.
+- Introduce a small explicit truth-model pass for history classification/reconciliation instead of guessing from upload timing alone.
+- Handle this work in stages: first harden UI/runtime clarity, then add explicit imported-vs-LeTrend reconciliation controls, then consider richer stats capture.
+- Add visual parity improvements to history cards without prematurely collapsing the underlying data distinction.
+
+## Latest user input classifications — prompt iteration / essence extraction refinement
+
+### Observed issues
+- The current LeTrend prompt can correctly identify coarse metadata such as category, rough structure, people/scenes/dialogue, while still missing the actual comedic essence or content thesis of the clip.
+- Fields like `format_type` can drift toward trivial platform facts (e.g. `vertical video`) instead of meaningful TikTok/hospitality content categories.
+- `replicability_notes` risk being framed too abstractly or against the wrong baseline if the model implicitly evaluates difficulty for a generic creator rather than for a normal restaurant/business operator.
+- `headline` and `summary` are especially sensitive failure points: they can sound plausible while still missing the joke or central tension that makes the clip work.
+
+### Intended behavior
+- The next prompt iteration should prioritize extracting the clip's essence, joke structure, or actual content point over merely getting the surrounding metadata right.
+- All clips can be assumed to be vertical TikTok-style videos, so the schema/prompt should not waste capacity on that distinction.
+- Category recognition for this test clip was acceptable (`humoristisk sketch`); the bigger problem is correctly packaging what the humor actually is.
+- Replicability should be judged relative to what is realistically easy/medium/hard for a restaurant/bar/café team, not an experienced content front-figure baseline.
+- Derived explanatory fields should capture the specific tension, premise, payoff, or social/comedic mechanism that gives the clip its value as a concept.
+
+### Evidence
+- User explicitly said: category was fine, `why_this_exists` was okay, but `concept_payload`, `headline`, and `summary` missed the joke and the essence.
+- User explicitly clarified that what packages the clip structurally is mostly okay, but what explains the content is "inte ens nära".
+
+### Decision candidates
+- Revise the prompt so `format_type` becomes a meaningful content format/category rather than technical video orientation.
+- Add stronger prompt language around identifying the exact joke/premise/tension/payoff, especially for subtle humor.
+- Reframe `replicability_notes` around hospitality-business reality instead of generic creator capability.
+- Potentially split the current overloaded `concept_payload` into a more essence-oriented field such as `core_premise`, `joke_mechanism`, or `transferable_idea`.
+
+## Latest user input classifications — history toggle / now-slot assumption correction
+
+### Observed issues
+- The just-implemented history reconciliation UX is too general/manual if the real operational case is that a newly detected TikTok upload usually corresponds to the current `nu` slot.
+- The labels added on top of history cards (`LeTrend-producerad` on LeTrend-style cards and `TikTok` on TikTok cards) are redundant because the cards already communicate that identity visually.
+- A free-form "link this history clip to any LeTrend concept" picker is likely the wrong primary metaphor for the common case.
+
+### Intended behavior
+- The system should treat cron as observation-only, but use the `nu` slot as the strong default candidate when a new TikTok clip arrives after collaboration has started.
+- History cards should support a simple binary semantic toggle between `TikTok` and `LeTrend`, because imported history can represent either customer-native uploads or LeTrend-produced outcomes.
+- The common operational path is: a CM marks the current LeTrend concept as done when they believe the newly observed upload is that concept; if the upload was actually unrelated, the state should be easy to toggle back.
+- The broad concept picker may remain as a fallback or internal linkage mechanism, but it should not be the primary user-facing interaction for the common case.
+- When a history item is treated as `LeTrend`, the card can present LeTrend-oriented identity/metadata; when treated as `TikTok`, it should present TikTok-native identity.
+- Redundant text labels that restate the card type visually should be removed from the cards.
+
+### Constraints
+- Do not collapse cron, advance-plan, and mark-produced into one automatic action.
+- Preserve the safe coexistence between hourly TikTok import and manual CM actions.
+- Prefer a 0↔1 semantic toggle model for history identity over a broad multi-select reconciliation UX for the common case.
+
+### Decision candidates
+- Reframe the current reconciliation work as a slot-aware `TikTok ↔ LeTrend` toggle model with `nu`-slot assumption as the primary operational heuristic.
+- Keep any arbitrary concept-linking capability, if retained, as a secondary/fallback path rather than the main CTA.
+- Remove the newly added small history-card labels that say `LeTrend-producerad` and `TikTok` because the card visuals already convey that distinction.

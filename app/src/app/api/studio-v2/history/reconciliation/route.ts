@@ -152,7 +152,7 @@ export const DELETE = withAuth(async (request) => {
 
   const { data: existing, error: existingError } = await supabase
     .from('customer_concepts')
-    .select('id, concept_id')
+    .select('id, concept_id, customer_profile_id, published_at')
     .eq('id', historyConceptId)
     .maybeSingle();
 
@@ -185,6 +185,53 @@ export const DELETE = withAuth(async (request) => {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // ── Restore feed_order for the now-unreconciled clip ─────────────────────
+  // Auto-reconcile set this clip's feed_order to null to hide it from the grid.
+  // After undo, it should reappear below all LeTrend historik cards, sorted by
+  // published_at alongside other unreconciled clips.
+  const customerId = existing.customer_profile_id as string;
+
+  const [{ data: letrEndHistorik }, { data: unreconciledRaw }] = await Promise.all([
+    supabase
+      .from('customer_concepts')
+      .select('feed_order')
+      .eq('customer_profile_id', customerId)
+      .not('concept_id', 'is', null)
+      .lt('feed_order', 0)
+      .order('feed_order', { ascending: true })
+      .limit(1),
+    supabase
+      .from('customer_concepts')
+      .select('id, feed_order, published_at, tiktok_url')
+      .eq('customer_profile_id', customerId)
+      .is('concept_id', null)
+      .is('reconciled_customer_concept_id', null),
+  ]);
+
+  const letrEndFloor = (letrEndHistorik?.[0]?.feed_order as number | undefined) ?? -1;
+  const renumberOffset = Math.abs(letrEndFloor);
+
+  // Sort all unreconciled clips (including the just-unreconciled one) by published_at desc
+  const sorted = (unreconciledRaw ?? []).sort((a, b) => {
+    const dateA = a.published_at ? new Date(a.published_at as string).getTime() : 0;
+    const dateB = b.published_at ? new Date(b.published_at as string).getTime() : 0;
+    if (dateB !== dateA) return dateB - dateA;
+    return String(a.tiktok_url ?? '').localeCompare(String(b.tiktok_url ?? ''));
+  });
+
+  const renumberUpdates = sorted.map((row, i) => ({
+    id: row.id as string,
+    to: -(renumberOffset + i + 1),
+  }));
+
+  if (renumberUpdates.length > 0) {
+    await Promise.all(
+      renumberUpdates.map((u) =>
+        supabase.from('customer_concepts').update({ feed_order: u.to }).eq('id', u.id)
+      )
+    );
   }
 
   return NextResponse.json({

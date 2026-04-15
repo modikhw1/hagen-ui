@@ -3,7 +3,8 @@
 import { createContext, useContext, useEffect, useState, useRef, ReactNode, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
-import { isAdminRole, resolveLegacyProfileRole, resolvePrimaryRole } from '@/lib/auth/roles';
+import { resolveLegacyProfileRole } from '@/lib/auth/roles';
+import { clearOnboardingSession } from '@/lib/onboarding/session';
 
 const PROFILE_CACHE_TTL_MS = 5 * 60_000; // 5 min
 const QUERY_TIMEOUT_MS = 10_000;
@@ -93,25 +94,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return null;
         }
 
-        // Resolve role from user_roles table, fall back to legacy profile fields
-        const { data: roles, error: rolesError } = await Promise.race([
-          supabase.from('user_roles').select('role').eq('user_id', userId),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Role query timeout')), QUERY_TIMEOUT_MS)
-          ),
-        ]);
-
-        if (rolesError) {
-          console.error('Error fetching user roles:', rolesError);
-        }
-
-        const hasUserRoles = Array.isArray(roles) && roles.length > 0;
-        const resolvedRole = hasUserRoles
-          ? resolvePrimaryRole(roles || [])
-          : resolveLegacyProfileRole(data as { role?: string | null; is_admin?: boolean | null });
-        const resolvedIsAdmin = hasUserRoles
-          ? isAdminRole(roles || [])
-          : resolvedRole === 'admin';
+        // Resolve role from profiles fields (canonical source)
+        const resolvedRole = resolveLegacyProfileRole(data as { role?: string | null; is_admin?: boolean | null });
+        const resolvedIsAdmin = resolvedRole === 'admin';
 
         const profile = {
           ...(data as Profile),
@@ -162,7 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           };
         });
       }
-    }, 4000);
+    }, 12000);
 
     const initAuth = async () => {
       try {
@@ -206,6 +191,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             error: null,
           });
         } else {
+          // No session — clear onboarding localStorage so stale data
+          // doesn't leak to the next user on the same device (covers
+          // session expiry / cookie clear without explicit signOut).
+          clearOnboardingSession();
           setState(prev => ({
             ...prev,
             user: null,
@@ -286,6 +275,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             break;
 
           case 'SIGNED_OUT':
+            // Clear onboarding localStorage (covers cross-tab signout)
+            clearOnboardingSession();
             setState({
               user: null,
               profile: null,
@@ -373,6 +364,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     try {
       setState(prev => ({ ...prev, authLoading: true, profileLoading: false, status: 'signing_out' }));
+      // Clear onboarding state so the next user on the same device starts fresh
+      clearOnboardingSession();
       await supabase.auth.signOut();
     } catch (err) {
       console.error('Sign out error:', err);

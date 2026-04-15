@@ -26,6 +26,9 @@ export interface Concept {
   mechanism: string;       // 'contrast' | 'subversion' | etc
   market: string;          // 'SE' | 'US' | 'UK' | 'global'
   trendLevel: number;      // 1-5
+  businessTypes?: string[];
+  hasScript?: boolean;
+  estimatedBudget?: string; // 'free' | 'low' | 'medium' | 'high'
 
   // Arrays
   vibeAlignments: string[];

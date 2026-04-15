@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { stripe, isStripeTestMode } from '@/lib/stripe/dynamic-config';
+import Stripe from 'stripe';
+import { stripe, isStripeTestMode, stripeEnvironment } from '@/lib/stripe/dynamic-config';
 import { withAuth } from '@/lib/auth/api-auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -10,7 +11,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
  * POST /api/studio/stripe/sync-subscriptions
  * Sync all subscriptions from Stripe to Supabase
  */
-export const POST = withAuth(async (request: NextRequest, user) => {
+export const POST = withAuth(async () => {
   try {
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
@@ -21,12 +22,12 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     console.log(`[sync-subscriptions] Starting sync from Stripe (${isStripeTestMode ? 'TEST' : 'LIVE'})`);
 
     // Fetch all subscriptions from Stripe
-    const subscriptions: any[] = [];
+    const subscriptions: Stripe.Subscription[] = [];
     let hasMore = true;
     let startingAfter: string | undefined;
 
     while (hasMore) {
-      const params: any = {
+      const params: Stripe.SubscriptionListParams = {
         limit: 100,
         status: 'all',
       };
@@ -78,6 +79,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
             amount,
             interval,
             interval_count: intervalCount,
+            environment: stripeEnvironment,
             current_period_start: sub.current_period_start
               ? new Date(sub.current_period_start * 1000).toISOString()
               : null,
@@ -97,7 +99,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
         } else {
           synced++;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`[sync-subscriptions] Error processing ${sub.id}:`, err);
         errors++;
       }
@@ -112,8 +114,11 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       total: subscriptions.length,
       mode: isStripeTestMode ? 'test' : 'live',
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[sync-subscriptions] Fatal error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Unknown error' },
+      { status: 500 }
+    );
   }
-}, ['admin', 'content_manager']);
+}, ['admin']);

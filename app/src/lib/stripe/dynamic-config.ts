@@ -12,38 +12,33 @@
  */
 
 import Stripe from 'stripe';
+import {
+  getStripeConfigEnvNames,
+  getStripeEnvironment,
+  isStripeTestEnvironment,
+} from '@/lib/stripe/environment';
 
-// Determine environment (defaults to 'test' for safety)
-const ENV = process.env.NEXT_PUBLIC_ENV || 'test';
-const isTestMode = ENV === 'test';
+const ENV = getStripeEnvironment();
+const isTestMode = isStripeTestEnvironment();
+const configEnvNames = getStripeConfigEnvNames(ENV);
 
 console.log(`[Stripe Config] Running in ${ENV} mode (test=${isTestMode})`);
 
-// Select appropriate keys based on environment (always fall back to unsuffixed key)
-const SECRET_KEY = isTestMode
-  ? process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
-  : process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY;
-
-const PUBLISHABLE_KEY = isTestMode
-  ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-
-const WEBHOOK_SECRET = isTestMode
-  ? process.env.STRIPE_WEBHOOK_SECRET_TEST || process.env.STRIPE_WEBHOOK_SECRET
-  : process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET;
+const SECRET_KEY = process.env[configEnvNames.secretKey];
+const PUBLISHABLE_KEY = process.env[configEnvNames.publishableKey];
+const WEBHOOK_SECRET = process.env[configEnvNames.webhookSecret];
 
 // Validate configuration
 if (!SECRET_KEY) {
-  console.error(`[Stripe Config] Missing STRIPE_SECRET_KEY for ${ENV} mode`);
-  console.error('Set STRIPE_SECRET_KEY_TEST or STRIPE_SECRET_KEY_LIVE in .env.local');
+  console.error(`[Stripe Config] Missing ${configEnvNames.secretKey} for ${ENV} mode`);
 }
 
 if (!PUBLISHABLE_KEY) {
-  console.warn(`[Stripe Config] Missing STRIPE_PUBLISHABLE_KEY for ${ENV} mode`);
+  console.warn(`[Stripe Config] Missing ${configEnvNames.publishableKey} for ${ENV} mode`);
 }
 
 if (!WEBHOOK_SECRET) {
-  console.warn(`[Stripe Config] Missing STRIPE_WEBHOOK_SECRET for ${ENV} mode - webhook signature verification disabled`);
+  console.warn(`[Stripe Config] Missing ${configEnvNames.webhookSecret} for ${ENV} mode - webhook signature verification disabled`);
 }
 
 // Initialize Stripe client (or null if key missing)

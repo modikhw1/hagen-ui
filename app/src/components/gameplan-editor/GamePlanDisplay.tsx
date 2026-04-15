@@ -11,12 +11,12 @@ interface GamePlanDisplayProps {
 export function GamePlanDisplay({
   html,
   hasChanges = false,
-  emptyLabel = 'Ingen Game Plan än.',
+  emptyLabel = 'Ingen Game Plan ännu.',
 }: GamePlanDisplayProps) {
   const safeHtml = sanitizeRichTextHtml(html || '');
 
   return (
-    <div style={{ fontSize: '14px', lineHeight: 1.7, position: 'relative' }}>
+    <div style={{ position: 'relative' }}>
       {hasChanges && (
         <div
           title="Nya uppdateringar i Game Plan"
@@ -34,9 +34,32 @@ export function GamePlanDisplay({
       )}
 
       {safeHtml.trim() ? (
-        <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
+        <div
+          className="gp-rich-text"
+          style={{
+            background: '#FFFFFF',
+            borderRadius: 12,
+            border: '1px solid rgba(74, 47, 24, 0.06)',
+            padding: '18px 20px',
+          }}
+          dangerouslySetInnerHTML={{ __html: safeHtml }}
+        />
       ) : (
-        <div style={{ color: '#9ca3af' }}>{emptyLabel}</div>
+        <div
+          style={{
+            padding: '20px 18px',
+            borderRadius: 12,
+            background: '#F5F2EE',
+            border: '1px dashed rgba(74, 47, 24, 0.08)',
+            color: '#7D6E5D',
+            fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            fontSize: 14,
+            lineHeight: 1.6,
+            textAlign: 'center',
+          }}
+        >
+          {emptyLabel}
+        </div>
       )}
     </div>
   );

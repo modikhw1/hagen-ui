@@ -2,169 +2,177 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
+import { onboardingTheme as t } from '@/lib/onboarding/theme';
+import { getOnboardingProfileId, clearOnboardingSession } from '@/lib/onboarding/session';
+import { WelcomeHero } from '@/components/onboarding/WelcomeHero';
+import { ContentManagerCard } from '@/components/onboarding/ContentManagerCard';
+import { TikTokProfileCard } from '@/components/onboarding/TikTokProfileCard';
+import { ProcessTimeline } from '@/components/onboarding/ProcessTimeline';
+import { PackageSummary } from '@/components/onboarding/PackageSummary';
+import { OnboardingCTA } from '@/components/onboarding/OnboardingCTA';
+
+interface WelcomeContext {
+  customer: { businessName: string; tiktokHandle: string | null; tiktokProfileUrl: string | null };
+  contentManager: { name: string; avatarUrl: string | null; email: string | null } | null;
+  subscription: {
+    pricePerMonth: number;
+    interval: string;
+    scopeItems: string[];
+    invoiceText: string | null;
+    firstInvoiceBehavior: string;
+    billingDayOfMonth: number;
+  };
+  process: { steps: Array<{ number: string; title: string; description: string }> };
+}
 
 export default function WelcomePage() {
   const router = useRouter();
+  const [context, setContext] = useState<WelcomeContext | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if user is logged in (has session)
-    const hasSession = localStorage.getItem('pending_agreement_email');
-    if (!hasSession) {
-      // Not from invite flow - redirect to login
-      router.push('/login');
-      return;
-    }
-    setLoading(false);
+    const init = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        router.replace('/login?redirect=/welcome');
+        return;
+      }
+
+      const profileId = getOnboardingProfileId();
+      if (!profileId) {
+        // No profile linked — redirect to feed (returning user) or login
+        router.replace('/feed');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/onboarding/welcome-context?profileId=${encodeURIComponent(profileId)}`);
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Kunde inte hämta data');
+        }
+        const data: WelcomeContext = await res.json();
+        setContext(data);
+      } catch (err) {
+        console.error('Failed to fetch welcome context:', err);
+        setError(err instanceof Error ? err.message : 'Något gick fel');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void init();
   }, [router]);
 
-  const handleGetStarted = () => {
-    router.push('/onboarding');
+  const handleCheckout = () => {
+    router.push('/checkout');
+  };
+
+  const handleExplore = () => {
+    clearOnboardingSession();
+    router.push('/feed');
   };
 
   if (loading) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(180deg, #FAF8F5 0%, #F5F0EB 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <div style={{
-          width: '32px',
-          height: '32px',
-          border: '3px solid #E8E0D8',
-          borderTopColor: '#6B4423',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite',
-        }} />
-        <style>{`
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}</style>
+      <div
+        style={{
+          minHeight: '100vh',
+          background: `linear-gradient(180deg, ${t.bg.primary} 0%, ${t.bg.secondary} 100%)`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: '32px',
+            height: '32px',
+            border: `3px solid ${t.border.light}`,
+            borderTopColor: t.brand.primary,
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+          }}
+        />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error || !context) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          background: `linear-gradient(180deg, ${t.bg.primary} 0%, ${t.bg.secondary} 100%)`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+        }}
+      >
+        <div style={{ textAlign: 'center', maxWidth: '400px' }}>
+          <p style={{ color: '#DC2626', marginBottom: '16px' }}>{error || 'Något gick fel'}</p>
+          <button
+            onClick={() => router.push('/login')}
+            style={{
+              padding: '12px 24px',
+              background: t.brand.dark,
+              color: t.bg.primary,
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+            }}
+          >
+            Tillbaka till inloggning
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(180deg, #FAF8F5 0%, #F5F0EB 100%)',
-      padding: '40px 20px',
-    }}>
-      <div style={{
-        maxWidth: '600px',
-        margin: '0 auto',
-        textAlign: 'center',
-      }}>
-        {/* Logo */}
-        <div style={{
-          width: '80px',
-          height: '80px',
-          background: 'linear-gradient(135deg, #6B4423 0%, #4A2F18 100%)',
-          borderRadius: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          margin: '0 auto 32px',
-          boxShadow: '0 8px 32px rgba(107, 68, 35, 0.3)',
-        }}>
-          <span style={{ color: '#FAF8F5', fontSize: '36px', fontWeight: 'bold', fontFamily: 'serif' }}>Le</span>
-        </div>
+    <div
+      style={{
+        minHeight: '100vh',
+        background: `linear-gradient(180deg, ${t.bg.primary} 0%, ${t.bg.secondary} 100%)`,
+      }}
+    >
+      <div style={{ maxWidth: '520px', margin: '0 auto' }}>
+        {/* 1. Hero */}
+        <WelcomeHero businessName={context.customer.businessName} />
 
-        <h1 style={{ 
-          fontSize: '36px', 
-          color: '#1A1612', 
-          marginBottom: '16px',
-          fontWeight: '700',
-          lineHeight: '1.2',
-        }}>
-          Välkommen till LeTrend!
-        </h1>
+        {/* 2. Content Manager */}
+        {context.contentManager && (
+          <ContentManagerCard
+            name={context.contentManager.name}
+            avatarUrl={context.contentManager.avatarUrl}
+            email={context.contentManager.email}
+          />
+        )}
 
-        <p style={{ 
-          fontSize: '18px', 
-          color: '#5D4D3D', 
-          marginBottom: '40px',
-          lineHeight: '1.6',
-        }}>
-          Din partner för sociala medier och content creation. 
-          Vi hjälper dig att växa din närvaro online.
-        </p>
+        {/* 3. TikTok (conditional) */}
+        {(context.customer.tiktokHandle || context.customer.tiktokProfileUrl) && (
+          <TikTokProfileCard
+            handle={context.customer.tiktokHandle || ''}
+            profileUrl={context.customer.tiktokProfileUrl}
+          />
+        )}
 
-        {/* Features */}
-        <div style={{
-          background: 'white',
-          borderRadius: '16px',
-          padding: '32px',
-          marginBottom: '40px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
-          textAlign: 'left',
-        }}>
-          <h2 style={{ fontSize: '18px', color: '#1A1612', marginBottom: '20px', fontWeight: '600' }}>
-            Vad vi erbjuder
-          </h2>
-          
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ width: '40px', height: '40px', background: '#FAF8F5', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: '20px' }}>📱</span>
-            </div>
-            <div>
-              <h3 style={{ fontSize: '16px', color: '#1A1612', marginBottom: '4px', fontWeight: '600' }}>Sociala Medier</h3>
-              <p style={{ fontSize: '14px', color: '#5D4D3D', margin: 0 }}>Professionell närvaro på alla plattformar</p>
-            </div>
-          </div>
+        {/* 4. Process Timeline */}
+        <ProcessTimeline steps={context.process.steps} />
 
-          <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
-            <div style={{ width: '40px', height: '40px', background: '#FAF8F5', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: '20px' }}>🎨</span>
-            </div>
-            <div>
-              <h3 style={{ fontSize: '16px', color: '#1A1612', marginBottom: '4px', fontWeight: '600' }}>Content Creation</h3>
-              <p style={{ fontSize: '14px', color: '#5D4D3D', margin: 0 }}>Unikt innehåll anpassat för ditt varumärke</p>
-            </div>
-          </div>
+        {/* 5. Package Summary */}
+        <PackageSummary
+          pricePerMonth={context.subscription.pricePerMonth}
+          interval={context.subscription.interval}
+          scopeItems={context.subscription.scopeItems}
+        />
 
-          <div style={{ display: 'flex', gap: '16px' }}>
-            <div style={{ width: '40px', height: '40px', background: '#FAF8F5', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span style={{ fontSize: '20px' }}>📈</span>
-            </div>
-            <div>
-              <h3 style={{ fontSize: '16px', color: '#1A1612', marginBottom: '4px', fontWeight: '600' }}>Tillväxt</h3>
-              <p style={{ fontSize: '14px', color: '#5D4D3D', margin: 0 }}>Strategier som levererar resultat</p>
-            </div>
-          </div>
-        </div>
-
-        {/* CTA */}
-        <button
-          onClick={handleGetStarted}
-          style={{
-            width: '100%',
-            maxWidth: '400px',
-            padding: '18px 32px',
-            background: 'linear-gradient(135deg, #6B4423 0%, #4A2F18 100%)',
-            color: '#FAF8F5',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            fontSize: '18px',
-            fontWeight: '600',
-            boxShadow: '0 4px 20px rgba(107, 68, 35, 0.4)',
-          }}
-        >
-          Kom igång →
-        </button>
-
-        <p style={{ 
-          fontSize: '13px', 
-          color: '#9A8B7A', 
-          marginTop: '20px',
-        }}>
-          Redo när du är • Inga förpliktelser
-        </p>
+        {/* 6. CTA */}
+        <OnboardingCTA onCheckout={handleCheckout} onExplore={handleExplore} />
       </div>
     </div>
   );

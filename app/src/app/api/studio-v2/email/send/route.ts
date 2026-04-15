@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
+import { z } from 'zod';
 import { withAuth } from '@/lib/auth/api-auth';
+import { hydrateEmailPayload } from '@/lib/email/service';
 import { buildAssignmentShareMarkerPayload } from '@/lib/customer-concept-lifecycle';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
@@ -8,26 +10,33 @@ const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KE
 const from = process.env.RESEND_FROM_EMAIL || 'LeTrend <hej@letrend.se>';
 
 export const POST = withAuth(async (request, user) => {
-  const body = await request.json();
-  const customerId = body?.customer_id;
-  const subject = body?.subject;
-  const html = body?.body_html;
-  const conceptIds = Array.isArray(body?.concept_ids) ? body.concept_ids : [];
+  let requestBody: unknown;
 
-  if (!customerId || !subject || !html) {
-    return NextResponse.json({ error: 'customer_id, subject and body_html are required' }, { status: 400 });
+  try {
+    requestBody = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Ogiltig JSON payload' }, { status: 400 });
   }
 
+  let hydrated;
+  try {
+    hydrated = await hydrateEmailPayload(requestBody);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues[0]?.message || 'Invalid payload' }, { status: 400 });
+    }
+
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to build email' },
+      { status: 500 }
+    );
+  }
+
+  const customerId = hydrated.payload.customer_id;
+  const subject = hydrated.rendered.subject;
+  const html = hydrated.rendered.html;
+  const conceptIds = hydrated.conceptIds;
   const supabase = createSupabaseAdmin();
-  const { data: customer, error: customerError } = await supabase
-    .from('customer_profiles')
-    .select('contact_email')
-    .eq('id', customerId)
-    .single();
-
-  if (customerError || !customer?.contact_email) {
-    return NextResponse.json({ error: customerError?.message || 'Customer email missing' }, { status: 500 });
-  }
 
   let status = 'queued';
   let providerMessageId: string | null = null;
@@ -37,7 +46,7 @@ export const POST = withAuth(async (request, user) => {
     try {
       const response = await resend.emails.send({
         from,
-        to: customer.contact_email,
+        to: hydrated.toEmail,
         subject,
         html,
       });
@@ -97,8 +106,6 @@ export const POST = withAuth(async (request, user) => {
         ? `${warning} Assignment share markers were not updated.`
         : 'Assignment share markers were not updated.';
     } else if (assignmentRows && assignmentRows.length > 0) {
-      // markers boundary write: advances share marker (sent_at) and assignment
-      // status for each concept included in the sent email
       const shareUpdates = await Promise.all(
         assignmentRows.map((assignment) => (
           supabase

@@ -22,6 +22,7 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
       feed_order,
       tags,
       collection_id,
+      updated_at,
       added_at,
       sent_at,
       produced_at,
@@ -88,6 +89,9 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
             tiktok_comments: importedStats.tiktok_comments ?? row.tiktok_comments,
             tiktok_watch_time_seconds: importedStats.tiktok_watch_time_seconds ?? row.tiktok_watch_time_seconds,
             tiktok_last_synced_at: importedStats.tiktok_last_synced_at ?? row.tiktok_last_synced_at,
+            // Expose the imported clip's own ID so the client can call undo-reconciliation
+            // from the LeTrend historik card side (the imported clip is hidden from the grid).
+            reconciled_imported_clip_id: importedStats.id,
           };
         }
       }

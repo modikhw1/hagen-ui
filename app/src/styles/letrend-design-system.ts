@@ -12,11 +12,24 @@ export const LeTrendColors = {
   brownMedium: '#5D3A1A',
   brownLight: '#6B4423',
 
+  // Warmth tokens
+  background: '#FAF8F5',
+  surfaceCard: '#FFFFFF',
+  surfaceMuted: '#F5F2EE',
+  surfaceWarm: '#F0EBE4',
+  surfaceHighlight: '#F7F2EC',
+  brownInk: '#1A1612',
+  brownSubtle: '#5D4D3D',
+  textLight: '#FAF8F5',
+  linkChip: '#8B7355',
+  gold: '#8B6914',
+
   // Text colors
   textPrimary: '#1A1612',
   textSecondary: '#7D6E5D',
   textMuted: '#9D8E7D',
   textPlaceholder: '#B5A99A',
+  editorBody: '#4A4239',
 
   // Surface colors
   surface: '#F5F2EE',
@@ -27,9 +40,15 @@ export const LeTrendColors = {
   error: '#C53030',
   warning: '#D97706',
   info: '#2563EB',
+  successLight: 'rgba(16, 185, 129, 0.08)',
+  warningLight: 'rgba(245, 158, 11, 0.14)',
+  warningText: '#92400e',
+  errorLight: 'rgba(239, 68, 68, 0.08)',
+  errorText: '#b91c1c',
 
   // Border
   border: 'rgba(74, 47, 24, 0.08)',
+  borderStrong: 'rgba(74, 47, 24, 0.15)',
   borderMedium: 'rgba(74, 47, 24, 0.12)',
   borderDark: 'rgba(74, 47, 24, 0.2)',
 } as const;
@@ -81,7 +100,10 @@ export const LeTrendRadius = {
   sm: '4px',
   md: '8px',
   lg: '12px',
+  xlSoft: '14px',
   xl: '16px',
+  '2xl': '16px',
+  pill: '999px',
   full: '9999px',
 } as const;
 
@@ -90,6 +112,8 @@ export const LeTrendShadows = {
   md: '0 4px 6px rgba(74, 47, 24, 0.07)',
   lg: '0 8px 16px rgba(74, 47, 24, 0.1)',
   xl: '0 12px 24px rgba(74, 47, 24, 0.12)',
+  warmthCard: '0 4px 24px rgba(44, 36, 22, 0.08)',
+  warmthFeatured: '0 8px 32px rgba(107, 68, 35, 0.25)',
   inner: 'inset 0 2px 4px rgba(74, 47, 24, 0.06)',
 } as const;
 
@@ -97,6 +121,9 @@ export const LeTrendGradients = {
   brownPrimary: 'linear-gradient(145deg, #4A2F18, #3D2510)',
   brownLight: 'linear-gradient(135deg, #6B4423 0%, #5D3A1A 100%)',
   cream: 'linear-gradient(180deg, #FAF8F5 0%, #F5F2EE 100%)',
+  gradientBrand: 'linear-gradient(145deg, #4A2F18, #3D2510)',
+  gradientCTA: 'linear-gradient(145deg, #6B4423, #4A2F18)',
+  gradientSuccess: 'linear-gradient(145deg, #5A8F5A, #4A7A4A)',
 } as const;
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
@@ -14,6 +14,7 @@ import { LinkChipNode } from './extensions/LinkChipNode';
 import { ImageFigureNode } from './extensions/ImageFigureNode';
 import { ImageGalleryNode } from './extensions/ImageGalleryNode';
 import { GamePlanToolbar } from './GamePlanToolbar';
+import { normalizeHref } from './utils/link-helpers';
 import { sanitizeRichTextHtml } from './utils/sanitize';
 
 interface GamePlanEditorProps {
@@ -22,11 +23,45 @@ interface GamePlanEditorProps {
   isFullscreen?: boolean;
 }
 
+function BubbleButton({
+  active,
+  onClick,
+  children,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '4px 8px',
+        border: 'none',
+        borderRadius: 6,
+        background: active ? 'rgba(250,248,245,0.18)' : 'transparent',
+        color: '#FAF8F5',
+        cursor: 'pointer',
+        fontSize: 13,
+        fontWeight: 600,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: GamePlanEditorProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestHtmlRef = useRef(initialHtml);
   const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkValue, setLinkValue] = useState('');
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   const flushPendingChanges = useCallback((editorInstance: ReturnType<typeof useEditor>) => {
     if (debounceRef.current) {
@@ -50,7 +85,6 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
         blockquote: false,
         codeBlock: false,
         horizontalRule: false,
-        // bulletList, orderedList, listItem included automatically
       }),
       Gapcursor,
       Dropcursor.configure({
@@ -84,17 +118,13 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
       debounceRef.current = setTimeout(() => {
         const html = sanitizeRichTextHtml(instance.getHTML());
         latestHtmlRef.current = html;
-        onChange(html);
+        onChangeRef.current(html);
       }, 300);
     },
     editorProps: {
       attributes: {
-        class: 'gameplan-editor-content',
+        class: 'gameplan-editor-content gp-rich-text',
         style: `
-          font-family: 'Lora', Georgia, serif;
-          font-size: 14px;
-          color: #4A4239;
-          line-height: 1.6;
           min-height: ${isFullscreen ? 'calc(100vh - 120px)' : '400px'};
           padding: 18px 20px;
           outline: none;
@@ -112,100 +142,194 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
     }
   }, [editor, initialHtml]);
 
-  // Flush on blur so save-button clicks get the latest content
   useEffect(() => {
     if (!editor) return;
     const handleBlur = () => flushPendingChanges(editor);
     editor.on('blur', handleBlur);
-    return () => { editor.off('blur', handleBlur); };
+    return () => {
+      editor.off('blur', handleBlur);
+    };
   }, [editor, flushPendingChanges]);
 
-  // Flush on unmount
   useEffect(() => {
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         debounceRef.current = null;
-        // Final save — editor may already be destroyed here, so use latestHtmlRef
         onChangeRef.current(latestHtmlRef.current);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!editor) return null;
 
+  const activeLinkHref = String(editor.getAttributes('link').href || '');
+
+  const openLinkDialog = () => {
+    setLinkValue(activeLinkHref);
+    setLinkDialogOpen(true);
+  };
+
+  const applyLink = () => {
+    const href = normalizeHref(linkValue);
+    if (!href) {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      setLinkDialogOpen(false);
+      return;
+    }
+
+    editor
+      .chain()
+      .focus()
+      .extendMarkRange('link')
+      .setLink({
+        href,
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      })
+      .run();
+
+    setLinkDialogOpen(false);
+  };
+
   return (
-    <div
-      style={{
-        background: '#FFFFFF',
-        borderRadius: 12,
-        border: '1px solid rgba(74,47,24,0.08)',
-        overflow: 'hidden',
-      }}
-    >
+    <div className="gameplan-editor-shell">
       <GamePlanToolbar editor={editor} />
 
-      <BubbleMenu editor={editor} options={{}}>
+      <BubbleMenu editor={editor} options={{ placement: 'top' }}>
         <div
           style={{
             display: 'flex',
-            gap: 2,
-            padding: 4,
+            alignItems: 'center',
+            gap: 4,
+            padding: 6,
             background: '#1A1612',
             borderRadius: 8,
             boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+            maxWidth: 'min(360px, calc(100vw - 32px))',
           }}
         >
-          <button
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            style={{
-              padding: '4px 8px',
-              border: 'none',
-              borderRadius: 4,
-              background: editor.isActive('bold') ? 'rgba(250,248,245,0.2)' : 'transparent',
-              color: '#FAF8F5',
-              cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 700,
-            }}
-          >
+          <BubbleButton active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()}>
             B
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            style={{
-              padding: '4px 8px',
-              border: 'none',
-              borderRadius: 4,
-              background: editor.isActive('italic') ? 'rgba(250,248,245,0.2)' : 'transparent',
-              color: '#FAF8F5',
-              cursor: 'pointer',
-              fontSize: 13,
-              fontStyle: 'italic',
-            }}
-          >
+          </BubbleButton>
+          <BubbleButton active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()}>
             I
-          </button>
-          <button
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            style={{
-              padding: '4px 8px',
-              border: 'none',
-              borderRadius: 4,
-              background: editor.isActive('underline') ? 'rgba(250,248,245,0.2)' : 'transparent',
-              color: '#FAF8F5',
-              cursor: 'pointer',
-              fontSize: 13,
-              textDecoration: 'underline',
-            }}
-          >
+          </BubbleButton>
+          <BubbleButton active={editor.isActive('underline')} onClick={() => editor.chain().focus().toggleUnderline().run()}>
             U
-          </button>
+          </BubbleButton>
+          <BubbleButton active={editor.isActive('link')} onClick={openLinkDialog}>
+            Länk
+          </BubbleButton>
+          {editor.isActive('link') && activeLinkHref ? (
+            <span
+              style={{
+                color: 'rgba(250,248,245,0.74)',
+                fontSize: 11,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: 160,
+              }}
+              title={activeLinkHref}
+            >
+              {activeLinkHref}
+            </span>
+          ) : null}
         </div>
       </BubbleMenu>
 
       <EditorContent editor={editor} />
+
+      {linkDialogOpen ? (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(26, 22, 18, 0.24)',
+            padding: 16,
+          }}
+          onClick={() => setLinkDialogOpen(false)}
+        >
+          <div
+            onClick={(event) => event.stopPropagation()}
+            style={{
+              width: 'min(420px, 100%)',
+              background: '#FFFFFF',
+              borderRadius: 14,
+              padding: 20,
+              boxShadow: '0 8px 32px rgba(107, 68, 35, 0.25)',
+              border: '1px solid rgba(74, 47, 24, 0.08)',
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                fontSize: 16,
+                fontWeight: 600,
+                color: '#1A1612',
+                marginBottom: 12,
+              }}
+              >
+              Lägg till länk
+            </div>
+            <input
+              autoFocus
+              value={linkValue}
+              onChange={(event) => setLinkValue(event.target.value)}
+              placeholder="https://..."
+              style={{
+                width: '100%',
+                padding: '14px 16px',
+                borderRadius: 12,
+                border: '1px solid rgba(74,47,24,0.15)',
+                fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                fontSize: 14,
+                color: '#4A4239',
+                outline: 'none',
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setLinkDialogOpen(false)}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(74,47,24,0.08)',
+                  background: '#FFFFFF',
+                  color: '#1A1612',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                onClick={applyLink}
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#6B4423',
+                  color: '#FAF8F5',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Spara länk
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

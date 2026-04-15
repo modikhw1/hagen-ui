@@ -47,9 +47,7 @@ export class AuthError extends Error {
 /**
  * Validates JWT from request and returns authenticated user with role.
  *
- * Checks both:
- * 1. Middleware-injected headers (x-user-id, x-user-role)
- * 2. Fallback: Direct JWT validation via Supabase
+ * Validates via JWT from cookies (Supabase session).
  *
  * @param request - Next.js request object
  * @param requiredRoles - Optional array of roles that are allowed
@@ -57,32 +55,11 @@ export class AuthError extends Error {
  * @returns Authenticated user object with id, email, role, is_admin
  */
 export async function validateApiRequest(
-  request: NextRequest,
+  _request: NextRequest,
   requiredRoles?: UserRole[]
 ): Promise<AuthenticatedUser> {
 
-  // Strategy 1: Try to get user from middleware headers (most efficient)
-  const userId = request.headers.get('x-user-id')
-  const userEmail = request.headers.get('x-user-email')
-  const userRole = request.headers.get('x-user-role') as UserRole | null
-
-  if (userId && userEmail && userRole) {
-    const user: AuthenticatedUser = {
-      id: userId,
-      email: userEmail,
-      role: userRole,
-      is_admin: userRole === 'admin',
-    }
-
-    // Check role requirement
-    if (requiredRoles && requiredRoles.length > 0 && !requiredRoles.includes(userRole)) {
-      throw new AuthError(403, 'Insufficient permissions')
-    }
-
-    return user
-  }
-
-  // Strategy 2: Fallback - validate JWT from cookies (in case middleware is bypassed or not run)
+  // Validate JWT from cookies
   const cookieStore = await cookies()
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {

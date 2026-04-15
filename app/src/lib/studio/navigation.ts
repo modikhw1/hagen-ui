@@ -17,8 +17,6 @@ type StudioWorkspaceSectionItem = {
 export const STUDIO_SHELL_NAV_ITEMS: StudioShellNavItem[] = [
   { href: '/studio/customers', label: 'Kundarbete', kind: 'primary' },
   { href: '/studio/concepts', label: 'Konceptbibliotek', kind: 'primary' },
-  { href: '/studio/upload', label: 'Upload', kind: 'utility' },
-  { href: '/studio/invoices', label: 'Fakturor', kind: 'utility' },
 ];
 
 export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [

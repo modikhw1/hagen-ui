@@ -38,6 +38,24 @@
     "team": "4+ personer"
   },
 
+  "businessTypes": {
+    "bar": "Bar",
+    "restaurang": "Restaurang",
+    "cafe": "Café",
+    "bistro": "Bistro",
+    "hotell": "Hotell",
+    "foodtruck": "Foodtruck",
+    "nattklubb": "Nattklubb",
+    "bageri": "Bageri"
+  },
+
+  "estimatedBudgets": {
+    "free": "Gratis",
+    "low": "Låg",
+    "medium": "Medel",
+    "high": "Hög"
+  },
+
   "vibeAlignments": {
     "foodies": "Matälskare",
     "locals": "Lokalbefolkning",

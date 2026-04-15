@@ -7,13 +7,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 
 const checkoutRequestSchema = z.object({
-  email: z.string().email().optional(),
-  profileId: z.string().trim().min(1).max(128).optional(),
-  priceAmount: z.number().int().nonnegative().optional(),
-  productName: z.string().trim().min(1).max(120).optional(),
-  customerName: z.string().trim().min(1).max(120).optional(),
-  interval: z.enum(['month', 'quarter', 'year']).optional(),
-  invoiceText: z.string().trim().max(2000).optional(),
+  profileId: z.string().trim().min(1).max(128),
 });
 
 const checkoutResponseSchema = z.object({
@@ -132,6 +126,17 @@ function resolveMonthlyPrice(profile: ContractProfile) {
   };
 }
 
+async function findOrCreateCoupon(
+  stripeClient: Stripe,
+  params: Stripe.CouponCreateParams & { id: string }
+) {
+  try {
+    return await stripeClient.coupons.retrieve(params.id);
+  } catch {
+    return stripeClient.coupons.create(params);
+  }
+}
+
 async function createContractCoupon(
   stripeClient: Stripe,
   profile: ContractProfile,
@@ -148,10 +153,13 @@ async function createContractCoupon(
 
   const duration: Stripe.CouponCreateParams.Duration = durationMonths === 1 ? 'once' : 'repeating';
   const durationInMonths = duration === 'repeating' ? durationMonths : undefined;
+  // Deterministic coupon ID based on profile discount parameters — prevents orphan coupons
+  const couponIdBase = `lt_${profile.id}_${type}_${rawValue}_${durationMonths}`;
 
   if (type === 'percent' && rawValue > 0) {
     const percentOff = Math.max(0, Math.min(100, rawValue));
-    return stripeClient.coupons.create({
+    return findOrCreateCoupon(stripeClient, {
+      id: couponIdBase,
       percent_off: percentOff,
       duration,
       duration_in_months: durationInMonths,
@@ -161,7 +169,8 @@ async function createContractCoupon(
 
   if (type === 'free_months' && rawValue > 0) {
     const freeMonths = Math.max(1, rawValue);
-    return stripeClient.coupons.create({
+    return findOrCreateCoupon(stripeClient, {
+      id: couponIdBase,
       percent_off: 100,
       duration: freeMonths === 1 ? 'once' : 'repeating',
       duration_in_months: freeMonths > 1 ? freeMonths : undefined,
@@ -172,7 +181,8 @@ async function createContractCoupon(
   if (type === 'amount' && rawValue > 0) {
     if (usingProration && basePriceOre > 0) {
       const percentOff = Math.max(1, Math.min(100, Math.round((rawValue * 100) / (basePriceOre / 100))));
-      return stripeClient.coupons.create({
+      return findOrCreateCoupon(stripeClient, {
+        id: `${couponIdBase}_pct`,
         percent_off: percentOff,
         duration,
         duration_in_months: durationInMonths,
@@ -180,7 +190,8 @@ async function createContractCoupon(
       });
     }
 
-    return stripeClient.coupons.create({
+    return findOrCreateCoupon(stripeClient, {
+      id: couponIdBase,
       amount_off: rawValue * 100,
       currency: 'sek',
       duration,
@@ -213,16 +224,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = parsedBody.data;
-    const {
-      email: fallbackEmailInput,
-      profileId,
-      priceAmount: fallbackPriceAmount,
-      productName: fallbackProductName,
-      customerName: fallbackCustomerName,
-      interval: fallbackInterval,
-      invoiceText: fallbackInvoiceText,
-    } = body;
+    const { profileId } = parsedBody.data;
 
     if (!stripe) {
       return json({ error: 'Stripe not configured', requestId }, 500);
@@ -233,69 +235,64 @@ export async function POST(req: NextRequest) {
       return json({ error: 'Unauthorized' }, 401);
     }
 
-    let contractProfile: ContractProfile | null = null;
-    let supabaseAdmin: ReturnType<typeof createClient> | null = null;
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-    if (profileId) {
-      supabaseAdmin = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
+    const { data, error } = await supabaseAdmin
+      .from('customer_profiles')
+      .select(`
+        id,
+        business_name,
+        contact_email,
+        monthly_price,
+        pricing_status,
+        subscription_interval,
+        invoice_text,
+        contract_start_date,
+        billing_day_of_month,
+        first_invoice_behavior,
+        discount_type,
+        discount_value,
+        discount_duration_months,
+        discount_start_date,
+        discount_end_date,
+        upcoming_monthly_price,
+        upcoming_price_effective_date
+      `)
+      .eq('id', profileId)
+      .single();
 
-      const { data, error } = await supabaseAdmin
-        .from('customer_profiles')
-        .select(`
-          id,
-          business_name,
-          contact_email,
-          monthly_price,
-          pricing_status,
-          subscription_interval,
-          invoice_text,
-          contract_start_date,
-          billing_day_of_month,
-          first_invoice_behavior,
-          discount_type,
-          discount_value,
-          discount_duration_months,
-          discount_start_date,
-          discount_end_date,
-          upcoming_monthly_price,
-          upcoming_price_effective_date
-        `)
-        .eq('id', profileId)
-        .single();
-
-      if (error) {
-        return json({ error: 'Customer profile not found', requestId }, 404);
-      }
-
-      contractProfile = data as ContractProfile;
-
-      // Verify the authenticated user owns this profile
-      const { data: profileLink } = await supabaseAdmin
-        .from('profiles')
-        .select('matching_data')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      const matchingData = (profileLink as Record<string, unknown> | null)?.matching_data as Record<string, unknown> | undefined;
-      const linkedProfileId = typeof matchingData?.customer_profile_id === 'string'
-        ? matchingData.customer_profile_id
-        : null;
-
-      const normalizedUserEmail = (user.email || '').trim().toLowerCase();
-      const normalizedContractEmail = (contractProfile.contact_email || '').trim().toLowerCase();
-      const ownsProfile =
-        linkedProfileId === profileId ||
-        (normalizedUserEmail.length > 0 && normalizedUserEmail === normalizedContractEmail);
-
-      if (!ownsProfile) {
-        return json({ error: 'Forbidden: profile does not belong to current user', requestId }, 403);
-      }
+    if (error || !data) {
+      return json({ error: 'Customer profile not found', requestId }, 404);
     }
 
-    const pricingStatus = contractProfile?.pricing_status || 'fixed';
+    const contractProfile = data as ContractProfile;
+
+    // Verify the authenticated user owns this profile
+    const { data: profileLink } = await supabaseAdmin
+      .from('profiles')
+      .select('matching_data')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const matchingData = (profileLink as Record<string, unknown> | null)?.matching_data as Record<string, unknown> | undefined;
+    const linkedProfileId = typeof matchingData?.customer_profile_id === 'string'
+      ? matchingData.customer_profile_id
+      : null;
+
+    const normalizedUserEmail = (user.email || '').trim().toLowerCase();
+    const normalizedContractEmail = (contractProfile.contact_email || '').trim().toLowerCase();
+    const ownsProfile =
+      linkedProfileId === profileId ||
+      (normalizedUserEmail.length > 0 && normalizedUserEmail === normalizedContractEmail);
+
+    if (!ownsProfile) {
+      return json({ error: 'Forbidden: profile does not belong to current user', requestId }, 403);
+    }
+
+    const pricingStatus = contractProfile.pricing_status || 'fixed';
     if (pricingStatus === 'unknown') {
       return json(
         { error: 'Pris ar inte satt for kunden annu. Satt avtalspris i admin innan checkout.', requestId },
@@ -303,19 +300,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const email = contractProfile?.contact_email || user.email || fallbackEmailInput;
-    const customerName = contractProfile?.business_name || fallbackCustomerName || undefined;
-    const finalInvoiceText = contractProfile?.invoice_text || fallbackInvoiceText || '';
-    const selectedInterval = contractProfile?.subscription_interval || fallbackInterval || 'month';
+    const email = contractProfile.contact_email || user.email;
+    const customerName = contractProfile.business_name || undefined;
+    const finalInvoiceText = contractProfile.invoice_text || '';
+    const selectedInterval = contractProfile.subscription_interval || 'month';
 
-    const priceResolution = contractProfile
-      ? resolveMonthlyPrice(contractProfile)
-      : { effectivePrice: (Number(fallbackPriceAmount) || 0) / 100, source: 'base' as const, shouldPromoteUpcoming: false };
+    const priceResolution = resolveMonthlyPrice(contractProfile);
 
     // Promote upcoming price if it has become effective
-    if (profileId && contractProfile && priceResolution.shouldPromoteUpcoming && supabaseAdmin) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabaseAdmin as any)
+    if (priceResolution.shouldPromoteUpcoming) {
+      await supabaseAdmin
         .from('customer_profiles')
         .update({
           monthly_price: priceResolution.effectivePrice,
@@ -349,34 +343,51 @@ export async function POST(req: NextRequest) {
 
     const { interval, intervalCount } = toIntervalParts(selectedInterval);
 
-    const price = await stripe.prices.create({
-      unit_amount: priceOre,
-      currency: 'sek',
-      tax_behavior: 'exclusive',
-      recurring: { interval, interval_count: intervalCount },
-      product_data: {
-        name: fallbackProductName || 'LeTrend Prenumeration',
-        tax_code: 'txcd_10000000',
-      },
+    // Reuse existing price with matching parameters to avoid orphan prices in Stripe
+    let price: { id: string };
+    const existingPrices = await stripe.prices.search({
+      query: `active:"true" currency:"sek" type:"recurring"`,
+      limit: 100,
     });
+    const matchingPrice = existingPrices.data.find(
+      (p) =>
+        p.unit_amount === priceOre &&
+        p.recurring?.interval === interval &&
+        p.recurring?.interval_count === intervalCount
+    );
+
+    if (matchingPrice) {
+      price = matchingPrice;
+    } else {
+      price = await stripe.prices.create({
+        unit_amount: priceOre,
+        currency: 'sek',
+        tax_behavior: 'exclusive',
+        recurring: { interval, interval_count: intervalCount },
+        product_data: {
+          name: 'LeTrend Prenumeration',
+          tax_code: 'txcd_10000000',
+        },
+      });
+    }
 
     const origin = req.headers.get('origin') || 'http://localhost:3000';
 
-    const firstInvoiceBehavior = contractProfile?.first_invoice_behavior || 'prorated';
+    const firstInvoiceBehavior = contractProfile.first_invoice_behavior || 'prorated';
     const now = new Date();
-    const contractStart = contractProfile?.contract_start_date
+    const contractStart = contractProfile.contract_start_date
       ? toUtcDate(contractProfile.contract_start_date)
       : now;
     const anchorReference = contractStart > now ? contractStart : now;
-    const anchorDate = nextBillingAnchor(anchorReference, contractProfile?.billing_day_of_month);
+    const anchorDate = nextBillingAnchor(anchorReference, contractProfile.billing_day_of_month);
 
     const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = {
-      description: finalInvoiceText || fallbackProductName || 'LeTrend Prenumeration',
+      description: finalInvoiceText || 'LeTrend Prenumeration',
       metadata: {
         profile_id: profileId || '',
         invoice_text: finalInvoiceText || '',
         first_invoice_behavior: firstInvoiceBehavior,
-        billing_day_of_month: String(contractProfile?.billing_day_of_month || 25),
+        billing_day_of_month: String(contractProfile.billing_day_of_month || 25),
         effective_price_source: priceResolution.source,
       },
       invoice_settings: { issuer: { type: 'self' } },
@@ -389,9 +400,7 @@ export async function POST(req: NextRequest) {
         firstInvoiceBehavior === 'free_until_anchor' ? 'none' : 'create_prorations';
     }
 
-    const contractCoupon = contractProfile
-      ? await createContractCoupon(stripe, contractProfile, priceOre, firstInvoiceBehavior === 'prorated')
-      : null;
+    const contractCoupon = await createContractCoupon(stripe, contractProfile, priceOre, firstInvoiceBehavior === 'prorated');
 
     const session = await stripe.checkout.sessions.create({
       ui_mode: 'embedded',

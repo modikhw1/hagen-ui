@@ -24,9 +24,20 @@ export function getLinkPlatformLabel(platform: LinkPlatform): string {
 }
 
 export function detectLinkType(url: string): LinkPlatform {
-  if (/tiktok\.com/i.test(url)) return 'tiktok';
-  if (/instagram\.com/i.test(url)) return 'instagram';
-  if (/youtube\.com|youtu\.be/i.test(url)) return 'youtube';
+  const normalized = normalizeHref(url);
+  if (!normalized) return 'external';
+  if (/tiktok\.com/i.test(normalized)) return 'tiktok';
+  if (/instagram\.com/i.test(normalized)) return 'instagram';
+  if (/youtube\.com|youtu\.be/i.test(normalized)) return 'youtube';
+  if (/^mailto:/i.test(normalized)) return 'external';
+
+  try {
+    const { protocol } = new URL(normalized);
+    if (protocol === 'http:' || protocol === 'https:') return 'article';
+  } catch {
+    return 'external';
+  }
+
   return 'external';
 }
 

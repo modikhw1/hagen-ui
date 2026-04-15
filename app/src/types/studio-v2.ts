@@ -79,6 +79,9 @@ export interface CustomerConceptReconciliationBoundary {
   linked_by_cm_id: string | null;
   linked_at: string | null;
   is_reconciled: boolean;
+  // Only set on enriched LeTrend historik cards. The ID of the imported TikTok clip
+  // that this card's stats come from — used to call undo-reconciliation from the LeTrend side.
+  reconciled_clip_id: string | null;
 }
 
 export interface CustomerConceptMarkerBoundary {
@@ -98,39 +101,64 @@ interface CustomerConceptBase {
   concept_id: string | null;
   cm_id: string | null;
   row_kind: CustomerConceptRowKind;
+  updated_at: string | null;
 
   // Assignment workflow
   status: CustomerConceptAssignmentStatus;
 
   // Customization fields
+  /** @deprecated Prefer `content.custom_script`. */
   custom_script: string | null;
+  /** @deprecated Prefer `content.why_it_fits`. */
   why_it_fits: string | null;
+  /** @deprecated Prefer `content.filming_instructions`. */
   filming_instructions: string | null;
+  /** @deprecated Prefer `result.tiktok_url`. */
   tiktok_url: string | null;
+  /** @deprecated Prefer `result.tiktok_thumbnail_url`. */
   tiktok_thumbnail_url: string | null;
+  /** @deprecated Prefer `result.tiktok_views`. */
   tiktok_views: number | null;
+  /** @deprecated Prefer `result.tiktok_likes`. */
   tiktok_likes: number | null;
+  /** @deprecated Prefer `result.tiktok_comments`. */
   tiktok_comments: number | null;
+  /** @deprecated Prefer `result.tiktok_watch_time_seconds`. */
   tiktok_watch_time_seconds: number | null;
+  /** @deprecated Prefer `result.tiktok_last_synced_at`. */
   tiktok_last_synced_at: string | null;
+  /** @deprecated Prefer `reconciliation.linked_customer_concept_id`. */
   reconciled_customer_concept_id: string | null;
+  /** @deprecated Prefer `reconciliation.linked_by_cm_id`. */
   reconciled_by_cm_id: string | null;
+  /** @deprecated Prefer `reconciliation.linked_at`. */
   reconciled_at: string | null;
+  /** @deprecated Prefer `content.content_overrides`. */
   content_overrides: ConceptContentOverrides | null;
 
   // Feed planner
+  /** @deprecated Prefer `placement.feed_order`. */
   feed_order: number | null;  // 0-centered: >0=future, 0=now, <0=history
+  /** @deprecated Prefer `markers.tags`. */
   tags: string[];             // Array of tag names
+  /** @deprecated Prefer `markers.collection_id`. */
   collection_id: string | null;
+  /** @deprecated Prefer `markers.assignment_note`. */
   cm_note: string | null;
 
   // Timestamps
   added_at: string;
+  /** @deprecated Prefer `markers.shared_at`. */
   sent_at: string | null;
+  /** @deprecated Prefer `result.produced_at`. */
   produced_at: string | null;
+  /** @deprecated Prefer `result.planned_publish_at`. */
   planned_publish_at: string | null;
+  /** @deprecated Prefer `result.content_loaded_at`. */
   content_loaded_at: string | null;
+  /** @deprecated Prefer `result.content_loaded_seen_at`. */
   content_loaded_seen_at: string | null;
+  /** @deprecated Prefer `result.published_at`. */
   published_at: string | null;
 
   assignment: CustomerConceptAssignmentBoundary;
@@ -313,6 +341,8 @@ export interface CustomerProfile {
   pending_history_advance_seen_at?: string | null;
   // Freshness seam: MAX(published_at) of the batch that triggered pending_history_advance
   pending_history_advance_published_at?: string | null;
+  // Operation lock: non-null = mark-produced is in progress; frontend shows badge if >60s old
+  pending_history_advance_at?: string | null;
 
   created_at: string;
   updated_at?: string;

@@ -157,7 +157,7 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
   }, [searchParams, pathname, profile, loginRedirect])
 
   useEffect(() => {
-    if (authLoading || !user) return
+    if (authLoading || profileLoading || !user) return
 
     let cancelled = false
 
@@ -173,7 +173,7 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
     return () => {
       cancelled = true
     }
-  }, [authLoading, user, resolvePostLoginDestination, router, pathname])
+  }, [authLoading, profileLoading, user, resolvePostLoginDestination, router, pathname])
 
   // Handle network errors gracefully
   const handleAuthError = (err: unknown, fallbackMessage: string): string => {

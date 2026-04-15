@@ -30,8 +30,15 @@ export type AutoReconcileResult =
   | { advanced: true; nuConceptId: string; importedClipId: string }
   | {
       advanced: false;
-      reason: 'no_nu_slot' | 'no_unreconciled_clip' | 'reconcile_failed' | 'produce_failed';
+      reason:
+        | 'no_nu_slot'
+        | 'no_unreconciled_clip'
+        | 'reconcile_failed'
+        | 'produce_failed'
+        | 'empty_feed'
+        | 'no_published_at';
       detail?: string;
+      skipped?: boolean;
     };
 
 export async function autoReconcileAndAdvance(
@@ -40,10 +47,23 @@ export async function autoReconcileAndAdvance(
 ): Promise<AutoReconcileResult> {
   const now = new Date().toISOString();
 
+  // ── 0. Guard: empty feed ──────────────────────────────────────────────────
+  // Skip reconciliation if no concepts have a feed_order (empty feed).
+  const { count: feedCount } = await supabase
+    .from('customer_concepts')
+    .select('id', { count: 'exact', head: true })
+    .eq('customer_profile_id', customerId)
+    .not('feed_order', 'is', null)
+    .not('concept_id', 'is', null);
+
+  if (!feedCount || feedCount === 0) {
+    return { advanced: false, reason: 'empty_feed', skipped: true };
+  }
+
   // ── 1. Find nu-slot ───────────────────────────────────────────────────────
   const { data: nuRow, error: nuError } = await supabase
     .from('customer_concepts')
-    .select('id')
+    .select('id, sent_at')
     .eq('customer_profile_id', customerId)
     .eq('feed_order', 0)
     .not('concept_id', 'is', null)
@@ -54,21 +74,44 @@ export async function autoReconcileAndAdvance(
   }
 
   // ── 2. Newest unreconciled imported clip ──────────────────────────────────
-  // Ordered by feed_order DESC: the clip at -1 is the most recently published
-  // (importClipsForCustomer renumbers newest → most-negative +1 position).
+  // Order by published_at DESC for reliable matching: feed_order is unreliable
+  // for TikTok-imported clips that may not have been assigned a correct value.
+  // Falls back to skipping if all candidates lack published_at.
   const { data: importedRow, error: importedError } = await supabase
     .from('customer_concepts')
     .select('id, tiktok_url, published_at')
     .eq('customer_profile_id', customerId)
     .is('concept_id', null)
     .is('reconciled_customer_concept_id', null)
-    .lt('feed_order', 0)
-    .order('feed_order', { ascending: false })
+    .not('tiktok_url', 'is', null)
+    .order('published_at', { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
 
   if (importedError || !importedRow) {
     return { advanced: false, reason: 'no_unreconciled_clip' };
+  }
+
+  // Fallback: if no published_at on this clip, skip reconciliation
+  if (!importedRow.published_at) {
+    console.warn(`[autoReconcile] skipping customer ${customerId}: no published_at on newest clip`);
+    return { advanced: false, reason: 'no_unreconciled_clip' };
+  }
+
+  // Confidence check: if the clip is >48h older than the nu-slot's sent_at, log a warning
+  // but reconcile anyway (flagged with low confidence in logs).
+  const nuSlotSentAt = typeof nuRow.sent_at === 'string'
+    ? new Date(nuRow.sent_at as string).getTime()
+    : null;
+  const clipPublishedAt = new Date(importedRow.published_at as string).getTime();
+  if (nuSlotSentAt !== null) {
+    const diffMs = nuSlotSentAt - clipPublishedAt;
+    const diffH = diffMs / (1000 * 60 * 60);
+    if (diffH > 48) {
+      console.warn(
+        `[autoReconcile] low confidence for customer ${customerId}: clip published_at is ${Math.round(diffH)}h before nu-slot sent_at`
+      );
+    }
   }
 
   // ── 3. Reconcile: link imported clip to nu-slot concept ───────────────────

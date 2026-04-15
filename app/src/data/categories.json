@@ -67,6 +67,24 @@
     "team": { "count": 4, "sortOrder": 4 }
   },
 
+  "businessTypes": {
+    "bar": { "icon": "🍸", "color": "#7C3AED", "sortOrder": 1 },
+    "restaurang": { "icon": "🍽️", "color": "#059669", "sortOrder": 2 },
+    "cafe": { "icon": "☕", "color": "#B45309", "sortOrder": 3 },
+    "bistro": { "icon": "🥂", "color": "#2563EB", "sortOrder": 4 },
+    "hotell": { "icon": "🛎️", "color": "#4F46E5", "sortOrder": 5 },
+    "foodtruck": { "icon": "🚚", "color": "#DC2626", "sortOrder": 6 },
+    "nattklubb": { "icon": "🌙", "color": "#6D28D9", "sortOrder": 7 },
+    "bageri": { "icon": "🥐", "color": "#92400E", "sortOrder": 8 }
+  },
+
+  "estimatedBudgets": {
+    "free": { "color": "#16A34A", "sortOrder": 1 },
+    "low": { "color": "#65A30D", "sortOrder": 2 },
+    "medium": { "color": "#D97706", "sortOrder": 3 },
+    "high": { "color": "#DC2626", "sortOrder": 4 }
+  },
+
   "vibeAlignments": {
     "foodies": { "icon": "🍽️" },
     "locals": { "icon": "📍" },

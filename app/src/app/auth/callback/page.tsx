@@ -131,17 +131,11 @@ function AuthCallbackContent() {
 
     console.log('[SESSION] Flow check:', { isInviteFlow, hasInviteMarker, fetchedBusinessName });
 
-    if (isInviteFlow) {
-      console.log('[SESSION] Calling updateState with set-password');
-      updateState({ status: 'set-password', businessName: fetchedBusinessName });
-      console.log('[SESSION] updateState called, new state should render');
-    } else {
-      // Normal login - redirect
-      console.log('[SESSION] Setting status to success, redirecting');
-      updateState({ status: 'success' });
-      const destination = await resolveRoleDestination(session.user.id);
-      router.replace(destination);
-    }
+    // Normal login - redirect (isInviteFlow paths already returned above)
+    console.log('[SESSION] Setting status to success, redirecting');
+    updateState({ status: 'success' });
+    const destination = await resolveRoleDestination(session.user.id);
+    router.replace(destination);
   }, [router, updateState]);
 
   useEffect(() => {
@@ -205,10 +199,6 @@ function AuthCallbackContent() {
 
         // Fallback: check if we already have a session
         console.log('Checking existing session...');
-        
-        // Wait a bit for any ongoing auth to complete
-        await new Promise(r => setTimeout(r, 500));
-        
         const { data: { session }, error: getSessionError } = await supabase.auth.getSession();
 
         if (getSessionError) {
@@ -317,8 +307,8 @@ function AuthCallbackContent() {
     const pwd = state.password;
     const confirmPwd = state.confirmPassword;
 
-    if (pwd.length < 6) {
-      updateState({ error: 'Lösenordet måste vara minst 6 tecken', isSubmitting: false });
+    if (pwd.length < 8) {
+      updateState({ error: 'Lösenordet måste vara minst 8 tecken', isSubmitting: false });
       return;
     }
 
@@ -328,57 +318,27 @@ function AuthCallbackContent() {
     }
 
     try {
-      // Use cached session first (it was valid when handleSessionEstablished ran)
-      const session = sessionRef.current;
-      console.log('[PASSWORD] Checking cached session...');
+      // Always fetch a fresh session — the cached ref may hold an expired token
+      // if the user took several minutes to fill in the password form.
+      const { data: { session: freshSession } } = await supabase.auth.getSession();
+      const session = freshSession ?? sessionRef.current;
+      console.log('[PASSWORD] Checking session...');
 
       if (!session) {
-        console.log('[PASSWORD] No cached session, this should not happen!');
+        console.log('[PASSWORD] No session available!');
         updateState({ error: 'Sessionen har gått ut. Klicka på inbjudningslänken igen.', isSubmitting: false });
         return;
       }
 
       console.log('[PASSWORD] Using session for:', session.user?.email);
-      console.log('[PASSWORD] Setting password via direct API call...');
 
-      // Make direct API call to Supabase Auth to bypass client issues
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      // Update password via the Supabase client (handles token refresh automatically)
+      const { error: updateError } = await supabase.auth.updateUser({ password: pwd });
 
-      // Add timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      if (updateError) {
+        console.error('Update error:', updateError);
+        const errorMessage = updateError.message || 'Kunde inte uppdatera lösenord';
 
-      let response: Response;
-      try {
-        response = await fetch(`${supabaseUrl}/auth/v1/user`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-          },
-          body: JSON.stringify({ password: pwd }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-      } catch (fetchError: unknown) {
-        clearTimeout(timeoutId);
-        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-          console.error('[PASSWORD] Request timed out');
-          updateState({ error: 'Begäran tog för lång tid. Försök igen.', isSubmitting: false });
-          return;
-        }
-        throw fetchError;
-      }
-
-      console.log('[PASSWORD] API response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Update error:', errorData);
-        const errorMessage = errorData.message || errorData.error_description || 'Kunde inte uppdatera lösenord';
-
-        // Handle specific password errors
         if (errorMessage.includes('different from the old') || errorMessage.includes('same password')) {
           updateState({ error: 'Detta lösenord har redan använts. Välj ett annat.', isSubmitting: false });
           return;
@@ -397,19 +357,11 @@ function AuthCallbackContent() {
 
       // Clear invited_at from user metadata to prevent re-triggering password set flow
       try {
-        await fetch(`${supabaseUrl}/auth/v1/user`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+        await supabase.auth.updateUser({
+          data: {
+            ...session.user.user_metadata,
+            invited_at: null,
           },
-          body: JSON.stringify({
-            data: {
-              ...session.user.user_metadata,
-              invited_at: null, // Clear the invite flag
-            }
-          }),
         });
         console.log('[PASSWORD] Cleared invited_at flag');
       } catch (err) {
@@ -428,7 +380,10 @@ function AuthCallbackContent() {
       const businessName = session.user.user_metadata?.business_name || 'Mitt företag';
 
       // Check if this is a team member invite
-      const isTeamInvite = session.user.user_metadata?.invited_as === 'team_member' || searchParams.get('flow') === 'team_invite';
+      const isTeamInvite =
+        session.user.user_metadata?.invited_as === 'team_member' ||
+        session.user.user_metadata?.isTeamMember === true ||  // 1.1: legacy key support
+        searchParams.get('flow') === 'team_invite';
 
       // Determine redirect path
       const redirectPath = isTeamInvite ? '/studio/customers' : '/welcome';
@@ -575,9 +530,9 @@ function AuthCallbackContent() {
                 value={password}
                 onChange={(e) => updateState({ password: e.target.value })}
                 className="w-full p-3 text-sm text-[#1A1612] bg-white border border-[#E5E0DA] rounded-lg outline-none focus:border-[#6B4423]"
-                placeholder="Minst 6 tecken"
+                placeholder="Minst 8 tecken"
                 autoComplete="new-password"
-                minLength={6}
+                minLength={8}
                 required
               />
             </div>

@@ -14,6 +14,39 @@ export const POST = withAuth(async (request: NextRequest, user) => {
   }
 
   const body = await request.json();
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+  // --- Handle resend invite (2.3) ---
+  if (body.resend) {
+    const { team_member_id, email: resendEmail, name: resendName, role: resendRole = 'content_manager' } = body;
+    if (!resendEmail?.trim() || !team_member_id) {
+      return NextResponse.json({ error: 'email och team_member_id krävs' }, { status: 400 });
+    }
+    const appUrl = getAppUrl();
+    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      resendEmail.trim(),
+      {
+        data: {
+          isTeamMember: true,
+          invited_as: 'team_member',
+          role: resendRole,
+          name: resendName?.trim() || '',
+          team_member_id,
+        },
+        redirectTo: `${appUrl}/auth/callback?flow=team_invite`,
+      }
+    );
+    if (inviteError) {
+      return NextResponse.json({ error: inviteError.message }, { status: 500 });
+    }
+    // Best-effort: save invited_at
+    await supabaseAdmin
+      .from('team_members')
+      .update({ invited_at: new Date().toISOString() })
+      .eq('id', team_member_id);
+    return NextResponse.json({ resent: true });
+  }
+
   const { name, email, phone, role = 'content_manager', sendInvite = false } = body;
 
   if (!name?.trim()) {
@@ -23,8 +56,6 @@ export const POST = withAuth(async (request: NextRequest, user) => {
   if (!email?.trim()) {
     return NextResponse.json({ error: 'E-post är obligatoriskt' }, { status: 400 });
   }
-
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
   // Duplicate check: 409 if email already exists
   const { data: existingMember } = await supabaseAdmin
@@ -90,11 +121,12 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       {
         data: {
           isTeamMember: true,
+          invited_as: 'team_member',  // 1.1: explicit key for callback detection
           role,
           name: name.trim(),
           team_member_id: member.id,
         },
-        redirectTo: `${appUrl}/auth/callback`,
+        redirectTo: `${appUrl}/auth/callback?flow=team_invite`,  // 1.1: belt-and-suspenders
       }
     );
 
@@ -105,6 +137,12 @@ export const POST = withAuth(async (request: NextRequest, user) => {
         warning: `Teammedlem skapad men inbjudan misslyckades: ${inviteError.message}`,
       });
     }
+
+    // Best-effort: save invited_at for status tracking (3.3)
+    await supabaseAdmin
+      .from('team_members')
+      .update({ invited_at: new Date().toISOString() })
+      .eq('id', member.id);
 
     return NextResponse.json({ member, invited: true });
   }

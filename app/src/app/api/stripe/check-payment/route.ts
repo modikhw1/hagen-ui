@@ -122,12 +122,14 @@ export async function POST(request: NextRequest) {
 // GET - Quick status check by email (no profile update)
 export async function GET(request: NextRequest) {
   try {
+    const authUser = await validateApiRequest(request);
+
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const email = searchParams.get('email');
+    // Only allow checking the authenticated user's own email
+    const email = authUser.email;
 
     if (!email) {
       return NextResponse.json({ error: 'email required' }, { status: 400 });
@@ -153,11 +155,14 @@ export async function GET(request: NextRequest) {
       customerId,
       status: sub.status,
       isPaid: sub.status === 'active' || sub.status === 'trialing',
-      currentPeriodEnd: subWithPeriod.current_period_end 
-        ? new Date(subWithPeriod.current_period_end * 1000).toISOString() 
+      currentPeriodEnd: subWithPeriod.current_period_end
+        ? new Date(subWithPeriod.current_period_end * 1000).toISOString()
         : null,
     });
   } catch (error) {
+    if (error instanceof Error && error.name === 'AuthError') {
+      return NextResponse.json({ error: error.message }, { status: (error as any).statusCode || 401 });
+    }
     console.error('Check payment error:', error);
     return NextResponse.json({ error: 'Failed to check payment' }, { status: 500 });
   }

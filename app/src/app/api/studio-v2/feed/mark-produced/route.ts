@@ -12,7 +12,7 @@ import { performMarkProduced } from '@/lib/studio/perform-mark-produced';
 // shared with the cron auto-advance path).
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const POST = withAuth(async (request) => {
+export const POST = withAuth(async (request, user) => {
   const body = await request.json().catch(() => ({}));
   const supabase = createSupabaseAdmin();
   const conceptId = typeof body?.concept_id === 'string' ? body.concept_id.trim() : '';
@@ -33,6 +33,7 @@ export const POST = withAuth(async (request) => {
     conceptId,
     tiktok_url: typeof body?.tiktok_url === 'string' ? body.tiktok_url : null,
     published_at: clipPublishedAt,
+    marker_cm_id: user.id,
     now,
   });
 

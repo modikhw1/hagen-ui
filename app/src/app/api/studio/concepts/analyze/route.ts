@@ -132,6 +132,12 @@ export const POST = withAuth(
           ...deepPayload.data,
           videoId: createData.id,
         },
+        upload: {
+          gcsUri:
+            (typeof deepPayload.data?.gcs_uri === 'string' && deepPayload.data.gcs_uri) ||
+            (typeof createData.gcs_uri === 'string' && createData.gcs_uri) ||
+            undefined,
+        },
       });
     } catch (error) {
       const message =

@@ -166,7 +166,6 @@ export default function StudioCustomersPage() {
 
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <Link href="/studio/concepts" style={headerActionStyle(false)}>Konceptbibliotek</Link>
-          <Link href="/studio/upload" style={headerActionStyle(false)}>Upload</Link>
         </div>
       </div>
 

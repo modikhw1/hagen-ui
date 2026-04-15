@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { getAppUrl } from '@/lib/url/public';
 
 // Email sending with Resend
@@ -109,6 +111,23 @@ async function sendPaymentConfirmation(email: string, customerName: string, amou
 
 export async function GET(req: NextRequest) {
   try {
+    // Authenticate the request
+    const cookieStore = await cookies();
+    const authClient = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll: () => cookieStore.getAll(),
+          setAll: () => {},
+        },
+      }
+    );
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const sessionId = req.nextUrl.searchParams.get('session_id');
 
     if (!stripe) {
@@ -123,6 +142,35 @@ export async function GET(req: NextRequest) {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['subscription', 'customer', 'line_items'],
     });
+
+    // Verify the authenticated user owns this checkout session
+    const sessionEmail = (session.customer_email || '').trim().toLowerCase();
+    const userEmail = (user.email || '').trim().toLowerCase();
+    const profileId = session.metadata?.profile_id;
+
+    let ownsSession = sessionEmail.length > 0 && sessionEmail === userEmail;
+
+    if (!ownsSession && profileId) {
+      const supabaseCheck = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+      const { data: profileLink } = await supabaseCheck
+        .from('profiles')
+        .select('matching_data')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const matchingData = profileLink?.matching_data as Record<string, unknown> | null;
+      const linkedId = typeof matchingData?.customer_profile_id === 'string'
+        ? matchingData.customer_profile_id
+        : null;
+      ownsSession = linkedId === profileId;
+    }
+
+    if (!ownsSession) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,

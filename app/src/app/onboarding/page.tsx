@@ -17,11 +17,19 @@ interface OnboardingData {
   firstInvoiceText?: string;
 }
 
+/**
+ * @deprecated This page is replaced by /welcome. Existing links redirect there.
+ */
 export default function OnboardingPage() {
   const router = useRouter();
   const [data, setData] = useState<OnboardingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Redirect to the new welcome page
+  useEffect(() => {
+    router.replace('/welcome');
+  }, [router]);
 
   useEffect(() => {
     const storedData = localStorage.getItem('onboarding_data');
@@ -367,26 +375,12 @@ export default function OnboardingPage() {
   }
 
   const price = data.pricePerMonth;
-  const vat = price * 0.25;
-  const total = price + vat;
 
   const priceDisplay = new Intl.NumberFormat('sv-SE', {
     style: 'currency',
     currency: 'SEK',
     minimumFractionDigits: 0,
   }).format(price);
-
-  const vatDisplay = new Intl.NumberFormat('sv-SE', {
-    style: 'currency',
-    currency: 'SEK',
-    minimumFractionDigits: 0,
-  }).format(vat);
-
-  const totalDisplay = new Intl.NumberFormat('sv-SE', {
-    style: 'currency',
-    currency: 'SEK',
-    minimumFractionDigits: 0,
-  }).format(total);
 
   const intervalText = data.interval === 'month' ? 'månad' : data.interval === 'quarter' ? 'kvartal' : 'år';
   const firstInvoiceAmount = typeof data.firstInvoiceAmount === 'number' ? data.firstInvoiceAmount : null;
@@ -497,28 +491,18 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          <div style={{ 
-            borderTop: '2px solid #E5E0DA', 
+          <div style={{
+            borderTop: '2px solid #E5E0DA',
             paddingTop: '16px',
             marginTop: '8px',
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ color: '#5D4D3D' }}>Pris</span>
-              <span style={{ color: '#1A1612' }}>{priceDisplay}</span>
+              <span style={{ color: '#1A1612', fontWeight: '700', fontSize: '16px' }}>Pris</span>
+              <span style={{ color: '#6B4423', fontWeight: '700', fontSize: '20px' }}>{priceDisplay}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ color: '#5D4D3D' }}>Moms (25%)</span>
-              <span style={{ color: '#1A1612' }}>{vatDisplay}</span>
-            </div>
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between',
-              paddingTop: '8px',
-              borderTop: '1px dashed #E5E0DA',
-            }}>
-              <span style={{ color: '#1A1612', fontWeight: '700', fontSize: '16px' }}>Totalt</span>
-              <span style={{ color: '#6B4423', fontWeight: '700', fontSize: '20px' }}>{totalDisplay}</span>
-            </div>
+            <p style={{ fontSize: '12px', color: '#9A8B7A', margin: '4px 0 0' }}>
+              per {intervalText}, exkl. moms. Slutpris beräknas vid betalning.
+            </p>
           </div>
 
           {(data.firstInvoiceText || firstInvoiceAmountDisplay) && (

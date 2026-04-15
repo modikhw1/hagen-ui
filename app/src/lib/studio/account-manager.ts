@@ -25,36 +25,49 @@ export async function resolveAccountManagerAssignment(
 
   const normalizedInput = accountManager.trim();
 
-  // Try to find by email first
-  const { data: profileByEmail, error: emailError } = await supabaseAdmin
+  // 1. Try team_members first (authoritative source for CM/account manager roles)
+  const { data: teamMember, error: tmError } = await supabaseAdmin
+    .from('team_members')
+    .select('profile_id, name, email')
+    .or(`name.ilike.${normalizedInput},email.ilike.${normalizedInput}`)
+    .maybeSingle();
+
+  if (!tmError && teamMember?.profile_id) {
+    return {
+      accountManager: teamMember.name || teamMember.email || normalizedInput,
+      accountManagerProfileId: teamMember.profile_id as string,
+    };
+  }
+
+  // 2. Fall back to profiles by email
+  const { data: profileByEmail } = await supabaseAdmin
     .from('profiles')
     .select('id, email, business_name')
     .ilike('email', normalizedInput)
-    .single();
+    .maybeSingle();
 
-  if (!emailError && profileByEmail) {
+  if (profileByEmail) {
     return {
       accountManager: profileByEmail.business_name || profileByEmail.email,
       accountManagerProfileId: profileByEmail.id,
     };
   }
 
-  // Try to find by business_name (case-insensitive)
-  const { data: profileByName, error: nameError } = await supabaseAdmin
+  // 3. Fall back to profiles by business_name
+  const { data: profileByName } = await supabaseAdmin
     .from('profiles')
     .select('id, email, business_name')
     .ilike('business_name', normalizedInput)
-    .single();
+    .maybeSingle();
 
-  if (!nameError && profileByName) {
+  if (profileByName) {
     return {
       accountManager: profileByName.business_name,
       accountManagerProfileId: profileByName.id,
     };
   }
 
-  // If no match found, return the input as-is with null profile ID
-  // The caller may choose to handle this case specially
+  // No match found — return the input as-is with null profile ID
   return {
     accountManager: normalizedInput,
     accountManagerProfileId: null,

@@ -66,6 +66,45 @@ export function isStudioAssignedCustomerConcept(
   return concept.row_kind === 'assignment' && concept.assignment.has_source_concept;
 }
 
+export function isConceptPlaced(concept: Pick<CustomerConcept, 'placement'>): boolean {
+  return concept.placement.feed_order !== null;
+}
+
+export function isConceptShared(concept: Pick<CustomerConcept, 'markers'>): boolean {
+  return Boolean(concept.markers.shared_at);
+}
+
+export function isConceptActionable(concept: CustomerConcept): boolean {
+  if (concept.assignment.status === 'archived' || concept.assignment.status === 'produced') {
+    return false;
+  }
+
+  if (!concept.content.why_it_fits) return true;
+  if (!concept.markers.assignment_note) return true;
+  if (concept.assignment.status === 'sent' && concept.placement.feed_order === null) return true;
+
+  return concept.assignment.status === 'draft';
+}
+
+export function getConceptPriority(concept: CustomerConcept): number {
+  const updatedAt = concept.updated_at ? new Date(concept.updated_at).getTime() : 0;
+  const statusWeight = concept.assignment.status === 'sent'
+    ? 300
+    : concept.assignment.status === 'draft'
+      ? 200
+      : concept.assignment.status === 'produced'
+        ? 100
+        : 0;
+  const placementWeight = concept.placement.feed_order === 0
+    ? 80
+    : typeof concept.placement.feed_order === 'number'
+      ? 40
+      : 0;
+  const actionableWeight = isConceptActionable(concept) ? 25 : 0;
+
+  return statusWeight + placementWeight + actionableWeight + updatedAt / 1_000_000_000_000;
+}
+
 export function normalizeStudioCustomerConcept(row: Record<string, unknown>): CustomerConcept {
   const status = normalizeCustomerConceptAssignmentStatus(
     typeof row.status === 'string' ? row.status : null
@@ -86,6 +125,7 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
   const normalizedContentOverrides = Object.keys(contentOverrides).length > 0 ? contentOverrides : null;
   const tags = asStringArray(row.tags);
   const collectionId = readString(row.collection_id);
+  const updatedAt = readString(row.updated_at);
   const addedAt = readString(row.added_at) ?? '';
   const sentAt = readString(row.sent_at);
   const producedAt = readString(row.produced_at);
@@ -103,6 +143,9 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
   const reconciledCustomerConceptId = readString(row.reconciled_customer_concept_id);
   const reconciledByCmId = readString(row.reconciled_by_cm_id);
   const reconciledAt = readString(row.reconciled_at);
+  // Only present on enriched LeTrend historik cards — the ID of the imported clip
+  // that supplies their TikTok stats. Used for undo-reconciliation from the LeTrend side.
+  const reconciledImportedClipId = readString(row.reconciled_imported_clip_id);
 
   const normalizedConcept = {
     ...row,
@@ -111,6 +154,7 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
     concept_id: sourceConceptId,
     cm_id: cmId,
     row_kind: rowKind,
+    updated_at: updatedAt,
     status,
     custom_script: contentOverrides.script ?? null,
     why_it_fits: contentOverrides.why_it_fits ?? null,
@@ -176,6 +220,7 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
       linked_by_cm_id: reconciledByCmId,
       linked_at: reconciledAt,
       is_reconciled: Boolean(reconciledCustomerConceptId),
+      reconciled_clip_id: reconciledImportedClipId,
     },
     markers: {
       tags,

@@ -2,15 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { withAuth } from '@/lib/auth/api-auth';
+import { getStripeConfigEnvNames, getStripeEnvironment } from '@/lib/stripe/environment';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 // Get Stripe config
-const ENV = process.env.NEXT_PUBLIC_ENV || 'test';
-const SECRET_KEY = ENV === 'test'
-  ? process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
-  : process.env.STRIPE_SECRET_KEY_LIVE;
+const ENV = getStripeEnvironment();
+const SECRET_KEY = process.env[getStripeConfigEnvNames(ENV).secretKey];
 
 const stripe = SECRET_KEY ? new Stripe(SECRET_KEY, { apiVersion: '2025-12-15.clover' }) : null;
 
@@ -73,7 +72,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     console.error('[create-customer] Error:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
-}, ['admin', 'content_manager']);
+}, ['admin']);
 
 /**
  * GET /api/studio/stripe/status
@@ -109,4 +108,4 @@ export const GET = withAuth(async (request: NextRequest, user) => {
     },
     recentSyncs: recentSyncs || [],
   });
-}, ['admin', 'content_manager']);
+}, ['admin']);

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
+import { validateApiRequest, AuthError } from '@/lib/auth/api-auth';
 
 // GET - Check invoice status for a subscription
 export async function GET(request: NextRequest) {
   try {
+    await validateApiRequest(request);
+
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
@@ -38,6 +41,9 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error('Error checking invoice:', error);
     return NextResponse.json({ error: 'Failed to check invoice' }, { status: 500 });
   }
