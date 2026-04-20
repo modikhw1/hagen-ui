@@ -1,5 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextRequest } from "next/server";
 import { AuthError, validateApiRequest } from "@/lib/auth/api-auth";
 import { stripe } from "@/lib/stripe/dynamic-config";
 import { logCustomerInvited } from "@/lib/activity/logger";
@@ -12,49 +11,75 @@ import {
 } from "@/lib/schemas/customer";
 import { z } from "zod";
 import {
-  applyCustomerDiscount,
   archiveStripeCustomer,
   cancelCustomerSubscription,
   pauseCustomerSubscription,
   resumeCustomerSubscription,
 } from "@/lib/stripe/admin-billing";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { deriveTikTokHandle, toCanonicalTikTokProfileUrl } from "@/lib/tiktok/profile";
+import { jsonError, jsonOk } from "@/lib/server/api-response";
+import { createSupabaseAdmin } from "@/lib/server/supabase-admin";
+import type { TablesUpdate } from "@/types/database";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-function buildCustomerPayload(profile: unknown) {
+function isMissingRelationError(message?: string | null) {
+  return (
+    typeof message === "string" &&
+    message.toLowerCase().includes("relation") &&
+    message.toLowerCase().includes("does not exist")
+  );
+}
+
+function buildCustomerPayload(
+  profile: Record<string, unknown>,
+  options?: {
+    bufferRow?: Record<string, unknown> | null;
+    attentionSnoozes?: Array<Record<string, unknown>>;
+  },
+) {
   return {
-    customer: profile,
-    profile,
+    customer: {
+      ...profile,
+      latest_planned_publish_date:
+        options?.bufferRow?.latest_planned_publish_date ?? null,
+      last_published_at: options?.bufferRow?.last_published_at ?? null,
+      attention_snoozes: options?.attentionSnoozes ?? [],
+    },
+    profile: {
+      ...profile,
+      latest_planned_publish_date:
+        options?.bufferRow?.latest_planned_publish_date ?? null,
+      last_published_at: options?.bufferRow?.last_published_at ?? null,
+      attention_snoozes: options?.attentionSnoozes ?? [],
+    },
   };
 }
 
 function buildValidationErrorResponse(error: z.ZodError) {
-  return NextResponse.json(
+  return jsonError(
+    "Ogiltig payload",
+    400,
     {
-      error: "Ogiltig payload",
       details: error.issues.map((issue) => ({
         path: issue.path.join("."),
         message: issue.message,
       })),
     },
-    { status: 400 },
   );
 }
 
-const applyDiscountActionSchema = z
-  .object({
-    action: z.literal("apply_discount"),
-    type: z.enum(["percent", "amount", "free_period"]),
-    value: z.number().min(0),
-    duration_months: z.number().int().min(1).max(36).nullable().optional(),
-    ongoing: z.boolean().default(false),
-  })
-  .strict();
+function buildRouteErrorResponse(error: unknown) {
+  if (error instanceof AuthError) {
+    return jsonError(error.message, error.statusCode);
+  }
+
+  const message =
+    error instanceof Error ? error.message : "Internt serverfel";
+  return jsonError(message, 500);
+}
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
@@ -66,68 +91,119 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Profile ID required" },
-        { status: 400 },
+      return jsonError("Kund-ID kravs", 400);
+    }
+
+    const supabaseAdmin = createSupabaseAdmin();
+
+    const [{ data: profile, error }, bufferResult, snoozesResult] =
+      await Promise.all([
+        supabaseAdmin
+          .from("customer_profiles")
+          .select("*")
+          .eq("id", id)
+          .single(),
+        (((supabaseAdmin.from("v_customer_buffer" as never) as never) as {
+          select: (
+            columns: string,
+          ) => {
+            eq: (
+              column: string,
+              value: string,
+            ) => {
+              maybeSingle: () => Promise<{
+                data: Record<string, unknown> | null;
+                error: { message?: string } | null;
+              }>;
+            };
+          };
+        }).select(
+          "customer_id, assigned_cm_id, concepts_per_week, paused_until, latest_planned_publish_date, last_published_at",
+        )).eq("customer_id", id).maybeSingle(),
+        (((supabaseAdmin.from("attention_snoozes" as never) as never) as {
+          select: (
+            columns: string,
+          ) => {
+            in: (
+              column: string,
+              values: string[],
+            ) => {
+              eq: (
+                innerColumn: string,
+                innerValue: string,
+              ) => {
+                is: (
+                  nullableColumn: string,
+                  nullableValue: null,
+                ) => Promise<{
+                  data: Array<Record<string, unknown>> | null;
+                  error: { message?: string } | null;
+                }>;
+              };
+            };
+          };
+        }).select(
+          "subject_type, subject_id, snoozed_until, released_at, note",
+        )).in("subject_type", ["onboarding", "customer_blocking"])
+          .eq("subject_id", id)
+          .is("released_at", null),
+      ]);
+
+    if (error) {
+      return jsonError(error.message, 500);
+    }
+
+    if (bufferResult.error && !isMissingRelationError(bufferResult.error.message)) {
+      return jsonError(
+        bufferResult.error.message || "Kunde inte hamta bufferdata",
+        500,
       );
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-    const { data: profile, error } = await supabaseAdmin
-      .from("customer_profiles")
-      .select("*")
-      .eq("id", id)
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (snoozesResult.error && !isMissingRelationError(snoozesResult.error.message)) {
+      return jsonError(
+        snoozesResult.error.message || "Kunde inte hamta hanteras-markeringar",
+        500,
+      );
     }
 
-    // Non-admins can only access their own profile
+    // Non-admin access follows the explicit role/ownership model.
     if (!user.is_admin && user.role !== "admin") {
-      const userEmail = (user.email || "").trim().toLowerCase();
-      const profileEmail = (profile?.contact_email || "").trim().toLowerCase();
-      if (!profileEmail || profileEmail !== userEmail) {
-        return NextResponse.json(
-          { error: "Insufficient permissions" },
-          { status: 403 },
-        );
+      const isAssignedContentManager =
+        user.role === "content_manager" &&
+        profile?.account_manager_profile_id === user.id;
+      const isCustomerOwner =
+        user.role === "customer" &&
+        (profile?.user_id === user.id || profile?.id === user.id);
+
+      if (!isAssignedContentManager && !isCustomerOwner) {
+        return jsonError("Du saknar behorighet", 403);
       }
     }
 
-    return NextResponse.json(buildCustomerPayload(profile));
+    return jsonOk(
+      buildCustomerPayload(profile as Record<string, unknown>, {
+        bufferRow: bufferResult.data ?? null,
+        attentionSnoozes: snoozesResult.data ?? [],
+      }),
+    );
   } catch (error: unknown) {
-    if (error instanceof AuthError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode },
-      );
-    }
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return buildRouteErrorResponse(error);
   }
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  console.log("[API] PATCH called for customer");
   try {
     const user = await validateApiRequest(request, ["admin"]);
-    console.log("[API] User validated:", user.email);
 
     const { id } = await params;
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Profile ID is required" },
-        { status: 400 },
-      );
+      return jsonError("Kund-ID kravs", 400);
     }
 
     const body = await request.json();
-    console.log("[API] Body action:", body.action);
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAdmin = createSupabaseAdmin();
 
     // --- Action: send_invite ---
     if (body.action === "send_invite") {
@@ -138,6 +214,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
       const inviteInput = parsedInvite.data;
       const appUrl = getAppUrl();
+      const canonicalTikTokProfileUrl = inviteInput.tiktok_profile_url
+        ? toCanonicalTikTokProfileUrl(inviteInput.tiktok_profile_url)
+        : null;
+      const tiktokHandle = inviteInput.tiktok_profile_url
+        ? deriveTikTokHandle(inviteInput.tiktok_profile_url)
+        : null;
+
+      if (inviteInput.tiktok_profile_url && (!canonicalTikTokProfileUrl || !tiktokHandle)) {
+        return jsonError(
+          "Ogiltig TikTok-profil. Anvand en profil-URL eller @handle.",
+          400,
+        );
+      }
 
       let stripeCustomerId: string | null = null;
       let stripeSubscriptionId: string | null = null;
@@ -160,7 +249,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             },
           });
           stripeCustomerId = customer.id;
-          console.log("Created Stripe customer:", customer.id);
 
           const subscriptionInterval =
             inviteInput.subscription_interval || "month";
@@ -236,7 +324,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             },
           });
           stripeSubscriptionId = subscription.id;
-          console.log("Created Stripe subscription:", subscription.id);
         } catch (stripeError: unknown) {
           const e = stripeError as Record<string, unknown>;
           console.error("Stripe error:", e?.type, e?.message, e?.code);
@@ -245,7 +332,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             try {
               await stripe.customers.del(stripeCustomerId);
               stripeCustomerId = null;
-              console.log("Deleted orphaned Stripe customer");
             } catch (deleteError) {
               console.error("Failed to delete orphaned customer:", deleteError);
             }
@@ -253,7 +339,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         }
       }
 
-      const { data: inviteData, error: inviteError } =
+      const { error: inviteError } =
         await supabaseAdmin.auth.admin.inviteUserByEmail(
           inviteInput.contact_email,
           {
@@ -269,15 +355,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
       if (inviteError) {
         console.error("Invite error:", inviteError);
-        return NextResponse.json(
-          { error: inviteError.message },
-          { status: 500 },
-        );
+        return jsonError(inviteError.message, 500);
       }
 
-      console.log("Invited user:", inviteData);
-
-      const updateData: Record<string, unknown> = {
+      const updateData: TablesUpdate<"customer_profiles"> = {
         status: "invited",
         invited_at: new Date().toISOString(),
       };
@@ -296,6 +377,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           inviteInput.customer_contact_name || null;
       if (inviteInput.account_manager !== undefined)
         updateData.account_manager = inviteInput.account_manager || null;
+      if (canonicalTikTokProfileUrl !== null) {
+        updateData.tiktok_profile_url = canonicalTikTokProfileUrl;
+        updateData.tiktok_handle = tiktokHandle;
+      }
       if (inviteInput.pricing_status)
         updateData.pricing_status =
           inviteInput.pricing_status === "unknown" ? "unknown" : "fixed";
@@ -324,10 +409,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .single();
 
       if (updateError) {
-        return NextResponse.json(
-          { error: updateError.message },
-          { status: 500 },
-        );
+        return jsonError(updateError.message, 500);
       }
 
       await logCustomerInvited(
@@ -338,9 +420,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         inviteInput.contact_email,
       );
 
-      return NextResponse.json({
+      return jsonOk({
         ...buildCustomerPayload(profile),
-        message: "Invitation email sent!",
+        message: "Inbjudan skickades.",
         stripe_customer_id: stripeCustomerId,
         stripe_subscription_id: stripeSubscriptionId,
       });
@@ -356,8 +438,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .single();
 
       if (error)
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      return NextResponse.json(buildCustomerPayload(data));
+        return jsonError(error.message, 500);
+      return jsonOk(buildCustomerPayload(data));
     }
 
     // --- Action: send_reminder ---
@@ -369,37 +451,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .single();
 
       if (profileError)
-        return NextResponse.json(
-          { error: profileError.message },
-          { status: 500 },
-        );
+        return jsonError(profileError.message, 500);
 
-      return NextResponse.json({
+      return jsonOk({
         message:
-          "Kunden har redan ett konto. De kan logga in for att fortsatta.",
+          "Kunden har redan ett konto och kan logga in for att fortsatta.",
         already_registered: true,
       });
-    }
-
-    if (body.action === "apply_discount") {
-      const parsedDiscount = applyDiscountActionSchema.safeParse(body);
-      if (!parsedDiscount.success) {
-        return buildValidationErrorResponse(parsedDiscount.error);
-      }
-
-      const result = await applyCustomerDiscount({
-        supabaseAdmin,
-        stripeClient: stripe,
-        profileId: id,
-        input: {
-          type: parsedDiscount.data.type,
-          value: parsedDiscount.data.value,
-          durationMonths: parsedDiscount.data.duration_months ?? null,
-          ongoing: parsedDiscount.data.ongoing,
-        },
-      });
-
-      return NextResponse.json(result);
     }
 
     if (body.action === "cancel_subscription") {
@@ -409,7 +467,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         profileId: id,
       });
 
-      return NextResponse.json({ success: true, subscription });
+      return jsonOk({ success: true, subscription });
     }
 
     if (body.action === "pause_subscription") {
@@ -419,7 +477,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         profileId: id,
       });
 
-      return NextResponse.json({ success: true, subscription });
+      return jsonOk({ success: true, subscription });
     }
 
     if (body.action === "resume_subscription") {
@@ -429,7 +487,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         profileId: id,
       });
 
-      return NextResponse.json({ success: true, subscription });
+      return jsonOk({ success: true, subscription });
     }
 
     // --- General update (allowlisted fields only) ---
@@ -443,11 +501,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .single();
 
     if (existingProfileError || !existingProfile) {
-      return NextResponse.json(
-        {
-          error: existingProfileError?.message || "Customer profile not found",
-        },
-        { status: 404 },
+      return jsonError(
+        existingProfileError?.message || "Kunden hittades inte",
+        404,
       );
     }
 
@@ -456,7 +512,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return buildValidationErrorResponse(parsedPatch.error);
     }
 
-    const sanitizedBody = { ...parsedPatch.data } as Record<string, unknown>;
+    const sanitizedBody = {
+      ...parsedPatch.data,
+    } as TablesUpdate<"customer_profiles">;
 
     if (sanitizedBody.billing_day_of_month !== undefined) {
       sanitizedBody.billing_day_of_month = Math.max(
@@ -472,13 +530,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         sanitizedBody.pricing_status === "unknown" ? "unknown" : "fixed";
       if (sanitizedBody.pricing_status === "unknown")
         sanitizedBody.monthly_price = 0;
-    }
-    if (sanitizedBody.discount_value !== undefined) {
-      sanitizedBody.discount_value = Number(sanitizedBody.discount_value) || 0;
-    }
-    if (sanitizedBody.discount_duration_months !== undefined) {
-      sanitizedBody.discount_duration_months =
-        Number(sanitizedBody.discount_duration_months) || null;
     }
     if (sanitizedBody.upcoming_monthly_price !== undefined) {
       sanitizedBody.upcoming_monthly_price =
@@ -539,12 +590,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     );
 
     if (hasActiveStripeSubscription && nextPricingStatus === "unknown") {
-      return NextResponse.json(
-        {
-          error:
-            'Aktiv Stripe-prenumeration kan inte ha "pris ej satt". Avsluta eller pausa abonnemang forst.',
-        },
-        { status: 400 },
+      return jsonError(
+        'Aktiv Stripe-prenumeration kan inte ha "pris ej satt". Avsluta eller pausa abonnemang forst.',
+        400,
       );
     }
 
@@ -554,10 +602,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       (upcomingDueNow || (monthlyPriceChanged && nextMonthlyPrice > 0))
     ) {
       if (!stripe)
-        return NextResponse.json(
-          { error: "Stripe is not configured on server" },
-          { status: 503 },
-        );
+        return jsonError("Stripe ar inte konfigurerat pa servern", 503);
 
       const syncedPrice = upcomingDueNow ? nextUpcomingPrice : nextMonthlyPrice;
       await applyPriceToSubscription({
@@ -584,20 +629,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       .single();
 
     if (error)
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonError(error.message, 500);
 
-    return NextResponse.json(buildCustomerPayload(data));
+    return jsonOk(buildCustomerPayload(data));
   } catch (error: unknown) {
-    if (error instanceof AuthError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode },
-      );
-    }
     console.error("[API] PATCH error:", error);
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return buildRouteErrorResponse(error);
   }
 }
 
@@ -607,41 +644,33 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Profile ID is required" },
-        { status: 400 },
-      );
+      return jsonError("Kund-ID kravs", 400);
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAdmin = createSupabaseAdmin();
     const cleanupSummary = await archiveStripeCustomer({
       supabaseAdmin,
       stripeClient: stripe,
       profileId: id,
     });
 
-    const { error } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from("customer_profiles")
-      .delete()
-      .eq("id", id);
+      .update({ status: "archived" })
+      .eq("id", id)
+      .select()
+      .single();
 
     if (error)
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonError(error.message, 500);
 
-    return NextResponse.json({
+    return jsonOk({
       success: true,
-      message: "Profile deleted successfully",
+      message: "Kunden arkiverades.",
+      customer: data,
       cleanup: cleanupSummary,
     });
   } catch (error: unknown) {
-    if (error instanceof AuthError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: error.statusCode },
-      );
-    }
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return buildRouteErrorResponse(error);
   }
 }

@@ -1,56 +1,61 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { applyCustomerDiscount, removeCustomerDiscount } from '@/lib/stripe/admin-billing';
-import { z } from 'zod';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const discountSchema = z.object({
-  type: z.enum(['percent', 'amount', 'free_period']),
-  value: z.number().min(0),
-  duration_months: z.number().int().min(1).max(36).nullable().optional(),
-  ongoing: z.boolean().default(false),
-}).strict();
+import { customerDiscountSchema } from '@/lib/schemas/customer-discount';
+import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
 export const POST = withAuth(async (request: NextRequest, _user, { params }: RouteParams) => {
-  const body = await request.json();
-  const parsed = discountSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Ogiltig payload' }, { status: 400 });
+  try {
+    const body = await request.json();
+    const parsed = customerDiscountSchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError('Ogiltig payload', 400);
+    }
+
+    const { id } = await params;
+    const supabaseAdmin = createSupabaseAdmin();
+    const result = await applyCustomerDiscount({
+      supabaseAdmin,
+      stripeClient: stripe,
+      profileId: id,
+      input: {
+        type: parsed.data.type,
+        value: parsed.data.value,
+        durationMonths: parsed.data.duration_months ?? null,
+        ongoing: parsed.data.ongoing,
+      },
+    });
+
+    return jsonOk(result);
+  } catch (error) {
+    return jsonError(
+      error instanceof Error ? error.message : 'Kunde inte spara rabatt',
+      500,
+    );
   }
-
-  const { id } = await params;
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-  const result = await applyCustomerDiscount({
-    supabaseAdmin,
-    stripeClient: stripe,
-    profileId: id,
-    input: {
-      type: parsed.data.type,
-      value: parsed.data.value,
-      durationMonths: parsed.data.duration_months ?? null,
-      ongoing: parsed.data.ongoing,
-    },
-  });
-
-  return NextResponse.json(result);
 }, ['admin']);
 
 export const DELETE = withAuth(async (_request: NextRequest, _user, { params }: RouteParams) => {
-  const { id } = await params;
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-  const result = await removeCustomerDiscount({
-    supabaseAdmin,
-    stripeClient: stripe,
-    profileId: id,
-  });
+  try {
+    const { id } = await params;
+    const supabaseAdmin = createSupabaseAdmin();
+    const result = await removeCustomerDiscount({
+      supabaseAdmin,
+      stripeClient: stripe,
+      profileId: id,
+    });
 
-  return NextResponse.json(result);
+    return jsonOk(result);
+  } catch (error) {
+    return jsonError(
+      error instanceof Error ? error.message : 'Kunde inte ta bort rabatt',
+      500,
+    );
+  }
 }, ['admin']);
