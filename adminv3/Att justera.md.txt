@@ -1,0 +1,200 @@
+# Att justera
+
+Underlag: genomgang av `adminv3/00-09` mot aktuell kodbas i `C:\Users\praiseworthy\Desktop\hagen-ui`.
+
+Princip: listan nedan tar bara upp sant som fortfarande avviker, saknas eller ar halvt implementerat jamfort med planen i `00-09`.
+
+## Redan justerat i denna omgang
+
+- `app/src/lib/url/public.ts` faller nu tillbaka till `VERCEL_URL` innan localhost-default.
+- `app/src/app/api/admin/billing-health/route.ts` filtrerar nu `stripe_sync_log` per aktiv Stripe-miljo nar kolumnen finns, och visar schema-varning med fallback nar den saknas.
+- `app/src/app/checkout/page.tsx` ar flyttad till serverwrapper + klientkomponent sa att checkout nu laser publishable key fran den nya `STRIPE_ENV`-modellen i stallet for legacy `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`.
+- `app/src/components/admin/customers/CustomerDetailView.tsx` erbjuder inte langre nagon trasig TikTok OAuth-knapp. Vyn forklarar nu att flodet bygger pa verifierad profil-URL + extern provider/RapidAPI, och att viss metadata kan saknas eller variera.
+- `app/env.example` dokumenterar nu den nya Stripe-modellen i stallet for den gamla en-nyckel-setupen.
+- `app/src/app/api/admin/team/route.ts` och `app/src/app/api/admin/team/[id]/route.ts` har nu `GET`, och `useTeamMembers()` gar via admin-API i stallet for direkt browser-Supabase.
+- `app/src/lib/admin/overview-derive.ts` innehaller nu den faktiska derive-logiken som `app/src/app/admin/page.tsx` anvander.
+- `useCustomers()` och delar av `useOverviewData()` gar nu via admin-API for kunder/team i stallet for direkt browser-Supabase.
+- `app/src/app/admin/customers/page.tsx` visar nu bufferstatus, onboarding-status, `Ny`-signal och blockeringssignal med derive-hjalparna i stallet for en ren grundlista.
+- `CustomerDetailView.tsx` visar nu onboarding-checklista, blockeringssignal med dagar, hanteras-varning och UI for planerad paus/hanteras direkt fran blockeringskontext.
+- `app/src/app/admin/team/page.tsx` anvander nu `team-flow.classifyDay`, `summarize` och en kundbalans-pill enligt dokumentets nivaer i stallet for enbart en enkel aktivitetsbar.
+- `app/src/app/admin/demos/page.tsx` ar nu en faktisk arbetsyta i stallet for read-only: admin kan skapa demo, flytta status genom pipelinen och konvertera `responded -> kund/invite` direkt fran boarden.
+- `app/src/app/api/admin/demos/[id]/route.ts` finns nu for demo-statusbyten, och `convert` satter nu ocksa `status_changed_at`, `responded_at` och `resolved_at` sa att `won` beter sig som en riktig avslutad status i overview/metrics.
+- `app/src/components/admin/AttentionList.tsx` har nu direkt `Hanteras`-action fran overviewn via `attention_snoozes`, och overviewn anvander nu Stripe-faktura-ID som `subject_id` i stallet for intern invoice-UUID.
+- `useOverviewData()` gar nu helt via admin-API, inklusive en serverroute for operativa attention-/buffer-/interaktionsdata, i stallet for direkt browser-Supabase.
+- `useTeam()` gar nu via `api/admin/team/overview` i stallet for direkt browser-Supabase, och API-lagret normaliserar dessutom mellan de tva `cm_activities`-schemana (`cm_id/type` respektive `cm_user_id/activity_type`).
+- `app/src/lib/auth/api-auth.ts` ger nu svenska auth-fel och gar via `createSupabaseAdmin()`, och centrala admin-read-routes anvander nu ocksa samma helper + delat `jsonError/jsonOk`-monster i stallet for lokal env-duplicering.
+- `app/src/app/api/admin/customers/[id]/route.ts` ar nu ocksa flyttad till samma servermonster: `createSupabaseAdmin()`, delade `jsonError/jsonOk`-svar och svenska standardmeddelanden i stallet for blandad engelska + lokal klientsetup.
+- `app/src/app/api/admin/profiles/setup/route.ts`, `profiles/route.ts` och `test-email/route.ts` ar nu ocksa staddade till samma servermonster med svenska standardfel och utan lokal `createClient(...)`-duplicering.
+
+## 00 - README och leveransoversikt
+
+- `adminv3/00-README-och-leveransoversikt.md` refererar till `AGENT-PROMPT.md`, men nagon sadan fil finns inte i `adminv3`.
+- Planen utgar fran en enhetlig migrationsyta under `supabase/migrations`, men repot har tva parallella migrationsspar:
+  - `supabase/migrations`
+  - `app/supabase/migrations`
+  Detta skapar osakerhet om vilken kedja som ar sann kalla.
+- Planen sager att backendfel som visas direkt for admin ska vara pa svenska. I faktisk kod finns fortfarande manga engelska API-svar, till exempel i:
+  - `app/src/app/api/admin/customers/route.ts`
+  - `app/src/app/api/admin/customers/decline-agreement/route.ts`
+  - `app/src/app/api/admin/concepts/[id]/route.ts`
+
+## 01 - Supabase-schema, RLS och triggers
+
+- RLS/RBAC ar inte konsekvent enligt planen. Repot innehaller fortfarande ett aldre spar som anvander `profiles.role` direkt i policies i `app/supabase/migrations`, exempelvis:
+  - `006_role_based_access.sql`
+  - `011_invoices_admin_rls.sql`
+  - `012_cleanup_is_admin_rls.sql`
+  - `020_subscriptions_admin_rls.sql`
+- `app/supabase/migrations/039_has_role_reads_profiles.sql` skriver uttryckligen om `has_role()` sa att den laser fran `profiles` i stallet for `user_roles`, vilket gar emot planen i `00` och `01` dar `user_roles` ska vara saker kalla och RLS ska anvanda `has_role(auth.uid(), 'role')`.
+- Samtidigt finns ett nytt spar i `supabase/migrations` som gar i planens riktning:
+  - `20260417000001_backend_schema_rls_stripe_tiktok.sql`
+  - `20260417010100_phase1_rls_alignment.sql`
+  - `20260417010300_phase1_profiles_sync.sql`
+  Resultatet ar att repot innehaller tva oforenliga RBAC-modeller samtidigt.
+- Planen anvander i flera SQL-exempel `public.customers`, men den faktiska implementationen arbetar genomgaende mot `public.customer_profiles`. Det kraver oversattning i nastan alla schemaavsnitt.
+- `tiktok_oauth_tokens` finns fortfarande i schema via:
+  - `supabase/migrations/20260417010000_phase1_base_schema.sql`
+  - `supabase/migrations/20260417010100_phase1_rls_alignment.sql`
+  - `supabase/migrations/20260417010200_phase1_triggers.sql`
+  men den tabellen matchar inte langre vald integrationsriktning och anvands inte av appkoden.
+- `tiktok_videos`-RLS i `supabase/migrations/20260417011200_tiktok_videos.sql` anvander `profiles.is_admin = true` i stallet for samma `has_role()`-monster som planen vill standardisera pa.
+- Planen beskriver en ren sekvens `001`-`099`. Faktisk migrationshistorik ar blandad mellan gamla numrerade filer, nya daterade filer och patchfiler.
+
+## 02 - Stripe BYOK, sync, webhooks och `lib/stripe/*`
+
+- Karnfilerna finns:
+  - `app/src/lib/stripe/config.ts`
+  - `environment.ts`
+  - `dynamic-config.ts`
+  - `sync-log.ts`
+  - `mirror.ts`
+  - `admin-billing.ts`
+  - `subscription-pricing.ts`
+  - `invite.ts`
+  - `customer-access.ts`
+  - `app/src/app/api/stripe/webhook/route.ts`
+  Men miljoflodet ar fortfarande inte helt rensat i hela repot.
+- `BillingHealth` filtrerar nu sync-logg per miljo dar schema stodjer det, men `app/src/app/api/studio/stripe/status/route.ts` laser fortfarande `stripe_sync_log` utan motsvarande miljoseparering.
+- `app/src/app/api/admin/invoices/route.ts` och `subscriptions/route.ts` hanterar franvaro av `environment`-kolumn med fallback och schemaWarnings. Det ar pragmatiskt, men det visar ocksa att planens krav pa konsekvent test/live-separation inte ar fullt sakrat i praktiken.
+
+## 03 - API-routes och auth-lager
+
+- `app/src/lib/auth/api-auth.ts` finns, men avviker pa flera punkter fran planens onskade slutlage:
+  - ingen typed `Database`-client
+  - flera hjalpfunktioner i samma fil som inte anvands konsekvent i routerna
+- `app/src/lib/server/supabase-admin.ts` finns men ar otypad. Det leder till manga `as never`-castar i API-koden i stallet for ren typad anvandning av `Database`.
+- `app/src/lib/schemas/customer-discount.ts` finns, men anvander `free_period` medan planen beskriver `free_months`. Kodbasen har darfor tva namn pa samma rabattkoncept:
+  - UI/admin billing anvander `free_period`
+  - schema/Stripe/customerdata anvander ofta `free_months`
+- `app/src/app/api/admin/customers/[id]/route.ts` anvander for icke-admin en e-postjamforelse mot `contact_email` for att avgora atkomst. Det ar en ad hoc-regel, inte den tydliga roll-/agarmodell som planen beskriver.
+- Flera routes anvander fortfarande `createClient(...)` direkt med env-duplicering i stallet for att konsekvent ga via `createSupabaseAdmin()`, men de centrala admin-read-routes och flera kvarvarande admin-verktygsroutes ar nu flyttade.
+- API-svar ar inte enhetliga. Vissa returnerar `{ error }`, andra `{ message }`, `{ warning }`, `{ resent: true }`, `{ success: true }` osv. Planen i `00` efterfragar mer konsekvent felkontrakt.
+
+## 04 - UI-paritet
+
+- Den faktiska oversiktslogiken ligger i stallet utspridd i:
+  - `app/src/app/admin/page.tsx`
+  - `app/src/lib/admin-derive/*`
+  Detta gar emot dokumentets bild av att `deriveOverview()` ska vara den centrala implementationen.
+- `app/src/lib/admin/money.ts` matchar inte exakt formatteringsregeln i dokumentet. Den anvander `toLocaleString(..., { style: 'currency' })` i stallet for den enklare `${Math.round(ore / 100).toLocaleString('sv-SE')} kr`.
+- `Providers.tsx` och Mantine notifications finns kvar i repo. Admin-rutter doljer visserligen `<Notifications />`, men toast-infrastruktur ar inte helt borttagen ur kodbasen.
+
+## 05 - TikTok-integration
+
+- TikTok OAuth ska inte langre raknas som saknat. Vald riktning ar nu profil-URL + provider/RapidAPI, inte officiell OAuth per kund.
+- Det som fortfarande bor tas upp i den valda integrationsmodellen ar i stallet:
+  - legacy-schema for OAuth (`tiktok_oauth_tokens`) ligger kvar trots att det inte anvands
+  - dokument och acceptanstester som forutsatter `?tiktok=connected|error`, token-refresh och callback-flode behover skrivas om eller strykas
+  - RapidAPI-sparet bygger pa publik profildata och provider-normalisering, sa metadata som forutsatter kontoauktorisering bor betraktas som osaker eller out-of-scope
+  - vissa fält i admin kan darfor bli null, mindre stabila eller beroende av hur providern normaliserar svaret mellan syncar
+- Det faktiska TikTok-flodet ar:
+  - spara `tiktok_profile_url` via `app/src/app/api/studio-v2/customers/[customerId]/profile/route.ts`
+  - verifiera profil via `app/src/app/api/admin/tiktok/profile-preview/route.ts`
+  - hamta/importera historik via `app/src/app/api/studio-v2/customers/[customerId]/fetch-profile-history/route.ts`
+  - schemalagd sync via `app/src/app/api/tiktok/sync/route.ts`
+- Det ar alltsa en tydlig funktionsskillnad mellan dokumentets gamla "TikTok Developer OAuth per kund" och repots nuvarande "profil-URL + provider/scraper-sync". Dokumentationen behover spegla det fullt ut.
+
+## 06 - Implementationsordning och acceptanstester
+
+- Planens fasordning ar svar att folja rakt av eftersom repo redan innehaller ett blandat tillstand:
+  - delar av adminv3 finns i `app/src`
+  - delar finns som nya root-migrationer i `supabase/migrations`
+  - delar finns som aldre migrations-/API-spar i `app/supabase/migrations`
+- TikTok-relaterade smoke tests maste skrivas om fran OAuth till det faktiska RapidAPI-flodet:
+  - verifiera profil
+  - spara profil-URL
+  - hamta profilhistorik
+  - schemalagd sync
+  - hantering nar provider-svar saknar delar av metadata
+- Flera av smoke testerna i dokumentet ar inte automatiserade i repot. Det finns visserligen unit-tester for `lib/admin-derive/*`, men ingen sammanhangande testsvit for:
+  - admin invite + Stripe-sub skapande
+  - billing webhooks
+  - TikTok profil-URL/provider-sync
+  - attention-snooze-floden
+- Dokumentets "inga toaster" ar inte fullt rensat i kodbasen. Det finns fortfarande Mantine notifications i:
+  - `app/src/components/Providers.tsx`
+  - `app/src/components/studio/customer-detail/MarkProducedDialog.tsx`
+- `Migration 040 saknas` namns i planen som ett tillstand att undvika. Faktisk adminkod ar i flera routes byggd for att leva vidare med fallback om migration 040 inte finns, vilket betyder att repo fortfarande accepterar ett schema som ligger under planens malbild.
+
+## 07 - Operativ modell och koncept
+
+- Triggern "CM-notis till admin" ar inte fullt genomford i appflodet:
+  - tabellen `cm_notifications` finns
+  - admin kan lasa och resolva notiser
+  - men jag hittar ingen faktisk CM-UI eller publik app-route dar en CM kan skapa en notis till admin
+- Operativmodellen sager att admin ska kunna se nar nagot gar fel utan att ga in i det dagliga arbetet. Faktiskt ar en stor del av oversiktskompositionen klientside-logik som ar hart kopplad till ratabeller, inte ett smalt "sortera och peka"-API.
+
+## 08 - Schemapatchar och tabeller
+
+- Dokumentet anvander genomgaende `public.customers`, `assigned_cm_id` och `team_members.user_id`. Faktisk repo anvander i stallet:
+  - `public.customer_profiles`
+  - `account_manager_profile_id`
+  - `team_members.profile_id`
+  Nastan varje SQL-block i dokument 08 behover darfor mappas om innan det kan appliceras i denna kodbas.
+- `demos` avviker i kolumnnamn:
+  - dokumentet beskriver `proposed_price_sek`
+  - faktiskt repo anvander `proposed_price_ore`
+- `cm_interactions` i dokumentet anvander `team_members.user_id = auth.uid()`. Faktisk migration i repo anvander `team_members.profile_id`.
+- `tiktok_publications` enligt dokumentet knyts mot `customers` och `assigned_cm_id`. Faktisk migration i repo knyter mot `customer_profiles` och `team_members.profile_id`.
+- Migrationsordningen i dokumentet ar en ren 1-7-sekvens. I repot ar samma omrade redan uppdelat i flera faktiska filer:
+  - `20260417010400_customers_patch.sql`
+  - `20260417010500_feedplan_concepts_patch.sql`
+  - `20260417010600_cm_interactions.sql`
+  - `20260417010700_tiktok_publications.sql`
+  - `20260417010800_demos.sql`
+  - `20260417010900_cm_notifications.sql`
+  - `20260417011000_attention_snoozes.sql`
+  - `20260417011100_admin_views.sql`
+  - `20260417011200_tiktok_videos.sql`
+- `attention-maintenance`-jobbet finns som `supabase/functions/attention-maintenance/index.ts`, men jag hittar ingen schedulerkonfiguration i repo som faktiskt kor det var 15:e minut.
+- `onboarding-tick` finns ocksa som Supabase function, men ingen synlig schemalaggning finns i repo for den heller.
+
+## 09 - Berakningslogik for UI
+
+- Den stora logiken ar delvis implementerad under `app/src/lib/admin-derive/*`, men inte exakt dar eller exakt sa som dokumentet beskriver.
+- `customerBlocking()` avviker fran dokumentet:
+  - dokumentet sager att ingen publikation ska ge `escalated` och `daysSincePublish = 999`
+  - faktisk kod i `app/src/lib/admin-derive/blocking.ts` returnerar `none` och `0`
+- Foljden blir att live-kunder utan publikationer inte flaggas enligt planens blockeringsmodell.
+- `app/src/app/admin/page.tsx` anvander inte heller dokumentets fallback "om inga publikationer och kunden ar live, rakna fran aktivering". Nagon sadan fallback finns inte.
+- `AttentionList.tsx` har nu `Hanteras` direkt i overviewn, men explicit slapp/release av en snooze finns fortfarande bara i detaljvyerna och inte fran oversiktslistan.
+- Mappingen i dokument 09 stammer inte fullt mot aktuell kod:
+- `app/src/components/admin/CmPulseHover.tsx` visar top-3 senaste publiceringar och nya kunder, vilket ligger nara planen, men kundportfoljdelen ar fortfarande enklare an den fulla hover-layouten som dokumentet refererar till.
+
+## Kort slutsats
+
+Det mesta av grunden finns redan i repot:
+
+- admin-UI finns
+- Stripe webhook/mirror finns
+- nya admin-derive helpers finns
+- schema for demos/cm_notifications/attention_snoozes finns
+- TikTok stats/videos/publications finns
+
+Det som framfor allt aterstar for att matcha `adminv3/00-09` ar:
+
+- valja och rensa till en enda migrations-/RBAC-sanning
+- rensa bort legacy-OAuth-sparet ur schema och dokumentation, och beskriva RapidAPI-sparets metadata-begransningar explicit
+- koppla ihop attention-snooze i faktisk UI
+- ersatta stubbar och parallella logikspar med en enda tydlig admin-derive-/API-arkitektur
+- fylla luckorna i kundlista, kunddetalj, demos och team-vy sa att de faktiskt anvander den operativa logik som dokument 07-09 beskriver

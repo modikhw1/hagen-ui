@@ -2,6 +2,8 @@
 
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { SPAN_COLOR_PALETTE, type FeedSpan } from '@/types/studio-v2';
+import type { GridConfig } from '@/types/studio-v2';
+import { fracToFeedOrder } from '@/lib/feed-planner-utils';
 
 type DragState =
   | {
@@ -20,6 +22,8 @@ export interface SpanHandlerRefs {
   activeSpan: string | null;
   nextColorIdx: number;
   fracOffset: number;
+  historyOffset: number;
+  gridConfig: GridConfig;
   reloadSpans: () => Promise<void>;
 }
 
@@ -107,7 +111,7 @@ export function createSpanHandlers(
       }
 
       if (!drag.spanId) return;
-      const adjustedFrac = clamp01(nextFrac + refs.current.fracOffset);
+      const adjustedFrac = nextFrac + refs.current.fracOffset;
       const otherSpans = refs.current.spans.filter(s => s.id !== drag.spanId);
       setSpans((prev) =>
         prev.map((span) => {
@@ -116,17 +120,27 @@ export function createSpanHandlers(
             // Hard stop: clamp against spans that end at or before the current start
             const lowerBound = otherSpans
               .filter(s => s.frac_end <= span.frac_start + 0.001)
-              .reduce((max, s) => Math.max(max, s.frac_end), 0);
+              .reduce((max, s) => Math.max(max, s.frac_end), Number.NEGATIVE_INFINITY);
             const clamped = Math.max(adjustedFrac, lowerBound);
-            return { ...span, frac_start: Math.min(clamped, span.frac_end - 0.01) };
+            const nextStart = Math.min(clamped, span.frac_end - 0.01);
+            return {
+              ...span,
+              frac_start: nextStart,
+              start_feed_order: fracToFeedOrder(nextStart, 0, refs.current.gridConfig),
+            };
           }
           if (drag.type === 'end') {
             // Hard stop: clamp against spans that start at or after the current end
             const upperBound = otherSpans
               .filter(s => s.frac_start >= span.frac_end - 0.001)
-              .reduce((min, s) => Math.min(min, s.frac_start), 1);
+              .reduce((min, s) => Math.min(min, s.frac_start), Number.POSITIVE_INFINITY);
             const clamped = Math.min(adjustedFrac, upperBound);
-            return { ...span, frac_end: Math.max(clamped, span.frac_start + 0.01) };
+            const nextEnd = Math.max(clamped, span.frac_start + 0.01);
+            return {
+              ...span,
+              frac_end: nextEnd,
+              end_feed_order: fracToFeedOrder(nextEnd, 0, refs.current.gridConfig),
+            };
           }
           return span;
         })
@@ -157,8 +171,10 @@ export function createSpanHandlers(
             id: spanId,
             customer_id: customerId,
             cm_id: '',
-            frac_start: clamp01(start),
-            frac_end: clamp01(end),
+            frac_start: start,
+            frac_end: end,
+            start_feed_order: fracToFeedOrder(start, 0, refs.current.gridConfig),
+            end_feed_order: fracToFeedOrder(end, 0, refs.current.gridConfig),
             climax: null,
             climax_date: null,
             color_index: colorIdx % SPAN_COLOR_PALETTE.length,
@@ -180,7 +196,10 @@ export function createSpanHandlers(
           fetch('/api/studio-v2/feed-spans', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newSpan),
+            body: JSON.stringify({
+              ...newSpan,
+              history_offset: refs.current.historyOffset,
+            }),
           }).then(async (res) => {
             if (!res.ok) {
               const data = await res.json().catch(() => ({}));
@@ -203,6 +222,8 @@ export function createSpanHandlers(
             body: JSON.stringify({
               frac_start: span.frac_start,
               frac_end: span.frac_end,
+              start_feed_order: fracToFeedOrder(span.frac_start, 0, refs.current.gridConfig),
+              end_feed_order: fracToFeedOrder(span.frac_end, 0, refs.current.gridConfig),
               climax: span.climax,
             }),
           }).then(async (res) => {

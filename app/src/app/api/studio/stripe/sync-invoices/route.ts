@@ -3,22 +3,28 @@ import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { stripe, isStripeTestMode, stripeEnvironment } from '@/lib/stripe/dynamic-config';
 import { withAuth } from '@/lib/auth/api-auth';
-import { syncInvoiceLineItems } from '@/lib/stripe/mirror';
+import { upsertInvoiceMirror } from '@/lib/stripe/mirror';
+import { logStripeSync } from '@/lib/stripe/sync-log';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+type SyncInvoice = Stripe.Invoice & {
+  subscription?: string | Stripe.Subscription | null;
+  payment_intent?: string | Stripe.PaymentIntent | null;
+};
 
 /**
  * POST /api/studio/stripe/sync-invoices
  * Sync all invoices from Stripe to Supabase
  */
 export const POST = withAuth(async (request: NextRequest) => {
+  const startedAt = Date.now();
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
   try {
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
     const body = await request.json().catch(() => ({})) as {
       customer_id?: string;
       subscription_id?: string;
@@ -28,7 +34,7 @@ export const POST = withAuth(async (request: NextRequest) => {
     console.log(`[sync-invoices] Starting sync from Stripe (${isStripeTestMode ? 'TEST' : 'LIVE'})`);
 
     // Fetch all invoices from Stripe
-    const invoices: Stripe.Invoice[] = [];
+    const invoices: SyncInvoice[] = [];
     let hasMore = true;
     let startingAfter: string | undefined;
 
@@ -43,7 +49,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       if (subscription_id) params.subscription = subscription_id;
 
       const result = await stripe.invoices.list(params);
-      invoices.push(...result.data);
+      invoices.push(...(result.data as SyncInvoice[]));
       hasMore = result.has_more;
       
       if (hasMore && result.data.length > 0) {
@@ -58,78 +64,12 @@ export const POST = withAuth(async (request: NextRequest) => {
 
     for (const invoice of invoices) {
       try {
-        const stripeCustomerId =
-          typeof invoice.customer === 'string'
-            ? invoice.customer
-            : invoice.customer?.id || null;
-        const stripeSubscriptionId =
-          typeof invoice.subscription === 'string'
-            ? invoice.subscription
-            : invoice.subscription?.id || null;
-
-        // Find customer profile by stripe_customer_id
-        let customerProfileId: string | null = null;
-
-        if (stripeCustomerId) {
-          const { data: customerProfile } = await supabaseAdmin
-            .from('customer_profiles')
-            .select('id')
-            .eq('stripe_customer_id', stripeCustomerId)
-            .maybeSingle();
-
-          if (customerProfile) {
-            customerProfileId = customerProfile.id;
-          }
-        }
-
-        // Upsert invoice
-        const { error: upsertError } = await supabaseAdmin
-          .from('invoices')
-          .upsert({
-            stripe_invoice_id: invoice.id,
-            stripe_customer_id: stripeCustomerId,
-            stripe_subscription_id: stripeSubscriptionId,
-            customer_profile_id: customerProfileId,
-            amount_due: invoice.amount_due,
-            amount_paid: invoice.amount_paid,
-            currency: invoice.currency || 'sek',
-            status: invoice.status,
-            hosted_invoice_url: invoice.hosted_invoice_url,
-            invoice_pdf: invoice.invoice_pdf,
-            environment: stripeEnvironment,
-            due_date: invoice.due_date ? new Date(invoice.due_date * 1000).toISOString() : null,
-            paid_at: invoice.status === 'paid' && invoice.payment_intent 
-              ? new Date().toISOString() 
-              : null,
-          }, {
-            onConflict: 'stripe_invoice_id',
-          });
-
-        if (upsertError) {
-          console.error(`[sync-invoices] Error upserting invoice ${invoice.id}:`, upsertError);
-          errors++;
-        } else {
-          await syncInvoiceLineItems({
-            supabaseAdmin,
-            invoiceId: invoice.id,
-            lineItems: invoice.lines?.data || [],
-            environment: stripeEnvironment,
-          });
-          synced++;
-        }
-
-        // Log sync event
-        await supabaseAdmin
-          .from('stripe_sync_log')
-          .insert({
-            event_type: 'invoice.synced',
-            stripe_event_id: `sync_${invoice.id}_${Date.now()}`,
-            object_type: 'invoice',
-            object_id: invoice.id,
-            sync_direction: 'stripe_to_supabase',
-            status: upsertError ? 'failed' : 'success',
-            error_message: upsertError?.message || null,
-          });
+        await upsertInvoiceMirror({
+          supabaseAdmin,
+          invoice,
+          environment: stripeEnvironment,
+        });
+        synced++;
 
       } catch (err: unknown) {
         console.error(`[sync-invoices] Error processing invoice ${invoice.id}:`, err);
@@ -138,6 +78,24 @@ export const POST = withAuth(async (request: NextRequest) => {
     }
 
     console.log(`[sync-invoices] Completed: ${synced} synced, ${errors} errors`);
+
+    await logStripeSync({
+      supabaseAdmin,
+      eventId: `manual_invoice_sync_${Date.now()}`,
+      eventType: 'manual_invoice_sync',
+      objectType: 'invoice',
+      objectId: customer_id || subscription_id || null,
+      syncDirection: 'stripe_to_supabase',
+      status: errors > 0 ? 'failed' : 'success',
+      errorMessage: errors > 0 ? `${errors} invoices failed to sync` : null,
+      payloadSummary: {
+        count: synced,
+        errors,
+        total: invoices.length,
+        took_ms: Date.now() - startedAt,
+        environment: stripeEnvironment,
+      },
+    });
 
     return NextResponse.json({ 
       success: true, 
@@ -149,6 +107,20 @@ export const POST = withAuth(async (request: NextRequest) => {
 
   } catch (err: unknown) {
     console.error('[sync-invoices] Fatal error:', err);
+    await logStripeSync({
+      supabaseAdmin,
+      eventId: `manual_invoice_sync_${Date.now()}`,
+      eventType: 'manual_invoice_sync',
+      objectType: 'invoice',
+      objectId: null,
+      syncDirection: 'stripe_to_supabase',
+      status: 'failed',
+      errorMessage: err instanceof Error ? err.message : 'Unknown error',
+      payloadSummary: {
+        took_ms: Date.now() - startedAt,
+        environment: stripeEnvironment,
+      },
+    });
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Unknown error' },
       { status: 500 }

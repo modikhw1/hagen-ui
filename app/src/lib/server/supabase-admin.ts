@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/database';
 
 export function createSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !key) {
-    throw new Error('Supabase admin env vars are missing');
+    throw new Error('Supabase-admin ar inte korrekt konfigurerad');
   }
 
-  return createClient(url, key);
+  return createClient<Database>(url, key);
 }

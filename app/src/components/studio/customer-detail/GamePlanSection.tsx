@@ -68,6 +68,7 @@ function buttonBase(background: string, color: string, border = 'none') {
 }
 
 export function GamePlanSection({
+  customerId,
   notes,
   customerName,
   aiDefaults,
@@ -99,12 +100,13 @@ export function GamePlanSection({
   const [showAiSheet, setShowAiSheet] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState('');
+  const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
   const sourceLabel =
     gamePlanSummary?.source === 'customer_game_plans'
-      ? 'Aktuell version'
+      ? 'Aktuell'
       : gamePlanSummary?.source === 'legacy_customer_profiles'
-        ? 'Äldre dokument'
-        : 'Tomt dokument';
+        ? 'Äldre'
+        : 'Tom';
 
   return (
     <div
@@ -182,10 +184,26 @@ export function GamePlanSection({
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
-            {customerName ? `${customerName} • ${sourceLabel}` : sourceLabel}
-            {gamePlanSummary?.updated_at ? ` • sparad ${formatDateTime(gamePlanSummary.updated_at)}` : ''}
+          <span
+            style={{
+              padding: '5px 10px',
+              borderRadius: LeTrendRadius.pill,
+              background: LeTrendColors.surfaceHighlight,
+              color: LeTrendColors.textMuted,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}
+            title={customerName ? `${customerName} • ${sourceLabel}` : sourceLabel}
+          >
+            {sourceLabel}
           </span>
+          {gamePlanSummary?.updated_at ? (
+            <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
+              Sparad {formatDateTime(gamePlanSummary.updated_at)}
+            </span>
+          ) : null}
           {hasUnsavedGamePlanChanges ? (
             <span
               style={{
@@ -320,9 +338,6 @@ export function GamePlanSection({
           >
             Noteringar
           </h3>
-          <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
-            Snabbt för egna observationer, länkar och feedback
-          </span>
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -335,7 +350,7 @@ export function GamePlanSection({
                 void handleAddNote();
               }
             }}
-            placeholder="Skriv en observation, klistra in en lank eller anvand [text](url) och tryck Enter"
+            placeholder="Skriv en observation..."
             style={{
               width: '100%',
               padding: '12px 14px',
@@ -367,16 +382,19 @@ export function GamePlanSection({
                 border: `1px dashed ${LeTrendColors.border}`,
               }}
             >
-              Inga noteringar än. Lägg till en snabb observation för att fånga riktning, feedback eller referenser.
+              Inga noteringar ännu. Skriv en snabb observation ovan.
             </div>
           ) : (
             notes.map((note) => {
               const noteMeta = getCustomerNoteTypeMeta(note.note_type || 'update');
               const isEditing = editingNoteId === note.id;
+              const showNoteActions = isEditing || hoveredNoteId === note.id;
 
               return (
                 <div
                   key={note.id}
+                  onMouseEnter={() => setHoveredNoteId(note.id)}
+                  onMouseLeave={() => setHoveredNoteId((current) => (current === note.id ? null : current))}
                   style={{
                     background: LeTrendColors.surfaceMuted,
                     borderRadius: LeTrendRadius.md,
@@ -394,29 +412,38 @@ export function GamePlanSection({
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      {note.note_type && note.note_type !== 'update' ? (
-                        <span
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: LeTrendRadius.pill,
-                            background: noteMeta.bg,
-                            color: noteMeta.text,
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          {noteMeta.label}
-                        </span>
-                      ) : null}
+                      <span
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: LeTrendRadius.pill,
+                          background: noteMeta.bg,
+                          color: noteMeta.text,
+                          fontSize: 11,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {noteMeta.label}
+                      </span>
                       <div style={{ fontSize: 11, color: LeTrendColors.textMuted }}>
-                        {formatDateTime(note.created_at)} av{' '}
+                        {formatDateTime(note.created_at)}
+                      </div>
+                      <div style={{ fontSize: 11, color: LeTrendColors.textMuted }}>
+                        av{' '}
                         {note.cm_id && cmDisplayNames[note.cm_id]
                           ? renderCmBadge(cmDisplayNames[note.cm_id]!)
                           : (note.cm_id || 'okand')}
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', gap: 12 }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 12,
+                        opacity: showNoteActions ? 1 : 0,
+                        pointerEvents: showNoteActions ? 'auto' : 'none',
+                        transition: 'opacity 0.2s ease',
+                      }}
+                    >
                       <button
                         type="button"
                         onClick={() => {
@@ -433,7 +460,7 @@ export function GamePlanSection({
                           padding: 0,
                         }}
                       >
-                        Ändra
+                        Redigera
                       </button>
                       <button
                         type="button"
@@ -500,7 +527,7 @@ export function GamePlanSection({
                             setEditingNoteContent('');
                           }}
                           style={buttonBase('#FFFFFF', LeTrendColors.brownInk, `1px solid ${LeTrendColors.border}`)}
-                        >
+                      >
                           Avbryt
                         </button>
                       </div>
@@ -539,6 +566,7 @@ export function GamePlanSection({
 
       {showAiSheet ? (
         <GamePlanAiSheet
+          customerId={customerId}
           loading={generatingGamePlanAi}
           initialValues={aiDefaults}
           onClose={() => setShowAiSheet(false)}

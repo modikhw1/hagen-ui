@@ -134,6 +134,23 @@ const studioStyles = {
     borderRadius: 999,
     border: '1px solid rgba(250, 248, 245, 0.14)',
   },
+  userActions: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap' as const,
+    justifyContent: 'flex-end',
+  },
+  actionButton: {
+    color: LeTrendColors.cream,
+    fontSize: '12px',
+    background: 'transparent',
+    textDecoration: 'none',
+    opacity: 0.88,
+    padding: '6px 10px',
+    borderRadius: 999,
+    border: '1px solid rgba(250, 248, 245, 0.14)',
+    cursor: 'pointer',
+  },
   main: {
     padding: '32px',
     maxWidth: '1400px',
@@ -162,9 +179,9 @@ export default function StudioLayout({ children }: StudioLayoutProps) {
 }
 
 function StudioLayoutContent({ children }: StudioLayoutProps) {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const searchParams = useSearchParams();
   const role = profile ? resolveAppRole(profile) : null;
 
@@ -234,7 +251,13 @@ function StudioLayoutContent({ children }: StudioLayoutProps) {
   const utilityNavItems = STUDIO_SHELL_NAV_ITEMS.filter((item) => item.kind === 'utility');
   const workspaceMatch = pathname.match(/^\/studio\/customers\/([^/]+)$/);
   const workspaceCustomerId = workspaceMatch?.[1] ?? null;
-  const workspaceSection = getStudioWorkspaceSection(searchParams.get('section'));
+  const workspaceSection = getStudioWorkspaceSection(searchParams?.get('section'));
+  const isAdmin = Boolean(profile?.is_admin || role === 'admin');
+
+  const handleLogout = async () => {
+    await signOut();
+    router.replace('/login');
+  };
 
   return (
     <div style={studioStyles.container}>
@@ -253,11 +276,14 @@ function StudioLayoutContent({ children }: StudioLayoutProps) {
 
           <div style={studioStyles.userInfo}>
             <span>{profile?.email}</span>
-            {profile?.is_admin && (
+            {isAdmin && (
               <Link href="/admin" style={studioStyles.adminLink}>
                 Öppna admin
               </Link>
             )}
+            <button type="button" onClick={() => void handleLogout()} style={studioStyles.actionButton}>
+              Logga ut
+            </button>
           </div>
         </div>
 

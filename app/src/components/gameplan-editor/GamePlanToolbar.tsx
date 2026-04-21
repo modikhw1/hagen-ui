@@ -10,21 +10,13 @@ interface GamePlanToolbarProps {
   editor: Editor;
 }
 
-const separatorStyle: CSSProperties = {
-  width: 1,
-  alignSelf: 'stretch',
-  background: 'rgba(74,47,24,0.1)',
-  margin: '0 4px',
-  flexShrink: 0,
-};
-
 function getButtonStyle(active: boolean, disabled = false): CSSProperties {
   return {
-    padding: '6px 10px',
-    border: 'none',
+    padding: '8px 10px',
+    border: active ? '1px solid #6B4423' : '1px solid transparent',
     borderRadius: 8,
-    background: active ? '#6B4423' : 'transparent',
-    color: active ? '#FFFFFF' : '#5D4D3D',
+    background: active ? '#FAF8F5' : 'transparent',
+    color: active ? '#6B4423' : '#5D4D3D',
     cursor: disabled ? 'not-allowed' : 'pointer',
     fontSize: 13,
     fontWeight: 600,
@@ -32,6 +24,24 @@ function getButtonStyle(active: boolean, disabled = false): CSSProperties {
     whiteSpace: 'nowrap',
     flexShrink: 0,
     opacity: disabled ? 0.5 : 1,
+  };
+}
+
+function menuButtonStyle(): CSSProperties {
+  return {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: '10px 12px',
+    border: 'none',
+    background: 'transparent',
+    color: '#4A4239',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 500,
+    textAlign: 'left',
   };
 }
 
@@ -53,11 +63,16 @@ function FieldLabel({ children }: { children: string }) {
 
 export function GamePlanToolbar({ editor }: GamePlanToolbarProps) {
   const [showLinkChipDialog, setShowLinkChipDialog] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkLabel, setLinkLabel] = useState('');
   const [linkPlatform, setLinkPlatform] = useState<LinkPlatformSelection>('auto');
   const canUndo = editor.can().chain().focus().undo().run();
   const canRedo = editor.can().chain().focus().redo().run();
+
+  const closeMenus = () => {
+    setShowMoreMenu(false);
+  };
 
   const insertLinkChip = () => {
     const href = normalizeHref(linkUrl);
@@ -78,6 +93,7 @@ export function GamePlanToolbar({ editor }: GamePlanToolbarProps) {
     setLinkLabel('');
     setLinkPlatform('auto');
     setShowLinkChipDialog(false);
+    closeMenus();
   };
 
   const insertLink = () => {
@@ -88,6 +104,7 @@ export function GamePlanToolbar({ editor }: GamePlanToolbarProps) {
 
     if (!href) {
       editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      closeMenus();
       return;
     }
 
@@ -101,6 +118,8 @@ export function GamePlanToolbar({ editor }: GamePlanToolbarProps) {
         rel: 'noopener noreferrer',
       })
       .run();
+
+    closeMenus();
   };
 
   const insertImage = () => {
@@ -118,6 +137,8 @@ export function GamePlanToolbar({ editor }: GamePlanToolbarProps) {
         attrs: { src, caption, width: 100 },
       })
       .run();
+
+    closeMenus();
   };
 
   const insertImageGallery = () => {
@@ -141,12 +162,20 @@ export function GamePlanToolbar({ editor }: GamePlanToolbarProps) {
         attrs: { images },
       })
       .run();
+
+    closeMenus();
   };
 
   const insertYoutube = () => {
     const url = prompt('YouTube-URL:');
     if (!url) return;
     editor.commands.setYoutubeVideo({ src: url });
+    closeMenus();
+  };
+
+  const runMenuAction = (action: () => void) => {
+    action();
+    closeMenus();
   };
 
   return (
@@ -154,80 +183,111 @@ export function GamePlanToolbar({ editor }: GamePlanToolbarProps) {
       <div
         className="gameplan-editor-toolbar"
         style={{
+          position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          flexWrap: 'nowrap',
-          gap: 2,
+          justifyContent: 'space-between',
+          gap: 12,
           padding: '8px 12px',
           background: '#FAF8F5',
           borderBottom: '1px solid rgba(74,47,24,0.08)',
           overflowX: 'auto',
         }}
       >
-        <button
-          type="button"
-          style={getButtonStyle(editor.isActive('heading', { level: 3 }))}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-        >
-          H3
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button
+            type="button"
+            style={getButtonStyle(editor.isActive('bold'))}
+            onClick={() => editor.chain().focus().toggleBold().run()}
+          >
+            B
+          </button>
+          <button
+            type="button"
+            style={getButtonStyle(editor.isActive('italic'))}
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+          >
+            I
+          </button>
+          <button
+            type="button"
+            style={getButtonStyle(editor.isActive('link'))}
+            onClick={insertLink}
+          >
+            Länk
+          </button>
+          <button
+            type="button"
+            style={getButtonStyle(false)}
+            onClick={insertImage}
+          >
+            Bild
+          </button>
+        </div>
 
-        <div style={separatorStyle} />
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            type="button"
+            onClick={() => setShowMoreMenu((prev) => !prev)}
+            style={getButtonStyle(showMoreMenu)}
+          >
+            Mer
+          </button>
 
-        <button type="button" style={getButtonStyle(editor.isActive('bold'))} onClick={() => editor.chain().focus().toggleBold().run()}>
-          B
-        </button>
-        <button type="button" style={getButtonStyle(editor.isActive('italic'))} onClick={() => editor.chain().focus().toggleItalic().run()}>
-          I
-        </button>
-        <button type="button" style={getButtonStyle(editor.isActive('underline'))} onClick={() => editor.chain().focus().toggleUnderline().run()}>
-          U
-        </button>
-        <button type="button" style={getButtonStyle(editor.isActive('bulletList'))} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-          Punktlista
-        </button>
-        <button type="button" style={getButtonStyle(editor.isActive('orderedList'))} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-          Numrerad
-        </button>
-
-        <div style={separatorStyle} />
-
-        <button type="button" style={getButtonStyle(editor.isActive('link'))} onClick={insertLink}>
-          Länk
-        </button>
-        <button type="button" style={getButtonStyle(false)} onClick={() => setShowLinkChipDialog(true)}>
-          Link-chip
-        </button>
-        <button type="button" style={getButtonStyle(false)} onClick={insertImage}>
-          Bild
-        </button>
-        <button type="button" style={getButtonStyle(false)} onClick={insertImageGallery}>
-          Galleri
-        </button>
-        <button type="button" style={getButtonStyle(false)} onClick={insertYoutube}>
-          YouTube
-        </button>
-
-        <div style={separatorStyle} />
-
-        <button
-          type="button"
-          style={getButtonStyle(false, !canUndo)}
-          onClick={() => editor.chain().focus().undo().run()}
-          disabled={!canUndo}
-          title="Ångra"
-        >
-          Undo
-        </button>
-        <button
-          type="button"
-          style={getButtonStyle(false, !canRedo)}
-          onClick={() => editor.chain().focus().redo().run()}
-          disabled={!canRedo}
-          title="Gör om"
-        >
-          Redo
-        </button>
+          {showMoreMenu ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                width: 220,
+                padding: 6,
+                borderRadius: 12,
+                background: '#FFFFFF',
+                border: '1px solid rgba(74,47,24,0.08)',
+                boxShadow: '0 12px 24px rgba(74,47,24,0.12)',
+                zIndex: 10,
+              }}
+            >
+              <button type="button" style={menuButtonStyle()} onClick={() => runMenuAction(() => editor.chain().focus().toggleHeading({ level: 3 }).run())}>
+                <span>Rubrik</span>
+                <span style={{ color: '#9D8E7D' }}>H3</span>
+              </button>
+              <button type="button" style={menuButtonStyle()} onClick={() => runMenuAction(() => editor.chain().focus().toggleBulletList().run())}>
+                Punktlista
+              </button>
+              <button type="button" style={menuButtonStyle()} onClick={() => runMenuAction(() => editor.chain().focus().toggleOrderedList().run())}>
+                Numrerad lista
+              </button>
+              <button type="button" style={menuButtonStyle()} onClick={() => setShowLinkChipDialog(true)}>
+                Länkchip
+              </button>
+              <button type="button" style={menuButtonStyle()} onClick={insertImageGallery}>
+                Bildgalleri
+              </button>
+              <button type="button" style={menuButtonStyle()} onClick={insertYoutube}>
+                YouTube
+              </button>
+              <div style={{ height: 1, background: 'rgba(74,47,24,0.08)', margin: '4px 6px' }} />
+              <button
+                type="button"
+                style={menuButtonStyle()}
+                onClick={() => runMenuAction(() => editor.chain().focus().undo().run())}
+                disabled={!canUndo}
+              >
+                Ångra
+              </button>
+              <button
+                type="button"
+                style={menuButtonStyle()}
+                onClick={() => runMenuAction(() => editor.chain().focus().redo().run())}
+                disabled={!canRedo}
+              >
+                Gör om
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {showLinkChipDialog ? (

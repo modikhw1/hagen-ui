@@ -135,6 +135,10 @@ interface CustomerConceptBase {
   reconciled_at: string | null;
   /** @deprecated Prefer `content.content_overrides`. */
   content_overrides: ConceptContentOverrides | null;
+  partner_name: string | null;
+  profile_name: string | null;
+  profile_image_url: string | null;
+  visual_variant: string | null;
 
   // Feed planner
   /** @deprecated Prefer `placement.feed_order`. */
@@ -273,6 +277,10 @@ export interface EmailJobEntry {
   id: string;
   customer_id: string;
   cm_id: string;
+  subject: string;
+  body_html: string;
+  concept_ids: string[];
+  recipient_email: string;
   status: EmailJobStatus;
   attempts: number;
   max_attempts: number;
@@ -335,14 +343,9 @@ export interface CustomerProfile {
   tiktok_profile_url?: string | null;   // canonical: full profile URL (e.g. https://www.tiktok.com/@brand)
   tiktok_handle?: string | null;        // derived display value, normalized from tiktok_profile_url
   last_history_sync_at?: string | null;
-  // Motor signal: non-null = new imported_history clips arrived, CM has not yet advanced plan
-  pending_history_advance?: number | null;
-  // Acknowledgement: non-null = CM dismissed the nudge without advancing (cleared by new sync or advance)
-  pending_history_advance_seen_at?: string | null;
-  // Freshness seam: MAX(published_at) of the batch that triggered pending_history_advance
-  pending_history_advance_published_at?: string | null;
   // Operation lock: non-null = mark-produced is in progress; frontend shows badge if >60s old
   pending_history_advance_at?: string | null;
+  operation_lock_until?: string | null;
 
   created_at: string;
   updated_at?: string;
@@ -521,7 +524,7 @@ export interface CmTag {
   created_at: string;
 }
 
-export type SlotType = 'planned' | 'current' | 'history' | 'empty';
+export type SlotType = 'planned' | 'current' | 'history' | 'empty' | 'brand_pad';
 
 export interface FeedSlot {
   slotIndex: number;
@@ -549,6 +552,8 @@ export interface FeedSpan {
   cm_id: string;
   frac_start: number;
   frac_end: number;
+  start_feed_order?: number | null;
+  end_feed_order?: number | null;
   climax: number | null;
   climax_date: string | null;
   color_index: number;

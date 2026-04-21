@@ -1,30 +1,61 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 import { stripe } from '@/lib/stripe/dynamic-config';
+import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
+import {
+  canAccessStripeCustomerResource,
+  getAuthorizedCustomerProfile,
+} from '@/lib/stripe/customer-access';
 
-/**
- * PUBLIC API - No auth required
- * Fetches agreement/subscription status by customer ID
- * Used for /pay/[customerId] page where customer may not have an account
- */
+const querySchema = z.object({
+  customerId: z.string().trim().regex(/^cus_/, 'Invalid customer ID'),
+});
+
 export async function GET(request: NextRequest) {
   try {
+    const authUser = await validateApiRequest(request);
+
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const customerId = searchParams.get('customerId');
+    const parsedQuery = querySchema.safeParse({
+      customerId: new URL(request.url).searchParams.get('customerId') ?? undefined,
+    });
 
-    if (!customerId) {
-      return NextResponse.json({ error: 'Customer ID required' }, { status: 400 });
+    if (!parsedQuery.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid customer ID',
+          issues: parsedQuery.error.issues.map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      );
     }
 
-    // Validate customer ID format
-    if (!customerId.startsWith('cus_')) {
-      return NextResponse.json({ error: 'Invalid customer ID' }, { status: 400 });
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const authorizedProfile = await getAuthorizedCustomerProfile({
+      supabaseAdmin,
+      user: authUser,
+    });
+
+    const { customerId } = parsedQuery.data;
+    if (
+      !canAccessStripeCustomerResource(authorizedProfile, {
+        customerId,
+        email: authUser.email,
+      })
+    ) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Fetch customer
     let customer;
     try {
       customer = await stripe.customers.retrieve(customerId);
@@ -36,27 +67,36 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Kunden finns inte längre' }, { status: 404 });
     }
 
-    // Fetch subscriptions
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       limit: 1,
       expand: ['data.latest_invoice'],
     });
 
-    // Fetch open invoices (if no subscription)
     const invoices = await stripe.invoices.list({
       customer: customerId,
       status: 'open',
       limit: 1,
     });
 
-    // Determine status and build response
     if (subscriptions.data.length > 0) {
       const sub = subscriptions.data[0] as {
         id: string;
         status: string;
-        items: { data: Array<{ price?: { unit_amount?: number; currency?: string; product?: string | { name?: string } } }> };
-        latest_invoice?: { id?: string; hosted_invoice_url?: string; status?: string } | null;
+        items: {
+          data: Array<{
+            price?: {
+              unit_amount?: number;
+              currency?: string;
+              product?: string | { name?: string };
+            };
+          }>;
+        };
+        latest_invoice?: {
+          id?: string;
+          hosted_invoice_url?: string;
+          status?: string;
+        } | null;
         cancel_at_period_end?: boolean;
         cancel_at?: number;
         current_period_end?: number;
@@ -71,23 +111,20 @@ export async function GET(request: NextRequest) {
         status = 'past_due';
       } else if (sub.status === 'canceled') {
         status = 'cancelled';
-      } else if (sub.status === 'incomplete' || sub.status === 'incomplete_expired') {
-        status = 'pending';
       } else {
         status = 'pending';
       }
 
-      // Check if cancelled but still active until period end
       if (sub.cancel_at_period_end && sub.status === 'active') {
         status = 'active';
       }
 
-      // Get price info
       const priceItem = sub.items.data[0];
       const priceAmount = priceItem?.price?.unit_amount || 0;
-      const productName = typeof priceItem?.price?.product === 'object'
-        ? (priceItem.price.product as { name?: string }).name
-        : null;
+      const productName =
+        typeof priceItem?.price?.product === 'object'
+          ? (priceItem.price.product as { name?: string }).name
+          : null;
 
       return NextResponse.json({
         agreement: {
@@ -110,7 +147,6 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // No subscription - check for open invoices
     if (invoices.data.length > 0) {
       const invoice = invoices.data[0];
 
@@ -133,8 +169,10 @@ export async function GET(request: NextRequest) {
       agreement: null,
       message: 'Ingen aktiv prenumeration eller öppen faktura',
     });
-
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
     console.error('Public agreement fetch error:', error);
     return NextResponse.json(
       { error: 'Kunde inte hämta avtalsinformation' },

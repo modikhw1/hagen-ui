@@ -13,9 +13,8 @@
 //   5. Clear the motor signal (plan has advanced — nudge is no longer needed).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { buildMarkProducedPayload } from '@/lib/customer-concept-lifecycle';
-import { motorSignalCleared } from '@/lib/studio/motor-signal';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import { buildMarkProducedPayload } from '@/lib/customer-concept-lifecycle';
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
@@ -95,13 +94,10 @@ export async function performMarkProduced(
     };
   }
 
-  // ── Phase 4: clear operation lock + motor signal ──────────────────────────
+  // ── Phase 4: clear operation lock ─────────────────────────────────────────
   await supabase
     .from('customer_profiles')
-    .update({
-      pending_history_advance_at: null,
-      ...motorSignalCleared(),
-    })
+    .update({ pending_history_advance_at: null })
     .eq('id', customerId);
 
   // ── Phase 5: mark any active feed_motor_signals as auto-resolved ──────────

@@ -35,7 +35,7 @@ export function GamePlanDisplay({
 
       {safeHtml.trim() ? (
         <div
-          className="gp-rich-text"
+          className="gp-rich-text game-plan-content"
           style={{
             background: '#FFFFFF',
             borderRadius: 12,

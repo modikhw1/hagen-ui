@@ -39,13 +39,6 @@ export default function StudioDashboard() {
   const [loading, setLoading] = useState(true);
   const [lastEmailDates, setLastEmailDates] = useState<Record<string, string>>({});
 
-  useEffect(() => {
-    void Promise.all([fetchCustomers(), fetchConceptStats()]).finally(() =>
-      setLoading(false)
-    );
-    void fetchLastEmailDates();
-  }, []);
-
   const fetchCustomers = async () => {
     const { data } = await supabase
       .from('customer_profiles')
@@ -89,6 +82,24 @@ export default function StudioDashboard() {
     }
     setConceptStats(stats);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      await Promise.all([fetchCustomers(), fetchConceptStats()]);
+      if (!cancelled) {
+        setLoading(false);
+      }
+    };
+
+    void loadDashboard();
+    void Promise.resolve().then(fetchLastEmailDates);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const activeCustomers = customers.filter((c) => c.status === 'active' || c.status === 'agreed');
   const orgWideWithDrafts: CustomerWithStats[] = activeCustomers

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { withAuth } from '@/lib/auth/api-auth';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { deletePendingInvoiceItem } from '@/lib/stripe/admin-billing';
+import { assertInvoiceItemBelongsToCustomer } from '@/lib/stripe/customer-access';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -29,13 +30,13 @@ export const DELETE = withAuth(async (_request: NextRequest, _user, { params }: 
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
   }
 
-  const invoiceItem = await stripe.invoiceItems.retrieve(itemId);
-  const invoiceItemCustomerId =
-    typeof invoiceItem.customer === 'string'
-      ? invoiceItem.customer
-      : invoiceItem.customer?.id || null;
-
-  if (invoiceItemCustomerId !== profile.stripe_customer_id) {
+  try {
+    await assertInvoiceItemBelongsToCustomer(
+      stripe,
+      itemId,
+      profile.stripe_customer_id
+    );
+  } catch {
     return NextResponse.json({ error: 'Fakturatillagget tillhor inte kunden' }, { status: 403 });
   }
 

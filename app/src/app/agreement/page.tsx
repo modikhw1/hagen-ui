@@ -112,7 +112,7 @@ function AgreementContent() {
               localStorage.removeItem('onboarding_customer_profile_id');
               router.push('/?agreement=completed');
             }
-          } catch (e) {
+          } catch {
             // If invoice check fails but subscription is active, check if 7 days have passed (timeout)
             const acceptedTime = localStorage.getItem('agreement_accepted_time');
             if (acceptedTime) {
@@ -152,7 +152,7 @@ function AgreementContent() {
     const fetchAgreement = async () => {
       try {
         // Get email from URL params (passed from auth callback)
-        const email = searchParams.get('email');
+        const email = searchParams?.get('email');
         
         if (!email) {
           // Try to get from localStorage (set by auth callback)
@@ -576,7 +576,7 @@ function AgreementContent() {
         {/* Terms */}
         <div style={{ marginBottom: '24px' }}>
           <p style={{ fontSize: '12px', color: '#5D4D3D', lineHeight: '1.5' }}>
-            Genom att klicka "Gå till betalning" godkänner du våra 
+            Genom att klicka &quot;Gå till betalning&quot; godkänner du våra 
             <a href="/terms" style={{ color: '#6B4423' }}> användarvillkor</a> och 
             <a href="/privacy" style={{ color: '#6B4423' }}> integritetspolicy</a>. 
             Din prenumeration debiteras månadsvis och kan när som helst sägas upp.

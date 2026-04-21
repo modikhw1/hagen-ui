@@ -103,8 +103,8 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
     setSuccess('')
   }
 
-  const resolvePostLoginDestination = useCallback(async (): Promise<string | null> => {
-    const requestedRedirect = getSafeRedirectPath(searchParams.get('redirect'))
+  const resolvePostLoginDestination = useCallback((): string | null => {
+    const requestedRedirect = getSafeRedirectPath(searchParams?.get('redirect') ?? null)
 
     if (pathname === '/login' || pathname === '/m/login') {
       const surface = pathname === '/m/login' ? 'mobile' : 'desktop'
@@ -121,31 +121,6 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
           fallback: customerDestinationForPath(pathname),
         })
       }
-
-      // If profile not loaded yet, fetch from DB
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (session?.user?.id) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('is_admin, role')
-          .eq('id', session.user.id)
-          .maybeSingle()
-
-        if (profileData) {
-          const authorizedRedirect = getRoleAuthorizedRedirect(requestedRedirect, profileData)
-          if (authorizedRedirect) {
-            return authorizedRedirect
-          }
-
-          return getPrimaryRouteForRole(profileData, {
-            surface,
-            fallback: customerDestinationForPath(pathname),
-          })
-        }
-      }
     }
 
     if (pathname === '/login' || pathname === '/m/login') {
@@ -161,14 +136,10 @@ export function useLoginForm(options: UseLoginFormOptions): LoginFormData {
 
     let cancelled = false
 
-    const run = async () => {
-      const destination = await resolvePostLoginDestination()
-      if (!cancelled && destination && destination !== pathname) {
-        router.replace(destination)
-      }
+    const destination = resolvePostLoginDestination()
+    if (!cancelled && destination && destination !== pathname) {
+      router.replace(destination)
     }
-
-    void run()
 
     return () => {
       cancelled = true

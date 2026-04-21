@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
+import {
+  normalizeStudioCustomerConcept,
+  STUDIO_CUSTOMER_CONCEPT_SELECT,
+} from '@/lib/studio/customer-concepts';
 import { performMarkProduced } from '@/lib/studio/perform-mark-produced';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -44,37 +47,7 @@ export const POST = withAuth(async (request, user) => {
   // Fetch the produced row to return a normalized concept in the response.
   const { data, error: fetchError } = await supabase
     .from('customer_concepts')
-    .select(`
-      id,
-      customer_profile_id,
-      customer_id,
-      concept_id,
-      status,
-      content_overrides,
-      cm_id,
-      cm_note,
-      match_percentage,
-      feed_order,
-      tags,
-      collection_id,
-      added_at,
-      sent_at,
-      produced_at,
-      planned_publish_at,
-      content_loaded_at,
-      content_loaded_seen_at,
-      published_at,
-      reconciled_customer_concept_id,
-      reconciled_by_cm_id,
-      reconciled_at,
-      tiktok_url,
-      tiktok_thumbnail_url,
-      tiktok_views,
-      tiktok_likes,
-      tiktok_comments,
-      tiktok_watch_time_seconds,
-      tiktok_last_synced_at
-    `)
+    .select(STUDIO_CUSTOMER_CONCEPT_SELECT)
     .eq('id', conceptId)
     .eq('customer_profile_id', customerId)
     .maybeSingle();

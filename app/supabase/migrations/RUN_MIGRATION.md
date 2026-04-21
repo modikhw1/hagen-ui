@@ -136,3 +136,7 @@ Kopiera felmeddelandet och visa mig det, så fixar jag det!
 ---
 
 **Status:** ✅ Migration fixad och redo att köras!
+# Legacy guide - anvand inte som canonical migrationspar
+
+`app/supabase/migrations` ar ett aldre migrationsspar.
+Om du ska applicera schema i en ny eller uppdaterad miljo ska du utga fran `supabase/migrations`.

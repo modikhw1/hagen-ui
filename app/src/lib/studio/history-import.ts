@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // history-import.ts
 //
-// importClipsForCustomer: shared deduplicate → insert → renumber → motor signal.
+// importClipsForCustomer: shared deduplicate → insert → renumber → sync stamp.
 // updateClipStats: update engagement stats on already-imported clips (cheap, runs every cron).
 // importNewClips: fetch and insert clips not yet in DB (heavier, gated by last_history_sync_at).
 //
@@ -9,7 +9,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { motorSignalNewEvidence } from '@/lib/studio/motor-signal';
 import type { NormalizedHistoryClip } from '@/lib/studio/tiktok-provider';
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
@@ -67,14 +66,26 @@ export async function updateClipStats(
   await Promise.all(
     updates.map((clip) => {
       const rowId = existingByUrl.get(normalizeTikTokUrl(clip.tiktok_url))!;
+      const patch: {
+        tiktok_views: number | null;
+        tiktok_likes: number | null;
+        tiktok_comments: number | null;
+        tiktok_last_synced_at: string;
+        tiktok_thumbnail_url?: string;
+      } = {
+        tiktok_views: clip.tiktok_views,
+        tiktok_likes: clip.tiktok_likes,
+        tiktok_comments: clip.tiktok_comments,
+        tiktok_last_synced_at: now,
+      };
+
+      if (clip.tiktok_thumbnail_url) {
+        patch.tiktok_thumbnail_url = clip.tiktok_thumbnail_url;
+      }
+
       return supabase
         .from('customer_concepts')
-        .update({
-          tiktok_views: clip.tiktok_views,
-          tiktok_likes: clip.tiktok_likes,
-          tiktok_comments: clip.tiktok_comments,
-          tiktok_last_synced_at: now,
-        })
+        .update(patch)
         .eq('id', rowId);
     })
   );
@@ -93,15 +104,15 @@ export async function importNewClips(
   supabase: SupabaseAdmin,
   customerId: string,
   clips: NormalizedHistoryClip[]
-): Promise<{ imported: number; skipped: number }> {
-  if (clips.length === 0) return { imported: 0, skipped: 0 };
+): Promise<{ imported: number; skipped: number; latestImportedPublishedAt: string | null }> {
+  if (clips.length === 0) return { imported: 0, skipped: 0, latestImportedPublishedAt: null };
 
   const existingByUrl = await fetchExistingClipUrlMap(supabase, customerId);
 
   const newClips = clips.filter((c) => !existingByUrl.has(normalizeTikTokUrl(c.tiktok_url)));
   const skipped = clips.length - newClips.length;
 
-  if (newClips.length === 0) return { imported: 0, skipped };
+  if (newClips.length === 0) return { imported: 0, skipped, latestImportedPublishedAt: null };
 
   // Sort newest-first for temp insertion order
   const sortedNewClips = [...newClips].sort((a, b) => {
@@ -150,17 +161,20 @@ export async function importNewClips(
   // Renumber all imported-history rows chronologically
   await renumberImportedRows(supabase, customerId);
 
-  return { imported: insertedRows?.length ?? 0, skipped };
+  return {
+    imported: insertedRows?.length ?? 0,
+    skipped,
+    latestImportedPublishedAt: sortedNewClips[0]?.published_at ?? null,
+  };
 }
 
 // ── importClipsForCustomer ────────────────────────────────────────────────────
 /**
- * Full pipeline: dedup → insert → renumber → motor signal.
+ * Full pipeline: dedup → insert → renumber → sync stamp.
  * Used by the sync-history-all cron (legacy entry point, calls importNewClips
  * internally so both paths stay in sync).
  *
  * Always stamps last_history_sync_at.
- * Only writes motorSignalNewEvidence when imported > 0.
  */
 export async function importClipsForCustomer(
   supabase: SupabaseAdmin,
@@ -190,41 +204,10 @@ export async function importClipsForCustomer(
   // Import new clips
   const { imported, skipped } = await importNewClips(supabase, customerId, clips);
 
-  // Stamp sync time + motor signal
-  if (imported > 0) {
-    const sortedForSignal = [...clips]
-      .filter((c) => c.published_at)
-      .sort((a, b) => new Date(b.published_at!).getTime() - new Date(a.published_at!).getTime());
-    const latestPublishedAt = sortedForSignal[0]?.published_at ?? null;
-
-    // Accumulate count rather than overwrite so daily cron runs show true total.
-    const { data: currentProfile } = await supabase
-      .from('customer_profiles')
-      .select('pending_history_advance, pending_history_advance_published_at')
-      .eq('id', customerId)
-      .maybeSingle();
-
-    const existingCount = (currentProfile?.pending_history_advance as number | null) ?? 0;
-    const existingPublishedAt = (currentProfile?.pending_history_advance_published_at as string | null) ?? null;
-
-    const accumulatedPublishedAt =
-      latestPublishedAt && existingPublishedAt
-        ? (latestPublishedAt > existingPublishedAt ? latestPublishedAt : existingPublishedAt)
-        : (latestPublishedAt ?? existingPublishedAt);
-
-    await supabase
-      .from('customer_profiles')
-      .update({
-        last_history_sync_at: new Date().toISOString(),
-        ...motorSignalNewEvidence(existingCount + imported, accumulatedPublishedAt),
-      })
-      .eq('id', customerId);
-  } else {
-    await supabase
-      .from('customer_profiles')
-      .update({ last_history_sync_at: new Date().toISOString() })
-      .eq('id', customerId);
-  }
+  await supabase
+    .from('customer_profiles')
+    .update({ last_history_sync_at: new Date().toISOString() })
+    .eq('id', customerId);
 
   return { imported, skipped };
 }
@@ -263,7 +246,7 @@ async function fetchExistingClipUrlMap(
  * Re-reads all imported-history rows for a customer and assigns sequential
  * feed_orders below the deepest LeTrend historik row, sorted by published_at DESC.
  */
-async function renumberImportedRows(
+export async function renumberImportedRows(
   supabase: SupabaseAdmin,
   customerId: string
 ): Promise<void> {
@@ -272,8 +255,7 @@ async function renumberImportedRows(
     .select('id, feed_order, published_at, tiktok_url')
     .eq('customer_profile_id', customerId)
     .is('concept_id', null)
-    .not('feed_order', 'is', null)
-    .lt('feed_order', 0);
+    .is('reconciled_customer_concept_id', null);
 
   const { data: letrEndHistorikRows } = await supabase
     .from('customer_concepts')
@@ -295,7 +277,11 @@ async function renumberImportedRows(
   });
 
   const renumberUpdates = chronological
-    .map((row, i) => ({ id: row.id as string, from: row.feed_order as number, to: -(renumberOffset + i + 1) }))
+    .map((row, i) => ({
+      id: row.id as string,
+      from: typeof row.feed_order === 'number' ? row.feed_order : null,
+      to: -(renumberOffset + i + 1),
+    }))
     .filter((u) => u.from !== u.to);
 
   if (renumberUpdates.length > 0) {

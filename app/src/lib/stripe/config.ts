@@ -1,22 +1,16 @@
-import Stripe from 'stripe';
+export const STRIPE_API_VERSION = '2026-02-25.clover' as const;
+export const DEFAULT_CURRENCY = 'sek';
+export const DEFAULT_TAX_CODE = 'txcd_10000000';
+export const DEFAULT_DAYS_UNTIL_DUE = 14;
+export const DEFAULT_BILLING_DAY = 25;
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  console.warn('Missing STRIPE_SECRET_KEY - Stripe will not work');
-}
-
-// Only initialize Stripe if key is provided (prevents build errors)
-export const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, { typescript: true })
-  : (null as unknown as Stripe);
-
-// Subscription plans - monthly recurring
 export const SUBSCRIPTION_PLANS = {
   starter: {
     id: 'starter',
     name: 'Starter',
     description: 'Perfekt för att komma igång med konceptmarknadsföring',
-    price: 99900, // 999 SEK/månad i öre
-    currency: 'sek',
+    price: 99900,
+    currency: DEFAULT_CURRENCY,
     features: [
       'Upp till 5 koncept per månad',
       'Grundläggande matchning',
@@ -27,8 +21,8 @@ export const SUBSCRIPTION_PLANS = {
     id: 'growth',
     name: 'Growth',
     description: 'För varumärken som vill skala upp sin närvaro',
-    price: 249900, // 2499 SEK/månad i öre
-    currency: 'sek',
+    price: 249900,
+    currency: DEFAULT_CURRENCY,
     features: [
       'Upp till 15 koncept per månad',
       'Avancerad AI-matchning',
@@ -40,8 +34,8 @@ export const SUBSCRIPTION_PLANS = {
     id: 'enterprise',
     name: 'Enterprise',
     description: 'Skräddarsydd lösning för stora varumärken',
-    price: 499900, // 4999 SEK/månad i öre
-    currency: 'sek',
+    price: 499900,
+    currency: DEFAULT_CURRENCY,
     features: [
       'Obegränsade koncept',
       'Custom AI-profil',
@@ -54,12 +48,11 @@ export const SUBSCRIPTION_PLANS = {
 
 export type SubscriptionPlanId = keyof typeof SUBSCRIPTION_PLANS;
 
-// Legacy - keep for backwards compatibility during transition
 export const PRODUCTS = {
   conceptPack: {
     name: 'Konceptpaket',
     description: 'Tillgång till alla sketchkoncept',
-    price: 49900, // 499 SEK in öre
-    currency: 'sek',
+    price: 49900,
+    currency: DEFAULT_CURRENCY,
   },
 } as const;

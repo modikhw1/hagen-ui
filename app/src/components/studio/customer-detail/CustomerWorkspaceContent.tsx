@@ -45,7 +45,6 @@ import type {
   ConceptContentOverrides,
 } from '@/types/studio-v2';
 import { DEFAULT_GRID_CONFIG } from '@/types/studio-v2';
-import { classifyMotorSignal } from '@/lib/studio/motor-signal';
 import { DEFAULT_TEMPO_WEEKDAYS } from '@/lib/feed-planner-utils';
 import {
   getCustomerConceptPlacementBucket,
@@ -483,10 +482,6 @@ function CustomerWorkspacePageContent() {
     setCmTags,
     showTagManager,
     setShowTagManager,
-    pendingAdvanceCue,
-    setPendingAdvanceCue,
-    advancingPlan,
-    setAdvancingPlan,
     markProducedDialogOpen,
     markProducedDialogConceptId,
     motorSignals,
@@ -575,21 +570,6 @@ function CustomerWorkspacePageContent() {
   const [historyNextCursor, setHistoryNextCursor] = useState<number | null>(null);
   const [pendingFeedPlacementConceptId, setPendingFeedPlacementConceptId] = useState<string | null>(null);
 
-  // Derive cue from backend truth whenever the customer profile changes.
-  // Shows the nudge when there is unseen pending evidence; hides it otherwise.
-  // seen_at is cleared by sync on new evidence, so fresh clips always re-surface.
-  // No guard â€” allows count to update if a new sync arrives while the cue is already showing.
-  useEffect(() => {
-    if (customer?.pending_history_advance && !customer.pending_history_advance_seen_at) {
-      const kind = classifyMotorSignal(customer) ?? 'fresh_activity';
-      setPendingAdvanceCue({ imported: customer.pending_history_advance, kind, publishedAt: customer.pending_history_advance_published_at ?? null });
-    } else {
-      // Signal absent or already acknowledged â€” clear any stale local cue so the
-      // workspace stays in sync with backend truth after a refetch or dismiss.
-      setPendingAdvanceCue(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customer?.pending_history_advance, customer?.pending_history_advance_seen_at, customer?.pending_history_advance_published_at]);
   // Derived: active nudges need CM action; auto-resolved nudges are informational (cron handled them)
   const activeNudges = motorSignals.filter(s => !s.auto_resolved_at);
   const autoResolvedNudges = motorSignals.filter(s => s.auto_resolved_at !== null);
@@ -1095,14 +1075,25 @@ function CustomerWorkspacePageContent() {
       const logData = await fetchAndCacheClient<EmailLogEntry[]>(
         emailLogCacheKey,
         async () => {
-          const { data, error } = await supabase
-            .from('email_log')
-            .select('*')
-            .eq('customer_id', customerId)
-            .order('sent_at', { ascending: false });
+          const response = await fetch(
+            `/api/studio-v2/email/jobs?customer_id=${encodeURIComponent(customerId)}&limit=20`
+          );
+          const data = await response.json().catch(() => ({}));
 
-          if (error) throw error;
-          return (data || []) as EmailLogEntry[];
+          if (!response.ok) {
+            throw new Error(data.error || `Failed to fetch email jobs (${response.status})`);
+          }
+
+          const jobs = Array.isArray(data.jobs) ? data.jobs as EmailJobEntry[] : [];
+          return jobs.map((job) => ({
+            id: job.id,
+            customer_id: job.customer_id,
+            cm_id: job.cm_id,
+            subject: job.subject,
+            body_html: job.body_html,
+            concept_ids: Array.isArray(job.concept_ids) ? job.concept_ids : [],
+            sent_at: job.sent_at || job.updated_at || job.created_at,
+          }));
         },
         WORKSPACE_CACHE_TTL_MS,
         { force }
@@ -2185,43 +2176,16 @@ function CustomerWorkspacePageContent() {
     }
   };
 
-  const handleAdvancePlan = async () => {
-    if (!customerId || advancingPlan) return;
-    setAdvancingPlan(true);
-    try {
-      const res = await fetch(`/api/studio-v2/customers/${customerId}/advance-plan`, { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Kunde inte flytta planen');
-      setPendingAdvanceCue(null); // optimistic local clear; fetchCustomer below will confirm
-      await Promise.all([fetchCustomer(true), fetchConcepts(true)]);
-    } catch (err) {
-      console.error('Advance plan error:', err);
-    } finally {
-      setAdvancingPlan(false);
-    }
-  };
-
   // Dismiss the nudge without advancing. Clears local state immediately (optimistic).
   // If a motor signal ID is provided, sets acknowledged_at on that row (new path).
-  // Also patches the legacy profile column for backward compat.
   const handleDismissAdvanceCue = (signalId?: string) => {
-    setPendingAdvanceCue(null);
     if (signalId) {
-      // Acknowledge the specific feed_motor_signals row (optimistic)
       setMotorSignals(prev => prev.filter(s => s.id !== signalId));
       void supabase
         .from('feed_motor_signals')
         .update({ acknowledged_at: new Date().toISOString() })
         .eq('id', signalId)
         .then(({ error }) => { if (error) console.error('[motor-signal] ack error:', error); });
-    }
-    if (customerId) {
-      // DEPRECATED: migrate to feed_motor_signals acknowledged_at
-      void fetch(`/api/studio-v2/customers/${customerId}/profile`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ acknowledge_advance_cue: true }),
-      }).catch((err) => console.error('Acknowledge advance cue error:', err));
     }
   };
 
@@ -2522,6 +2486,7 @@ function CustomerWorkspacePageContent() {
   const editingConcept = editingConceptId ? concepts.find((concept) => concept.id === editingConceptId) ?? null : null;
   const editingConceptDetails = getWorkspaceConceptDetails(editingConcept, getConceptDetails);
   const latestEmailJob = emailJobs[0] || null;
+  const latestSentEmailJob = emailJobs.find((job) => job.sent_at) || null;
   const activeSectionMeta = getStudioWorkspaceSectionMeta(activeSection);
   const customerStatusMeta = getStudioCustomerStatusMeta(customer.status);
 
@@ -2625,7 +2590,7 @@ function CustomerWorkspacePageContent() {
             )}
 
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 6 }}>
-              {formatLastEmailSent(emailLog[0]?.sent_at)}
+              {formatLastEmailSent(latestSentEmailJob?.sent_at || emailLog[0]?.sent_at)}
             </div>
 
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
@@ -2916,6 +2881,7 @@ function CustomerWorkspacePageContent() {
           {/* Section content will be rendered here based on activeSection */}
           {activeSection === 'gameplan' && (
             <MemoGamePlanSection
+              customerId={customerId}
               notes={notes}
               customerName={customer?.business_name || ''}
               aiDefaults={gamePlanAiDefaults}
@@ -3108,11 +3074,8 @@ function CustomerWorkspacePageContent() {
               historyHasMore={historyHasMore}
               fetchingProfileHistory={fetchingProfileHistory}
               onLoadMoreHistory={handleLoadMoreHistory}
-              pendingAdvanceCue={pendingAdvanceCue}
               activeNudges={activeNudges}
               autoResolvedNudges={autoResolvedNudges}
-              onAdvancePlan={handleAdvancePlan}
-              advancingPlan={advancingPlan}
               onDismissAdvanceCue={handleDismissAdvanceCue}
               onDismissAutoResolvedSignals={handleDismissAutoResolvedSignals}
               tempoWeekdays={brief.posting_weekdays != null ? brief.posting_weekdays : DEFAULT_TEMPO_WEEKDAYS}
@@ -3806,7 +3769,6 @@ function CustomerWorkspacePageContent() {
           isOpen={markProducedDialogOpen}
           onClose={handleCloseMarkProducedDialog}
           nuConceptId={markProducedDialogConceptId}
-          customerId={customerId}
           importedConcepts={concepts.filter((c) => c.row_kind === 'imported_history' && !c.reconciliation.is_reconciled)}
           freshestImportedConcept={
             concepts

@@ -1,82 +1,137 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 import { stripe } from '@/lib/stripe/dynamic-config';
-import { validateApiRequest, AuthError } from '@/lib/auth/api-auth';
+import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
+import {
+  canAccessStripeCustomerResource,
+  getAuthorizedCustomerProfile,
+} from '@/lib/stripe/customer-access';
 
-// GET - Fetch invoice by ID or subscription
+const querySchema = z
+  .object({
+    id: z.string().trim().min(1).optional(),
+    subscriptionId: z.string().trim().min(1).optional(),
+  })
+  .refine((value) => value.id || value.subscriptionId, {
+    message: 'invoiceId or subscriptionId required',
+  });
+
 export async function GET(request: NextRequest) {
   try {
-    await validateApiRequest(request);
+    const authUser = await validateApiRequest(request);
 
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
 
     const { searchParams } = new URL(request.url);
-    const invoiceId = searchParams.get('id');
-    const subscriptionId = searchParams.get('subscriptionId');
+    const parsedQuery = querySchema.safeParse({
+      id: searchParams.get('id') ?? undefined,
+      subscriptionId: searchParams.get('subscriptionId') ?? undefined,
+    });
 
-    let invoice;
-    
+    if (!parsedQuery.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid query params',
+          issues: parsedQuery.error.issues.map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      );
+    }
+
+    const { id: invoiceId, subscriptionId } = parsedQuery.data;
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const authorizedProfile = await getAuthorizedCustomerProfile({
+      supabaseAdmin,
+      user: authUser,
+    });
+
+    let invoice: Stripe.Invoice | undefined;
     if (invoiceId) {
-      // Fetch by invoice ID
       invoice = await stripe.invoices.retrieve(invoiceId);
     } else if (subscriptionId) {
-      // Fetch latest invoice for subscription
       const invoices = await stripe.invoices.list({
         subscription: subscriptionId,
         limit: 1,
       });
       invoice = invoices.data[0];
-    } else {
-      return NextResponse.json({ error: 'invoiceId or subscriptionId required' }, { status: 400 });
     }
 
     if (!invoice) {
       return NextResponse.json({ error: 'Invoice not found' }, { status: 404 });
     }
 
-    // Get customer details
-    const customer = typeof invoice.customer === 'string' 
-      ? await stripe.customers.retrieve(invoice.customer)
-      : invoice.customer;
+    const customer =
+      typeof invoice.customer === 'string'
+        ? await stripe.customers.retrieve(invoice.customer)
+        : invoice.customer;
+    const customerId =
+      typeof invoice.customer === 'string' ? invoice.customer : customer?.id || null;
+    const resolvedCustomer: Stripe.Customer | null =
+      !customer || ('deleted' in customer && customer.deleted) ? null : customer;
+    const customerEmail = resolvedCustomer?.email || null;
 
-    // Get subscription if exists
-    let subscription = null;
-    const invoiceSubscriptionId = (invoice as any).subscription;
-    if (invoiceSubscriptionId) {
-      subscription = await stripe.subscriptions.retrieve(invoiceSubscriptionId as string);
+    const invoiceWithSubscription = invoice as Stripe.Invoice & {
+      subscription?: string | null;
+    };
+    const invoiceSubscriptionId =
+      typeof invoiceWithSubscription.subscription === 'string'
+        ? invoiceWithSubscription.subscription
+        : null;
+
+    const ownsInvoice = canAccessStripeCustomerResource(authorizedProfile, {
+      customerId,
+      subscriptionId: invoiceSubscriptionId,
+      email: customerEmail || authUser.email,
+    });
+
+    if (!ownsInvoice) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get invoice line items (use lines property directly)
-    const lineItems = (invoice as any).lines?.data || [];
+    const subscription = invoiceSubscriptionId
+      ? await stripe.subscriptions.retrieve(invoiceSubscriptionId)
+      : null;
+    const lineItems = invoice.lines.data || [];
+    const customerName = resolvedCustomer?.name || 'Kund';
+    const invoiceTax =
+      invoice.total_taxes?.reduce((sum, item) => sum + item.amount, 0) || 0;
 
-    const formattedInvoice = {
-      id: invoice.id,
-      number: invoice.number,
-      status: invoice.status,
-      created: invoice.created,
-      dueDate: invoice.due_date,
-      customer: {
-        name: (customer as any)?.name || 'Kund',
-        email: (customer as any)?.email || '',
+    return NextResponse.json({
+      invoice: {
+        id: invoice.id,
+        number: invoice.number,
+        status: invoice.status,
+        created: invoice.created,
+        dueDate: invoice.due_date,
+        customer: {
+          name: customerName,
+          email: customerEmail || '',
+        },
+        lineItems: lineItems.map((item) => ({
+          description: item.description || 'Tjänst',
+          amount: item.amount,
+          currency: item.currency,
+        })),
+        subtotal: invoice.subtotal,
+        tax: invoiceTax,
+        total: invoice.total,
+        currency: invoice.currency,
+        hostedInvoiceUrl: invoice.hosted_invoice_url,
+        invoicePdf: invoice.invoice_pdf,
+        paid: invoice.status === 'paid',
+        subscriptionId: subscription?.id || null,
       },
-      lineItems: lineItems.map((item: any) => ({
-        description: item.description || item.plan?.interval || 'Tjänst',
-        amount: item.amount,
-        currency: item.currency,
-      })),
-      subtotal: invoice.subtotal,
-      tax: (invoice as any).tax || 0,
-      total: invoice.total,
-      currency: invoice.currency,
-      hostedInvoiceUrl: invoice.hosted_invoice_url,
-      invoicePdf: invoice.invoice_pdf,
-      paid: invoice.status === 'paid',
-      subscriptionId: subscription?.id,
-    };
-
-    return NextResponse.json({ invoice: formattedInvoice });
-
+    });
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });

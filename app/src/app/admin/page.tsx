@@ -1,356 +1,194 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase/client';
-import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
-
-interface CustomerStatusCounts {
-  active: number;
-  agreed: number;
-  invited: number;
-  pending: number;
-  archived: number;
-}
-
-interface ConceptTotals {
-  draft: number;
-  sent: number;
-  produced: number;
-  archived: number;
-}
-
-interface CmWorkloadRow {
-  name: string;
-  customers: number;
-  drafts: number;
-  sent: number;
-}
-
-interface SubscriptionSummary {
-  active: number;
-  paused: number;
-  cancelled: number;
-  mrr: number;
-}
+import { DollarSign, Send, TrendingUp, UserCheck } from 'lucide-react';
+import AttentionList from '@/components/admin/AttentionList';
+import CmPulseRow from '@/components/admin/CmPulseRow';
+import { useOverviewData } from '@/hooks/admin/useOverviewData';
+import { type SortMode } from '@/lib/admin-derive/cm-pulse';
+import { CM_PREVIEW_COUNT } from '@/lib/admin-derive/constants';
+import { deriveOverview } from '@/lib/admin/overview-derive';
+import { formatSek } from '@/lib/admin/money';
 
 export default function AdminOverviewPage() {
-  const [statusCounts, setStatusCounts] = useState<CustomerStatusCounts>({ active: 0, agreed: 0, invited: 0, pending: 0, archived: 0 });
-  const [conceptTotals, setConceptTotals] = useState<ConceptTotals>({ draft: 0, sent: 0, produced: 0, archived: 0 });
-  const [cmWorkload, setCmWorkload] = useState<CmWorkloadRow[]>([]);
-  const [subscriptionSummary, setSubscriptionSummary] = useState<SubscriptionSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, isLoading, error } = useOverviewData();
+  const [cmExpanded, setCmExpanded] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>('standard');
 
-  useEffect(() => {
-    void Promise.all([
-      fetchCustomerStats(),
-      fetchConceptTotals(),
-      fetchSubscriptionSummary(),
-    ]).finally(() => setLoading(false));
-  }, []);
+  const derived = useMemo(() => {
+    if (!data) return null;
+    return deriveOverview(data, { sortMode });
+  }, [data, sortMode]);
 
-  const fetchCustomerStats = async () => {
-    const [customersResult, conceptsResult] = await Promise.all([
-      supabase
-        .from('customer_profiles')
-        .select('id, status, account_manager'),
-      supabase
-        .from('customer_concepts')
-        .select('customer_profile_id, status'),
-    ]);
-
-    const customers = customersResult.data ?? [];
-    const concepts = conceptsResult.data ?? [];
-
-    // Status distribution
-    const counts: CustomerStatusCounts = { active: 0, agreed: 0, invited: 0, pending: 0, archived: 0 };
-    for (const c of customers) {
-      const s = c.status as string;
-      if (s === 'active') counts.active++;
-      else if (s === 'agreed') counts.agreed++;
-      else if (s === 'invited') counts.invited++;
-      else if (s === 'pending') counts.pending++;
-      else if (s === 'archived') counts.archived++;
-    }
-    setStatusCounts(counts);
-
-    // CM workload
-    const conceptsByCustomer: Record<string, { draft: number; sent: number }> = {};
-    for (const concept of concepts) {
-      const id = concept.customer_profile_id as string;
-      if (!conceptsByCustomer[id]) conceptsByCustomer[id] = { draft: 0, sent: 0 };
-      const s = concept.status as string;
-      if (s === 'draft' || s === 'active') conceptsByCustomer[id].draft++;
-      else if (s === 'sent' || s === 'paused') conceptsByCustomer[id].sent++;
-    }
-
-    const cmMap: Record<string, CmWorkloadRow> = {};
-    for (const c of customers) {
-      if ((c.status as string) === 'archived') continue;
-      const cm = (c.account_manager as string | null)?.trim() || '(Ingen CM)';
-      if (!cmMap[cm]) cmMap[cm] = { name: cm, customers: 0, drafts: 0, sent: 0 };
-      cmMap[cm].customers++;
-      const cc = conceptsByCustomer[c.id];
-      if (cc) {
-        cmMap[cm].drafts += cc.draft;
-        cmMap[cm].sent += cc.sent;
-      }
-    }
-    setCmWorkload(
-      Object.values(cmMap).sort((a, b) => b.customers - a.customers || a.name.localeCompare(b.name, 'sv'))
-    );
-  };
-
-  const fetchConceptTotals = async () => {
-    const { data } = await supabase
-      .from('customer_concepts')
-      .select('status');
-    if (!data) return;
-    const totals: ConceptTotals = { draft: 0, sent: 0, produced: 0, archived: 0 };
-    for (const row of data) {
-      const s = row.status as string;
-      if (s === 'draft' || s === 'active') totals.draft++;
-      else if (s === 'sent' || s === 'paused') totals.sent++;
-      else if (s === 'produced' || s === 'completed') totals.produced++;
-      else if (s === 'archived') totals.archived++;
-    }
-    setConceptTotals(totals);
-  };
-
-  const fetchSubscriptionSummary = async () => {
-    const { data } = await supabase
-      .from('subscriptions')
-      .select('status, amount');
-    if (!data) return;
-    const summary: SubscriptionSummary = { active: 0, paused: 0, cancelled: 0, mrr: 0 };
-    for (const row of data) {
-      const s = row.status as string;
-      const amt = typeof row.amount === 'number' ? row.amount : 0;
-      if (s === 'active') {
-        summary.active++;
-        summary.mrr += amt;
-      } else if (s === 'paused' || s === 'past_due') {
-        summary.paused++;
-      } else if (s === 'canceled' || s === 'cancelled') {
-        summary.cancelled++;
-      }
-    }
-    setSubscriptionSummary(summary);
-  };
-
-  if (loading) {
+  if (isLoading) return <div className="text-sm text-muted-foreground">Laddar oversikt...</div>;
+  if (error || !data || !derived) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: LeTrendColors.textMuted }}>
-        Laddar...
+      <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+        Kunde inte ladda oversikten.
       </div>
     );
   }
 
-  const activeTotal = statusCounts.active + statusCounts.agreed;
-  const pipelineTotal = statusCounts.invited + statusCounts.pending;
+  const visibleCMs = cmExpanded
+    ? derived.sortedCmRows
+    : derived.sortedCmRows.slice(0, CM_PREVIEW_COUNT);
+  const hasMoreCMs = derived.sortedCmRows.length > CM_PREVIEW_COUNT;
+  const visibleCostEntries = derived.costEntries;
 
   return (
-    <div style={{ maxWidth: 960 }}>
-      {/* Header */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#1a1a2e', margin: 0 }}>
-          Org-översikt
-        </h1>
-        <p style={{ margin: '6px 0 0', fontSize: 14, color: '#6b7280' }}>
-          Operativt tillstånd och nyckeltal för LeTrend.
-        </p>
+    <div className="space-y-8">
+      <div>
+        <h1 className="mt-0 font-heading text-2xl font-bold text-foreground">Oversikt</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Operativt tillstand</p>
       </div>
 
-      {/* Customer status distribution */}
-      <section style={{ marginBottom: 36 }}>
-        <SectionHeader title="Kundstatus" linkHref="/admin/customers" linkLabel="Hantera kunder →" />
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StatTile value={activeTotal} label="aktiva / avtalade" accent="#166534" bg="#dcfce7" border="#bbf7d0" />
-          <StatTile value={pipelineTotal} label="i pipeline" accent="#92400e" bg="#fef3c7" border="#fde68a" />
-          <StatTile value={statusCounts.invited} label="inbjudna" accent="#1e40af" bg="#dbeafe" border="#bfdbfe" />
-          <StatTile value={statusCounts.pending} label="väntande" accent="#6b7280" bg="#f3f4f6" border="#e5e7eb" />
-          <StatTile value={statusCounts.archived} label="arkiverade" accent="#9ca3af" bg="#f9fafb" border="#f3f4f6" />
-        </div>
-      </section>
-
-      {/* Concept throughput */}
-      <section style={{ marginBottom: 36 }}>
-        <SectionHeader title="Konceptgenomströmning" linkHref="/admin/customers" linkLabel="Öppna kundlista →" />
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StatTile value={conceptTotals.draft} label="utkast (ej skickade)" accent="#92400e" bg="#fef3c7" border="#fde68a" />
-          <StatTile value={conceptTotals.sent} label="skickade (ej producerade)" accent="#1e40af" bg="#dbeafe" border="#bfdbfe" />
-          <StatTile value={conceptTotals.produced} label="producerade" accent="#166534" bg="#dcfce7" border="#bbf7d0" />
-          <StatTile value={conceptTotals.archived} label="arkiverade" accent="#9ca3af" bg="#f9fafb" border="#f3f4f6" />
-        </div>
-      </section>
-
-      {/* CM workload */}
-      {cmWorkload.length > 0 && (
-        <section style={{ marginBottom: 36 }}>
-          <SectionHeader title="CM-belastning" linkHref="/admin/team" linkLabel="Hantera team →" />
-          <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', overflow: 'hidden' }}>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr auto auto auto',
-                gap: 16,
-                padding: '8px 20px',
-                background: '#f9fafb',
-                borderBottom: '1px solid #e5e7eb',
-                fontSize: 11,
-                fontWeight: 600,
-                color: '#6b7280',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              <div>Content Manager</div>
-              <div style={{ textAlign: 'right' }}>Kunder</div>
-              <div style={{ textAlign: 'right' }}>Utkast</div>
-              <div style={{ textAlign: 'right' }}>Skickade</div>
-            </div>
-            {cmWorkload.map((row, i) => (
-              <div
-                key={row.name}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto auto auto',
-                  gap: 16,
-                  padding: '12px 20px',
-                  alignItems: 'center',
-                  borderBottom: i < cmWorkload.length - 1 ? '1px solid #f3f4f6' : 'none',
-                }}
-              >
-                <div style={{ fontWeight: 600, color: '#1a1a2e', fontSize: 14 }}>{row.name}</div>
-                <div style={{ textAlign: 'right', fontSize: 13, color: '#374151', fontWeight: 600 }}>{row.customers}</div>
-                <div style={{ textAlign: 'right' }}>
-                  {row.drafts > 0 ? (
-                    <Badge value={row.drafts} accent="#92400e" bg="#fef3c7" border="#fde68a" />
-                  ) : (
-                    <span style={{ fontSize: 12, color: '#9ca3af' }}>-</span>
-                  )}
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  {row.sent > 0 ? (
-                    <Badge value={row.sent} accent="#1e40af" bg="#dbeafe" border="#bfdbfe" />
-                  ) : (
-                    <span style={{ fontSize: 12, color: '#9ca3af' }}>-</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Revenue / subscription summary */}
-      {subscriptionSummary !== null && (
-        <section style={{ marginBottom: 36 }}>
-          <SectionHeader title="Abonnemang" linkHref="/admin/subscriptions" linkLabel="Alla abonnemang →" />
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <StatTile value={subscriptionSummary.active} label="aktiva abonnemang" accent="#166534" bg="#dcfce7" border="#bbf7d0" />
-            <StatTile value={subscriptionSummary.paused} label="pausade / förfallna" accent="#92400e" bg="#fef3c7" border="#fde68a" />
-            <StatTile value={subscriptionSummary.cancelled} label="avslutade" accent="#9ca3af" bg="#f9fafb" border="#f3f4f6" />
-            {subscriptionSummary.mrr > 0 && (
-              <StatTile
-                value={`${Math.round(subscriptionSummary.mrr / 100).toLocaleString('sv-SE')} kr`}
-                label="MRR (aktiva)"
-                accent="#374151"
-                bg="#f3f4f6"
-                border="#e5e7eb"
-              />
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Admin surface links */}
       <section>
-        <h2 style={{ fontSize: 14, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>
-          Adminverktyg
-        </h2>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {[
-            { href: '/admin/customers', label: 'Kunder' },
-            { href: '/admin/team', label: 'Team' },
-            { href: '/admin/invoices', label: 'Fakturor' },
-            { href: '/admin/subscriptions', label: 'Abonnemang' },
-            { href: '/studio', label: 'Studio (CM-yta)' },
-          ].map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              style={{
-                padding: '9px 16px',
-                borderRadius: LeTrendRadius.md,
-                background: '#fff',
-                border: '1px solid #e5e7eb',
-                fontSize: 13,
-                fontWeight: 500,
-                color: '#374151',
-                textDecoration: 'none',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-              }}
-            >
-              {label}
-            </Link>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <MetricCard icon={<DollarSign className="h-4 w-4" />} card={derived.revenueCard} />
+          <MetricCard icon={<UserCheck className="h-4 w-4" />} card={derived.activeCard} />
+          <MetricCard icon={<Send className="h-4 w-4" />} card={derived.demosCard} href="/admin/demos" />
+          <MetricCard icon={<TrendingUp className="h-4 w-4" />} card={derived.costsCard} />
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-baseline gap-3">
+          <h2 className="text-sm font-semibold text-foreground">CM-puls</h2>
+          <span className="text-xs text-muted-foreground">Senaste 7 dagarna</span>
+          <div className="flex-1" />
+          <button
+            onClick={() =>
+              setSortMode((mode) =>
+                mode === 'standard' ? 'lowest_activity' : 'standard',
+              )
+            }
+            className="text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {sortMode === 'lowest_activity'
+              ? 'Avvikande aktivitet forst'
+              : 'Standard'}
+          </button>
+        </div>
+        <div className="space-y-2">
+          {visibleCMs.map((row) => (
+            <CmPulseRow
+              key={row.member.id}
+              name={row.member.name}
+              avatarUrl={row.member.avatar_url}
+              aggregate={row.aggregate}
+            />
           ))}
         </div>
+        {hasMoreCMs && (
+          <button
+            onClick={() => setCmExpanded((value) => !value)}
+            className="mt-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            {cmExpanded
+              ? 'Visa farre'
+              : `Visa alla ${derived.sortedCmRows.length} CMs`}
+          </button>
+        )}
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-baseline gap-3">
+          <h2 className="text-sm font-semibold text-foreground">Kraver uppmarksamhet</h2>
+          <span className="text-xs text-muted-foreground">Sorterad enligt operativ modell</span>
+        </div>
+        <AttentionList items={derived.attentionItems} />
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-baseline gap-3">
+          <h2 className="text-sm font-semibold text-foreground">Hanteras nu</h2>
+          <span className="text-xs text-muted-foreground">
+            Slapp markering direkt fran overviewn
+          </span>
+        </div>
+        <AttentionList
+          items={derived.snoozedAttentionItems}
+          mode="snoozed"
+          emptyLabel="Inga aktiva hanteras-markeringar."
+        />
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-baseline gap-3">
+          <h2 className="text-sm font-semibold text-foreground">Kostnader</h2>
+          <span className="text-xs text-muted-foreground">30 dagar</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          {visibleCostEntries.map((cost) => (
+            <div key={cost.service} className="rounded-lg border border-border bg-card p-4">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                {cost.service}
+              </div>
+              <div className="mt-2 text-base font-bold text-foreground">
+                {cost.cost_30d > 0
+                  ? `${Math.round(cost.cost_30d).toLocaleString('sv-SE')} kr`
+                  : 'Gratis'}
+              </div>
+              <div className="mt-1 text-[11px] text-muted-foreground">
+                {cost.calls_30d.toLocaleString('sv-SE')} anrop
+              </div>
+            </div>
+          ))}
+          <div className="rounded-lg border border-border bg-secondary/50 p-4">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Totalt
+            </div>
+            <div className="mt-2 text-base font-bold text-foreground">
+              {formatSek(Math.round(data.serviceCosts.total * 100))}
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   );
 }
 
-function SectionHeader({ title, linkHref, linkLabel }: { title: string; linkHref: string; linkLabel: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', margin: 0 }}>{title}</h2>
-      <Link href={linkHref} style={{ fontSize: 13, color: '#4f46e5', textDecoration: 'none', fontWeight: 500 }}>
-        {linkLabel}
-      </Link>
-    </div>
-  );
-}
-
-function StatTile({
-  value, label, accent, bg, border,
+function MetricCard({
+  icon,
+  card,
+  href,
 }: {
-  value: number | string;
-  label: string;
-  accent: string;
-  bg: string;
-  border: string;
+  icon: React.ReactNode;
+  card: {
+    label: string;
+    value: string;
+    sub?: string;
+    delta?: { text: string; tone: 'success' | 'muted' | 'destructive' };
+  };
+  href?: string;
 }) {
-  return (
-    <div
-      style={{
-        flex: '1 1 120px',
-        background: bg,
-        border: `1px solid ${border}`,
-        borderRadius: 12,
-        padding: '16px 20px',
-      }}
-    >
-      <div style={{ fontSize: 30, fontWeight: 800, color: accent, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 12, color: accent, marginTop: 4, opacity: 0.8 }}>{label}</div>
+  const content = (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-4">
+      <div className="text-muted-foreground">{icon}</div>
+      <div className="flex-1">
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          {card.label}
+        </div>
+        <div className="text-base font-bold text-foreground">{card.value}</div>
+        {card.sub && <div className="text-[11px] text-muted-foreground">{card.sub}</div>}
+      </div>
+      {card.delta && (
+        <div
+          className={`text-[11px] font-semibold ${
+            card.delta.tone === 'success'
+              ? 'text-success'
+              : card.delta.tone === 'destructive'
+                ? 'text-destructive'
+                : 'text-muted-foreground'
+          }`}
+        >
+          {card.delta.text}
+        </div>
+      )}
     </div>
   );
-}
 
-function Badge({ value, accent, bg, border }: { value: number; accent: string; bg: string; border: string }) {
-  return (
-    <span
-      style={{
-        fontSize: 12,
-        fontWeight: 600,
-        color: accent,
-        background: bg,
-        border: `1px solid ${border}`,
-        borderRadius: 999,
-        padding: '2px 8px',
-      }}
-    >
-      {value}
-    </span>
-  );
+  if (!href) return content;
+  return <Link href={href}>{content}</Link>;
 }

@@ -179,7 +179,7 @@ export async function GET(req: NextRequest) {
 
     let customerName = '';
     let customerEmail = session.customer_email || '';
-    let amountTotal = session.amount_total || 0;
+    const amountTotal = session.amount_total || 0;
 
     // Get customer name from profile if we have profile_id
     if (session.metadata?.profile_id) {
@@ -196,8 +196,13 @@ export async function GET(req: NextRequest) {
     }
 
     // Fallback to Stripe customer name if no profile
-    if (!customerName && typeof session.customer === 'object' && session.customer) {
-      customerName = (session.customer as any).name || '';
+    if (
+      !customerName &&
+      typeof session.customer === 'object' &&
+      session.customer &&
+      !('deleted' in session.customer && session.customer.deleted)
+    ) {
+      customerName = session.customer.name || '';
     }
 
     // Update customer profile if we have metadata

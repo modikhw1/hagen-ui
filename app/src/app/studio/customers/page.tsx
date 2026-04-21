@@ -19,8 +19,6 @@ interface CustomerProfile {
     title?: string;
     goals?: string[];
   };
-  pending_history_advance?: number | null;
-  pending_history_advance_seen_at?: string | null;
   tiktok_handle?: string | null;
   last_history_sync_at?: string | null;
 }
@@ -46,6 +44,7 @@ export default function StudioCustomersPage() {
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
   const [conceptStats, setConceptStats] = useState<Record<string, ConceptStats>>({});
   const [lastEmailDates, setLastEmailDates] = useState<Record<string, string>>({});
+  const [activeSignalCounts, setActiveSignalCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CustomerStatusFilter>('all');
   const [cmFilter, setCmFilter] = useState<string>('all');
@@ -54,6 +53,7 @@ export default function StudioCustomersPage() {
     void fetchCustomers();
     void fetchConceptStats();
     void fetchLastEmailDates();
+    void fetchActiveSignals();
   }, []);
 
   const fetchCustomers = async () => {
@@ -116,6 +116,34 @@ export default function StudioCustomersPage() {
       setLastEmailDates(dates);
     } catch (err) {
       console.error('Error fetching email dates:', err);
+    }
+  };
+
+  const fetchActiveSignals = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('feed_motor_signals')
+        .select('customer_id, payload, created_at')
+        .eq('signal_type', 'nudge')
+        .is('acknowledged_at', null)
+        .is('auto_resolved_at', null)
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return;
+
+      const counts: Record<string, number> = {};
+      for (const row of data) {
+        const customerId = row.customer_id as string;
+        if (customerId in counts) continue;
+        const payload = (row.payload ?? {}) as { imported_count?: unknown };
+        counts[customerId] =
+          typeof payload.imported_count === 'number' && Number.isFinite(payload.imported_count)
+            ? payload.imported_count
+            : 1;
+      }
+      setActiveSignalCounts(counts);
+    } catch (err) {
+      console.error('Error fetching active signals:', err);
     }
   };
 
@@ -272,6 +300,7 @@ export default function StudioCustomersPage() {
             const statusMeta = getStudioCustomerStatusMeta(customer.status);
             const stats = conceptStats[customer.id];
             const lastEmail = lastEmailDates[customer.id];
+            const activeSignalCount = activeSignalCounts[customer.id] ?? 0;
 
             return (
               <div
@@ -289,14 +318,14 @@ export default function StudioCustomersPage() {
                 <div>
                   <div style={{ fontWeight: 700, color: '#1a1a2e', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: 6 }}>
                     {customer.business_name}
-                    {customer.pending_history_advance && !customer.pending_history_advance_seen_at ? (
+                    {activeSignalCount > 0 ? (
                       <span style={{
                         fontSize: '10px', fontWeight: 700,
                         color: '#92400e', background: '#fef3c7', border: '1px solid #f59e0b',
                         borderRadius: '999px', padding: '1px 6px',
                         lineHeight: 1.4, flexShrink: 0,
                       }}>
-                        {customer.pending_history_advance} nya klipp
+                        {activeSignalCount} nya klipp
                       </span>
                     ) : null}
                   </div>

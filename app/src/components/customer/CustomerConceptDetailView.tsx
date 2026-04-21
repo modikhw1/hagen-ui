@@ -26,7 +26,7 @@ export function CustomerConceptDetailView({
 }: CustomerConceptDetailViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isDemo = variant === 'mobile' && searchParams.get('demo') === 'true';
+  const isDemo = variant === 'mobile' && searchParams?.get('demo') === 'true';
   const [state, setState] = useState<FetchState>({ status: 'loading' });
   const demoState = useMemo<FetchState | null>(() => {
     if (!isDemo) return null;

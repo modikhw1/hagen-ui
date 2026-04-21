@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { createClient } from '@supabase/supabase-js';
-import { validateApiRequest } from '@/lib/auth/api-auth';
+import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
+import {
+  canAccessStripeCustomerResource,
+  getAuthorizedCustomerProfile,
+} from '@/lib/stripe/customer-access';
+import { z } from 'zod';
+
+const postBodySchema = z.object({
+  subscriptionId: z.string().trim().min(1).optional(),
+  email: z.string().trim().email().optional(),
+}).refine((value) => value.subscriptionId || value.email, {
+  message: 'subscriptionId or email required',
+});
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -21,16 +33,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
 
-    const { subscriptionId, userId, email } = await request.json();
-
-    // Users can only update their own profile
-    if (userId && userId !== authUser.id) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const parsedBody = postBodySchema.safeParse(await request.json());
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        {
+          error: 'Invalid request payload',
+          issues: parsedBody.error.issues.map((issue) => ({
+            path: issue.path.join('.'),
+            message: issue.message,
+          })),
+        },
+        { status: 400 }
+      );
     }
 
-    if (!subscriptionId && !email) {
-      return NextResponse.json({ error: 'subscriptionId or email required' }, { status: 400 });
-    }
+    const { subscriptionId, email } = parsedBody.data;
+    const supabase = getSupabaseAdmin();
+    const authorizedProfile = await getAuthorizedCustomerProfile({
+      supabaseAdmin: supabase,
+      user: authUser,
+    });
 
     let subscription;
 
@@ -57,6 +79,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ found: false, message: 'Subscription not found' });
     }
 
+    const subscriptionCustomerId =
+      typeof subscription.customer === 'string' ? subscription.customer : null;
+    let subscriptionCustomerEmail: string | null = null;
+
+    if (subscriptionCustomerId) {
+      const customer = await stripe.customers.retrieve(subscriptionCustomerId);
+      if (!customer.deleted) {
+        subscriptionCustomerEmail = customer.email || null;
+      }
+    }
+
+    const ownsSubscription = canAccessStripeCustomerResource(authorizedProfile, {
+      customerId: subscriptionCustomerId,
+      subscriptionId: subscription.id,
+      email: subscriptionCustomerEmail || authUser.email,
+    });
+
+    if (!ownsSubscription) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     // Map Stripe status to our status
     const status = subscription.status;
     const isPaid = status === 'active';
@@ -72,27 +115,23 @@ export async function POST(request: NextRequest) {
 
     const subWithPeriod = subscription as unknown as { current_period_end?: number };
 
-    // Update profile if we have userId
     let profileUpdated = false;
-    if (userId) {
-      const supabase = getSupabaseAdmin();
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          subscription_status: status,
-          subscription_id: subscription.id,
-          has_paid: isPaid,
-          stripe_customer_id: subscription.customer as string,
-          current_period_end: subWithPeriod.current_period_end
-            ? new Date(subWithPeriod.current_period_end * 1000).toISOString()
-            : null,
-        })
-        .eq('id', userId);
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        subscription_status: status,
+        subscription_id: subscription.id,
+        has_paid: isPaid,
+        stripe_customer_id: subscription.customer as string,
+        current_period_end: subWithPeriod.current_period_end
+          ? new Date(subWithPeriod.current_period_end * 1000).toISOString()
+          : null,
+      })
+      .eq('id', authUser.id);
 
-      profileUpdated = !error;
-      if (error) {
-        console.error('Failed to update profile:', error);
-      }
+    profileUpdated = !error;
+    if (error) {
+      console.error('Failed to update profile:', error);
     }
 
     return NextResponse.json({
@@ -160,8 +199,8 @@ export async function GET(request: NextRequest) {
         : null,
     });
   } catch (error) {
-    if (error instanceof Error && error.name === 'AuthError') {
-      return NextResponse.json({ error: error.message }, { status: (error as any).statusCode || 401 });
+    if (error instanceof AuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
     }
     console.error('Check payment error:', error);
     return NextResponse.json({ error: 'Failed to check payment' }, { status: 500 });

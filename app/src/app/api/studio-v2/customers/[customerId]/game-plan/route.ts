@@ -79,7 +79,7 @@ export const PUT = withAuth(async (request, user, { params }: { params: Promise<
     return NextResponse.json({ error: legacyMirrorError.message }, { status: 500 });
   }
 
-  await logGamePlanUpdated(user.id, user.email, customerId);
+  await logGamePlanUpdated(user.id, user.email || 'unknown', customerId);
 
   const resolvedGamePlan = resolveGamePlanDocument(gamePlanRecord, null);
 

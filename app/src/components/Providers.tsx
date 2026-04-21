@@ -1,23 +1,17 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode } from 'react';
 import { MantineProvider } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
+import { usePathname } from 'next/navigation';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProfileProvider } from '@/contexts/ProfileContext';
 
 export function Providers({ children }: { children: ReactNode }) {
-  const [isAdminRoute, setIsAdminRoute] = useState(false);
-
-  useEffect(() => {
-    // Check if we're on admin or studio routes
-    const pathname = window.location.pathname;
-    setIsAdminRoute(pathname.startsWith('/admin') || pathname.startsWith('/studio'));
-  }, []);
+  const pathname = usePathname() ?? '';
+  const isAdminRoute = pathname.startsWith('/admin') || pathname.startsWith('/studio');
 
   return (
     <MantineProvider>
-      <Notifications />
       <AuthProvider>
         {isAdminRoute ? (
           // Admin/Studio routes don't need ProfileProvider (customer-facing context)

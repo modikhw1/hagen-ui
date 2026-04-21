@@ -1,17 +1,16 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
-import { getStripeEnvironment } from '@/lib/stripe/environment';
+import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { z } from 'zod';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
   page: z.coerce.number().int().min(1).optional(),
   status: z.string().trim().min(1).optional(),
   environment: z.enum(['test', 'live']).optional(),
+  customer_profile_id: z.string().uuid().optional(),
+  stripe_subscription_id: z.string().trim().min(1).optional(),
 }).strict();
 
 function isMissingColumnError(message?: string | null) {
@@ -25,15 +24,23 @@ export const GET = withAuth(async (request: NextRequest) => {
     page: url.searchParams.get('page') ?? undefined,
     status: url.searchParams.get('status') ?? undefined,
     environment: url.searchParams.get('environment') ?? undefined,
+    customer_profile_id: url.searchParams.get('customer_profile_id') ?? undefined,
+    stripe_subscription_id: url.searchParams.get('stripe_subscription_id') ?? undefined,
   });
 
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Ogiltiga query-parametrar' }, { status: 400 });
+    return jsonError('Ogiltiga query-parametrar', 400);
   }
 
-  const { limit = 50, page = 1, status } = parsed.data;
-  const environment = parsed.data.environment || getStripeEnvironment();
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  const {
+    limit = 50,
+    page = 1,
+    status,
+    customer_profile_id,
+    stripe_subscription_id,
+  } = parsed.data;
+  const environment = parsed.data.environment;
+  const supabaseAdmin = createSupabaseAdmin();
   const from = (page - 1) * limit;
   const to = from + limit - 1;
   const schemaWarnings: string[] = [];
@@ -45,7 +52,7 @@ export const GET = withAuth(async (request: NextRequest) => {
       .order('created', { ascending: false })
       .range(from, to);
 
-    if (withEnvironmentFilter) {
+    if (withEnvironmentFilter && environment) {
       query = query.eq('environment', environment);
     }
 
@@ -53,10 +60,18 @@ export const GET = withAuth(async (request: NextRequest) => {
       query = query.eq('status', status);
     }
 
+    if (customer_profile_id) {
+      query = query.eq('customer_profile_id', customer_profile_id);
+    }
+
+    if (stripe_subscription_id) {
+      query = query.eq('stripe_subscription_id', stripe_subscription_id);
+    }
+
     return query;
   };
 
-  let { data: subscriptions, error, count } = await buildSubscriptionQuery(true);
+  let { data: subscriptions, error, count } = await buildSubscriptionQuery(Boolean(environment));
   if (error && isMissingColumnError(error.message)) {
     schemaWarnings.push('Migration 040 saknas i databasen. Visar abonnemang utan miljöfiltrering och utan garanterad test/live-separation.');
     const fallback = await buildSubscriptionQuery(false);
@@ -66,7 +81,7 @@ export const GET = withAuth(async (request: NextRequest) => {
   }
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error.message, 500);
   }
 
   const { data: customers } = await supabaseAdmin
@@ -93,9 +108,9 @@ export const GET = withAuth(async (request: NextRequest) => {
       'Okänd',
   }));
 
-  return NextResponse.json({
+  return jsonOk({
     subscriptions: payload,
-    environment,
+    environment: environment ?? 'all',
     schemaWarnings,
     pagination: {
       page,

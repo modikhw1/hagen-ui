@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages, @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 'use client';
 
 import { useState, useEffect } from 'react';

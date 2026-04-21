@@ -28,25 +28,44 @@ export function useVideoSignedUrl({
       return
     }
 
-    setIsLoading(true)
-    setError(null)
+    let cancelled = false
 
-    const videoId = gcsUri.split('/').pop()?.replace('.mp4', '') || 'video'
+    const run = async () => {
+      await Promise.resolve()
+      if (cancelled) return
 
-    fetch(`/api/video/${videoId}?gcs_uri=${encodeURIComponent(gcsUri)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.signedUrl) {
-          setSignedUrl(data.signedUrl)
-        } else if (data.error) {
-          setError(data.error)
-        }
-      })
-      .catch(err => {
-        console.error('Video signing failed:', err)
-        setError('Kunde inte ladda video')
-      })
-      .finally(() => setIsLoading(false))
+      setIsLoading(true)
+      setError(null)
+
+      const videoId = gcsUri.split('/').pop()?.replace('.mp4', '') || 'video'
+
+      fetch(`/api/video/${videoId}?gcs_uri=${encodeURIComponent(gcsUri)}`)
+        .then(res => res.json())
+        .then(data => {
+          if (cancelled) return
+          if (data.signedUrl) {
+            setSignedUrl(data.signedUrl)
+          } else if (data.error) {
+            setError(data.error)
+          }
+        })
+        .catch(err => {
+          if (cancelled) return
+          console.error('Video signing failed:', err)
+          setError('Kunde inte ladda video')
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsLoading(false)
+          }
+        })
+    }
+
+    void run()
+
+    return () => {
+      cancelled = true
+    }
   }, [gcsUri, enabled, signedUrl, isLoading])
 
   return { signedUrl, isLoading, error }

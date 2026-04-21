@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { DEFAULT_GRID_CONFIG } from '@/types/studio-v2';
 import type { CmTag, GridConfig } from '@/types/studio-v2';
-import type { MotorSignalKind } from '@/lib/studio/motor-signal';
 
 type MotorSignalRow = {
   id: string;
@@ -17,12 +16,6 @@ export function useFeedPlannerState() {
   const [historyOffset, setHistoryOffset] = useState(0);
   const [cmTags, setCmTags] = useState<CmTag[]>([]);
   const [showTagManager, setShowTagManager] = useState(false);
-  const [pendingAdvanceCue, setPendingAdvanceCue] = useState<{
-    imported: number;
-    kind: MotorSignalKind;
-    publishedAt: string | null;
-  } | null>(null);
-  const [advancingPlan, setAdvancingPlan] = useState(false);
   const [markProducedDialogOpen, setMarkProducedDialogOpen] = useState(false);
   const [markProducedDialogConceptId, setMarkProducedDialogConceptId] = useState<string | null>(null);
   const [motorSignals, setMotorSignals] = useState<MotorSignalRow[]>([]);
@@ -46,10 +39,6 @@ export function useFeedPlannerState() {
     setCmTags,
     showTagManager,
     setShowTagManager,
-    pendingAdvanceCue,
-    setPendingAdvanceCue,
-    advancingPlan,
-    setAdvancingPlan,
     markProducedDialogOpen,
     setMarkProducedDialogOpen,
     markProducedDialogConceptId,

@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/tiktok/sync",
+      "schedule": "15 6 * * *"
+    },
+    {
+      "path": "/api/cron/attention-maintenance",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/onboarding-tick",
+      "schedule": "*/30 * * * *"
+    }
+  ]
+}

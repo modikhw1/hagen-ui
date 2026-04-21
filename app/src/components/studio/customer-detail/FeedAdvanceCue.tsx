@@ -3,7 +3,7 @@
 import React from 'react';
 import type { CustomerConcept } from '@/types/studio-v2';
 import type { MotorSignalKind } from '@/lib/studio/motor-signal';
-import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
+import { LeTrendRadius } from '@/styles/letrend-design-system';
 
 type FeedAdvanceCueProps = {
   cue: {
@@ -18,14 +18,10 @@ type FeedAdvanceCueProps = {
   freshImportedConcepts: CustomerConcept[];
   freshImportedIds: ReadonlySet<string>;
   focusedEvidenceCount: number;
-  advancingPlan: boolean;
   markingProducedFromCue: boolean;
-  showCueOverflowMenu: boolean;
   onReviewHistory: () => void;
   onDefer: () => void;
-  onToggleOverflow: () => void;
   onMarkProducedFromCue: () => void;
-  onAdvancePlan: () => void;
   onDismissCue: (signalId?: string) => void;
   formatCompactViews: (count: number) => string;
 };
@@ -39,14 +35,10 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
   freshImportedConcepts,
   freshImportedIds,
   focusedEvidenceCount,
-  advancingPlan,
   markingProducedFromCue,
-  showCueOverflowMenu,
   onReviewHistory,
   onDefer,
-  onToggleOverflow,
   onMarkProducedFromCue,
-  onAdvancePlan,
   onDismissCue,
   formatCompactViews,
 }: FeedAdvanceCueProps) {
@@ -80,10 +72,10 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
             ? (nuConcept
                 ? 'Var det nu-konceptet som publicerades?'
                 : (hasActivePlan
-                    ? 'Kunden publicerade nytt – granska historiken och flytta planen om det stämmer.'
-                    : 'Placera ett koncept i planen för att kunna flytta framåt.'))
+                    ? 'Kunden publicerade nytt. Granska historiken innan du bekräftar.'
+                    : 'Placera ett koncept i planen för att kunna markera produktion.'))
             : (hasActivePlan
-                ? 'Äldre innehåll – granska historiken innan du flyttar planen.'
+                ? 'Äldre innehåll. Granska historiken innan du bekräftar.'
                 : 'Äldre innehåll importerat till historiken.')}
         </div>
         {nuConcept && (
@@ -205,10 +197,10 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
       </div>
 
       {nuConcept ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end', position: 'relative' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
           <button
             onClick={onMarkProducedFromCue}
-            disabled={markingProducedFromCue || advancingPlan}
+            disabled={markingProducedFromCue}
             style={{
               padding: '5px 12px',
               background: '#16a34a',
@@ -217,115 +209,19 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
               fontSize: 12,
               fontWeight: 600,
               color: '#fff',
-              cursor: markingProducedFromCue || advancingPlan ? 'not-allowed' : 'pointer',
+              cursor: markingProducedFromCue ? 'not-allowed' : 'pointer',
               whiteSpace: 'nowrap',
             }}
           >
-            {markingProducedFromCue ? 'Markerar...' : 'Markera och flytta'}
+            {markingProducedFromCue ? 'Markerar...' : 'Markera som gjord'}
           </button>
           <div style={{ fontSize: 10, color: '#166534', opacity: 0.6, textAlign: 'right', maxWidth: 220 }}>
-            Kopplar senaste klippet till nu-konceptet och flyttar planen framåt.
+            Bekräfta nu-kortet när historiken stämmer.
           </div>
-          {freshImportedConcepts.length > 0 && freshImportedConcepts[0].result.tiktok_url && (
-            <div style={{ fontSize: 10, color: '#166534', opacity: 0.55, textAlign: 'right' }}>
-              {'↑ länkar klippet'}
-              {freshImportedConcepts[0].result.published_at
-                ? ` · ${new Date(freshImportedConcepts[0].result.published_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`
-                : ''}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={onToggleOverflow}
-            disabled={advancingPlan || markingProducedFromCue}
-            aria-label="Fler val"
-            style={{
-              width: 28,
-              height: 28,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: '#fff',
-              border: '1px solid #9ca3af',
-              borderRadius: LeTrendRadius.md,
-              fontSize: 15,
-              fontWeight: 700,
-              color: '#4b5563',
-              cursor: advancingPlan || markingProducedFromCue ? 'not-allowed' : 'pointer',
-            }}
-          >
-            ⋯
-          </button>
-          {showCueOverflowMenu ? (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                right: 0,
-                marginTop: 6,
-                minWidth: 210,
-                padding: 6,
-                background: '#fff',
-                border: `1px solid ${LeTrendColors.border}`,
-                borderRadius: LeTrendRadius.md,
-                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
-                zIndex: 4,
-              }}
-            >
-              <button
-                type="button"
-                onClick={onAdvancePlan}
-                disabled={advancingPlan || markingProducedFromCue}
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '8px 10px',
-                  border: 'none',
-                  background: 'transparent',
-                  borderRadius: LeTrendRadius.sm,
-                  fontSize: 12,
-                  color: '#4b5563',
-                  cursor: advancingPlan || markingProducedFromCue ? 'not-allowed' : 'pointer',
-                }}
-              >
-                Flytta utan att koppla klipp
-              </button>
-            </div>
-          ) : null}
         </div>
-      ) : hasActivePlan ? (
-        <button
-          onClick={onAdvancePlan}
-          disabled={advancingPlan}
-          style={cue.kind === 'fresh_activity'
-            ? {
-                padding: '5px 12px',
-                background: '#16a34a',
-                border: 'none',
-                borderRadius: LeTrendRadius.md,
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#fff',
-                cursor: advancingPlan ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap',
-              }
-            : {
-                padding: '5px 12px',
-                background: 'none',
-                border: '1px solid #9ca3af',
-                borderRadius: LeTrendRadius.md,
-                fontSize: 12,
-                fontWeight: 400,
-                color: '#4b5563',
-                cursor: advancingPlan ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-        >
-          {advancingPlan ? 'Flyttar...' : 'Flytta planen framåt'}
-        </button>
       ) : (
         <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap', paddingTop: 3 }}>
-          Inget kommande i planen
+          Inget nu-kort att bekräfta
         </span>
       )}
 

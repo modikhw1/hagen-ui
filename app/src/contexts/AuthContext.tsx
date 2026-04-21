@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 import { resolveLegacyProfileRole } from '@/lib/auth/roles';
 import { clearOnboardingSession } from '@/lib/onboarding/session';
+import { logInteraction } from '@/lib/interactions';
 
 const PROFILE_CACHE_TTL_MS = 5 * 60_000; // 5 min
 const QUERY_TIMEOUT_MS = 10_000;
@@ -324,10 +325,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       setState(prev => ({ ...prev, error: null, authLoading: true, status: 'signing_in' }));
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         setState(prev => ({ ...prev, authLoading: false, profileLoading: false, status: 'error', error }));
         return { error };
+      }
+      if (data.user) {
+        void logInteraction({
+          type: 'login',
+          cmProfileId: data.user.id,
+          metadata: { source: 'auth_context' },
+          client: supabase,
+        });
       }
       return { error: null };
     } catch (err) {

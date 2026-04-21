@@ -1,24 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { validateApiRequest, AuthError } from '@/lib/auth/api-auth';
+import { createClient } from '@supabase/supabase-js';
+import {
+  canAccessStripeCustomerResource,
+  getAuthorizedCustomerProfile,
+} from '@/lib/stripe/customer-access';
+
+interface RouteParams {
+  params: Promise<{ subscriptionId: string }>;
+}
 
 // GET - Check invoice status for a subscription
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: RouteParams
+) {
   try {
-    await validateApiRequest(request);
+    const authUser = await validateApiRequest(request);
 
     if (!stripe) {
       return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const subscriptionId = searchParams.get('subscriptionId');
+    const { subscriptionId } = await params;
 
     if (!subscriptionId) {
       return NextResponse.json({ error: 'subscriptionId required' }, { status: 400 });
     }
 
-    // Get the latest invoice for this subscription
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const authorizedProfile = await getAuthorizedCustomerProfile({
+      supabaseAdmin,
+      user: authUser,
+    });
+
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const customerId =
+      typeof subscription.customer === 'string' ? subscription.customer : null;
+    let customerEmail: string | null = null;
+
+    if (customerId) {
+      const customer = await stripe.customers.retrieve(customerId);
+      if (!customer.deleted) {
+        customerEmail = customer.email || null;
+      }
+    }
+
+    const ownsSubscription = canAccessStripeCustomerResource(authorizedProfile, {
+      customerId,
+      subscriptionId,
+      email: customerEmail || authUser.email,
+    });
+
+    if (!ownsSubscription) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const invoices = await stripe.invoices.list({
       subscription: subscriptionId,
       limit: 1,

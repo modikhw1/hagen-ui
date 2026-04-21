@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';
 
 export interface AssignAccountManagerResult {
   success: boolean;
@@ -33,38 +34,14 @@ export async function assignAccountManager(
     return { success: true, updatedCustomerIds, errors };
   }
 
-  // Resolve account_manager_profile_id from team_members table
-  let managerProfileId: string | null = null;
-
-  if (managerName && managerName.trim()) {
-    const { data: teamMember, error: tmError } = await supabaseAdmin
-      .from('team_members')
-      .select('profile_id, name')
-      .ilike('name', managerName.trim())
-      .maybeSingle();
-
-    if (!tmError && teamMember?.profile_id) {
-      managerProfileId = teamMember.profile_id as string;
-    } else {
-      // Fallback: try profiles table by business_name
-      const { data: profile, error: pError } = await supabaseAdmin
-        .from('profiles')
-        .select('id')
-        .ilike('business_name', managerName.trim())
-        .maybeSingle();
-
-      if (!pError && profile?.id) {
-        managerProfileId = profile.id as string;
-      }
-    }
-  }
+  const assignment = await resolveAccountManagerAssignment(supabaseAdmin, managerName);
 
   // Update all customer profiles in a single query for efficiency
   const { data, error } = await supabaseAdmin
     .from('customer_profiles')
     .update({
-      account_manager: managerName || null,
-      account_manager_profile_id: managerProfileId,
+      account_manager: assignment.accountManager,
+      account_manager_profile_id: assignment.accountManagerProfileId,
     })
     .in('id', customerIds)
     .select('id');

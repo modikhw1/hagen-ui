@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { normalizeCustomerNotePayload } from '@/lib/customer-notes';
+import { logInteraction } from '@/lib/interactions';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 export const GET = withAuth(async (_request, _user, { params }: { params: Promise<{ customerId: string }> }) => {
@@ -48,6 +49,14 @@ export const POST = withAuth(async (request, user, { params }: { params: Promise
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await logInteraction({
+    type: 'note_added',
+    cmProfileId: user.id,
+    customerId,
+    metadata: { note_id: data.id, note_type: data.note_type ?? null },
+    client: supabase,
+  });
 
   return NextResponse.json({ note: data });
 }, ['admin', 'content_manager']);

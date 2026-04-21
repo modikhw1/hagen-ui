@@ -1,36 +1,37 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
+import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-// GET - Fetch all profiles with their linked customer_profiles
-export const GET = withAuth(async (request: NextRequest, user) => {
+export const GET = withAuth(async () => {
   try {
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Fetch profiles
+    const supabaseAdmin = createSupabaseAdmin();
+
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false });
 
     if (profilesError) {
-      return NextResponse.json({ error: profilesError.message }, { status: 500 });
+      return jsonError(profilesError.message, 500);
     }
 
-    // For each profile, try to find linked customer_profile
     const profilesWithCustomer = await Promise.all(
       (profiles || []).map(async (profile) => {
-        // Try to find customer profile via matching_data
         let customerProfile = null;
-        
-        if (profile.matching_data?.customer_profile_id) {
+        const customerProfileId =
+          profile.matching_data &&
+          typeof profile.matching_data === 'object' &&
+          !Array.isArray(profile.matching_data) &&
+          typeof profile.matching_data.customer_profile_id === 'string'
+            ? profile.matching_data.customer_profile_id
+            : null;
+
+        if (customerProfileId) {
           const { data } = await supabaseAdmin
             .from('customer_profiles')
             .select('*')
-            .eq('id', profile.matching_data.customer_profile_id)
+            .eq('id', customerProfileId)
             .single();
           customerProfile = data;
         }
@@ -39,28 +40,34 @@ export const GET = withAuth(async (request: NextRequest, user) => {
           ...profile,
           customer_profile: customerProfile,
         };
-      })
+      }),
     );
 
-    return NextResponse.json({ profiles: profilesWithCustomer });
+    return jsonOk({ profiles: profilesWithCustomer });
   } catch (error) {
-    console.error('Error fetching profiles:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('[ADMIN_PROFILES] Kunde inte hamta profiler:', error);
+    return jsonError('Internt serverfel', 500);
   }
 }, ['admin']);
 
-// PATCH - Update a profile
-export const PATCH = withAuth(async (request: NextRequest, user) => {
+export const PATCH = withAuth(async (request: NextRequest) => {
   try {
     const body = await request.json();
-    const { id, tone, energy, industry, business_name, business_description, matching_data } = body;
+    const {
+      id,
+      tone,
+      energy,
+      industry,
+      business_name,
+      business_description,
+      matching_data,
+    } = body;
 
     if (!id) {
-      return NextResponse.json({ error: 'Profile ID is required' }, { status: 400 });
+      return jsonError('Profil-ID kravs', 400);
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
+    const supabaseAdmin = createSupabaseAdmin();
     const updateData: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -80,12 +87,12 @@ export const PATCH = withAuth(async (request: NextRequest, user) => {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonError(error.message, 500);
     }
 
-    return NextResponse.json({ profile: data });
+    return jsonOk({ profile: data });
   } catch (error) {
-    console.error('Error updating profile:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('[ADMIN_PROFILES] Kunde inte uppdatera profil:', error);
+    return jsonError('Internt serverfel', 500);
   }
 }, ['admin']);

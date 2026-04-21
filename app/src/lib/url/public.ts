@@ -6,7 +6,10 @@ function trimTrailingSlash(value: string) {
 }
 
 export function getAppUrl() {
-  return trimTrailingSlash(process.env.NEXT_PUBLIC_APP_URL || DEFAULT_APP_URL)
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL
+  const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined
+
+  return trimTrailingSlash(configuredUrl || vercelUrl || DEFAULT_APP_URL)
 }
 
 export function getMarketingUrl() {

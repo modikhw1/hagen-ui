@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import type { KommunikationSectionProps, InlineFeedbackTone, CMIdentity } from './feedTypes';
 import {
   LeTrendColors,
@@ -155,12 +156,21 @@ export function KommunikationSection({
   formatDateTime,
   cmDisplayNames,
 }: KommunikationSectionProps) {
+  const { profile } = useAuth();
   const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null);
+  const [adminNotificationMessage, setAdminNotificationMessage] = useState('');
+  const [adminNotificationPriority, setAdminNotificationPriority] = useState<'normal' | 'urgent'>('normal');
+  const [sendingAdminNotification, setSendingAdminNotification] = useState(false);
+  const [adminNotificationFeedback, setAdminNotificationFeedback] = useState<{
+    tone: InlineFeedbackTone;
+    text: string;
+  } | null>(null);
   const selectedTemplate = useMemo(
     () => EMAIL_TEMPLATES.find((template) => template.id === emailType) || EMAIL_TEMPLATES[0],
     [emailType]
   );
   const attachableConcepts = getDraftConcepts();
+  const showAdminNotificationPanel = profile?.role === 'content_manager';
 
   const getEmailJobStatusLabel = (status: EmailJobEntry['status']) => {
     switch (status) {
@@ -246,6 +256,54 @@ export function KommunikationSection({
     }));
   };
 
+  const handleSendAdminNotification = async () => {
+    const message = adminNotificationMessage.trim();
+    if (message.length < 5) {
+      setAdminNotificationFeedback({
+        tone: 'error',
+        text: 'Skriv lite mer sa att admin forstar vad som behovs.',
+      });
+      return;
+    }
+
+    setSendingAdminNotification(true);
+    setAdminNotificationFeedback(null);
+
+    try {
+      const response = await fetch(`/api/studio-v2/customers/${customer.id}/admin-notification`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          message,
+          priority: adminNotificationPriority,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || 'Kunde inte skicka notisen till admin.');
+      }
+
+      setAdminNotificationMessage('');
+      setAdminNotificationPriority('normal');
+      setAdminNotificationFeedback({
+        tone: 'success',
+        text:
+          adminNotificationPriority === 'urgent'
+            ? 'Akut notis skickad till admin.'
+            : 'Notis skickad till admin.',
+      });
+    } catch (error) {
+      setAdminNotificationFeedback({
+        tone: 'error',
+        text: error instanceof Error ? error.message : 'Kunde inte skicka notisen till admin.',
+      });
+    } finally {
+      setSendingAdminNotification(false);
+    }
+  };
+
   return (
     <div
       style={{
@@ -285,6 +343,101 @@ export function KommunikationSection({
           }}
         >
           {communicationFeedback.text}
+        </div>
+      )}
+
+      {showAdminNotificationPanel && (
+        <div
+          style={{
+            marginBottom: 24,
+            padding: 18,
+            borderRadius: 16,
+            background: '#FFF9F2',
+            border: `1px solid ${LeTrendColors.borderStrong}`,
+          }}
+        >
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: LeTrendColors.brownDark, marginBottom: 4 }}>
+              Be admin om hjalp
+            </div>
+            <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, lineHeight: 1.6 }}>
+              Skicka en intern CM-notis nar du behover beslut, blocker-losning eller snabb admininsats for kunden.
+            </div>
+          </div>
+
+          {adminNotificationFeedback && (
+            <div
+              style={{
+                marginBottom: 12,
+                padding: '10px 12px',
+                borderRadius: LeTrendRadius.md,
+                fontSize: 12,
+                lineHeight: 1.6,
+                ...getInlineFeedbackStyle(adminNotificationFeedback.tone),
+              }}
+            >
+              {adminNotificationFeedback.text}
+            </div>
+          )}
+
+          <div style={{ marginBottom: 10 }}>
+            <label style={labelStyle}>Prioritet</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {([
+                { value: 'normal', label: 'Normal' },
+                { value: 'urgent', label: 'Akut' },
+              ] as const).map((option) => {
+                const active = adminNotificationPriority === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setAdminNotificationPriority(option.value)}
+                    style={{
+                      padding: '9px 12px',
+                      borderRadius: 999,
+                      border: `1px solid ${active ? LeTrendColors.brownLight : LeTrendColors.borderStrong}`,
+                      background: active ? LeTrendColors.surfaceHighlight : '#FFFFFF',
+                      color: active ? LeTrendColors.brownDark : LeTrendColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <label style={labelStyle}>Meddelande</label>
+            <textarea
+              value={adminNotificationMessage}
+              onChange={(event) => setAdminNotificationMessage(event.target.value)}
+              placeholder="Beskriv vad du behover hjalp med, vad som blockerar och om det ar tidskritiskt."
+              rows={4}
+              style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleSendAdminNotification()}
+            disabled={sendingAdminNotification}
+            style={{
+              padding: '12px 16px',
+              borderRadius: 12,
+              border: 'none',
+              background: sendingAdminNotification ? '#BFAE9B' : '#6B4423',
+              color: '#FAF8F5',
+              fontWeight: 600,
+              cursor: sendingAdminNotification ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {sendingAdminNotification ? 'Skickar notis...' : 'Skicka notis till admin'}
+          </button>
         </div>
       )}
 

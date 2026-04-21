@@ -1,16 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
-import { getStripeEnvironment } from '@/lib/stripe/environment';
+import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { z } from 'zod';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const querySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
   page: z.coerce.number().int().min(1).optional(),
   customerProfileId: z.string().uuid().optional(),
+  customer_profile_id: z.string().uuid().optional(),
   status: z.string().trim().min(1).optional(),
   environment: z.enum(['test', 'live']).optional(),
   includeLineItems: z.coerce.boolean().optional(),
@@ -30,24 +28,27 @@ export const GET = withAuth(async (request: NextRequest) => {
     limit: url.searchParams.get('limit') ?? undefined,
     page: url.searchParams.get('page') ?? undefined,
     customerProfileId: url.searchParams.get('customerProfileId') ?? undefined,
+    customer_profile_id: url.searchParams.get('customer_profile_id') ?? undefined,
     status: url.searchParams.get('status') ?? undefined,
     environment: url.searchParams.get('environment') ?? undefined,
     includeLineItems: url.searchParams.get('includeLineItems') ?? undefined,
   });
 
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Ogiltiga query-parametrar' }, { status: 400 });
+    return jsonError('Ogiltiga query-parametrar', 400);
   }
 
   const {
     limit = 50,
     page = 1,
     customerProfileId,
+    customer_profile_id,
     status,
     includeLineItems = false,
   } = parsed.data;
-  const environment = parsed.data.environment || getStripeEnvironment();
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  const resolvedCustomerProfileId = customer_profile_id || customerProfileId;
+  const environment = parsed.data.environment;
+  const supabaseAdmin = createSupabaseAdmin();
   const from = (page - 1) * limit;
   const to = from + limit - 1;
   const schemaWarnings: string[] = [];
@@ -59,12 +60,12 @@ export const GET = withAuth(async (request: NextRequest) => {
       .order('created_at', { ascending: false })
       .range(from, to);
 
-    if (withEnvironmentFilter) {
+    if (withEnvironmentFilter && environment) {
       query = query.eq('environment', environment);
     }
 
-    if (customerProfileId) {
-      query = query.eq('customer_profile_id', customerProfileId);
+    if (resolvedCustomerProfileId) {
+      query = query.eq('customer_profile_id', resolvedCustomerProfileId);
     }
 
     if (status) {
@@ -74,7 +75,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     return query;
   };
 
-  let { data: invoices, error, count } = await buildInvoiceQuery(true);
+  let { data: invoices, error, count } = await buildInvoiceQuery(Boolean(environment));
   if (error && isMissingColumnError(error.message)) {
     schemaWarnings.push('Migration 040 saknas i databasen. Visar fakturor utan miljöfiltrering och utan garanterad test/live-separation.');
     const fallback = await buildInvoiceQuery(false);
@@ -83,7 +84,7 @@ export const GET = withAuth(async (request: NextRequest) => {
     count = fallback.count;
   }
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonError(error.message, 500);
   }
 
   const rows = invoices || [];
@@ -136,9 +137,9 @@ export const GET = withAuth(async (request: NextRequest) => {
     line_items: lineItemsByInvoiceId.get(invoice.stripe_invoice_id) || [],
   }));
 
-  return NextResponse.json({
+  return jsonOk({
     invoices: payload,
-    environment,
+    environment: environment ?? 'all',
     schemaWarnings,
     pagination: {
       page,

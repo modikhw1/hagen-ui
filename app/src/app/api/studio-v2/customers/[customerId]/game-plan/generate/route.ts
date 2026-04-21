@@ -62,6 +62,7 @@ export const POST = withAuth(async (request, _user, { params }: { params: Promis
   const { customerId } = await params;
   const parsed = requestSchema.safeParse(await request.json().catch(() => ({})));
   const model = process.env.LOVABLE_AI_MODEL?.trim() || 'google/gemini-2.5-flash';
+  const generatedAt = new Date().toISOString();
 
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid generate payload' }, { status: 400 });
@@ -104,6 +105,7 @@ export const POST = withAuth(async (request, _user, { params }: { params: Promis
       html: fallbackHtml,
       source: 'fallback',
       model,
+      generated_at: generatedAt,
       reason: 'LOVABLE_API_KEY is not configured',
     });
   }
@@ -147,12 +149,14 @@ export const POST = withAuth(async (request, _user, { params }: { params: Promis
       html,
       source: 'ai',
       model,
+      generated_at: generatedAt,
     });
   } catch (error) {
     return NextResponse.json({
       html: fallbackHtml,
       source: 'fallback',
       model,
+      generated_at: generatedAt,
       reason: error instanceof Error ? error.message : 'Unknown generation error',
     });
   }

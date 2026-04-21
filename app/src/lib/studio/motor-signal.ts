@@ -1,21 +1,10 @@
 /**
- * Motor signal helpers.
+ * Motor signal helpers backed by feed_motor_signals.
  *
- * Two persistence layers:
- *
- * 1. customer_profiles columns (legacy, still written for backward compat):
- *    pending_history_advance              SMALLINT NULL    — evidence count
- *    pending_history_advance_seen_at      TIMESTAMPTZ NULL — acknowledgement
- *    pending_history_advance_published_at TIMESTAMPTZ NULL — freshness seam
- *
- * 2. feed_motor_signals table (new, durable):
- *    Rows are never deleted — instead auto_resolved_at and acknowledged_at
- *    track the lifecycle so CM can see historical signals.
- *
- * Signal states (feed_motor_signals):
+ * Signal states:
  *   acknowledged_at IS NULL AND auto_resolved_at IS NULL  → active nudge (show to CM)
  *   auto_resolved_at IS NOT NULL                          → auto-resolved (subtle badge)
- *   acknowledged_at IS NOT NULL                           → CM acknowledged / dismissed
+ *   acknowledged_at IS NOT NULL                          → CM acknowledged / dismissed
  */
 
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
@@ -34,17 +23,7 @@ export type MotorSignalKind = 'fresh_activity' | 'backfill';
 /** Clips published within this many days are considered fresh activity. */
 const FRESH_ACTIVITY_THRESHOLD_DAYS = 90;
 
-/**
- * Derives the semantic classification of a pending motor signal.
- * Returns null when there is no pending signal.
- */
-export function classifyMotorSignal(profile: {
-  pending_history_advance?: number | null;
-  pending_history_advance_published_at?: string | null;
-}): MotorSignalKind | null {
-  if (!profile.pending_history_advance) return null;
-
-  const publishedAt = profile.pending_history_advance_published_at;
+export function inferMotorSignalKind(publishedAt: string | null): MotorSignalKind {
   if (!publishedAt) return 'fresh_activity'; // unknown date → conservative
 
   const ageMs = Date.now() - new Date(publishedAt).getTime();
@@ -52,30 +31,39 @@ export function classifyMotorSignal(profile: {
   return ageDays <= FRESH_ACTIVITY_THRESHOLD_DAYS ? 'fresh_activity' : 'backfill';
 }
 
-// ── Column-based write helpers (customer_profiles) ──────────────────────────
-
-/** Fields to write when new imported_history rows arrive.
- * @deprecated Still written for backward compat; migrate reads to feed_motor_signals.
+/**
+ * Loads the latest active nudge and returns its semantic kind.
+ * Returns null when there is no active signal.
  */
-export function motorSignalNewEvidence(importedCount: number, latestPublishedAt: string | null) {
-  return {
-    pending_history_advance: importedCount,
-    // DEPRECATED: migrate to feed_motor_signals acknowledged_at
-    pending_history_advance_seen_at: null,
-    pending_history_advance_published_at: latestPublishedAt,
-  } as const;
-}
+export async function classifyMotorSignal(
+  supabase: SupabaseAdmin,
+  customerId: string
+): Promise<MotorSignalKind | null> {
+  const { data, error } = await supabase
+    .from('feed_motor_signals')
+    .select('payload')
+    .eq('customer_id', customerId)
+    .eq('signal_type', 'nudge')
+    .is('acknowledged_at', null)
+    .is('auto_resolved_at', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-/** Fields to write when the CM advances the plan. Clears evidence, acknowledgement, and freshness seam.
- * @deprecated Still written for backward compat; migrate reads to feed_motor_signals.
- */
-export function motorSignalCleared() {
-  return {
-    pending_history_advance: null,
-    // DEPRECATED: migrate to feed_motor_signals acknowledged_at
-    pending_history_advance_seen_at: null,
-    pending_history_advance_published_at: null,
-  } as const;
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) return null;
+
+  const payload = (data.payload ?? {}) as FeedMotorSignalPayload;
+  if (payload.kind === 'fresh_activity' || payload.kind === 'backfill') {
+    return payload.kind;
+  }
+
+  return inferMotorSignalKind(
+    typeof payload.latest_published_at === 'string' ? payload.latest_published_at : null
+  );
 }
 
 // ── feed_motor_signals table helpers ────────────────────────────────────────
@@ -98,10 +86,16 @@ export async function createMotorSignalNudge(
   customerId: string,
   payload: FeedMotorSignalPayload
 ): Promise<string | null> {
-  // Check for existing active (unacknowledged + unresolved) nudge
+  const importedCount =
+    typeof payload.imported_count === 'number' && Number.isFinite(payload.imported_count)
+      ? Math.max(0, Math.floor(payload.imported_count))
+      : 0;
+  const latestPublishedAt =
+    typeof payload.latest_published_at === 'string' ? payload.latest_published_at : null;
+
   const { data: existing } = await supabase
     .from('feed_motor_signals')
-    .select('id')
+    .select('id, payload')
     .eq('customer_id', customerId)
     .eq('signal_type', 'nudge')
     .is('acknowledged_at', null)
@@ -110,16 +104,56 @@ export async function createMotorSignalNudge(
     .maybeSingle();
 
   if (existing) {
-    // Active nudge already exists — skip to avoid duplicates
-    return null;
+    const existingPayload = (existing.payload ?? {}) as FeedMotorSignalPayload;
+    const existingCount =
+      typeof existingPayload.imported_count === 'number' && Number.isFinite(existingPayload.imported_count)
+        ? Math.max(0, Math.floor(existingPayload.imported_count))
+        : 0;
+    const existingPublishedAt =
+      typeof existingPayload.latest_published_at === 'string'
+        ? existingPayload.latest_published_at
+        : null;
+
+    const mergedLatestPublishedAt =
+      latestPublishedAt && existingPublishedAt
+        ? (latestPublishedAt > existingPublishedAt ? latestPublishedAt : existingPublishedAt)
+        : (latestPublishedAt ?? existingPublishedAt);
+
+    const mergedPayload: FeedMotorSignalPayload = {
+      ...existingPayload,
+      ...payload,
+      imported_count: existingCount + importedCount,
+      latest_published_at: mergedLatestPublishedAt,
+      kind: inferMotorSignalKind(mergedLatestPublishedAt),
+    };
+
+    const { error } = await supabase
+      .from('feed_motor_signals')
+      .update({ payload: mergedPayload })
+      .eq('id', existing.id);
+
+    if (error) {
+      console.error('[motor-signal] failed to update active nudge:', error.message);
+      return null;
+    }
+
+    return existing.id as string;
   }
+
+  const nextPayload: FeedMotorSignalPayload = {
+    ...payload,
+    kind:
+      payload.kind === 'fresh_activity' || payload.kind === 'backfill'
+        ? payload.kind
+        : inferMotorSignalKind(latestPublishedAt),
+  };
 
   const { data: inserted, error } = await supabase
     .from('feed_motor_signals')
     .insert({
       customer_id: customerId,
       signal_type: 'nudge',
-      payload,
+      payload: nextPayload,
     })
     .select('id')
     .single();

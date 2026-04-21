@@ -1,46 +1,19 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { buildAssignmentInsertPayload } from '@/lib/customer-concept-assignment';
+import { logInteraction } from '@/lib/interactions';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
+import {
+  normalizeStudioCustomerConcept,
+  STUDIO_CUSTOMER_CONCEPT_SELECT,
+} from '@/lib/studio/customer-concepts';
 
 export const GET = withAuth(async (_request, _user, { params }: { params: Promise<{ customerId: string }> }) => {
   const { customerId } = await params;
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from('customer_concepts')
-    .select(`
-      id,
-      customer_profile_id,
-      customer_id,
-      concept_id,
-      status,
-      content_overrides,
-      cm_id,
-      cm_note,
-      match_percentage,
-      feed_order,
-      tags,
-      collection_id,
-      updated_at,
-      added_at,
-      sent_at,
-      produced_at,
-      planned_publish_at,
-      content_loaded_at,
-      content_loaded_seen_at,
-      published_at,
-      reconciled_customer_concept_id,
-      reconciled_by_cm_id,
-      reconciled_at,
-      tiktok_url,
-      tiktok_thumbnail_url,
-      tiktok_views,
-      tiktok_likes,
-      tiktok_comments,
-      tiktok_watch_time_seconds,
-      tiktok_last_synced_at
-    `)
+    .select(STUDIO_CUSTOMER_CONCEPT_SELECT)
     .eq('customer_profile_id', customerId)
     .order('added_at', { ascending: false });
 
@@ -185,6 +158,14 @@ export const POST = withAuth(async (request, user, { params }: { params: Promise
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await logInteraction({
+    type: 'concept_added',
+    cmProfileId: user.id,
+    customerId,
+    metadata: { concept_id: conceptId, assignment_id: data.id },
+    client: supabase,
+  });
 
   return NextResponse.json(
     { concept: normalizeStudioCustomerConcept(data) },

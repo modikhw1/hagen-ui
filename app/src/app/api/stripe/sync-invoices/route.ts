@@ -14,6 +14,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe/dynamic-config';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -21,6 +22,11 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function getSupabaseAdmin() {
   return createClient(supabaseUrl, supabaseServiceKey);
+}
+
+function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
+  const subscription = invoice.parent?.subscription_details?.subscription;
+  return typeof subscription === 'string' ? subscription : null;
 }
 
 export async function GET(request: NextRequest) {
@@ -45,7 +51,7 @@ export async function GET(request: NextRequest) {
     const supabaseAdmin = getSupabaseAdmin();
 
     // Build query parameters for Stripe API
-    const queryParams: any = { limit: 100 };
+    const queryParams: Stripe.InvoiceListParams = { limit: 100 };
     if (customerId) {
       queryParams.customer = customerId;
     }
@@ -60,7 +66,7 @@ export async function GET(request: NextRequest) {
 
     let synced = 0;
     let errors = 0;
-    const errorDetails: any[] = [];
+    const errorDetails: Array<{ invoice_id: string; error: string }> = [];
 
     // Sync each invoice to Supabase
     for (const invoice of invoices.data) {
@@ -95,7 +101,7 @@ export async function GET(request: NextRequest) {
         const { error } = await supabaseAdmin.from('invoices').upsert(
           {
             stripe_invoice_id: invoice.id,
-            stripe_subscription_id: (invoice as unknown as Record<string, unknown>).subscription as string || null,
+            stripe_subscription_id: getInvoiceSubscriptionId(invoice),
             stripe_customer_id: invoice.customer as string,
             customer_profile_id: customerProfileId,
             user_profile_id: userProfileId,
@@ -121,10 +127,13 @@ export async function GET(request: NextRequest) {
           synced++;
           console.log(`[sync-invoices] Synced invoice ${invoice.id}`);
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error('[sync-invoices] Exception syncing invoice:', e);
         errors++;
-        errorDetails.push({ invoice_id: invoice.id, error: e.message });
+        errorDetails.push({
+          invoice_id: invoice.id,
+          error: e instanceof Error ? e.message : 'Unknown error',
+        });
       }
     }
 
@@ -148,10 +157,10 @@ export async function GET(request: NextRequest) {
       error_details: errorDetails.length > 0 ? errorDetails : undefined,
       message: `Successfully synced ${synced} out of ${invoices.data.length} invoices`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[sync-invoices] Fatal error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to sync invoices' },
+      { error: error instanceof Error ? error.message : 'Failed to sync invoices' },
       { status: 500 }
     );
   }

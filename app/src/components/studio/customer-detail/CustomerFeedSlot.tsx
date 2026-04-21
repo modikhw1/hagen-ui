@@ -335,6 +335,11 @@ export function CustomerFeedSlot({
       border: `1px solid ${LeTrendColors.border}`,
       opacity: 1,
     },
+    brand_pad: {
+      bg: 'rgba(107, 68, 35, 0.04)',
+      border: `1px dashed ${LeTrendColors.border}`,
+      opacity: 1,
+    },
   };
 
   const style = slotStyles[type];
@@ -349,6 +354,30 @@ export function CustomerFeedSlot({
   const emptyBaseColor = canAddConcept ? style.bg : '#ECE7DF';
   const emptyBackgroundColor = dragOver ? 'rgba(107, 68, 35, 0.08)' : emptyBaseColor;
   const emptyBackgroundImage = !dragOver && spanTint ? `linear-gradient(${spanTint}, ${spanTint})` : 'none';
+
+  if (type === 'brand_pad') {
+    return (
+      <div
+        data-slot-index={slot.slotIndex}
+        style={{
+          aspectRatio: '9/16',
+          maxHeight: 280,
+          backgroundColor: style.bg,
+          border: style.border,
+          borderRadius: LeTrendRadius.lg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: LeTrendColors.textMuted,
+          fontSize: 10,
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+        }}
+      >
+        LeTrend
+      </div>
+    );
+  }
 
   if (type === 'empty') {
     return (

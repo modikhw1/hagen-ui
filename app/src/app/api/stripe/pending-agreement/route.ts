@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -32,9 +32,8 @@ type ContractTerms = {
   discount_duration_months?: number | null;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getContractTerms(
-  supabase: any,
+  supabase: SupabaseClient,
   stripeCustomerId: string
 ): Promise<ContractTerms> {
   const { data } = await supabase

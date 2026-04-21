@@ -4,7 +4,11 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getPrimaryRouteForRole } from '@/lib/auth/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { clearOnboardingSession, getOnboardingProfileId } from '@/lib/onboarding/session';
+import {
+  clearOnboardingSession,
+  getOnboardingProfileId,
+  loadOnboardingSession,
+} from '@/lib/onboarding/session';
 
 function LoadingFallback() {
   return (
@@ -42,10 +46,50 @@ function CheckoutCompleteContent() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [customerName, setCustomerName] = useState('');
   const [dashboardPath, setDashboardPath] = useState('/feed');
+  const [errorMessage, setErrorMessage] = useState(
+    'Vi kunde inte verifiera din betalning. Om du har blivit debiterad, kontakta support.',
+  );
 
   useEffect(() => {
+    const delay = (ms: number) =>
+      new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    const verifySessionWithRetry = async (sessionId: string, maxAttempts = 3) => {
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        try {
+          const res = await fetch(
+            `/api/stripe/verify-checkout-session?session_id=${sessionId}`,
+          );
+          const data = await res.json();
+
+          if (!res.ok) {
+            throw new Error(data.error || 'Kunde inte verifiera betalningen');
+          }
+
+          return data;
+        } catch (error) {
+          lastError =
+            error instanceof Error
+              ? error
+              : new Error('Kunde inte verifiera betalningen');
+
+          if (attempt === maxAttempts - 1) {
+            throw lastError;
+          }
+
+          await delay(500 * 2 ** attempt);
+        }
+      }
+
+      throw lastError || new Error('Kunde inte verifiera betalningen');
+    };
+
     const resolveDashboardPath = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.user) return '/login';
 
       const { data: profile } = await supabase
@@ -58,9 +102,12 @@ function CheckoutCompleteContent() {
     };
 
     const ensureCustomerProfileSetup = async (resolvedName: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session?.user) return;
 
+      const onboardingSession = loadOnboardingSession();
       const storedProfileId = getOnboardingProfileId() || undefined;
 
       await fetch('/api/admin/profiles/setup', {
@@ -69,39 +116,47 @@ function CheckoutCompleteContent() {
         body: JSON.stringify({
           userId: session.user.id,
           userEmail: session.user.email || '',
-          businessName: resolvedName || localStorage.getItem('onboarding_business_name') || 'Mitt företag',
+          businessName:
+            resolvedName || onboardingSession?.businessName || 'Mitt företag',
           customerProfileId: storedProfileId,
         }),
       });
     };
 
     const verifySession = async () => {
-      const sessionId = searchParams.get('session_id');
+      const sessionId = searchParams?.get('session_id');
       if (!sessionId) {
+        setErrorMessage('Vi kunde inte hitta någon betalningssession att verifiera.');
         setStatus('error');
         return;
       }
 
       try {
-        const res = await fetch(`/api/stripe/verify-checkout-session?session_id=${sessionId}`);
-        const data = await res.json();
+        const data = await verifySessionWithRetry(sessionId);
 
         if (data.status === 'complete' || data.status === 'paid') {
-          const resolvedName = data.customerName || localStorage.getItem('onboarding_business_name') || '';
+          const resolvedName =
+            data.customerName || loadOnboardingSession()?.businessName || '';
           await ensureCustomerProfileSetup(resolvedName);
           const resolvedDashboardPath = await resolveDashboardPath();
           setDashboardPath(resolvedDashboardPath);
 
           setStatus('success');
           setCustomerName(resolvedName);
-
-          // Clean up localStorage
           clearOnboardingSession();
         } else {
+          setErrorMessage(
+            'Betalningen är ännu inte bekräftad. Om du precis slutförde betalningen, försök igen om en stund.',
+          );
           setStatus('error');
         }
       } catch (err) {
         console.error('Error verifying session:', err);
+        setErrorMessage(
+          err instanceof Error && err.message
+            ? err.message
+            : 'Vi kunde inte verifiera din betalning. Om du har blivit debiterad, kontakta support.',
+        );
         setStatus('error');
       }
     };
@@ -166,16 +221,16 @@ function CheckoutCompleteContent() {
             margin: '0 auto 20px',
           }}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="15" y1="9" x2="9" y2="15"/>
-              <line x1="9" y1="9" x2="15" y2="15"/>
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
             </svg>
           </div>
           <h1 style={{ fontSize: '24px', color: '#1A1612', marginBottom: '12px' }}>
             Något gick fel
           </h1>
           <p style={{ color: '#6B5B4F', marginBottom: '24px' }}>
-            Vi kunde inte verifiera din betalning. Kontakta support om du har blivit debiterad.
+            {errorMessage}
           </p>
           <button
             onClick={() => router.push('/checkout')}
@@ -214,7 +269,6 @@ function CheckoutCompleteContent() {
         borderRadius: '20px',
         boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
       }}>
-        {/* Success Animation */}
         <div style={{
           width: '80px',
           height: '80px',
@@ -227,7 +281,7 @@ function CheckoutCompleteContent() {
           animation: 'popIn 0.5s ease-out',
         }}>
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12"/>
+            <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
 
@@ -249,7 +303,6 @@ function CheckoutCompleteContent() {
           Välkommen till LeTrend{customerName ? `, ${customerName}` : ''}! Din prenumeration är nu aktiv och du har full tillgång till plattformen.
         </p>
 
-        {/* What happens next */}
         <div style={{
           background: '#FAF8F5',
           borderRadius: '12px',
@@ -305,7 +358,7 @@ function CheckoutCompleteContent() {
         <p style={{
           fontSize: '13px',
           color: '#9A8B7A',
-          marginTop: '20px'
+          marginTop: '20px',
         }}>
           Har du frågor? Kontakta{' '}
           <a href="mailto:hej@letrend.se" style={{ color: '#6B4423' }}>

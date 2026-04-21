@@ -12,6 +12,9 @@ import {
 } from './shared';
 import {
   buildSlotMap,
+  feedOrderToFrac,
+  fracToFeedOrder,
+  getMaxHistoryOffset,
   projectTempoDate,
   TEMPO_PRESETS,
   globalFracToProjectedDate,
@@ -99,11 +102,8 @@ export function FeedPlannerSection({
   historyHasMore,
   fetchingProfileHistory,
   onLoadMoreHistory,
-  pendingAdvanceCue,
   activeNudges,
   autoResolvedNudges,
-  onAdvancePlan,
-  advancingPlan,
   onDismissAdvanceCue,
   onDismissAutoResolvedSignals,
   tempoWeekdays,
@@ -122,20 +122,15 @@ export function FeedPlannerSection({
   // The signal stays unresolved on the backend: next page load will show the cue again.
   // Use "Inte nu" when the CM wants to think about it; use × for explicit acknowledgement.
   const [deferredAdvanceCue, setDeferredAdvanceCue] = React.useState(false);
-  const [showCueOverflowMenu, setShowCueOverflowMenu] = React.useState(false);
-  // Effective cue: merge new motor signals with legacy pendingAdvanceCue.
-  // Motor signals take priority; pendingAdvanceCue is the fallback for pre-migration customers.
   const effectiveCue = React.useMemo(() => {
-    if (activeNudges.length > 0) {
-      const p = (activeNudges[0].payload ?? {}) as { imported_count?: number; kind?: string; latest_published_at?: string | null };
-      return {
-        imported: p.imported_count ?? 1,
-        kind: (p.kind ?? 'fresh_activity') as MotorSignalKind,
-        publishedAt: p.latest_published_at ?? null,
-      };
-    }
-    return pendingAdvanceCue;
-  }, [activeNudges, pendingAdvanceCue]);
+    if (activeNudges.length === 0) return null;
+    const p = (activeNudges[0].payload ?? {}) as { imported_count?: number; kind?: string; latest_published_at?: string | null };
+    return {
+      imported: p.imported_count ?? 1,
+      kind: (p.kind ?? 'fresh_activity') as MotorSignalKind,
+      publishedAt: p.latest_published_at ?? null,
+    };
+  }, [activeNudges]);
   // Local focus state: set of imported-history concept IDs identified as fresh evidence for the
   // current motor cue. Populated when CM clicks "Granska historiken".
   // Pure UI — never written to backend. Used to apply a thin visual treatment in historik.
@@ -147,10 +142,24 @@ export function FeedPlannerSection({
   }, [effectiveCue]);
   React.useEffect(() => {
     if (!effectiveCue) {
-      setShowCueOverflowMenu(false);
+      setDeferredAdvanceCue(false);
     }
   }, [effectiveCue]);
-  const maxExtraHistorySlots = gridConfig.columns * 8; // support going back ~24 clips (8 rows)
+  // Disabled legacy cue branch kept as an inert fallback until the large inline block
+  // is removed in a dedicated cleanup pass. It is never rendered because the branch
+  // remains gated behind `false && ...`.
+  const advancingPlan = false;
+  const onAdvancePlan = React.useCallback(() => {}, []);
+  const showCueOverflowMenu = false;
+  const setShowCueOverflowMenu = (
+    _value?: boolean | ((current: boolean) => boolean)
+  ) => {
+    void _value;
+  };
+  const maxExtraHistorySlots = React.useMemo(
+    () => getMaxHistoryOffset(concepts, gridConfig),
+    [concepts, gridConfig]
+  );
   const maxForwardSlots = gridConfig.columns * 5;      // allow planning up to 5 extra rows forward (~13 clips at 3 cols)
   const historyReconciliationTargets = React.useMemo(
     () =>
@@ -172,8 +181,8 @@ export function FeedPlannerSection({
   }, [getConceptDetails, pendingPlacementConcept]);
 
 
-  // Wheel scroll removed — the page now scrolls normally over the planner.
-  // historyOffset is still set programmatically (e.g. "Granska historiken" button).
+  // Planner navigation is row-based: each deliberate wheel gesture advances exactly one row.
+  // historyOffset is still also set programmatically (e.g. "Granska historiken" button).
 
   // Threshold-based history fetch gate.
   // Fires onLoadMoreHistory (debounced 500 ms) when the visible planner bottom
@@ -219,6 +228,36 @@ export function FeedPlannerSection({
       }
     };
   }, [historyOffset, historyHasMore, fetchingProfileHistory, concepts, gridConfig, onLoadMoreHistory]);
+
+  React.useEffect(() => {
+    if (historyOffset > maxExtraHistorySlots) {
+      setHistoryOffset(maxExtraHistorySlots);
+    }
+  }, [historyOffset, maxExtraHistorySlots, setHistoryOffset]);
+
+  const wheelThrottleRef = React.useRef<number>(0);
+  const handlePlannerWheel = React.useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX) || Math.abs(event.deltaY) < 18) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const now = performance.now();
+    if (now - wheelThrottleRef.current < 220) return;
+    wheelThrottleRef.current = now;
+
+    if (event.deltaY > 0) {
+      if (fetchingProfileHistory) return;
+      setHistoryOffset((previous) => Math.min(previous + gridConfig.columns, maxExtraHistorySlots));
+      return;
+    }
+
+    if (event.deltaY < 0) {
+      setHistoryOffset((previous) => Math.max(previous - gridConfig.columns, -maxForwardSlots));
+    }
+  }, [fetchingProfileHistory, gridConfig.columns, maxExtraHistorySlots, maxForwardSlots, setHistoryOffset]);
 
   // Spans state
   const [spans, setSpans] = React.useState<FeedSpan[]>([]);
@@ -266,6 +305,20 @@ export function FeedPlannerSection({
   // Frac offset: shifts span positions when grid is scrolled
   const totalSlots = gridConfig.columns * gridConfig.rows;
   const fracOffset = historyOffset / totalSlots;
+  const hydrateSpanForViewport = React.useCallback((span: FeedSpan): FeedSpan => {
+    if (
+      typeof span.start_feed_order === 'number' &&
+      typeof span.end_feed_order === 'number'
+    ) {
+      return {
+        ...span,
+        frac_start: feedOrderToFrac(span.start_feed_order, 0, gridConfig),
+        frac_end: feedOrderToFrac(span.end_feed_order, 0, gridConfig),
+      };
+    }
+
+    return span;
+  }, [gridConfig]);
 
   // Bygg slot-map
   const slotMap = React.useMemo(() =>
@@ -276,6 +329,13 @@ export function FeedPlannerSection({
     ),
     [concepts, gridConfig, historyOffset]
   );
+  const slotRows = React.useMemo(() => {
+    const rows: Array<typeof slotMap> = [];
+    for (let index = 0; index < slotMap.length; index += gridConfig.columns) {
+      rows.push(slotMap.slice(index, index + gridConfig.columns));
+    }
+    return rows;
+  }, [gridConfig.columns, slotMap]);
   const upwardOffset = historyOffset < 0 ? Math.abs(historyOffset) : 0;
   const downwardOffset = historyOffset > 0 ? historyOffset : 0;
 
@@ -375,7 +435,7 @@ export function FeedPlannerSection({
         });
 
         if (cached?.value) {
-          setSpans(cached.value);
+          setSpans(cached.value.map(hydrateSpanForViewport));
         }
 
         const spanData = await fetchAndCacheClient<FeedSpan[]>(
@@ -388,13 +448,15 @@ export function FeedPlannerSection({
               throw new Error(data.error || `Failed to fetch spans (${res.status})`);
             }
 
-            return Array.isArray(data.spans) ? data.spans as FeedSpan[] : [];
+            return Array.isArray(data.spans)
+              ? (data.spans as FeedSpan[]).map(hydrateSpanForViewport)
+              : [];
           },
           WORKSPACE_CACHE_TTL_MS,
           { force: Boolean(cached) }
         );
 
-        setSpans(spanData);
+        setSpans(spanData.map(hydrateSpanForViewport));
       } catch (error) {
         console.error('Error fetching spans:', error);
       } finally {
@@ -403,7 +465,7 @@ export function FeedPlannerSection({
     };
 
     void fetchSpans();
-  }, [customerId, spansCacheKey]);
+  }, [customerId, hydrateSpanForViewport, spansCacheKey]);
 
   React.useEffect(() => {
     if (!customerId || !spansHydrated) return;
@@ -422,13 +484,19 @@ export function FeedPlannerSection({
         throw new Error(data.error || `Failed to reload spans (${res.status})`);
       }
 
-      const nextSpans = Array.isArray(data.spans) ? data.spans as FeedSpan[] : [];
+      const nextSpans = Array.isArray(data.spans)
+        ? (data.spans as FeedSpan[]).map(hydrateSpanForViewport)
+        : [];
       setSpans(nextSpans);
       writeClientCache(spansCacheKey, nextSpans, WORKSPACE_CACHE_TTL_MS);
     } catch (error) {
       console.error('Error reloading spans:', error);
     }
-  }, [customerId, spansCacheKey]);
+  }, [customerId, hydrateSpanForViewport, spansCacheKey]);
+
+  React.useEffect(() => {
+    setSpans((previous) => previous.map(hydrateSpanForViewport));
+  }, [hydrateSpanForViewport]);
 
   // Measure slot positions
   React.useEffect(() => {
@@ -498,10 +566,28 @@ export function FeedPlannerSection({
   // Ref-based span handlers - avoids stale closures and listener churn
   const getGridElement = React.useCallback(() => gridRef.current, []);
   const spanHandlerRefs = React.useRef<SpanHandlerRefs>({
-    spans, slotAnchors, drag, activeSpan, nextColorIdx, fracOffset, reloadSpans: reloadSpansFromServer
+    spans,
+    slotAnchors,
+    drag,
+    activeSpan,
+    nextColorIdx,
+    fracOffset,
+    historyOffset,
+    gridConfig,
+    reloadSpans: reloadSpansFromServer
   });
   // Keep refs in sync
-  spanHandlerRefs.current = { spans, slotAnchors, drag, activeSpan, nextColorIdx, fracOffset, reloadSpans: reloadSpansFromServer };
+  spanHandlerRefs.current = {
+    spans,
+    slotAnchors,
+    drag,
+    activeSpan,
+    nextColorIdx,
+    fracOffset,
+    historyOffset,
+    gridConfig,
+    reloadSpans: reloadSpansFromServer
+  };
 
   const stableHandlers = React.useMemo(
     () =>
@@ -672,7 +758,7 @@ export function FeedPlannerSection({
   );
 
   // True when at least one LeTrend-managed concept is placed in nu (0) or kommande (>0).
-  // Used both in the toolbar header (standalone advance affordance) and in the cue block.
+  // Used to explain the cue state when there is new activity but nothing current to confirm.
   const hasActivePlan = concepts.some(
     (c) =>
       c.row_kind === 'assignment' &&
@@ -694,8 +780,8 @@ export function FeedPlannerSection({
   // for the current motor cue. Both the cue glimpse and the historik highlight use the same source
   // so the CM always sees the same evidence in both surfaces.
   //
-  // Primary path: any imported clip with published_at >= pending_history_advance_published_at
-  //   (the seam stored by the sync engine for the triggering batch).
+  // Primary path: any imported clip with published_at >= cue.latest_published_at
+  //   (the seam stored in the active feed_motor_signals payload).
   // Fallback: when no seam is available, the N most-recent imported clips (N = signal count).
   // Conservative: only rows present in memory. Never invents a match.
   const { freshImportedConcepts, freshImportedIds } = React.useMemo(() => {
@@ -797,24 +883,6 @@ export function FeedPlannerSection({
           Feed-planerare
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {hasActivePlan && (
-            <button
-              onClick={() => void onAdvancePlan()}
-              disabled={advancingPlan}
-              style={{
-                background: 'none',
-                border: '1px solid #9ca3af',
-                borderRadius: LeTrendRadius.md,
-                fontSize: 12,
-                color: '#4b5563',
-                cursor: advancingPlan ? 'not-allowed' : 'pointer',
-                padding: '3px 10px',
-                fontWeight: 400,
-              }}
-            >
-              {advancingPlan ? 'Flyttar...' : 'Flytta planen framåt'}
-            </button>
-          )}
           <button
             onClick={() => setShowTagManager(true)}
             style={{
@@ -873,8 +941,7 @@ export function FeedPlannerSection({
       {/* TempoModal — preset + free-form weekday picker */}
       {/* Legacy TempoModal extracted to ./TempoModal */}
       {/* Advancement cue — shown when new clips appear in the customer's historik.
-          Driven by feed_motor_signals (activeNudges) if available; falls back to legacy
-          pendingAdvanceCue for customers whose signals pre-date the migration.
+          Driven by active feed_motor_signals only.
           Hidden when deferredAdvanceCue is true (session-local only, no backend write). */}
       {effectiveCue && !deferredAdvanceCue && (
         <FeedAdvanceCue
@@ -886,22 +953,17 @@ export function FeedPlannerSection({
           freshImportedConcepts={freshImportedConcepts}
           freshImportedIds={freshImportedIds}
           focusedEvidenceCount={focusedEvidenceIds.size}
-          advancingPlan={advancingPlan}
           markingProducedFromCue={markingProducedFromCue}
-          showCueOverflowMenu={showCueOverflowMenu}
           onReviewHistory={() => {
             setHistoryOffset(gridConfig.columns);
             setFocusedEvidenceIds(freshImportedIds);
           }}
           onDefer={() => {
             setDeferredAdvanceCue(true);
-            setShowCueOverflowMenu(false);
           }}
-          onToggleOverflow={() => setShowCueOverflowMenu((current) => !current)}
           onMarkProducedFromCue={() => {
             void (async () => {
               setMarkingProducedFromCue(true);
-              setShowCueOverflowMenu(false);
               try {
                 const linkClip = freshImportedConcepts.length > 0 ? freshImportedConcepts[0] : null;
                 await handleMarkProduced(
@@ -914,10 +976,6 @@ export function FeedPlannerSection({
                 setMarkingProducedFromCue(false);
               }
             })();
-          }}
-          onAdvancePlan={() => {
-            setShowCueOverflowMenu(false);
-            void onAdvancePlan();
           }}
           onDismissCue={onDismissAdvanceCue}
           formatCompactViews={formatCompactViews}
@@ -1391,7 +1449,17 @@ export function FeedPlannerSection({
       )}
 
       {/* Grid med Åliden till vänster */}
-      <div ref={gridWrapperRef} style={{ position: 'relative', paddingLeft: 70 }}>
+      <div
+        ref={gridWrapperRef}
+        onWheel={handlePlannerWheel}
+        style={{
+          position: 'relative',
+          paddingLeft: 70,
+          overscrollBehavior: 'contain',
+          touchAction: 'none',
+          scrollSnapType: 'y mandatory',
+        }}
+      >
         {/* Åliden SVG - till vänster om grid via padding */}
         {eelPath && (
           <svg
@@ -1645,47 +1713,62 @@ export function FeedPlannerSection({
             if (activeSpan && !editingSpan) setActiveSpan(null);
           }}
           style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(${gridConfig.columns}, 1fr)`,
+            display: 'flex',
+            flexDirection: 'column',
             gap: 8,
             position: 'relative',
-            zIndex: 2
+            zIndex: 2,
+            transition: 'transform 200ms ease-out',
           }}
         >
-          {slotMap.map((slot, slotIdx) => {
-            const spanData = allSpansCoverage.get(slotIdx);
-            return (
-              <FeedSlot
-                key={slot.slotIndex}
-                slot={slot}
-                tags={cmTags}
-              config={gridConfig}
-              spanCoverage={spanData?.coverage ?? 0}
-              spanColor={spanData?.color ?? null}
-              showSpanCoverageLabels={eelHovered || !!activeSpan || !!editingSpan || !!drag}
-              projectedDate={tempoDateMap.get(slot.feedOrder) ?? null}
-              isFreshEvidence={slot.concept != null && focusedEvidenceIds.has(slot.concept.id)}
-              historyReconciliationTargets={historyReconciliationTargets}
-              currentHistoryDefaultTarget={currentHistoryDefaultTarget}
-              getConceptDetails={getConceptDetails}
-              onCheckAndMarkProduced={handleCheckAndMarkProduced}
-              onMarkProduced={handleMarkProduced}
-              onOpenMarkProducedDialog={handleOpenMarkProducedDialog}
-              onReconcileHistory={handleReconcileHistory}
-              onUndoHistoryReconciliation={handleUndoHistoryReconciliation}
-              onRemoveFromSlot={handleRemoveFromSlot}
-              onAssignToSlot={handleAssignToSlot}
-              onSwapFeedOrder={handleSwapFeedOrder}
-              allConcepts={concepts}
-              onUpdateTags={handleUpdateConceptTags}
-              onUpdateNote={handleUpdateCmNote}
-              onUpdateTikTokUrl={handleUpdateTikTokUrl}
-              onPatchConcept={handlePatchConcept}
-              onOpenConcept={onOpenConcept}
-              onSlotClick={onSlotClick}
-            />
-            );
-          })}
+          {slotRows.map((row, rowIndex) => (
+            <div
+              key={`feed-row-${rowIndex}`}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${gridConfig.columns}, 1fr)`,
+                gap: 8,
+                scrollSnapAlign: 'start',
+                scrollSnapStop: 'always',
+              }}
+            >
+              {row.map((slot, columnIndex) => {
+                const slotIdx = rowIndex * gridConfig.columns + columnIndex;
+                const spanData = allSpansCoverage.get(slotIdx);
+                return (
+                  <FeedSlot
+                    key={slot.slotIndex}
+                    slot={slot}
+                    tags={cmTags}
+                    config={gridConfig}
+                    spanCoverage={spanData?.coverage ?? 0}
+                    spanColor={spanData?.color ?? null}
+                    showSpanCoverageLabels={eelHovered || !!activeSpan || !!editingSpan || !!drag}
+                    projectedDate={tempoDateMap.get(slot.feedOrder) ?? null}
+                    isFreshEvidence={slot.concept != null && focusedEvidenceIds.has(slot.concept.id)}
+                    historyReconciliationTargets={historyReconciliationTargets}
+                    currentHistoryDefaultTarget={currentHistoryDefaultTarget}
+                    getConceptDetails={getConceptDetails}
+                    onCheckAndMarkProduced={handleCheckAndMarkProduced}
+                    onMarkProduced={handleMarkProduced}
+                    onOpenMarkProducedDialog={handleOpenMarkProducedDialog}
+                    onReconcileHistory={handleReconcileHistory}
+                    onUndoHistoryReconciliation={handleUndoHistoryReconciliation}
+                    onRemoveFromSlot={handleRemoveFromSlot}
+                    onAssignToSlot={handleAssignToSlot}
+                    onSwapFeedOrder={handleSwapFeedOrder}
+                    allConcepts={concepts}
+                    onUpdateTags={handleUpdateConceptTags}
+                    onUpdateNote={handleUpdateCmNote}
+                    onUpdateTikTokUrl={handleUpdateTikTokUrl}
+                    onPatchConcept={handlePatchConcept}
+                    onOpenConcept={onOpenConcept}
+                    onSlotClick={onSlotClick}
+                  />
+                );
+              })}
+            </div>
+          ))}
         </div>
 
         {/* Empty feed state (Task 8): shown when no LeTrend concepts have been assigned */}
@@ -1869,8 +1952,21 @@ export function FeedPlannerSection({
                               onBlur={(e) => {
                                 const newFrac = fromInput(e.target.value, span.frac_start);
                                 if (Math.abs(newFrac - span.frac_start) < 0.001) return;
-                                setSpans(prev => prev.map(s => s.id === span.id ? { ...s, frac_start: Math.min(newFrac, s.frac_end - 0.01) } : s));
-                                void fetch(`/api/studio-v2/feed-spans/${span.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frac_start: Math.min(newFrac, span.frac_end - 0.01) }) }).catch(() => void reloadSpansFromServer());
+                                const nextFracStart = Math.min(newFrac, span.frac_end - 0.01);
+                                const nextStartFeedOrder = fracToFeedOrder(nextFracStart, 0, gridConfig);
+                                setSpans(prev => prev.map(s => s.id === span.id ? {
+                                  ...s,
+                                  frac_start: nextFracStart,
+                                  start_feed_order: nextStartFeedOrder,
+                                } : s));
+                                void fetch(`/api/studio-v2/feed-spans/${span.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    frac_start: nextFracStart,
+                                    start_feed_order: nextStartFeedOrder,
+                                  })
+                                }).catch(() => void reloadSpansFromServer());
                               }}
                               style={{ fontSize: 10, padding: '3px 6px', borderRadius: LeTrendRadius.sm, border: `1px solid ${col}44`, color: col, background: `${col}0d`, outline: 'none', cursor: 'pointer' }}
                             />
@@ -1879,8 +1975,21 @@ export function FeedPlannerSection({
                               onBlur={(e) => {
                                 const newFrac = fromInput(e.target.value, span.frac_end);
                                 if (Math.abs(newFrac - span.frac_end) < 0.001) return;
-                                setSpans(prev => prev.map(s => s.id === span.id ? { ...s, frac_end: Math.max(newFrac, s.frac_start + 0.01) } : s));
-                                void fetch(`/api/studio-v2/feed-spans/${span.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ frac_end: Math.max(newFrac, span.frac_start + 0.01) }) }).catch(() => void reloadSpansFromServer());
+                                const nextFracEnd = Math.max(newFrac, span.frac_start + 0.01);
+                                const nextEndFeedOrder = fracToFeedOrder(nextFracEnd, 0, gridConfig);
+                                setSpans(prev => prev.map(s => s.id === span.id ? {
+                                  ...s,
+                                  frac_end: nextFracEnd,
+                                  end_feed_order: nextEndFeedOrder,
+                                } : s));
+                                void fetch(`/api/studio-v2/feed-spans/${span.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    frac_end: nextFracEnd,
+                                    end_feed_order: nextEndFeedOrder,
+                                  })
+                                }).catch(() => void reloadSpansFromServer());
                               }}
                               style={{ fontSize: 10, padding: '3px 6px', borderRadius: LeTrendRadius.sm, border: `1px solid ${col}44`, color: col, background: `${col}0d`, outline: 'none', cursor: 'pointer' }}
                             />
@@ -1953,10 +2062,11 @@ export function FeedPlannerSection({
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={() => setHistoryOffset(prev => Math.max(prev - gridConfig.columns, -maxForwardSlots))}
-            disabled={historyOffset <= -maxForwardSlots}
+            disabled
             title="Flytta vyn en rad upp"
             aria-label={`Flytta vyn en rad upp. Nuvarande uppforflyttning ar ${upwardOffset} slotar.`}
             style={{
+              display: 'none',
               padding: '8px 14px',
               background: 'white',
               border: `1px solid ${LeTrendColors.border}`,
@@ -1984,6 +2094,7 @@ export function FeedPlannerSection({
                 : `Flytta vyn en rad ned. Nuvarande nedforflyttning ar ${downwardOffset} slotar.`
             }
             style={{
+              display: 'none',
               padding: '8px 14px',
               background: 'white',
               border: `1px solid ${LeTrendColors.border}`,
@@ -2015,6 +2126,9 @@ export function FeedPlannerSection({
               ↻ Nu
             </button>
           )}
+          <span style={{ fontSize: 11, color: LeTrendColors.textMuted }}>
+            Scrolla i planen för att navigera
+          </span>
         </div>
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>

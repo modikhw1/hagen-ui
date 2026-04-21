@@ -1,73 +1,102 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
+import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+type CustomerLookup = {
+  id: string;
+  status: string | null;
+};
 
-// POST - Mark customer as declined / pending payment
-export const POST = withAuth(async (request: NextRequest, user) => {
-  try {
-    const body = await request.json();
-    const { stripeCustomerId, subscriptionId } = body;
+async function findCustomerProfile(params: {
+  stripeCustomerId?: string | null;
+  subscriptionId?: string | null;
+}) {
+  const supabaseAdmin = createSupabaseAdmin();
+  const { stripeCustomerId, subscriptionId } = params;
 
-    if (!stripeCustomerId && !subscriptionId) {
-      return NextResponse.json({ error: 'stripeCustomerId or subscriptionId required' }, { status: 400 });
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Find the customer profile by stripe_customer_id
-    let query = supabaseAdmin
+  if (stripeCustomerId) {
+    const { data, error } = await supabaseAdmin
       .from('customer_profiles')
       .select('id, status')
       .eq('stripe_customer_id', stripeCustomerId);
 
-    const { data: profiles, error: findError } = await query;
+    if (error) {
+      return { error, profile: null };
+    }
+
+    if (data && data.length > 0) {
+      return { error: null, profile: data[0] as CustomerLookup };
+    }
+  }
+
+  if (!subscriptionId) {
+    return { error: null, profile: null };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('customer_profiles')
+    .select('id, status')
+    .eq('stripe_subscription_id', subscriptionId);
+
+  if (error) {
+    return { error, profile: null };
+  }
+
+  return {
+    error: null,
+    profile: data && data.length > 0 ? (data[0] as CustomerLookup) : null,
+  };
+}
+
+export const POST = withAuth(async (request: NextRequest) => {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const stripeCustomerId =
+      typeof body.stripeCustomerId === 'string' ? body.stripeCustomerId : null;
+    const subscriptionId =
+      typeof body.subscriptionId === 'string' ? body.subscriptionId : null;
+
+    if (!stripeCustomerId && !subscriptionId) {
+      return jsonError(
+        'stripeCustomerId eller subscriptionId kravs',
+        400,
+      );
+    }
+
+    const supabaseAdmin = createSupabaseAdmin();
+    const { profile, error: findError } = await findCustomerProfile({
+      stripeCustomerId,
+      subscriptionId,
+    });
 
     if (findError) {
-      console.error('Error finding profile:', findError);
-      return NextResponse.json({ error: findError.message }, { status: 500 });
+      console.error('[decline-agreement] Kunde inte hitta kundprofil:', findError);
+      return jsonError(findError.message, 500);
     }
 
-    if (!profiles || profiles.length === 0) {
-      // Try by subscription ID
-      const { data: profilesBySub, error: findSubError } = await supabaseAdmin
-        .from('customer_profiles')
-        .select('id, status')
-        .eq('stripe_subscription_id', subscriptionId);
-
-      if (findSubError || !profilesBySub || profilesBySub.length === 0) {
-        return NextResponse.json({ error: 'Customer profile not found' }, { status: 404 });
-      }
-
-      // Update to pending_payment status
-      const { error: updateError } = await supabaseAdmin
-        .from('customer_profiles')
-        .update({ status: 'pending_payment', declined_at: new Date().toISOString() })
-        .eq('id', profilesBySub[0].id);
-
-      if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
-      }
-
-      return NextResponse.json({ message: 'Status updated to pending_payment', profileId: profilesBySub[0].id });
+    if (!profile) {
+      return jsonError('Kundprofil hittades inte', 404);
     }
 
-    // Update to pending_payment status
     const { error: updateError } = await supabaseAdmin
       .from('customer_profiles')
-      .update({ status: 'pending_payment', declined_at: new Date().toISOString() })
-      .eq('id', profiles[0].id);
+      .update({
+        status: 'pending_payment',
+        declined_at: new Date().toISOString(),
+      } as never)
+      .eq('id', profile.id);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
+      return jsonError(updateError.message, 500);
     }
 
-    return NextResponse.json({ message: 'Status updated to pending_payment', profileId: profiles[0].id });
-
+    return jsonOk({
+      message: 'Status uppdaterad till pending_payment',
+      profileId: profile.id,
+    });
   } catch (error) {
-    console.error('Decline agreement error:', error);
-    return NextResponse.json({ error: 'Failed to update status' }, { status: 500 });
+    console.error('[decline-agreement] Ovantat fel:', error);
+    return jsonError('Kunde inte uppdatera status', 500);
   }
 }, ['admin']);

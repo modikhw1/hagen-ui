@@ -138,6 +138,50 @@ function FeedSlot({
     if (!dateValue) return null;
     return new Date(dateValue).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
   })();
+  const collaborationTitle = concept
+    ? getStudioCustomerConceptDisplayTitle(
+        concept,
+        details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null
+      )
+    : null;
+  const isCustomCollaboration = Boolean(concept?.partner_name) && (type === 'planned' || type === 'current');
+  const collaborationPalette = (() => {
+    switch ((concept?.visual_variant ?? 'default').toLowerCase()) {
+      case 'editorial':
+        return {
+          bg: '#F7F0E7',
+          accent: '#7C4A1E',
+          secondary: '#B7792B',
+          text: '#2A170A',
+          surface: 'rgba(255,255,255,0.56)',
+          border: '1px solid rgba(124,74,30,0.2)',
+        };
+      case 'midnight':
+        return {
+          bg: '#1E1A1A',
+          accent: '#F4E0B6',
+          secondary: '#D2A45C',
+          text: '#FFF9ED',
+          surface: 'rgba(255,255,255,0.08)',
+          border: '1px solid rgba(244,224,182,0.18)',
+        };
+      default:
+        return {
+          bg: '#F6EEDF',
+          accent: '#6B4423',
+          secondary: '#C4813A',
+          text: '#2F1B0E',
+          surface: 'rgba(255,255,255,0.52)',
+          border: '1px solid rgba(107,68,35,0.16)',
+        };
+    }
+  })();
+  const profileInitials = (concept?.profile_name ?? concept?.partner_name ?? 'LT')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
   // Fetch TikTok oEmbed thumbnail for planned/current slots
   React.useEffect(() => {
     if (type !== 'planned' && type !== 'current') return;
@@ -383,6 +427,11 @@ function FeedSlot({
       bg: '#F0EDE8',
       border: `1px solid ${LeTrendColors.border}`,
       opacity: 0.85
+    },
+    brand_pad: {
+      bg: 'rgba(74,47,24,0.03)',
+      border: `1px dashed rgba(74,47,24,0.12)`,
+      opacity: 1
     }
   };
 
@@ -403,6 +452,33 @@ function FeedSlot({
     : 'none';
 
   // Tom slot
+  if (type === 'brand_pad') {
+    return (
+      <div
+        data-slot-index={slot.slotIndex}
+        style={{
+          aspectRatio: '9/16',
+          maxHeight: 280,
+          background: style.bg,
+          border: style.border,
+          borderRadius: LeTrendRadius.lg,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, opacity: 0.42 }}>
+          <img src="/lt-logo.png" alt="LeTrend" style={{ width: 48, height: 48, objectFit: 'contain' }} />
+          <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: LeTrendColors.textMuted }}>
+            LeTrend
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   if (type === 'empty') {
     return (
       <div
@@ -494,10 +570,15 @@ function FeedSlot({
   const thumbnailUrl = result?.tiktok_thumbnail_url;
   const effectiveThumbnailUrl = type === 'history' ? thumbnailUrl : refThumbnailUrl;
   const hasThumbnail = !!effectiveThumbnailUrl;
+  const hasHistoryThumbnail = type === 'history' && hasThumbnail;
   const isOnThumbnail = hasThumbnail && (type === 'planned' || type === 'current');
-  const slotBackgroundColor = style.bg;
-  const slotBackgroundImage = hasThumbnail
-    ? `linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 30%, rgba(0,0,0,0.22) 58%, rgba(0,0,0,0.80) 100%), url(${effectiveThumbnailUrl})`
+  const slotBackgroundColor = isCustomCollaboration ? collaborationPalette.bg : style.bg;
+  const slotBackgroundImage = hasHistoryThumbnail
+    ? `linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.15) 50%, transparent 100%), url(${effectiveThumbnailUrl})`
+    : isCustomCollaboration
+      ? `radial-gradient(circle at top left, ${hexToRgba(collaborationPalette.secondary, 0.22)} 0%, transparent 46%), linear-gradient(160deg, ${collaborationPalette.bg} 0%, ${hexToRgba(collaborationPalette.secondary, 0.18)} 100%)`
+      : hasThumbnail
+        ? `linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.18) 30%, rgba(0,0,0,0.22) 58%, rgba(0,0,0,0.80) 100%), url(${effectiveThumbnailUrl})`
     : spanTint
       ? `linear-gradient(${spanTint}, ${spanTint})`
       : 'none';
@@ -528,6 +609,7 @@ function FeedSlot({
         boxShadow: [
           spanOutline,
           isFreshEvidence && type === 'history' ? '0 0 0 3px rgba(22, 101, 52, 0.15)' : null,
+          isCustomCollaboration ? '0 16px 36px rgba(107,68,35,0.12)' : null,
           hasThumbnail ? 'inset 0 0 0 1px rgba(255,255,255,0.07)' : null,
         ].filter(Boolean).join(', ') || undefined
       }}
@@ -585,13 +667,22 @@ function FeedSlot({
             position: 'absolute',
             top: type === 'history' ? 32 : 8,
             left: 8,
-            background: hasUnreadUpload ? 'rgba(16, 185, 129, 0.14)' : 'rgba(107,114,128,0.12)',
-            color: hasUnreadUpload ? '#047857' : '#4b5563',
+            background: hasHistoryThumbnail
+              ? 'rgba(0,0,0,0.5)'
+              : hasUnreadUpload
+                ? 'rgba(16, 185, 129, 0.14)'
+                : 'rgba(107,114,128,0.12)',
+            color: hasHistoryThumbnail ? '#fff' : hasUnreadUpload ? '#047857' : '#4b5563',
             padding: '2px 8px',
             borderRadius: 999,
             fontSize: 10,
             fontWeight: 700,
-            border: hasUnreadUpload ? '1px solid rgba(16, 185, 129, 0.45)' : '1px solid rgba(107,114,128,0.25)'
+            border: hasHistoryThumbnail
+              ? '1px solid rgba(255,255,255,0.14)'
+              : hasUnreadUpload
+                ? '1px solid rgba(16, 185, 129, 0.45)'
+                : '1px solid rgba(107,114,128,0.25)',
+            backdropFilter: hasHistoryThumbnail ? 'blur(4px)' : undefined,
           }}
           title={hasUnreadUpload ? 'Ny uppladdning' : 'Uppladdning sedd'}
         >
@@ -619,7 +710,7 @@ function FeedSlot({
             border: 'none',
             cursor: 'pointer',
             fontSize: 16,
-            color: LeTrendColors.textMuted
+            color: hasHistoryThumbnail ? 'rgba(255,255,255,0.88)' : LeTrendColors.textMuted
           }}
         >
           ⋯
@@ -627,7 +718,197 @@ function FeedSlot({
       )}
 
       {/* Koncept-innehåll — v2 layout för planned/current och history */}
-      {concept && (type === 'planned' || type === 'current') ? (
+      {concept && isCustomCollaboration ? (
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minHeight: 0, color: collaborationPalette.text }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 999, background: collaborationPalette.surface, border: collaborationPalette.border }}>
+                <img src="/lt-logo.png" alt="LeTrend" aria-hidden="true" style={{ width: 15, height: 15, objectFit: 'contain', flexShrink: 0 }} />
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: collaborationPalette.accent }}>
+                  Samarbete
+                </span>
+              </div>
+              {type === 'current' && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: collaborationPalette.accent, color: '#fff', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: collaborationPalette.secondary, flexShrink: 0 }} />
+                  Nu
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              {concept.profile_image_url ? (
+                <img
+                  src={concept.profile_image_url}
+                  alt={concept.profile_name ?? concept.partner_name ?? 'Profil'}
+                  style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${hexToRgba(collaborationPalette.accent, 0.18)}`, flexShrink: 0 }}
+                />
+              ) : (
+                <div style={{ width: 42, height: 42, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: hexToRgba(collaborationPalette.accent, 0.12), border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.2)}`, color: collaborationPalette.accent, fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                  {profileInitials}
+                </div>
+              )}
+              <div style={{ minWidth: 0, display: 'grid', gap: 2 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: collaborationPalette.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {concept.partner_name}
+                </span>
+                <span style={{ fontSize: 10, color: hexToRgba(collaborationPalette.text, 0.72), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {concept.profile_name ?? 'Utvalt samarbete'}
+                </span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.35, color: collaborationPalette.text, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' as const }}>
+              {collaborationTitle}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {markers && markers.tags.length > 0 && (
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {markers.tags.slice(0, 2).map((tagName) => {
+                  const tag = tags.find(t => t.name === tagName);
+                  return (
+                    <span key={tagName} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 999, padding: '3px 8px 3px 6px', fontSize: 9.5, fontWeight: 600, background: collaborationPalette.surface, border: collaborationPalette.border, color: tag?.color ?? collaborationPalette.accent }}>
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: tag?.color ?? collaborationPalette.secondary, flexShrink: 0, display: 'inline-block' }} />
+                      {tagName}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 10.5, color: hexToRgba(collaborationPalette.text, 0.72) }}>
+              <span>
+                {result?.planned_publish_at
+                  ? new Date(result.planned_publish_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })
+                  : projectedDate
+                    ? `~${projectedDate.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`
+                    : 'Ingen plan satt'}
+              </span>
+              <span style={{ textTransform: 'capitalize' }}>
+                {concept.visual_variant && concept.visual_variant !== 'default' ? concept.visual_variant : 'premium'}
+              </span>
+            </div>
+
+            {type === 'current' && !checkingForClip && !noClipFound && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onOpenMarkProducedDialog) {
+                    onOpenMarkProducedDialog(concept.id);
+                  } else {
+                    setCheckingForClip(true);
+                    setNoClipFound(false);
+                    void onCheckAndMarkProduced(concept.id).then((res) => {
+                      setCheckingForClip(false);
+                      if (res === 'no_clip') setNoClipFound(true);
+                    });
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.2)}`,
+                  background: collaborationPalette.surface,
+                  borderRadius: 7,
+                  padding: '6px 9px',
+                  cursor: 'pointer',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <div style={{
+                  width: 15,
+                  height: 15,
+                  borderRadius: '50%',
+                  background: collaborationPalette.accent,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  <svg width="8" height="6" viewBox="0 0 8 6">
+                    <polyline points="1,3 3,5 7,1" stroke="#FAF8F5" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: collaborationPalette.text, whiteSpace: 'nowrap' }}>
+                  Markera som gjord
+                </span>
+              </button>
+            )}
+
+            {type === 'current' && checkingForClip && (
+              <div style={{ fontSize: 10, color: hexToRgba(collaborationPalette.text, 0.72), fontStyle: 'italic', padding: '6px 0' }}>
+                Soker efter nytt klipp...
+              </div>
+            )}
+
+            {type === 'current' && noClipFound && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.28)}`,
+                  borderRadius: 7,
+                  padding: '7px 9px',
+                  background: collaborationPalette.surface,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
+                <span style={{ fontSize: 9.5, fontWeight: 600, color: collaborationPalette.text, lineHeight: 1.4 }}>
+                  Inget nytt klipp hittades pa profilen.
+                </span>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNoClipFound(false);
+                      void onMarkProduced(concept.id);
+                    }}
+                    style={{
+                      flex: 1,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      padding: '5px 0',
+                      border: 'none',
+                      borderRadius: 5,
+                      cursor: 'pointer',
+                      background: collaborationPalette.accent,
+                      color: 'white',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    Markera anda
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setNoClipFound(false);
+                    }}
+                    style={{
+                      flex: 1,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      padding: '5px 0',
+                      border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.16)}`,
+                      borderRadius: 5,
+                      cursor: 'pointer',
+                      background: 'transparent',
+                      color: collaborationPalette.text,
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    Avbryt
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : concept && (type === 'planned' || type === 'current') ? (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minHeight: 0 }}>
           {/* Övre: Nu-badge (current) + titel */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -891,10 +1172,12 @@ function FeedSlot({
                   return (
                     <span key={tagName} style={{
                       display: 'inline-flex', alignItems: 'center', gap: 2.5,
-                      background: hasThumbnail ? 'rgba(255,255,255,0.1)' : `${tag?.color ?? '#999'}1a`,
+                      background: hasHistoryThumbnail ? 'rgba(0,0,0,0.5)' : `${tag?.color ?? '#999'}1a`,
                       borderRadius: 4, padding: '1.5px 5px 1.5px 3.5px',
                       fontSize: 9, fontWeight: 500,
-                      color: hasThumbnail ? 'rgba(255,255,255,0.75)' : (tag?.color ?? LeTrendColors.textMuted),
+                      color: hasHistoryThumbnail ? '#fff' : (tag?.color ?? LeTrendColors.textMuted),
+                      border: hasHistoryThumbnail ? '1px solid rgba(255,255,255,0.12)' : undefined,
+                      backdropFilter: hasHistoryThumbnail ? 'blur(4px)' : undefined,
                       whiteSpace: 'nowrap',
                     }}>
                       {tag && <span style={{ width: 5, height: 5, borderRadius: '50%', background: tag.color, flexShrink: 0, display: 'inline-block' }} />}
@@ -907,11 +1190,11 @@ function FeedSlot({
             {/* Title — TikTok clips show video description, LeTrend shows concept headline */}
             <div style={{
               fontSize: 12, fontWeight: 600,
-              color: hasThumbnail ? '#fff' : LeTrendColors.brownDark,
+              color: hasHistoryThumbnail ? '#fff' : LeTrendColors.brownDark,
               lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box',
               WebkitLineClamp: concept.row_kind === 'imported_history' ? 4 : 3,
               WebkitBoxOrient: 'vertical' as const,
-              textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.5)' : undefined,
+              textShadow: hasHistoryThumbnail ? '0 1px 3px rgba(0,0,0,0.6)' : undefined,
             }}>
               {historyPrimaryTitle}
             </div>
@@ -920,9 +1203,9 @@ function FeedSlot({
                 style={{
                   fontSize: 10,
                   fontWeight: 500,
-                  color: hasThumbnail ? 'rgba(255,255,255,0.62)' : LeTrendColors.textMuted,
+                  color: hasHistoryThumbnail ? 'rgba(255,255,255,0.82)' : LeTrendColors.textMuted,
                   lineHeight: 1.1,
-                  textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.35)' : undefined,
+                  textShadow: hasHistoryThumbnail ? '0 1px 3px rgba(0,0,0,0.6)' : undefined,
                 }}
               >
                 {historyDateLabel}
@@ -936,9 +1219,9 @@ function FeedSlot({
                   gap: 5,
                   fontSize: 9.5,
                   fontWeight: 600,
-                  color: hasThumbnail ? 'rgba(204,251,241,0.88)' : '#0f766e',
+                  color: hasHistoryThumbnail ? 'rgba(255,255,255,0.88)' : '#0f766e',
                   lineHeight: 1.35,
-                  textShadow: hasThumbnail ? '0 1px 3px rgba(0,0,0,0.45)' : undefined,
+                  textShadow: hasHistoryThumbnail ? '0 1px 3px rgba(0,0,0,0.6)' : undefined,
                 }}
               >
                 <span style={{ opacity: 0.72 }}>LeTrend:</span>
@@ -956,11 +1239,12 @@ function FeedSlot({
             {/* Note preview */}
             {markers?.assignment_note && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <div style={{ width: 3, height: 3, borderRadius: '50%', background: hasThumbnail ? 'rgba(255,255,255,0.35)' : 'rgba(74,47,24,0.35)', flexShrink: 0 }} />
+                <div style={{ width: 3, height: 3, borderRadius: '50%', background: hasHistoryThumbnail ? 'rgba(255,255,255,0.48)' : 'rgba(74,47,24,0.35)', flexShrink: 0 }} />
                 <span title={markers.assignment_note} style={{
-                  fontSize: 9.5, color: hasThumbnail ? 'rgba(255,255,255,0.42)' : '#9CA3AF',
+                  fontSize: 9.5, color: hasHistoryThumbnail ? 'rgba(255,255,255,0.78)' : '#9CA3AF',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   maxWidth: 118, fontStyle: 'italic',
+                  textShadow: hasHistoryThumbnail ? '0 1px 3px rgba(0,0,0,0.6)' : undefined,
                 }}>
                   {markers.assignment_note}
                 </span>
@@ -974,11 +1258,11 @@ function FeedSlot({
                 result?.tiktok_comments != null ? { key: 'comments', value: result.tiktok_comments } : null,
               ].filter((s): s is { key: string; value: number } => s !== null);
               if (statItems.length === 0) return null;
-              const iconColor = hasThumbnail ? 'rgba(255,255,255,0.7)' : LeTrendColors.textMuted;
-              const dividerColor = hasThumbnail ? 'rgba(255,255,255,0.12)' : 'rgba(74,47,24,0.12)';
-              const textColor = hasThumbnail ? '#fff' : LeTrendColors.brownDark;
+              const iconColor = hasHistoryThumbnail ? 'rgba(255,255,255,0.82)' : LeTrendColors.textMuted;
+              const dividerColor = hasHistoryThumbnail ? 'rgba(255,255,255,0.18)' : 'rgba(74,47,24,0.12)';
+              const textColor = hasHistoryThumbnail ? '#fff' : LeTrendColors.brownDark;
               return (
-                <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${hasThumbnail ? 'rgba(255,255,255,0.1)' : 'rgba(74,47,24,0.1)'}`, paddingTop: 6, gap: 2 }}>
+                <div style={{ display: 'flex', alignItems: 'center', borderTop: `1px solid ${hasHistoryThumbnail ? 'rgba(255,255,255,0.14)' : 'rgba(74,47,24,0.1)'}`, paddingTop: 6, gap: 2 }}>
                   {statItems.map((stat, idx) => (
                     <React.Fragment key={stat.key}>
                       {idx > 0 && <div style={{ width: 1, height: 11, background: dividerColor, margin: '0 3px', flexShrink: 0 }} />}

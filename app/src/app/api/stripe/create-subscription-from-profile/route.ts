@@ -208,8 +208,11 @@ export async function POST(request: NextRequest) {
       invoiceUrl: invoiceUrl,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating subscription:', error);
-    return NextResponse.json({ error: error.message || 'Failed to create subscription' }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to create subscription' },
+      { status: 500 }
+    );
   }
 }

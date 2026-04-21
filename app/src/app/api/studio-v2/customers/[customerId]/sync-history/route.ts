@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { motorSignalNewEvidence } from '@/lib/studio/motor-signal';
+import { logInteraction } from '@/lib/interactions';
+import {
+  createMotorSignalNudge,
+  inferMotorSignalKind,
+} from '@/lib/studio/motor-signal';
 
 // ─────────────────────────────────────────────
 // POST /api/studio-v2/customers/[customerId]/sync-history
@@ -38,7 +42,7 @@ function normHandle(s: string): string {
 export const POST = withAuth(
   async (
     request: NextRequest,
-    _user: unknown,
+    user,
     { params }: { params: Promise<{ customerId: string }> }
   ) => {
     const { customerId } = await params;
@@ -242,14 +246,30 @@ export const POST = withAuth(
       if (!max) return c.published_at;
       return c.published_at > max ? c.published_at : max;
     }, null);
-    const profileUpdate = {
-      last_history_sync_at: new Date().toISOString(),
-      ...(importedCount > 0 ? motorSignalNewEvidence(importedCount, latestPublishedAt) : {}),
-    };
     await supabase
       .from('customer_profiles')
-      .update(profileUpdate)
+      .update({ last_history_sync_at: new Date().toISOString() })
       .eq('id', customerId);
+
+    if (importedCount > 0) {
+      await createMotorSignalNudge(supabase, customerId, {
+        imported_count: importedCount,
+        latest_published_at: latestPublishedAt,
+        kind: inferMotorSignalKind(latestPublishedAt),
+      });
+    }
+
+    await logInteraction({
+      type: 'tiktok_upload_synced',
+      cmProfileId: typeof user === 'object' && user && 'id' in user ? String(user.id) : null,
+      customerId,
+      metadata: {
+        imported: importedCount,
+        skipped,
+        preview: false,
+      },
+      client: supabase,
+    });
 
     return NextResponse.json({
       imported: importedCount,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { withAuth } from '@/lib/auth/api-auth';
 import { hydrateEmailPayload } from '@/lib/email/service';
 import { buildAssignmentShareMarkerPayload } from '@/lib/customer-concept-lifecycle';
+import { logInteraction } from '@/lib/interactions';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -66,6 +67,7 @@ export const POST = withAuth(async (request, user) => {
     .insert({
       customer_id: customerId,
       cm_id: user.id,
+      recipient_email: hydrated.toEmail,
       status,
       attempts: 1,
       max_attempts: 3,
@@ -125,6 +127,19 @@ export const POST = withAuth(async (request, user) => {
       }
     }
   }
+
+  await logInteraction({
+    type: 'email_sent',
+    cmProfileId: user.id,
+    customerId,
+    metadata: {
+      email_job_id: job.id,
+      status,
+      concept_count: conceptIds.length,
+      provider_message_id: providerMessageId,
+    },
+    client: supabase,
+  });
 
   return NextResponse.json({
     success: true,

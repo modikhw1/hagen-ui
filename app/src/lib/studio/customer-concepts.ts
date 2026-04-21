@@ -10,6 +10,43 @@ import type {
   CustomerConceptRowKind,
 } from '@/types/studio-v2';
 
+export const STUDIO_CUSTOMER_CONCEPT_SELECT = `
+  id,
+  customer_profile_id,
+  customer_id,
+  concept_id,
+  status,
+  content_overrides,
+  cm_id,
+  cm_note,
+  match_percentage,
+  feed_order,
+  tags,
+  collection_id,
+  updated_at,
+  added_at,
+  sent_at,
+  produced_at,
+  planned_publish_at,
+  content_loaded_at,
+  content_loaded_seen_at,
+  published_at,
+  reconciled_customer_concept_id,
+  reconciled_by_cm_id,
+  reconciled_at,
+  tiktok_url,
+  tiktok_thumbnail_url,
+  tiktok_views,
+  tiktok_likes,
+  tiktok_comments,
+  tiktok_watch_time_seconds,
+  tiktok_last_synced_at,
+  partner_name,
+  profile_name,
+  profile_image_url,
+  visual_variant
+`;
+
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -143,6 +180,10 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
   const reconciledCustomerConceptId = readString(row.reconciled_customer_concept_id);
   const reconciledByCmId = readString(row.reconciled_by_cm_id);
   const reconciledAt = readString(row.reconciled_at);
+  const partnerName = readString(row.partner_name);
+  const profileName = readString(row.profile_name);
+  const profileImageUrl = readString(row.profile_image_url);
+  const visualVariant = readString(row.visual_variant);
   // Only present on enriched LeTrend historik cards — the ID of the imported clip
   // that supplies their TikTok stats. Used for undo-reconciliation from the LeTrend side.
   const reconciledImportedClipId = readString(row.reconciled_imported_clip_id);
@@ -170,6 +211,10 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
     reconciled_by_cm_id: reconciledByCmId,
     reconciled_at: reconciledAt,
     content_overrides: normalizedContentOverrides,
+    partner_name: partnerName,
+    profile_name: profileName,
+    profile_image_url: profileImageUrl,
+    visual_variant: visualVariant,
     feed_order: feedOrder,
     tags,
     collection_id: collectionId,

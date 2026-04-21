@@ -11,7 +11,6 @@ import type {
   FeedSlot as FeedSlotData,
 } from '@/types/studio-v2';
 import type { TranslatedConcept } from '@/lib/translator';
-import type { MotorSignalKind } from '@/lib/studio/motor-signal';
 import type { ConceptSectionKey } from '@/lib/studio-v2-concept-content';
 import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle';
 import type { GamePlanGenerateInput } from '@/lib/game-plan';
@@ -32,6 +31,7 @@ export interface CMIdentity {
 }
 
 export interface GamePlanSectionProps {
+  customerId: string;
   notes: CustomerNote[];
   customerName: string;
   aiDefaults: GamePlanGenerateInput;
@@ -94,11 +94,8 @@ export interface FeedPlannerSectionProps {
   historyHasMore: boolean;
   fetchingProfileHistory: boolean;
   onLoadMoreHistory: (count?: number) => Promise<void>;
-  pendingAdvanceCue: { imported: number; kind: MotorSignalKind; publishedAt: string | null } | null;
   activeNudges: Array<{ id: string; payload: Record<string, unknown>; created_at: string; auto_resolved_at: string | null }>;
   autoResolvedNudges: Array<{ id: string; payload: Record<string, unknown>; created_at: string; auto_resolved_at: string | null }>;
-  onAdvancePlan: () => Promise<void>;
-  advancingPlan: boolean;
   onDismissAdvanceCue: (signalId?: string) => void;
   onDismissAutoResolvedSignals: () => void;
   tempoWeekdays: number[];

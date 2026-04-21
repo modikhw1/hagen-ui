@@ -1,111 +1,197 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { withAuth } from '@/lib/auth/api-auth';
+import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { getStripeConfigEnvNames, getStripeEnvironment } from '@/lib/stripe/environment';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+function isMissingColumnError(message?: string | null) {
+  return (
+    typeof message === 'string' &&
+    message.toLowerCase().includes('column') &&
+    message.toLowerCase().includes('does not exist')
+  );
+}
 
-// Get Stripe config
-const ENV = getStripeEnvironment();
-const SECRET_KEY = process.env[getStripeConfigEnvNames(ENV).secretKey];
+const stripeEnvironment = getStripeEnvironment();
+const stripeConfigNames = getStripeConfigEnvNames(stripeEnvironment);
+const stripeSecretKey = process.env[stripeConfigNames.secretKey];
+const stripe = stripeSecretKey
+  ? new Stripe(stripeSecretKey, { apiVersion: '2026-02-25.clover' })
+  : null;
 
-const stripe = SECRET_KEY ? new Stripe(SECRET_KEY, { apiVersion: '2025-12-15.clover' }) : null;
-
-/**
- * POST /api/studio/stripe/status
- * Create a Stripe customer for an existing customer profile
- */
-export const POST = withAuth(async (request: NextRequest, user) => {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
-    const body = await request.json();
-    const { customer_profile_id, email, business_name } = body;
+    const body = await request.json().catch(() => ({}));
+    const customerProfileId =
+      typeof body.customer_profile_id === 'string' ? body.customer_profile_id : null;
+    const email = typeof body.email === 'string' ? body.email : null;
+    const businessName =
+      typeof body.business_name === 'string' ? body.business_name : null;
 
-    if (!customer_profile_id || !email) {
-      return NextResponse.json({ error: 'customer_profile_id and email required' }, { status: 400 });
+    if (!customerProfileId || !email) {
+      return jsonError('customer_profile_id och email kravs', 400);
     }
 
     if (!stripe) {
-      return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
+      return jsonError('Stripe ar inte konfigurerat', 500);
     }
 
-    // Create Stripe customer
     const customer = await stripe.customers.create({
       email,
-      name: business_name || email,
+      name: businessName || email,
       metadata: {
-        customer_profile_id,
+        customer_profile_id: customerProfileId,
         source: 'hagen-studio',
       },
     });
 
-    // Update customer profile with Stripe ID
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAdmin = createSupabaseAdmin();
     const { error: updateError } = await supabaseAdmin
       .from('customer_profiles')
       .update({ stripe_customer_id: customer.id })
-      .eq('id', customer_profile_id);
+      .eq('id', customerProfileId);
 
     if (updateError) {
-      console.error('Error updating customer profile:', updateError);
+      console.error('[studio/stripe/status] Kunde inte uppdatera kundprofil:', updateError);
     }
 
-    // Log the sync
-    await supabaseAdmin
-      .from('stripe_sync_log')
-      .insert({
-        event_type: 'customer.created',
-        stripe_event_id: `studio_${customer.id}`,
-        object_type: 'customer',
-        object_id: customer.id,
-        sync_direction: 'supabase_to_stripe',
-        status: 'success',
-      });
+    await (((supabaseAdmin.from('stripe_sync_log') as never) as {
+      insert: (payload: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
+    }).insert({
+      event_type: 'customer.created',
+      stripe_event_id: `studio_${customer.id}`,
+      object_type: 'customer',
+      object_id: customer.id,
+      sync_direction: 'supabase_to_stripe',
+      status: 'success',
+      environment: stripeEnvironment,
+    }));
 
-    return NextResponse.json({
+    return jsonOk({
       success: true,
       stripe_customer_id: customer.id,
+      environment: stripeEnvironment,
     });
-
-  } catch (err: any) {
-    console.error('[create-customer] Error:', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (error) {
+    console.error('[studio/stripe/status] POST error:', error);
+    return jsonError(
+      error instanceof Error ? error.message : 'Internt serverfel',
+      500,
+    );
   }
 }, ['admin']);
 
-/**
- * GET /api/studio/stripe/status
- * Get Stripe environment and sync status
- */
-export const GET = withAuth(async (request: NextRequest, user) => {
-  const isTestMode = ENV === 'test';
+export const GET = withAuth(async () => {
+  const supabaseAdmin = createSupabaseAdmin();
+  const isTestMode = stripeEnvironment === 'test';
 
-  // Get invoice counts
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-  
-  const { count: invoiceCount } = await supabaseAdmin
-    .from('invoices')
-    .select('*', { count: 'exact', head: true });
+  const invoiceCountQuery = (((supabaseAdmin.from('invoices') as never) as {
+    select: (
+      columns: string,
+      options: { count: 'exact'; head: true },
+    ) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => Promise<{ count: number | null; error: { message?: string } | null }>;
+    };
+  }).select('*', { count: 'exact', head: true })).eq('environment', stripeEnvironment);
 
-  const { count: customerCount } = await supabaseAdmin
-    .from('customer_profiles')
-    .select('*', { count: 'exact', head: true })
-    .not('stripe_customer_id', 'is', null);
+  const recentSyncsQuery = (((supabaseAdmin.from('stripe_sync_log') as never) as {
+    select: (
+      columns: string,
+    ) => {
+      eq: (
+        column: string,
+        value: string,
+      ) => {
+        order: (
+          innerColumn: string,
+          options: { ascending: boolean },
+        ) => {
+          limit: (
+            limitValue: number,
+          ) => Promise<{ data: unknown[] | null; error: { message?: string } | null }>;
+        };
+      };
+      order: (
+        innerColumn: string,
+        options: { ascending: boolean },
+      ) => {
+        limit: (
+          limitValue: number,
+        ) => Promise<{ data: unknown[] | null; error: { message?: string } | null }>;
+      };
+    };
+  }).select('*'));
 
-  const { data: recentSyncs } = await supabaseAdmin
-    .from('stripe_sync_log')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(5);
+  const [invoiceCountResult, customerCountResult, syncResult] = await Promise.all([
+    invoiceCountQuery,
+    supabaseAdmin
+      .from('customer_profiles')
+      .select('*', { count: 'exact', head: true })
+      .not('stripe_customer_id', 'is', null),
+    recentSyncsQuery
+      .eq('environment', stripeEnvironment)
+      .order('created_at', { ascending: false })
+      .limit(5)
+      .catch((error: unknown) => ({
+        data: null,
+        error: error instanceof Error ? { message: error.message } : { message: 'Okant fel' },
+      })),
+  ]);
 
-  return NextResponse.json({
-    environment: ENV,
+  let schemaWarnings: string[] = [];
+  let recentSyncs = syncResult.data ?? [];
+
+  if (syncResult.error) {
+    if (isMissingColumnError(syncResult.error.message)) {
+      schemaWarnings = [
+        'stripe_sync_log saknar environment-kolumn. Kora migrationskedjan under supabase/migrations for full miljoseparering.',
+      ];
+      const fallback = await supabaseAdmin
+        .from('stripe_sync_log')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (fallback.error) {
+        return jsonError(fallback.error.message, 500);
+      }
+
+      recentSyncs = fallback.data ?? [];
+    } else {
+      return jsonError(syncResult.error.message || 'Kunde inte hamta synklogg', 500);
+    }
+  }
+
+  if (invoiceCountResult.error) {
+    if (isMissingColumnError(invoiceCountResult.error.message)) {
+      schemaWarnings = [
+        ...schemaWarnings,
+        'invoices saknar environment-kolumn. Fakturastatistiken ar inte fullt miljoisolerad.',
+      ];
+    } else {
+      return jsonError(invoiceCountResult.error.message || 'Kunde inte hamta fakturastatistik', 500);
+    }
+  }
+
+  if (customerCountResult.error) {
+    return jsonError(
+      customerCountResult.error.message || 'Kunde inte hamta kundstatistik',
+      500,
+    );
+  }
+
+  return jsonOk({
+    environment: stripeEnvironment,
     isTestMode,
     stats: {
-      totalInvoices: invoiceCount || 0,
-      syncedCustomers: customerCount || 0,
+      totalInvoices: invoiceCountResult.count || 0,
+      syncedCustomers: customerCountResult.count || 0,
     },
-    recentSyncs: recentSyncs || [],
+    recentSyncs,
+    schemaWarnings,
   });
 }, ['admin']);

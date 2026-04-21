@@ -247,6 +247,64 @@ export type Database = {
           },
         ]
       }
+      cm_notifications: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          from_cm_id: string
+          id: string
+          message: string
+          priority: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by_admin_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          from_cm_id: string
+          id?: string
+          message: string
+          priority?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by_admin_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          from_cm_id?: string
+          id?: string
+          message?: string
+          priority?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by_admin_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_notifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_notifications_from_cm_id_fkey"
+            columns: ["from_cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_notifications_resolved_by_admin_id_fkey"
+            columns: ["resolved_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cm_library_visits: {
         Row: {
           cm_id: string
@@ -298,6 +356,50 @@ export type Database = {
             columns: ["cm_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attention_snoozes: {
+        Row: {
+          id: string
+          note: string | null
+          release_reason: string | null
+          released_at: string | null
+          snoozed_at: string
+          snoozed_by_admin_id: string
+          snoozed_until: string | null
+          subject_id: string
+          subject_type: string
+        }
+        Insert: {
+          id?: string
+          note?: string | null
+          release_reason?: string | null
+          released_at?: string | null
+          snoozed_at?: string
+          snoozed_by_admin_id: string
+          snoozed_until?: string | null
+          subject_id: string
+          subject_type: string
+        }
+        Update: {
+          id?: string
+          note?: string | null
+          release_reason?: string | null
+          released_at?: string | null
+          snoozed_at?: string
+          snoozed_by_admin_id?: string
+          snoozed_until?: string | null
+          subject_id?: string
+          subject_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attention_snoozes_snoozed_by_admin_id_fkey"
+            columns: ["snoozed_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
         ]
@@ -785,6 +887,7 @@ export type Database = {
           billing_day_of_month: number | null
           brief: Json | null
           business_name: string
+          concepts_per_week: number | null
           concepts: Json | null
           contact_email: string | null
           contacts: Json | null
@@ -798,12 +901,21 @@ export type Database = {
           discount_type: string | null
           discount_value: number | null
           first_invoice_behavior: string | null
+          from_demo_id: string | null
           game_plan: Json | null
           id: string
           invited_at: string | null
           invoice_text: string | null
+          last_history_sync_at: string | null
+          last_upload_at: string | null
           logo_url: string | null
           monthly_price: number | null
+          onboarding_state: string | null
+          onboarding_state_changed_at: string | null
+          operation_lock_until: string | null
+          paused_until: string | null
+          pending_history_advance_at: string | null
+          phone: string | null
           price_end_date: string | null
           price_start_date: string | null
           pricing_status: string | null
@@ -813,9 +925,16 @@ export type Database = {
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           subscription_interval: string | null
+          tiktok_handle: string | null
+          tiktok_profile_pic_url: string | null
+          tiktok_profile_synced_at: string | null
+          tiktok_profile_url: string | null
+          tiktok_user_id: string | null
           upcoming_monthly_price: number | null
           upcoming_price_effective_date: string | null
           updated_at: string | null
+          upload_schedule: string[] | null
+          user_id: string | null
         }
         Insert: {
           account_manager?: string | null
@@ -824,6 +943,7 @@ export type Database = {
           billing_day_of_month?: number | null
           brief?: Json | null
           business_name: string
+          concepts_per_week?: number | null
           concepts?: Json | null
           contact_email?: string | null
           contacts?: Json | null
@@ -837,12 +957,21 @@ export type Database = {
           discount_type?: string | null
           discount_value?: number | null
           first_invoice_behavior?: string | null
+          from_demo_id?: string | null
           game_plan?: Json | null
           id?: string
           invited_at?: string | null
           invoice_text?: string | null
+          last_history_sync_at?: string | null
+          last_upload_at?: string | null
           logo_url?: string | null
           monthly_price?: number | null
+          onboarding_state?: string | null
+          onboarding_state_changed_at?: string | null
+          operation_lock_until?: string | null
+          paused_until?: string | null
+          pending_history_advance_at?: string | null
+          phone?: string | null
           price_end_date?: string | null
           price_start_date?: string | null
           pricing_status?: string | null
@@ -852,9 +981,16 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           subscription_interval?: string | null
+          tiktok_handle?: string | null
+          tiktok_profile_pic_url?: string | null
+          tiktok_profile_synced_at?: string | null
+          tiktok_profile_url?: string | null
+          tiktok_user_id?: string | null
           upcoming_monthly_price?: number | null
           upcoming_price_effective_date?: string | null
           updated_at?: string | null
+          upload_schedule?: string[] | null
+          user_id?: string | null
         }
         Update: {
           account_manager?: string | null
@@ -863,6 +999,7 @@ export type Database = {
           billing_day_of_month?: number | null
           brief?: Json | null
           business_name?: string
+          concepts_per_week?: number | null
           concepts?: Json | null
           contact_email?: string | null
           contacts?: Json | null
@@ -876,12 +1013,21 @@ export type Database = {
           discount_type?: string | null
           discount_value?: number | null
           first_invoice_behavior?: string | null
+          from_demo_id?: string | null
           game_plan?: Json | null
           id?: string
           invited_at?: string | null
           invoice_text?: string | null
+          last_history_sync_at?: string | null
+          last_upload_at?: string | null
           logo_url?: string | null
           monthly_price?: number | null
+          onboarding_state?: string | null
+          onboarding_state_changed_at?: string | null
+          operation_lock_until?: string | null
+          paused_until?: string | null
+          pending_history_advance_at?: string | null
+          phone?: string | null
           price_end_date?: string | null
           price_start_date?: string | null
           pricing_status?: string | null
@@ -891,9 +1037,16 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           subscription_interval?: string | null
+          tiktok_handle?: string | null
+          tiktok_profile_pic_url?: string | null
+          tiktok_profile_synced_at?: string | null
+          tiktok_profile_url?: string | null
+          tiktok_user_id?: string | null
           upcoming_monthly_price?: number | null
           upcoming_price_effective_date?: string | null
           updated_at?: string | null
+          upload_schedule?: string[] | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -901,6 +1054,122 @@ export type Database = {
             columns: ["account_manager_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_profiles_from_demo_id_fkey"
+            columns: ["from_demo_id"]
+            isOneToOne: false
+            referencedRelation: "demos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      demos: {
+        Row: {
+          company_name: string
+          contact_email: string | null
+          contact_name: string | null
+          created_at: string
+          id: string
+          lost_reason: string | null
+          opened_at: string | null
+          owner_admin_id: string | null
+          preliminary_feedplan: Json | null
+          proposed_concepts_per_week: number | null
+          proposed_price_ore: number | null
+          resolved_at: string | null
+          responded_at: string | null
+          sent_at: string | null
+          status: string
+          status_changed_at: string
+          tiktok_handle: string | null
+          tiktok_profile_pic_url: string | null
+        }
+        Insert: {
+          company_name: string
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          lost_reason?: string | null
+          opened_at?: string | null
+          owner_admin_id?: string | null
+          preliminary_feedplan?: Json | null
+          proposed_concepts_per_week?: number | null
+          proposed_price_ore?: number | null
+          resolved_at?: string | null
+          responded_at?: string | null
+          sent_at?: string | null
+          status?: string
+          status_changed_at?: string
+          tiktok_handle?: string | null
+          tiktok_profile_pic_url?: string | null
+        }
+        Update: {
+          company_name?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          created_at?: string
+          id?: string
+          lost_reason?: string | null
+          opened_at?: string | null
+          owner_admin_id?: string | null
+          preliminary_feedplan?: Json | null
+          proposed_concepts_per_week?: number | null
+          proposed_price_ore?: number | null
+          resolved_at?: string | null
+          responded_at?: string | null
+          sent_at?: string | null
+          status?: string
+          status_changed_at?: string
+          tiktok_handle?: string | null
+          tiktok_profile_pic_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "demos_owner_admin_id_fkey"
+            columns: ["owner_admin_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feed_motor_signals: {
+        Row: {
+          acknowledged_at: string | null
+          auto_resolved_at: string | null
+          created_at: string | null
+          customer_id: string
+          id: string
+          payload: Json | null
+          signal_type: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          auto_resolved_at?: string | null
+          created_at?: string | null
+          customer_id: string
+          id?: string
+          payload?: Json | null
+          signal_type?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          auto_resolved_at?: string | null
+          created_at?: string | null
+          customer_id?: string
+          id?: string
+          payload?: Json | null
+          signal_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_motor_signals_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1304,10 +1573,12 @@ export type Database = {
           currency: string
           customer_profile_id: string | null
           due_date: string | null
+          environment: string | null
           hosted_invoice_url: string | null
           id: string
           invoice_pdf: string | null
           paid_at: string | null
+          raw: Json | null
           status: string
           stripe_customer_id: string
           stripe_invoice_id: string
@@ -1322,10 +1593,12 @@ export type Database = {
           currency?: string
           customer_profile_id?: string | null
           due_date?: string | null
+          environment?: string | null
           hosted_invoice_url?: string | null
           id?: string
           invoice_pdf?: string | null
           paid_at?: string | null
+          raw?: Json | null
           status: string
           stripe_customer_id: string
           stripe_invoice_id: string
@@ -1340,10 +1613,12 @@ export type Database = {
           currency?: string
           customer_profile_id?: string | null
           due_date?: string | null
+          environment?: string | null
           hosted_invoice_url?: string | null
           id?: string
           invoice_pdf?: string | null
           paid_at?: string | null
+          raw?: Json | null
           status?: string
           stripe_customer_id?: string
           stripe_invoice_id?: string
@@ -1367,6 +1642,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      invoice_line_items: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          data: Json | null
+          description: string
+          environment: string | null
+          id: string
+          period_end: string | null
+          period_start: string | null
+          quantity: number
+          stripe_invoice_id: string
+          stripe_invoice_item_id: string | null
+          stripe_line_item_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          data?: Json | null
+          description?: string
+          environment?: string | null
+          id?: string
+          period_end?: string | null
+          period_start?: string | null
+          quantity?: number
+          stripe_invoice_id: string
+          stripe_invoice_item_id?: string | null
+          stripe_line_item_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          data?: Json | null
+          description?: string
+          environment?: string | null
+          id?: string
+          period_end?: string | null
+          period_start?: string | null
+          quantity?: number
+          stripe_invoice_id?: string
+          stripe_invoice_item_id?: string | null
+          stripe_line_item_id?: string
+        }
+        Relationships: []
       }
       leads: {
         Row: {
@@ -1518,6 +1841,86 @@ export type Database = {
           },
         ]
       }
+      service_costs: {
+        Row: {
+          calls: number
+          cost_sek: number
+          created_at: string
+          date: string
+          id: string
+          metadata: Json | null
+          service: string
+        }
+        Insert: {
+          calls?: number
+          cost_sek?: number
+          created_at?: string
+          date: string
+          id?: string
+          metadata?: Json | null
+          service: string
+        }
+        Update: {
+          calls?: number
+          cost_sek?: number
+          created_at?: string
+          date?: string
+          id?: string
+          metadata?: Json | null
+          service?: string
+        }
+        Relationships: []
+      }
+      sync_runs: {
+        Row: {
+          customer_id: string
+          error: string | null
+          fetched_count: number | null
+          finished_at: string | null
+          id: string
+          imported_count: number | null
+          mode: string
+          reconciled: boolean | null
+          started_at: string
+          stats_updated_count: number | null
+          status: string
+        }
+        Insert: {
+          customer_id: string
+          error?: string | null
+          fetched_count?: number | null
+          finished_at?: string | null
+          id?: string
+          imported_count?: number | null
+          mode: string
+          reconciled?: boolean | null
+          started_at?: string
+          stats_updated_count?: number | null
+          status?: string
+        }
+        Update: {
+          customer_id?: string
+          error?: string | null
+          fetched_count?: number | null
+          finished_at?: string | null
+          id?: string
+          imported_count?: number | null
+          mode?: string
+          reconciled?: boolean | null
+          started_at?: string
+          stats_updated_count?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_runs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stepper_email_imports: {
         Row: {
           collection_name: string | null
@@ -1614,36 +2017,63 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_processed_events: {
+        Row: {
+          event_id: string
+          event_type: string
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          event_type: string
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string
+          processed_at?: string
+        }
+        Relationships: []
+      }
       stripe_sync_log: {
         Row: {
           created_at: string
+          environment: string | null
           error_message: string | null
+          event_id: string | null
           event_type: string
           id: string
           object_id: string | null
           object_type: string | null
+          payload_summary: Json | null
           status: string
           stripe_event_id: string | null
           sync_direction: string | null
         }
         Insert: {
           created_at?: string
+          environment?: string | null
           error_message?: string | null
+          event_id?: string | null
           event_type: string
           id?: string
           object_id?: string | null
           object_type?: string | null
+          payload_summary?: Json | null
           status: string
           stripe_event_id?: string | null
           sync_direction?: string | null
         }
         Update: {
           created_at?: string
+          environment?: string | null
           error_message?: string | null
+          event_id?: string | null
           event_type?: string
           id?: string
           object_id?: string | null
           object_type?: string | null
+          payload_summary?: Json | null
           status?: string
           stripe_event_id?: string | null
           sync_direction?: string | null
@@ -1662,9 +2092,12 @@ export type Database = {
           current_period_start: string | null
           customer_profile_id: string | null
           ended_at: string | null
+          environment: string | null
           id: string
           interval: string | null
           interval_count: number | null
+          pause_collection: Json | null
+          raw: Json | null
           status: string
           stripe_customer_id: string
           stripe_subscription_id: string
@@ -1684,9 +2117,12 @@ export type Database = {
           current_period_start?: string | null
           customer_profile_id?: string | null
           ended_at?: string | null
+          environment?: string | null
           id?: string
           interval?: string | null
           interval_count?: number | null
+          pause_collection?: Json | null
+          raw?: Json | null
           status: string
           stripe_customer_id: string
           stripe_subscription_id: string
@@ -1706,9 +2142,12 @@ export type Database = {
           current_period_start?: string | null
           customer_profile_id?: string | null
           ended_at?: string | null
+          environment?: string | null
           id?: string
           interval?: string | null
           interval_count?: number | null
+          pause_collection?: Json | null
+          raw?: Json | null
           status?: string
           stripe_customer_id?: string
           stripe_subscription_id?: string
@@ -1730,6 +2169,141 @@ export type Database = {
             columns: ["user_profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiktok_publications: {
+        Row: {
+          customer_id: string
+          fetched_at: string
+          id: string
+          published_at: string
+          tiktok_video_id: string
+        }
+        Insert: {
+          customer_id: string
+          fetched_at?: string
+          id?: string
+          published_at: string
+          tiktok_video_id: string
+        }
+        Update: {
+          customer_id?: string
+          fetched_at?: string
+          id?: string
+          published_at?: string
+          tiktok_video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiktok_publications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiktok_stats: {
+        Row: {
+          customer_profile_id: string
+          engagement_rate: number
+          fetched_at: string
+          followers: number
+          id: string
+          raw_payload: Json | null
+          snapshot_date: string
+          total_videos: number
+          total_views_24h: number
+          videos_last_24h: number
+        }
+        Insert: {
+          customer_profile_id: string
+          engagement_rate?: number
+          fetched_at?: string
+          followers?: number
+          id?: string
+          raw_payload?: Json | null
+          snapshot_date: string
+          total_videos?: number
+          total_views_24h?: number
+          videos_last_24h?: number
+        }
+        Update: {
+          customer_profile_id?: string
+          engagement_rate?: number
+          fetched_at?: string
+          followers?: number
+          id?: string
+          raw_payload?: Json | null
+          snapshot_date?: string
+          total_videos?: number
+          total_views_24h?: number
+          videos_last_24h?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiktok_stats_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tiktok_videos: {
+        Row: {
+          comments: number
+          cover_image_url: string | null
+          created_at: string
+          customer_profile_id: string
+          id: string
+          likes: number
+          raw_payload: Json | null
+          share_url: string | null
+          shares: number
+          updated_at: string
+          uploaded_at: string
+          video_id: string
+          views: number
+        }
+        Insert: {
+          comments?: number
+          cover_image_url?: string | null
+          created_at?: string
+          customer_profile_id: string
+          id?: string
+          likes?: number
+          raw_payload?: Json | null
+          share_url?: string | null
+          shares?: number
+          updated_at?: string
+          uploaded_at: string
+          video_id: string
+          views?: number
+        }
+        Update: {
+          comments?: number
+          cover_image_url?: string | null
+          created_at?: string
+          customer_profile_id?: string
+          id?: string
+          likes?: number
+          raw_payload?: Json | null
+          share_url?: string | null
+          shares?: number
+          updated_at?: string
+          uploaded_at?: string
+          video_id?: string
+          views?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tiktok_videos_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
         ]

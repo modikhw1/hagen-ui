@@ -1,25 +1,20 @@
-const PUBLIC_ENV = process.env.NEXT_PUBLIC_ENV === 'live' ? 'live' : 'test';
+export type StripeEnv = 'test' | 'live';
+export type StripeEnvironment = StripeEnv;
 
-export type StripeEnvironment = 'test' | 'live';
-
-export function getStripeEnvironment(): StripeEnvironment {
-  return PUBLIC_ENV;
+export function getStripeEnvironment(): StripeEnv {
+  const env = (process.env.STRIPE_ENV || 'test').toLowerCase();
+  return env === 'live' ? 'live' : 'test';
 }
 
 export function isStripeTestEnvironment(): boolean {
-  return PUBLIC_ENV === 'test';
+  return getStripeEnvironment() === 'test';
 }
 
-export function getStripeConfigEnvNames(environment: StripeEnvironment) {
+export function getStripeConfigEnvNames(env: StripeEnv) {
+  const upper = env.toUpperCase();
   return {
-    secretKey: environment === 'test' ? 'STRIPE_SECRET_KEY_TEST' : 'STRIPE_SECRET_KEY_LIVE',
-    publishableKey:
-      environment === 'test'
-        ? 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST'
-        : 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_LIVE',
-    webhookSecret:
-      environment === 'test'
-        ? 'STRIPE_WEBHOOK_SECRET_TEST'
-        : 'STRIPE_WEBHOOK_SECRET_LIVE',
+    secretKey: `STRIPE_${upper}_SECRET_KEY` as const,
+    publishableKey: `STRIPE_${upper}_PUBLISHABLE_KEY` as const,
+    webhookSecret: `STRIPE_${upper}_WEBHOOK_SECRET` as const,
   };
 }

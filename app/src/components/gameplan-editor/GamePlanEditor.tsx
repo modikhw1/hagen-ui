@@ -14,7 +14,7 @@ import { LinkChipNode } from './extensions/LinkChipNode';
 import { ImageFigureNode } from './extensions/ImageFigureNode';
 import { ImageGalleryNode } from './extensions/ImageGalleryNode';
 import { GamePlanToolbar } from './GamePlanToolbar';
-import { normalizeHref } from './utils/link-helpers';
+import { detectLinkType, normalizeHref } from './utils/link-helpers';
 import { sanitizeRichTextHtml } from './utils/sanitize';
 
 interface GamePlanEditorProps {
@@ -123,12 +123,43 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
     },
     editorProps: {
       attributes: {
-        class: 'gameplan-editor-content gp-rich-text',
+        class: 'gameplan-editor-content gp-rich-text game-plan-content',
         style: `
           min-height: ${isFullscreen ? 'calc(100vh - 120px)' : '400px'};
           padding: 18px 20px;
           outline: none;
         `,
+      },
+      handlePaste: (view, event) => {
+        const clipboardText = event.clipboardData?.getData('text/plain')?.trim() || '';
+        const href = normalizeHref(clipboardText);
+        const platform = href ? detectLinkType(href) : 'external';
+        const linkChipNode = view.state.schema.nodes.linkChip;
+
+        if (!href || platform === 'external' || !linkChipNode) {
+          return false;
+        }
+
+        const selectedText = view.state.doc.textBetween(
+          view.state.selection.from,
+          view.state.selection.to,
+          ' '
+        ).trim();
+
+        const shouldConvert = window.confirm(`Gör om den här ${platform}-länken till ett länkchip i planen?`);
+        if (!shouldConvert) {
+          return false;
+        }
+
+        event.preventDefault();
+        const node = linkChipNode.create({
+          href,
+          label: selectedText,
+          platform,
+        });
+        const transaction = view.state.tr.replaceSelectionWith(node).scrollIntoView();
+        view.dispatch(transaction);
+        return true;
       },
     },
   });

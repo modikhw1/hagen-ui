@@ -770,9 +770,9 @@ export default function StudioConceptsPage() {
         throw new Error(payload.error || `HTTP ${response.status}`);
       }
 
-      const rows = Array.isArray(payload.concepts) ? payload.concepts : [];
+      const rows = (Array.isArray(payload.concepts) ? payload.concepts : []) as Array<Record<string, unknown>>;
       setConcepts(
-        rows.map((row) => {
+        rows.map((row: Record<string, unknown>) => {
           const backend = row.backend_data as BackendClip & { source_url?: string };
           const concept = translateClipToConcept(
             backend,

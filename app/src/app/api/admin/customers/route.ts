@@ -1,127 +1,211 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
+import { logCustomerCreated, logCustomerInvited } from '@/lib/activity/logger';
+import { inferFirstInvoiceBehavior } from '@/lib/billing/first-invoice';
+import { sendCustomerInvite } from '@/lib/customers/invite';
+import { createCustomerSchema } from '@/lib/schemas/customer';
+import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';
+import { stripe } from '@/lib/stripe/dynamic-config';
+import { deriveTikTokHandle, toCanonicalTikTokProfileUrl } from '@/lib/tiktok/profile';
+import { getAppUrl } from '@/lib/url/public';
+import type { TablesInsert } from '@/types/database';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+function isMissingRelationError(message?: string | null) {
+  return (
+    typeof message === 'string' &&
+    message.toLowerCase().includes('relation') &&
+    message.toLowerCase().includes('does not exist')
+  );
+}
 
-function buildCustomerListPayload(data: unknown[]) {
+function buildCustomerListPayload(data: unknown[], bufferRows: unknown[]) {
   return {
     customers: data,
     profiles: data,
-  };
-}
-
-function buildCustomerPayload(profile: unknown) {
-  return {
-    customer: profile,
-    profile,
+    bufferRows,
   };
 }
 
 export const GET = withAuth(
   async () => {
     try {
-      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+      const supabaseAdmin = createSupabaseAdmin();
 
-      const { data, error } = await supabaseAdmin
-        .from('customer_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [{ data, error }, bufferResult] = await Promise.all([
+        supabaseAdmin
+          .from('customer_profiles')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        (((supabaseAdmin.from('v_customer_buffer' as never) as never) as {
+          select: (
+            columns: string,
+          ) => Promise<{ data: unknown[] | null; error: { message?: string } | null }>;
+        }).select(
+          'customer_id, assigned_cm_id, concepts_per_week, paused_until, latest_planned_publish_date, last_published_at',
+        )),
+      ]);
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return jsonError(error.message, 500);
       }
 
-      return NextResponse.json(buildCustomerListPayload(data ?? []));
+      if (bufferResult.error && !isMissingRelationError(bufferResult.error.message)) {
+        return jsonError(
+          bufferResult.error.message || 'Kunde inte hamta bufferdata',
+          500,
+        );
+      }
+
+      return jsonOk(
+        buildCustomerListPayload(data ?? [], bufferResult.data ?? []),
+      );
     } catch {
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+      return jsonError('Internt serverfel', 500);
     }
   },
-  ['admin'] // Only admins can list customers
+  ['admin'],
 );
 
 export const POST = withAuth(
-  async (request: NextRequest) => {
+  async (request: NextRequest, user) => {
     try {
       const body = await request.json();
+      const parsed = createCustomerSchema.safeParse(body);
+
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        return jsonError(
+          issue?.message || 'Ogiltig data',
+          400,
+          {
+            field:
+              typeof issue?.path?.[0] === 'string' ? issue.path[0] : undefined,
+          },
+        );
+      }
 
       const {
-        business_name,
-        contact_email,
-        customer_contact_name,
+        send_invite,
+        send_invite_now,
+        waive_days_until_billing,
         account_manager,
-        monthly_price = 0,
-        price_start_date,
-        price_end_date,
-        subscription_interval = 'month',
-        invoice_text,
-        scope_items = [],
-        contacts = [],
-        profile_data = {},
-        game_plan = {},
-        concepts = [],
-        brief,
+        monthly_price,
+        pricing_status,
+        contract_start_date,
+        billing_day_of_month,
+        phone,
         tiktok_profile_url,
-      } = body;
+        ...rest
+      } = parsed.data;
 
-      // Derive handle from profile URL if provided
-      function deriveTikTokHandle(input: string): string | null {
-        const trimmed = input.trim();
-        if (!trimmed) return null;
-        if (trimmed.startsWith('http')) {
-          try {
-            const url = new URL(trimmed);
-            const match = url.pathname.match(/^\/@?([^/?&#]+)/);
-            return match ? match[1] : null;
-          } catch { return null; }
-        }
-        return trimmed.replace(/^@/, '').trim() || null;
+      const supabaseAdmin = createSupabaseAdmin();
+      const assignment = await resolveAccountManagerAssignment(
+        supabaseAdmin,
+        account_manager,
+      );
+      const effectiveContractStartDate =
+        contract_start_date || new Date().toISOString().slice(0, 10);
+      const firstInvoiceBehavior = inferFirstInvoiceBehavior({
+        startDate: effectiveContractStartDate,
+        billingDay: billing_day_of_month,
+        waiveDaysUntilBilling: waive_days_until_billing,
+      });
+
+      const canonicalTikTokProfileUrl = tiktok_profile_url
+        ? toCanonicalTikTokProfileUrl(tiktok_profile_url)
+        : null;
+      const tiktokHandle = tiktok_profile_url
+        ? deriveTikTokHandle(tiktok_profile_url)
+        : null;
+
+      if (tiktok_profile_url && (!canonicalTikTokProfileUrl || !tiktokHandle)) {
+        return jsonError(
+          'Ogiltig TikTok-profil. Anvand en profil-URL eller @handle.',
+          400,
+          { field: 'tiktok_profile_url' },
+        );
       }
-      const tiktokProfileUrl = typeof tiktok_profile_url === 'string' && tiktok_profile_url.trim() ? tiktok_profile_url.trim() : null;
-      const tiktokHandle = tiktokProfileUrl ? deriveTikTokHandle(tiktokProfileUrl) : null;
-
-      if (!business_name) {
-        return NextResponse.json({ error: 'Business name is required' }, { status: 400 });
-      }
-
-      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
       const { data, error } = await supabaseAdmin
         .from('customer_profiles')
         .insert({
-          business_name,
-          contact_email,
-          customer_contact_name,
-          account_manager,
-          monthly_price,
-          price_start_date,
-          price_end_date,
-          subscription_interval,
-          invoice_text,
-          scope_items,
-          contacts,
-          profile_data,
-          game_plan,
-          concepts,
-          ...(brief && typeof brief === 'object' ? { brief } : {}),
-          ...(tiktokProfileUrl ? { tiktok_profile_url: tiktokProfileUrl, tiktok_handle: tiktokHandle } : {}),
-          status: 'pending'
-        })
+          ...rest,
+          account_manager: assignment.accountManager,
+          account_manager_profile_id: assignment.accountManagerProfileId,
+          monthly_price: pricing_status === 'unknown' ? 0 : monthly_price,
+          pricing_status,
+          contract_start_date,
+          billing_day_of_month,
+          first_invoice_behavior: firstInvoiceBehavior,
+          phone: phone || null,
+          tiktok_profile_url: canonicalTikTokProfileUrl,
+          tiktok_handle: tiktokHandle,
+          status: 'pending',
+        } as TablesInsert<'customer_profiles'>)
         .select()
         .single();
 
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return jsonError(error.message, 500);
       }
 
-      return NextResponse.json(
-        buildCustomerPayload(data),
-        { status: 201 }
+      await logCustomerCreated(
+        user.id,
+        user.email || 'unknown',
+        data.id,
+        data.business_name,
       );
-    } catch {
-      return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+
+      let customer = data;
+      let inviteSent = false;
+      const warnings: string[] = [];
+
+      if (send_invite || send_invite_now) {
+        const inviteResult = await sendCustomerInvite({
+          supabaseAdmin,
+          stripeClient: stripe,
+          profileId: data.id,
+          payload: {
+            ...rest,
+            account_manager: assignment.accountManager,
+            monthly_price: pricing_status === 'unknown' ? 0 : monthly_price,
+            pricing_status,
+            contract_start_date,
+            billing_day_of_month,
+            first_invoice_behavior: firstInvoiceBehavior,
+            phone: phone || null,
+            tiktok_profile_url: canonicalTikTokProfileUrl,
+            waive_days_until_billing,
+          },
+          appUrl: getAppUrl(),
+        });
+
+        if (inviteResult.ok) {
+          inviteSent = true;
+          customer = inviteResult.profile as typeof data;
+          await logCustomerInvited(
+            user.id,
+            user.email || 'unknown',
+            data.id,
+            data.business_name,
+            data.contact_email || rest.contact_email,
+          );
+        } else {
+          warnings.push(`Inbjudan kunde inte skickas: ${inviteResult.error}`);
+        }
+      }
+
+      return jsonOk(
+        { customer, invite_sent: inviteSent, warnings },
+        201,
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Internt serverfel';
+      return jsonError(message, 500);
     }
   },
-  ['admin'] // Only admins can create customers
+  ['admin'],
 );

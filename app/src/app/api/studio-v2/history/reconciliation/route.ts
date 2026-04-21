@@ -1,39 +1,11 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
-
-const HISTORY_RECONCILIATION_SELECT = `
-  id,
-  customer_profile_id,
-  customer_id,
-  concept_id,
-  status,
-  content_overrides,
-  cm_id,
-  cm_note,
-  match_percentage,
-  feed_order,
-  tags,
-  collection_id,
-  added_at,
-  sent_at,
-  produced_at,
-  planned_publish_at,
-  content_loaded_at,
-  content_loaded_seen_at,
-  published_at,
-  reconciled_customer_concept_id,
-  reconciled_by_cm_id,
-  reconciled_at,
-  tiktok_url,
-  tiktok_thumbnail_url,
-  tiktok_views,
-  tiktok_likes,
-  tiktok_comments,
-  tiktok_watch_time_seconds,
-  tiktok_last_synced_at
-`;
+import {
+  normalizeStudioCustomerConcept,
+  STUDIO_CUSTOMER_CONCEPT_SELECT,
+} from '@/lib/studio/customer-concepts';
+import { renumberImportedRows } from '@/lib/studio/history-import';
 
 export const POST = withAuth(async (request, user) => {
   const body = await request.json().catch(() => ({}));
@@ -128,7 +100,7 @@ export const POST = withAuth(async (request, user) => {
       updated_at: new Date().toISOString(),
     })
     .eq('id', historyConceptId)
-    .select(HISTORY_RECONCILIATION_SELECT)
+    .select(STUDIO_CUSTOMER_CONCEPT_SELECT)
     .single();
 
   if (error) {
@@ -180,59 +152,14 @@ export const DELETE = withAuth(async (request) => {
       updated_at: new Date().toISOString(),
     })
     .eq('id', historyConceptId)
-    .select(HISTORY_RECONCILIATION_SELECT)
+    .select(STUDIO_CUSTOMER_CONCEPT_SELECT)
     .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // ── Restore feed_order for the now-unreconciled clip ─────────────────────
-  // Auto-reconcile set this clip's feed_order to null to hide it from the grid.
-  // After undo, it should reappear below all LeTrend historik cards, sorted by
-  // published_at alongside other unreconciled clips.
-  const customerId = existing.customer_profile_id as string;
-
-  const [{ data: letrEndHistorik }, { data: unreconciledRaw }] = await Promise.all([
-    supabase
-      .from('customer_concepts')
-      .select('feed_order')
-      .eq('customer_profile_id', customerId)
-      .not('concept_id', 'is', null)
-      .lt('feed_order', 0)
-      .order('feed_order', { ascending: true })
-      .limit(1),
-    supabase
-      .from('customer_concepts')
-      .select('id, feed_order, published_at, tiktok_url')
-      .eq('customer_profile_id', customerId)
-      .is('concept_id', null)
-      .is('reconciled_customer_concept_id', null),
-  ]);
-
-  const letrEndFloor = (letrEndHistorik?.[0]?.feed_order as number | undefined) ?? -1;
-  const renumberOffset = Math.abs(letrEndFloor);
-
-  // Sort all unreconciled clips (including the just-unreconciled one) by published_at desc
-  const sorted = (unreconciledRaw ?? []).sort((a, b) => {
-    const dateA = a.published_at ? new Date(a.published_at as string).getTime() : 0;
-    const dateB = b.published_at ? new Date(b.published_at as string).getTime() : 0;
-    if (dateB !== dateA) return dateB - dateA;
-    return String(a.tiktok_url ?? '').localeCompare(String(b.tiktok_url ?? ''));
-  });
-
-  const renumberUpdates = sorted.map((row, i) => ({
-    id: row.id as string,
-    to: -(renumberOffset + i + 1),
-  }));
-
-  if (renumberUpdates.length > 0) {
-    await Promise.all(
-      renumberUpdates.map((u) =>
-        supabase.from('customer_concepts').update({ feed_order: u.to }).eq('id', u.id)
-      )
-    );
-  }
+  await renumberImportedRows(supabase, existing.customer_profile_id as string);
 
   return NextResponse.json({
     concept: normalizeStudioCustomerConcept(data as Record<string, unknown>),

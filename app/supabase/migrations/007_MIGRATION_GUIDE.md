@@ -127,3 +127,7 @@ DROP FUNCTION IF EXISTS get_customer_concept;
 ---
 
 **Status:** ✅ Ready to run!
+# Legacy guide - do not use as canonical migration chain
+
+`app/supabase/migrations` is a legacy migration path.
+Use `supabase/migrations` as the canonical chain for current environments.

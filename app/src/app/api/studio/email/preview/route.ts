@@ -7,9 +7,6 @@ export const POST = withAuth(async (request: NextRequest) => {
     method: 'POST',
     headers: {
       'content-type': request.headers.get('content-type') || 'application/json',
-      'x-user-id': request.headers.get('x-user-id') || '',
-      'x-user-email': request.headers.get('x-user-email') || '',
-      'x-user-role': request.headers.get('x-user-role') || '',
       cookie: request.headers.get('cookie') || '',
     },
     body: await request.text(),
@@ -18,6 +15,9 @@ export const POST = withAuth(async (request: NextRequest) => {
   const body = await proxiedResponse.text();
   return new NextResponse(body, {
     status: proxiedResponse.status,
-    headers: { 'content-type': proxiedResponse.headers.get('content-type') || 'application/json' },
+    headers: {
+      'content-type': proxiedResponse.headers.get('content-type') || 'application/json',
+      'x-letrend-deprecated': 'Use /api/studio-v2/email/preview',
+    },
   });
 }, ['admin', 'content_manager']);

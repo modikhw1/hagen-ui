@@ -26,7 +26,7 @@ export interface LogActivityParams {
   customerProfileId?: string;
   activityType: ActivityType;
   description: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**

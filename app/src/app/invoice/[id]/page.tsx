@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 interface LineItem {
@@ -30,18 +30,14 @@ interface Invoice {
 }
 
 export default function InvoicePage() {
-  const params = useParams();
+  const params = useParams<{ id?: string }>();
   const router = useRouter();
-  const invoiceId = params.id as string;
+  const invoiceId = typeof params?.id === 'string' ? params.id : '';
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchInvoice();
-  }, [invoiceId]);
-
-  const fetchInvoice = async () => {
+  const fetchInvoice = useCallback(async () => {
     try {
       const res = await fetch(`/api/stripe/invoice?id=${invoiceId}`);
       const data = await res.json();
@@ -57,7 +53,17 @@ export default function InvoicePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [invoiceId]);
+
+  useEffect(() => {
+    if (!invoiceId) {
+      setError('Ogiltigt faktura-id');
+      setLoading(false);
+      return;
+    }
+
+    void fetchInvoice();
+  }, [fetchInvoice, invoiceId]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('sv-SE', {

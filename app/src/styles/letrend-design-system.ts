@@ -1,4 +1,10 @@
 /**
+ * @deprecated För admin-vyer: använd Tailwind-tokens (bg-primary,
+ * text-foreground, border-border, etc.) via tailwind.config.ts.
+ * Denna fil behålls bara för (a) icke-admin ytor som ännu inte migrerats,
+ * och (b) DB-lagrade hex-färger som behöver matchas (t.ex. team_members.color).
+ */
+/**
  * LeTrend Design System
  *
  * Centralized design tokens for consistent styling across admin and studio.

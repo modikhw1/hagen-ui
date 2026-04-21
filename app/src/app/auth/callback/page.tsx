@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { getPrimaryRouteForRole } from '@/lib/auth/navigation';
 import { supabase } from '@/lib/supabase/client';
 import type { Session } from '@supabase/supabase-js';
+import { clearOnboardingSession, saveOnboardingSession } from '@/lib/onboarding/session';
 
 type AuthStatus = 'loading' | 'set-password' | 'error' | 'success';
 const INVITE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -146,8 +147,8 @@ function AuthCallbackContent() {
     const handleAuth = async () => {
       try {
         // Check for error in URL first
-        const errorParam = searchParams.get('error');
-        const errorDesc = searchParams.get('error_description');
+        const errorParam = searchParams?.get('error');
+        const errorDesc = searchParams?.get('error_description');
 
         if (errorParam) {
           console.log('Error in URL:', errorParam, errorDesc);
@@ -214,7 +215,7 @@ function AuthCallbackContent() {
         }
 
         if (session) {
-          const flowParam = searchParams.get('flow');
+          const flowParam = searchParams?.get('flow');
           await handleSessionEstablished(session, flowParam === 'invite' || !!session.user.invited_at);
           return;
         }
@@ -272,7 +273,7 @@ function AuthCallbackContent() {
       if (statusRef.current !== 'loading') return;
 
       if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
-        const flowParam = searchParams.get('flow');
+        const flowParam = searchParams?.get('flow');
         await handleSessionEstablished(session, flowParam === 'invite' || !!session.user.invited_at);
         return;
       }
@@ -370,7 +371,7 @@ function AuthCallbackContent() {
       }
 
       // Check for subscription in URL params OR in user metadata
-      const price = searchParams.get('price');
+      const price = searchParams?.get('price');
       const customerProfileId = session.user.user_metadata?.customer_profile_id;
       const stripeSubscriptionId = session.user.user_metadata?.stripe_subscription_id;
 
@@ -383,7 +384,7 @@ function AuthCallbackContent() {
       const isTeamInvite =
         session.user.user_metadata?.invited_as === 'team_member' ||
         session.user.user_metadata?.isTeamMember === true ||  // 1.1: legacy key support
-        searchParams.get('flow') === 'team_invite';
+        searchParams?.get('flow') === 'team_invite';
 
       // Determine redirect path
       const redirectPath = isTeamInvite ? '/studio/customers' : '/welcome';
@@ -414,16 +415,15 @@ function AuthCallbackContent() {
           return;
         }
       } else {
-        // Store onboarding data for customer flow only
-        localStorage.setItem('pending_agreement_email', userEmail);
-        localStorage.setItem('onboarding_business_name', businessName);
-        localStorage.setItem('onboarding_interval', 'month');
-        localStorage.setItem('onboarding_customer_profile_id', customerProfileId || '');
-        if (price && Number(price) > 0) {
-          localStorage.setItem('onboarding_price', price);
-        } else {
-          localStorage.removeItem('onboarding_price');
-        }
+        // Replace stale onboarding remnants before persisting the new flow.
+        clearOnboardingSession();
+        saveOnboardingSession({
+          email: userEmail,
+          businessName,
+          interval: 'month',
+          profileId: customerProfileId || undefined,
+          price: price && Number(price) > 0 ? Number(price) : undefined,
+        });
 
         // If there's a Stripe subscription, we'll fetch the actual price from agreement page
         if (stripeSubscriptionId || customerProfileId) {
