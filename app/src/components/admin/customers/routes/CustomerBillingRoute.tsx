@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { FileText } from 'lucide-react';
+import EmptyState from '@/components/admin/EmptyState';
 import ManualInvoiceModal from '@/components/admin/customers/modals/ManualInvoiceModal';
 import PendingInvoiceItems from '@/components/admin/customers/PendingInvoiceItems';
 import { useCustomerDetail, useCustomerInvoices } from '@/hooks/admin/useCustomerDetail';
@@ -34,7 +36,11 @@ export default function CustomerBillingRoute({ customerId }: { customerId: strin
       <div className="grid gap-6 lg:grid-cols-[1.65fr_1fr]">
         <CustomerSection title="Fakturahistorik">
           {invoices.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Inga fakturor annu.</p>
+            <EmptyState
+              icon={FileText}
+              title="Inga fakturor annu"
+              hint="Nar de forsta fakturorna skapats visas historiken har."
+            />
           ) : (
             <div className="space-y-3">
               {invoices.map((invoice) => (

@@ -1,5 +1,7 @@
 'use client';
 
+import { History } from 'lucide-react';
+import EmptyState from '@/components/admin/EmptyState';
 import { useCustomerActivity } from '@/hooks/admin/useCustomerDetail';
 import { shortDateSv, timeAgoSv } from '@/lib/admin/time';
 import { CustomerRouteError, CustomerRouteLoading, CustomerSection } from './shared';
@@ -43,9 +45,11 @@ export default function CustomerActivityRoute({ customerId }: { customerId: stri
             </div>
           ))
         ) : (
-          <div className="rounded-md border border-border bg-secondary/20 px-4 py-4 text-sm text-muted-foreground">
-            Ingen historik hittades for kunden an.
-          </div>
+          <EmptyState
+            icon={History}
+            title="Ingen historik hittades an"
+            hint="Auditlogg och kundaktivitet visas har nar det finns data."
+          />
         )}
       </div>
     </CustomerSection>
