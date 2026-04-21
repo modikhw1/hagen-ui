@@ -1,7 +1,8 @@
+import type { Json } from '@/types/database';
 import type { ConceptContentOverrides } from '@/types/studio-v2';
 
 export type CustomerConceptOverrideSource = {
-  content_overrides?: Record<string, unknown> | null;
+  content_overrides?: Json | null;
 };
 
 type OverrideTextField =

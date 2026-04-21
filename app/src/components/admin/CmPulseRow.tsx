@@ -18,7 +18,9 @@ export default function CmPulseRow({
     ? 'text-destructive'
     : aggregate.status === 'watch'
       ? 'text-warning'
-      : 'text-success';
+      : aggregate.status === 'away'
+        ? 'text-muted-foreground'
+        : 'text-success';
 
   return (
     <HoverCard openDelay={200} closeDelay={100}>
@@ -28,7 +30,7 @@ export default function CmPulseRow({
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold text-foreground">{name}</div>
             <div className="text-xs text-muted-foreground">
-              {aggregate.counts.n_ok} i fas · {aggregate.counts.n_thin + aggregate.counts.n_under} behöver mer buffer
+              {aggregate.counts.n_ok} i fas · {aggregate.counts.n_thin + aggregate.counts.n_under} behover mer buffer
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-4">
@@ -42,7 +44,13 @@ export default function CmPulseRow({
               <div className="text-[11px] text-muted-foreground">{aggregate.barLabel}</div>
             </div>
             <span className={`text-[11px] font-semibold ${toneClass}`}>
-              {aggregate.status === 'needs_action' ? 'Behöver åtgärd' : aggregate.status === 'watch' ? 'Bevaka' : 'I fas'}
+              {aggregate.status === 'needs_action'
+                ? 'Behover atgard'
+                : aggregate.status === 'watch'
+                  ? 'Bevaka'
+                  : aggregate.status === 'away'
+                    ? 'Franvarande'
+                    : 'I fas'}
             </span>
           </div>
         </div>

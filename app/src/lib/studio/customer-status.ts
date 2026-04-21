@@ -50,3 +50,18 @@ export function getStudioCustomerStatusMeta(
 ): StudioCustomerStatusMeta {
   return STUDIO_CUSTOMER_STATUS_META[status];
 }
+
+export function normalizeStudioCustomerStatus(
+  status: string | null | undefined
+): StudioCustomerStatus {
+  switch (status) {
+    case 'active':
+    case 'archived':
+    case 'invited':
+    case 'agreed':
+      return status;
+    case 'pending':
+    default:
+      return 'pending';
+  }
+}

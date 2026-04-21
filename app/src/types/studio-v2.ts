@@ -326,18 +326,18 @@ export interface CustomerBrief {
 export interface CustomerProfile {
   id: string;
   business_name: string;
-  contact_email: string;
-  customer_contact_name?: string;
-  account_manager?: string;
+  contact_email?: string | null;
+  customer_contact_name?: string | null;
+  account_manager?: string | null;
   account_manager_profile_id?: string | null;
-  monthly_price: number;
-  status: 'pending' | 'active' | 'archived' | 'invited' | 'agreed';
+  monthly_price?: number | null;
+  status: 'pending' | 'active' | 'archived' | 'invited' | 'agreed' | null;
   logo_url?: string;
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
 
   // Studio 2.0 additions
-  brief?: CustomerBrief;
+  brief?: CustomerBrief | null;
 
   // TikTok profile identity
   tiktok_profile_url?: string | null;   // canonical: full profile URL (e.g. https://www.tiktok.com/@brand)
@@ -347,8 +347,8 @@ export interface CustomerProfile {
   pending_history_advance_at?: string | null;
   operation_lock_until?: string | null;
 
-  created_at: string;
-  updated_at?: string;
+  created_at: string | null;
+  updated_at?: string | null;
 }
 
 /**

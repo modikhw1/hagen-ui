@@ -1,21 +1,52 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatSek } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
-import type { AttentionItem } from '@/lib/admin-derive/attention';
+import {
+  attentionSeverity,
+  attentionTimestamp,
+  type AttentionItem,
+  type AttentionSeverity,
+} from '@/lib/admin-derive/attention';
 
 export default function AttentionList({
   items,
   mode = 'open',
   emptyLabel,
+  lastSeenAt,
+  trackSeen = false,
+  surface = 'overview',
 }: {
   items: AttentionItem[];
   mode?: 'open' | 'snoozed';
   emptyLabel?: string;
+  lastSeenAt?: string | null;
+  trackSeen?: boolean;
+  surface?: 'overview' | 'notifications';
 }) {
   const queryClient = useQueryClient();
+  const parsedLastSeenAt = lastSeenAt ? new Date(lastSeenAt) : null;
+
+  useEffect(() => {
+    if (mode !== 'open' || !trackSeen) {
+      return;
+    }
+
+    void (async () => {
+      await fetch('/api/admin/events/attention-seen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ surface }),
+        keepalive: true,
+      });
+
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'overview'] });
+    })();
+  }, [mode, queryClient, surface, trackSeen]);
 
   const mutateAttention = useMutation({
     mutationFn: async (item: AttentionItem) => {
@@ -67,6 +98,12 @@ export default function AttentionList({
     <div className="space-y-2">
       {items.map((item) => {
         const href = hrefForItem(item);
+        const severity = attentionSeverity(item);
+        const timestamp = attentionTimestamp(item);
+        const isNew =
+          mode === 'open' && parsedLastSeenAt && timestamp
+            ? +timestamp > +parsedLastSeenAt
+            : false;
         const pending =
           mutateAttention.isPending &&
           mutateAttention.variables?.subjectType === item.subjectType &&
@@ -78,7 +115,15 @@ export default function AttentionList({
             className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
           >
             <Link href={href} className="min-w-0 flex-1 transition-colors hover:text-foreground">
-              <div className="text-sm font-semibold text-foreground">{labelForItem(item)}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-sm font-semibold text-foreground">{labelForItem(item)}</div>
+                <SeverityPill severity={severity} />
+                {isNew ? (
+                  <span className="rounded-full bg-info/10 px-2 py-0.5 text-[10px] font-semibold text-info">
+                    Ny
+                  </span>
+                ) : null}
+              </div>
               <div className="truncate text-xs text-muted-foreground">{subLabelForItem(item)}</div>
             </Link>
 
@@ -123,11 +168,26 @@ export default function AttentionList({
 }
 
 function hrefForItem(item: AttentionItem) {
-  if (item.kind === 'demo_responded') return '/admin/demos';
-  if (item.kind === 'invoice_unpaid' || item.kind === 'onboarding_stuck' || item.kind === 'customer_blocked') {
-    return `/admin/customers/${item.customerId}`;
+  switch (item.kind) {
+    case 'demo_responded':
+      return '/admin/demos?focus=responded';
+    case 'cm_low_activity':
+      return `/admin/team?focus=${item.subjectId}`;
+    case 'cm_notification':
+      return item.customerId
+        ? `/admin/customers/${item.customerId}?focus=cm`
+        : '/admin/team';
+    case 'invoice_unpaid':
+      return `/admin/customers/${item.customerId}?focus=invoices&invoice=${item.id}`;
+    case 'onboarding_stuck':
+      return `/admin/customers/${item.customerId}?focus=operations`;
+    case 'customer_blocked':
+      return `/admin/customers/${item.customerId}?focus=operations`;
+    case 'cm_change_due_today':
+      return `/admin/customers/${item.customerId}?focus=cm`;
+    case 'pause_resume_due_today':
+      return `/admin/customers/${item.customerId}?focus=operations`;
   }
-  return item.customerId ? `/admin/customers/${item.customerId}` : '/admin';
 }
 
 function customerIdForItem(item: AttentionItem) {
@@ -147,6 +207,12 @@ function labelForItem(item: AttentionItem) {
       return item.companyName;
     case 'customer_blocked':
       return 'Kund blockerad';
+    case 'cm_change_due_today':
+      return item.customerName;
+    case 'pause_resume_due_today':
+      return item.customerName;
+    case 'cm_low_activity':
+      return item.cmName;
   }
 }
 
@@ -162,6 +228,14 @@ function subLabelForItem(item: AttentionItem) {
       return 'Svar inkommet pa demo';
     case 'customer_blocked':
       return `${item.daysBlocked} dagar utan publicering`;
+    case 'cm_change_due_today':
+      return `${item.currentCmName || 'Nuvarande CM'} → ${item.nextCmName || 'Oallokerad'} idag`;
+    case 'pause_resume_due_today':
+      return 'Pausen ar planerad att slappa idag';
+    case 'cm_low_activity':
+      return item.interactionCount7d === 0
+        ? `0 aktiviteter senaste 7 dagarna • forvantat ${item.expectedConcepts7d} koncept`
+        : `${item.interactionCount7d} aktiviteter senaste 7 dagarna • ${item.lastInteractionDays} dagar sedan senaste aktivitet`;
   }
 }
 
@@ -177,5 +251,37 @@ function metaForItem(item: AttentionItem) {
       return shortDateSv(item.respondedAt.toISOString());
     case 'customer_blocked':
       return 'TikTok';
+    case 'cm_change_due_today':
+      return shortDateSv(item.effectiveDate.toISOString());
+    case 'pause_resume_due_today':
+      return shortDateSv(item.resumeDate.toISOString());
+    case 'cm_low_activity':
+      return 'CM-puls';
   }
+}
+
+function SeverityPill({ severity }: { severity: AttentionSeverity }) {
+  const className =
+    severity === 'critical'
+      ? 'bg-destructive/10 text-destructive'
+      : severity === 'high'
+        ? 'bg-warning/10 text-warning'
+        : severity === 'medium'
+          ? 'bg-info/10 text-info'
+          : 'bg-secondary text-muted-foreground';
+
+  const label =
+    severity === 'critical'
+      ? 'Akut'
+      : severity === 'high'
+        ? 'Hog'
+        : severity === 'medium'
+          ? 'Planera'
+          : 'FYI';
+
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${className}`}>
+      {label}
+    </span>
+  );
 }

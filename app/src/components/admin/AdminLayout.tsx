@@ -4,12 +4,17 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Bell,
   CreditCard,
   LayoutDashboard,
   LogOut,
+  ReceiptText,
+  Settings,
+  ShieldCheck,
   Users,
   UsersRound,
 } from 'lucide-react';
+import NotificationBell from '@/components/admin/NotificationBell';
 
 const navItems = [
   { href: '/admin', label: 'Översikt', icon: LayoutDashboard, exact: true },
@@ -20,7 +25,11 @@ const navItems = [
     icon: CreditCard,
     matchers: ['/admin/invoices', '/admin/subscriptions', '/admin/billing-health'],
   },
-  { href: '/admin/team', label: 'Team', icon: UsersRound },
+  { href: '/admin/team', label: 'Team', icon: UsersRound, matchers: ['/admin/team/payroll'] },
+  { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+  { href: '/admin/team/payroll', label: 'Payroll', icon: ReceiptText, matchers: ['/admin/payroll'] },
+  { href: '/admin/settings', label: 'Settings', icon: Settings },
+  { href: '/admin/audit-log', label: 'Auditlogg', icon: ShieldCheck },
 ];
 
 function SidebarLink({
@@ -65,6 +74,15 @@ export default function AdminLayout({
   userEmail: string;
   onLogout: () => void;
 }) {
+  const pathname = usePathname() ?? '';
+  const currentNavItem =
+    navItems.find((item) =>
+      item.exact
+        ? pathname === item.href
+        : pathname.startsWith(item.href) ||
+          (item.matchers ?? []).some((matcher) => pathname.startsWith(matcher)),
+    ) ?? navItems[0];
+
   return (
     <div className="flex min-h-screen bg-background">
       <aside className="fixed left-0 top-0 z-50 flex h-screen w-60 flex-col border-r border-border bg-secondary">
@@ -106,6 +124,19 @@ export default function AdminLayout({
       </aside>
 
       <main className="ml-60 min-h-screen flex-1">
+        <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+          <div className="flex max-w-[1080px] items-center justify-between px-8 py-4">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                LeTrend Admin
+              </div>
+              <div className="text-sm font-semibold text-foreground">
+                {currentNavItem.label}
+              </div>
+            </div>
+            <NotificationBell />
+          </div>
+        </header>
         <div className="max-w-[1080px] p-8">{children}</div>
       </main>
     </div>

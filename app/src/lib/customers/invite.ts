@@ -1,2 +1,6 @@
 // Re-export from stripe invite utility
-export { sendCustomerInvite, type SendInviteResult } from '@/lib/stripe/invite';
+export {
+  ensureStripeSubscriptionForProfile,
+  sendCustomerInvite,
+  type SendInviteResult,
+} from '@/lib/stripe/invite';

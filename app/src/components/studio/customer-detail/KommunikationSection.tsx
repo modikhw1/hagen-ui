@@ -566,7 +566,7 @@ export function KommunikationSection({
 
         <div style={{ marginBottom: 14 }}>
           <label style={labelStyle}>Till</label>
-          <input type="text" value={customer.contact_email} disabled style={{ ...inputStyle, background: '#F7F4F0', color: LeTrendColors.textMuted }} />
+          <input type="text" value={customer.contact_email ?? ''} disabled style={{ ...inputStyle, background: '#F7F4F0', color: LeTrendColors.textMuted }} />
         </div>
 
         <div style={{ marginBottom: 14 }}>

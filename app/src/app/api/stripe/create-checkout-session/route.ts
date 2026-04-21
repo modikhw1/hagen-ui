@@ -5,6 +5,10 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
+import {
+  recurringUnitAmountFromMonthlyOre,
+  recurringUnitAmountFromMonthlySek,
+} from '@/lib/stripe/price-amounts';
 
 const checkoutRequestSchema = z.object({
   profileId: z.string().trim().min(1).max(128),
@@ -140,7 +144,9 @@ async function findOrCreateCoupon(
 async function createContractCoupon(
   stripeClient: Stripe,
   profile: ContractProfile,
-  basePriceOre: number,
+  baseMonthlyPriceOre: number,
+  interval: Stripe.Price.Recurring.Interval,
+  intervalCount: number,
   usingProration: boolean
 ) {
   if (!isDiscountActive(profile)) return null;
@@ -179,8 +185,8 @@ async function createContractCoupon(
   }
 
   if (type === 'amount' && rawValue > 0) {
-    if (usingProration && basePriceOre > 0) {
-      const percentOff = Math.max(1, Math.min(100, Math.round((rawValue * 100) / (basePriceOre / 100))));
+    if (usingProration && baseMonthlyPriceOre > 0) {
+      const percentOff = Math.max(1, Math.min(100, Math.round((rawValue * 100) / (baseMonthlyPriceOre / 100))));
       return findOrCreateCoupon(stripeClient, {
         id: `${couponIdBase}_pct`,
         percent_off: percentOff,
@@ -192,7 +198,11 @@ async function createContractCoupon(
 
     return findOrCreateCoupon(stripeClient, {
       id: couponIdBase,
-      amount_off: rawValue * 100,
+      amount_off: recurringUnitAmountFromMonthlySek({
+        monthlyPriceSek: rawValue,
+        interval,
+        intervalCount,
+      }),
       currency: 'sek',
       duration,
       duration_in_months: durationInMonths,
@@ -319,9 +329,9 @@ export async function POST(req: NextRequest) {
         .eq('id', profileId);
     }
 
-    const priceOre = Math.round(priceResolution.effectivePrice * 100);
+    const monthlyPriceOre = Math.round(priceResolution.effectivePrice * 100);
 
-    if (!email || priceOre <= 0) {
+    if (!email || monthlyPriceOre <= 0) {
       return json({ error: 'Missing required pricing information', requestId }, 400);
     }
 
@@ -342,6 +352,11 @@ export async function POST(req: NextRequest) {
     }
 
     const { interval, intervalCount } = toIntervalParts(selectedInterval);
+    const recurringPriceOre = recurringUnitAmountFromMonthlyOre({
+      monthlyPriceOre,
+      interval,
+      intervalCount,
+    });
 
     // Reuse existing price with matching parameters to avoid orphan prices in Stripe
     let price: { id: string };
@@ -351,7 +366,7 @@ export async function POST(req: NextRequest) {
     });
     const matchingPrice = existingPrices.data.find(
       (p) =>
-        p.unit_amount === priceOre &&
+        p.unit_amount === recurringPriceOre &&
         p.recurring?.interval === interval &&
         p.recurring?.interval_count === intervalCount
     );
@@ -360,7 +375,7 @@ export async function POST(req: NextRequest) {
       price = matchingPrice;
     } else {
       price = await stripe.prices.create({
-        unit_amount: priceOre,
+        unit_amount: recurringPriceOre,
         currency: 'sek',
         tax_behavior: 'exclusive',
         recurring: { interval, interval_count: intervalCount },
@@ -400,7 +415,14 @@ export async function POST(req: NextRequest) {
         firstInvoiceBehavior === 'free_until_anchor' ? 'none' : 'create_prorations';
     }
 
-    const contractCoupon = await createContractCoupon(stripe, contractProfile, priceOre, firstInvoiceBehavior === 'prorated');
+    const contractCoupon = await createContractCoupon(
+      stripe,
+      contractProfile,
+      monthlyPriceOre,
+      interval,
+      intervalCount,
+      firstInvoiceBehavior === 'prorated',
+    );
 
     const session = await stripe.checkout.sessions.create({
       ui_mode: 'embedded',

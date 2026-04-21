@@ -4,6 +4,7 @@ import {
 } from '@/lib/customer-concept-lifecycle';
 import { resolveCustomerConceptAssignmentNote } from '@/lib/customer-concept-assignment';
 import { resolveCustomerConceptContentOverrides } from '@/lib/customer-concept-overrides';
+import type { Json } from '@/types/database';
 import type {
   AssignedCustomerConcept,
   CustomerConcept,
@@ -63,12 +64,12 @@ function readNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function readNullableRecord(value: unknown): Record<string, unknown> | null {
+function readNullableRecord(value: unknown): { [key: string]: Json | undefined } | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
 
-  return value as Record<string, unknown>;
+  return value as { [key: string]: Json | undefined };
 }
 
 export function getStudioCustomerConceptRowKind(source: {

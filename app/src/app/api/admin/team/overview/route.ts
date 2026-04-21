@@ -1,3 +1,5 @@
+import { getAdminSettings } from '@/lib/admin/settings';
+import { listCmAbsences } from '@/lib/admin/cm-absences';
 import { withAuth } from '@/lib/auth/api-auth';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
@@ -7,6 +9,16 @@ type NormalizedActivityRow = {
   cm_email: string | null;
   type: string | null;
   created_at: string;
+};
+
+type AssignmentHistoryRow = {
+  id: string;
+  customer_id: string;
+  cm_id: string | null;
+  valid_from: string;
+  valid_to: string | null;
+  handover_note: string | null;
+  scheduled_change: Record<string, unknown> | null;
 };
 
 function isMissingColumnError(message?: string | null) {
@@ -74,20 +86,57 @@ async function fetchActivities(activityCutoff: string) {
   };
 }
 
+async function fetchAssignments() {
+  const supabase = createSupabaseAdmin();
+  const result = await (((supabase.from('cm_assignments' as never) as never) as {
+    select: (columns: string) => {
+      order: (column: string, options: { ascending: boolean }) => Promise<{
+        data: AssignmentHistoryRow[] | null;
+        error: { message?: string } | null;
+      }>;
+    };
+  }).select(
+    'id, customer_id, cm_id, valid_from, valid_to, handover_note, scheduled_change',
+  )).order('valid_from', { ascending: false });
+
+  if (result.error) {
+    if (isMissingTableError(result.error.message)) {
+      return {
+        data: [] as AssignmentHistoryRow[],
+        usedFallback: true,
+        error: null,
+      };
+    }
+
+    return {
+      data: [] as AssignmentHistoryRow[],
+      usedFallback: false,
+      error: result.error,
+    };
+  }
+
+  return {
+    data: result.data ?? [],
+    usedFallback: false,
+    error: null,
+  };
+}
+
 export const GET = withAuth(async () => {
   const supabase = createSupabaseAdmin();
+  const settings = await getAdminSettings(supabase);
   const activityCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
   const statsCutoff = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
 
-  const [teamResult, customersResult, activitiesResult, tiktokStatsResult] = await Promise.all([
+  const [teamResult, customersResult, activitiesResult, tiktokStatsResult, absences, assignmentsResult] = await Promise.all([
     supabase
       .from('team_members')
-      .select('id, name, email, phone, role, color, is_active, profile_id, bio, region, avatar_url')
+      .select('id, name, email, phone, role, color, is_active, profile_id, bio, region, avatar_url, commission_rate')
       .eq('is_active', true)
       .order('name'),
     supabase
       .from('customer_profiles')
-      .select('id, business_name, monthly_price, status, account_manager_profile_id, account_manager, last_upload_at')
+      .select('id, business_name, monthly_price, status, paused_until, account_manager_profile_id, account_manager, last_upload_at')
       .neq('status', 'archived'),
     fetchActivities(activityCutoff),
     supabase
@@ -95,9 +144,38 @@ export const GET = withAuth(async () => {
       .select('customer_profile_id, followers, videos_last_24h, engagement_rate, snapshot_date')
       .gte('snapshot_date', statsCutoff)
       .order('snapshot_date', { ascending: false }),
+    listCmAbsences(supabase, { limit: 200 }),
+    fetchAssignments(),
   ]);
 
-  if (teamResult.error) {
+  let normalizedTeam: Array<Record<string, unknown>> =
+    (teamResult.data ?? []) as unknown as Array<Record<string, unknown>>;
+  const schemaWarnings = [...settings.schemaWarnings];
+
+  if (teamResult.error && isMissingColumnError(teamResult.error.message)) {
+    const fallbackTeam = await (((supabase.from('team_members' as never) as never) as {
+      select: (columns: string) => {
+        eq: (column: string, value: boolean) => {
+          order: (orderColumn: string) => Promise<{
+            data: Array<Record<string, unknown>> | null;
+            error: { message?: string } | null;
+          }>;
+        };
+      };
+    }).select('id, name, email, phone, role, color, is_active, profile_id, bio, region, avatar_url'))
+      .eq('is_active', true)
+      .order('name');
+
+    if (fallbackTeam.error) {
+      return jsonError(fallbackTeam.error.message || 'Kunde inte hamta team-oversikten', 500);
+    }
+
+    normalizedTeam = (fallbackTeam.data ?? []).map((member) => ({
+      ...member,
+      commission_rate: settings.settings.default_commission_rate,
+    }));
+    schemaWarnings.push('Kolumnen team_members.commission_rate saknas i databasen. Team-oversikten visar defaultkommission.');
+  } else if (teamResult.error) {
     return jsonError(teamResult.error.message, 500);
   }
   if (customersResult.error) {
@@ -105,6 +183,9 @@ export const GET = withAuth(async () => {
   }
   if (activitiesResult.error) {
     return jsonError(activitiesResult.error.message || 'Kunde inte hamta aktiviteter', 500);
+  }
+  if (assignmentsResult.error) {
+    return jsonError(assignmentsResult.error.message || 'Kunde inte hamta CM-historik', 500);
   }
   if (tiktokStatsResult.error && !isMissingTableError(tiktokStatsResult.error.message)) {
     return jsonError(tiktokStatsResult.error.message, 500);
@@ -131,12 +212,20 @@ export const GET = withAuth(async () => {
   }
 
   return jsonOk({
-    members: teamResult.data ?? [],
+    members: normalizedTeam,
     customers: customersResult.data ?? [],
     activities: activitiesResult.data,
+    assignments: assignmentsResult.data,
     byCustomer,
-    schemaWarnings: activitiesResult.usedLegacyFallback
-      ? ['cm_activities anvander legacy-kolumner i denna miljo och normaliseras i API-lagret.']
-      : [],
+    absences,
+    schemaWarnings: [
+      ...schemaWarnings,
+      ...(assignmentsResult.usedFallback
+        ? ['Tabellen cm_assignments saknas i denna miljo. Team-vyn visar bara nuvarande kunder utan periodhistorik.']
+        : []),
+      ...(activitiesResult.usedLegacyFallback
+        ? ['cm_activities anvander legacy-kolumner i denna miljo och normaliseras i API-lagret.']
+        : []),
+    ],
   });
 }, ['admin']);

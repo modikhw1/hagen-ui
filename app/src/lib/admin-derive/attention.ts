@@ -3,26 +3,113 @@ export type AttentionItem =
   | { kind: 'invoice_unpaid'; id: string; subjectType: 'invoice'; subjectId: string; customerId: string; daysPastDue: number; amount_ore: number }
   | { kind: 'onboarding_stuck'; id: string; subjectType: 'onboarding'; subjectId: string; customerId: string; daysSinceCmReady: number }
   | { kind: 'demo_responded'; id: string; subjectType: 'demo_response'; subjectId: string; respondedAt: Date; companyName: string }
-  | { kind: 'customer_blocked'; id: string; subjectType: 'customer_blocking'; subjectId: string; customerId: string; daysBlocked: number };
+  | { kind: 'customer_blocked'; id: string; subjectType: 'customer_blocking'; subjectId: string; customerId: string; daysBlocked: number }
+  | { kind: 'cm_change_due_today'; id: string; subjectType: 'cm_assignment'; subjectId: string; customerId: string; customerName: string; currentCmName: string | null; nextCmName: string | null; effectiveDate: Date }
+  | { kind: 'pause_resume_due_today'; id: string; subjectType: 'subscription_pause_resume'; subjectId: string; customerId: string; customerName: string; resumeDate: Date }
+  | { kind: 'cm_low_activity'; id: string; subjectType: 'cm_activity'; subjectId: string; customerId: null; cmName: string; interactionCount7d: number; expectedConcepts7d: number; lastInteractionDays: number };
 
-const RANK: Record<AttentionItem['kind'], number> = {
+export type AttentionSeverity = 'critical' | 'high' | 'medium' | 'info';
+
+const KIND_RANK: Record<AttentionItem['kind'], number> = {
   cm_notification: 0,
-  invoice_unpaid: 1,
-  onboarding_stuck: 2,
-  demo_responded: 3,
-  customer_blocked: 4,
+  cm_change_due_today: 1,
+  pause_resume_due_today: 2,
+  cm_low_activity: 3,
+  invoice_unpaid: 4,
+  onboarding_stuck: 5,
+  demo_responded: 6,
+  customer_blocked: 7,
 };
 
-export function sortAttention(items: AttentionItem[]) {
+const SEVERITY_RANK: Record<AttentionSeverity, number> = {
+  critical: 0,
+  high: 1,
+  medium: 2,
+  info: 3,
+};
+
+export function attentionSeverity(item: AttentionItem): AttentionSeverity {
+  switch (item.kind) {
+    case 'customer_blocked':
+      return 'critical';
+    case 'invoice_unpaid':
+      return item.daysPastDue >= 14 ? 'critical' : 'high';
+    case 'cm_notification':
+      return item.priority === 'urgent' ? 'critical' : 'high';
+    case 'cm_low_activity':
+      return item.interactionCount7d === 0 ? 'high' : 'medium';
+    case 'cm_change_due_today':
+      return 'high';
+    case 'onboarding_stuck':
+      return item.daysSinceCmReady >= 14 ? 'high' : 'medium';
+    case 'pause_resume_due_today':
+      return 'medium';
+    case 'demo_responded':
+      return 'info';
+  }
+}
+
+export function attentionTimestamp(
+  item: AttentionItem,
+  now: Date = new Date(),
+): Date | null {
+  switch (item.kind) {
+    case 'cm_notification':
+      return item.createdAt;
+    case 'invoice_unpaid':
+      return new Date(now.getTime() - item.daysPastDue * 86_400_000);
+    case 'onboarding_stuck':
+      return new Date(
+        now.getTime() - Math.max(0, item.daysSinceCmReady - 7) * 86_400_000,
+      );
+    case 'demo_responded':
+      return item.respondedAt;
+    case 'customer_blocked':
+      return new Date(
+        now.getTime() - Math.max(0, item.daysBlocked - 10) * 86_400_000,
+      );
+    case 'cm_change_due_today':
+      return item.effectiveDate;
+    case 'pause_resume_due_today':
+      return item.resumeDate;
+    case 'cm_low_activity':
+      return new Date(
+        now.getTime() -
+          (item.interactionCount7d === 0
+            ? 7
+            : Math.max(0, item.lastInteractionDays - 5)) *
+            86_400_000,
+      );
+  }
+}
+
+export function sortAttention(items: AttentionItem[], now: Date = new Date()) {
   return [...items].sort((a, b) => {
-    const aUrgent = a.kind === 'cm_notification' && a.priority === 'urgent' ? 0 : 1;
-    const bUrgent = b.kind === 'cm_notification' && b.priority === 'urgent' ? 0 : 1;
-    if (aUrgent !== bUrgent) return aUrgent - bUrgent;
+    const severityDiff =
+      SEVERITY_RANK[attentionSeverity(a)] - SEVERITY_RANK[attentionSeverity(b)];
+    if (severityDiff !== 0) {
+      return severityDiff;
+    }
 
-    const aOld = a.kind === 'invoice_unpaid' && a.daysPastDue > 14 ? 0 : 1;
-    const bOld = b.kind === 'invoice_unpaid' && b.daysPastDue > 14 ? 0 : 1;
-    if (aOld !== bOld) return aOld - bOld;
+    if (a.kind === 'invoice_unpaid' && b.kind === 'invoice_unpaid') {
+      return b.daysPastDue - a.daysPastDue;
+    }
 
-    return RANK[a.kind] - RANK[b.kind];
+    if (a.kind === 'cm_low_activity' && b.kind === 'cm_low_activity') {
+      if (a.interactionCount7d !== b.interactionCount7d) {
+        return a.interactionCount7d - b.interactionCount7d;
+      }
+
+      return b.lastInteractionDays - a.lastInteractionDays;
+    }
+
+    const aTime = attentionTimestamp(a, now);
+    const bTime = attentionTimestamp(b, now);
+    const timeDiff = +(bTime ?? new Date(0)) - +(aTime ?? new Date(0));
+    if (timeDiff !== 0) {
+      return timeDiff;
+    }
+
+    return KIND_RANK[a.kind] - KIND_RANK[b.kind];
   });
 }

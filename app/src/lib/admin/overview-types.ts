@@ -11,6 +11,7 @@ export type OverviewPayload = {
     last_upload_at: string | null;
     upload_schedule: string[] | null;
     concepts_per_week: number | null;
+    expected_concepts_per_week?: number | null;
     paused_until: string | null;
     onboarding_state: 'invited' | 'cm_ready' | 'live' | 'settled' | null;
     onboarding_state_changed_at: string | null;
@@ -46,6 +47,17 @@ export type OverviewPayload = {
     amount_due: number;
     due_date: string | null;
     status: string;
+  }>;
+  scheduledAssignmentChanges: Array<{
+    customer_id: string;
+    customer_name: string;
+    current_cm_id: string | null;
+    current_cm_name: string | null;
+    next_cm_id: string | null;
+    next_cm_name: string | null;
+    next_cm_email: string | null;
+    effective_date: string;
+    handover_note: string | null;
   }>;
   subscriptions: Array<{
     id?: string;
@@ -116,9 +128,33 @@ export type OverviewPayload = {
       | 'onboarding'
       | 'cm_notification'
       | 'customer_blocking'
-      | 'demo_response';
+      | 'demo_response'
+      | 'cm_assignment'
+      | 'subscription_pause_resume'
+      | 'cm_activity';
     subject_id: string;
     snoozed_until: string | null;
     released_at: string | null;
   }>;
+  absences: Array<{
+    id: string;
+    cm_id: string;
+    customer_profile_id: string | null;
+    backup_cm_id: string | null;
+    absence_type:
+      | 'vacation'
+      | 'sick'
+      | 'parental_leave'
+      | 'training'
+      | 'temporary_coverage'
+      | 'other';
+    compensation_mode: 'covering_cm' | 'primary_cm';
+    starts_on: string;
+    ends_on: string;
+    note: string | null;
+    created_by: string | null;
+    created_at: string;
+    updated_at: string;
+  }>;
+  attentionFeedSeenAt?: string | null;
 };

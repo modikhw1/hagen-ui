@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { resolveCustomerConceptContentOverrides } from '@/lib/customer-concept-overrides';
+import { asJsonObject } from '@/lib/database/json';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { translateClipToConcept, type BackendClip, type ClipOverride } from '@/lib/translator';
+import type { Json } from '@/types/database';
 import type { CustomerNoteAttachment, CustomerNoteItem, CustomerNoteReference } from '@/types/customer-notes';
 
 type CustomerNoteRow = {
@@ -22,15 +24,15 @@ type CustomerNoteRow = {
 type ConceptLookupRow = {
   id: string;
   concept_id: string;
-  content_overrides: Record<string, unknown> | null;
+  content_overrides: Json | null;
   concepts:
     | {
-        backend_data?: Record<string, unknown> | null;
-        overrides?: Record<string, unknown> | null;
+        backend_data?: Json | null;
+        overrides?: Json | null;
       }
     | Array<{
-        backend_data?: Record<string, unknown> | null;
-        overrides?: Record<string, unknown> | null;
+        backend_data?: Json | null;
+        overrides?: Json | null;
       }>
     | null;
 };
@@ -99,7 +101,7 @@ export const GET = withAuth(async (request: NextRequest, user) => {
 
     for (const row of (conceptRows || []) as ConceptLookupRow[]) {
       const conceptRelation = Array.isArray(row.concepts) ? row.concepts[0] : row.concepts;
-      const rawBackendData = (conceptRelation?.backend_data ?? {}) as Record<string, unknown>;
+      const rawBackendData = asJsonObject(conceptRelation?.backend_data);
       const backendData: BackendClip = {
         ...(rawBackendData as unknown as BackendClip),
         id: typeof rawBackendData.id === 'string' ? rawBackendData.id : row.concept_id,
@@ -107,7 +109,7 @@ export const GET = withAuth(async (request: NextRequest, user) => {
       };
       const translated = translateClipToConcept(
         backendData,
-        ((conceptRelation?.overrides ?? {}) as ClipOverride)
+        (asJsonObject(conceptRelation?.overrides) as ClipOverride)
       );
       const overrides = resolveCustomerConceptContentOverrides(row);
       const title =

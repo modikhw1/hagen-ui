@@ -279,7 +279,7 @@ export function CustomerCommunicationPanel({
           </label>
           <input
             type="text"
-            value={customer.contact_email}
+            value={customer.contact_email ?? ''}
             disabled
             style={{
               width: '100%',

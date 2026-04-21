@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import type { TablesInsert, TablesUpdate } from '@/types/database';
+import { asJsonObject } from '@/lib/database/json';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
@@ -27,7 +29,7 @@ async function activateLinkedCustomerProfile(params: {
     .update({
       status: 'active',
       agreed_at: customerProfile.agreed_at || new Date().toISOString(),
-    })
+    } satisfies TablesUpdate<'customer_profiles'>)
     .eq('id', customerProfileId);
 }
 
@@ -157,8 +159,7 @@ export async function POST(request: NextRequest) {
         : 'content_manager';
     const desiredRole: ProfileRole = isTeamMember ? normalizedTeamRole : 'customer';
     const desiredIsAdmin = Boolean(isTeamMember && normalizedTeamRole === 'admin');
-    const existingMatchingData =
-      (existingProfile?.matching_data as Record<string, unknown> | null) || {};
+    const existingMatchingData = asJsonObject(existingProfile?.matching_data);
     const existingCustomerProfileId =
       typeof existingMatchingData.customer_profile_id === 'string'
         ? existingMatchingData.customer_profile_id
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (needsRoleUpdate) {
-      const updatePayload: Record<string, unknown> = {
+      const updatePayload: TablesUpdate<'profiles'> = {
         role: desiredRole,
         is_admin: desiredIsAdmin,
       };
@@ -241,11 +242,9 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const { error: createError } = await supabaseAdmin
-        .from('profiles')
-        .insert({
+      const profileInsert: TablesInsert<'profiles'> = {
           id: userId,
-          email: userEmail,
+          email: normalizedAuthEmail || `${userId}@invalid.local`,
           business_name: finalBusinessName || 'Mitt foretag',
           business_description: businessDescription,
           social_links: {},
@@ -258,8 +257,12 @@ export async function POST(request: NextRequest) {
           has_paid: false,
           has_concepts: false,
           is_admin: isTeamMember && role === 'admin',
-          role: isTeamMember ? (role || 'content_manager') : 'customer',
-        });
+          role: desiredRole,
+        };
+
+      const { error: createError } = await supabaseAdmin
+        .from('profiles')
+        .insert(profileInsert);
 
       if (createError) {
         console.error('[PROFILE_SETUP] Kunde inte skapa profil:', createError);

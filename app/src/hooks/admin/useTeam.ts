@@ -7,6 +7,11 @@ import {
   summarize,
   type DailyDot,
 } from '@/lib/admin-derive/team-flow';
+import {
+  findActiveCmAbsence,
+  resolveEffectiveCustomerCoverage,
+  type CmAbsenceRecord,
+} from '@/lib/admin/cm-absences';
 
 type TeamMemberRow = {
   id: string;
@@ -20,6 +25,7 @@ type TeamMemberRow = {
   bio: string | null;
   region: string | null;
   avatar_url: string | null;
+  commission_rate: number | null;
 };
 
 type CustomerRow = {
@@ -27,6 +33,7 @@ type CustomerRow = {
   business_name: string;
   monthly_price: number | null;
   status: string;
+  paused_until?: string | null;
   account_manager_profile_id: string | null;
   account_manager: string | null;
   last_upload_at: string | null;
@@ -39,10 +46,22 @@ type ActivityRow = {
   created_at: string;
 };
 
+type AssignmentHistoryRow = {
+  id: string;
+  customer_id: string;
+  cm_id: string | null;
+  valid_from: string;
+  valid_to: string | null;
+  handover_note: string | null;
+  scheduled_change: Record<string, unknown> | null;
+};
+
 type TeamOverviewResponse = {
   members: TeamMemberRow[];
   customers: CustomerRow[];
   activities: ActivityRow[];
+  assignments: AssignmentHistoryRow[];
+  absences: CmAbsenceRecord[];
   byCustomer: Record<
     string,
     {
@@ -59,10 +78,13 @@ export type TeamCustomer = {
   business_name: string;
   monthly_price: number;
   status: string;
+  paused_until?: string | null;
   followers: number;
   videos_last_7d: number;
   engagement_rate: number;
   last_upload_at: string | null;
+  covered_by_absence: boolean;
+  payout_cm_id: string | null;
 };
 
 export type TeamMemberView = {
@@ -76,7 +98,18 @@ export type TeamMemberView = {
   avatar_url: string | null;
   role: string;
   is_active: boolean;
+  commission_rate: number;
+  active_absence: CmAbsenceRecord | null;
   customers: TeamCustomer[];
+  assignmentHistory: Array<{
+    id: string;
+    customer_id: string;
+    customer_name: string;
+    valid_from: string;
+    valid_to: string | null;
+    handover_note: string | null;
+    scheduled_effective_date: string | null;
+  }>;
   customerCount: number;
   mrr_ore: number;
   activityCount: number;
@@ -110,6 +143,8 @@ async function fetchTeamOverview(): Promise<TeamOverviewResponse> {
     members: payload.members ?? [],
     customers: payload.customers ?? [],
     activities: payload.activities ?? [],
+    assignments: payload.assignments ?? [],
+    absences: payload.absences ?? [],
     byCustomer: payload.byCustomer ?? {},
     schemaWarnings: payload.schemaWarnings ?? [],
   };
@@ -119,25 +154,71 @@ export function useTeam() {
   return useQuery({
     queryKey: ['admin', 'team-full'],
     queryFn: async () => {
-      const { members, customers, activities, byCustomer } = await fetchTeamOverview();
+      const { members, customers, activities, assignments, absences, byCustomer } = await fetchTeamOverview();
+      const today = new Date().toISOString().slice(0, 10);
+      const customerNameById = new Map(
+        customers.map((customer) => [customer.id, customer.business_name]),
+      );
+
+      const effectiveCustomers = customers.map((customer) => {
+        const primaryMember = members.find((member) =>
+          member.profile_id
+            ? customer.account_manager_profile_id === member.profile_id
+            : normalize(customer.account_manager) === normalize(member.name) ||
+              normalize(customer.account_manager) === normalize(member.email),
+        );
+        const coverage = resolveEffectiveCustomerCoverage({
+          absences,
+          customerId: customer.id,
+          primaryCmId: primaryMember?.id ?? null,
+          asOfDate: today,
+        });
+
+        return {
+          ...customer,
+          primary_cm_id: primaryMember?.id ?? null,
+          effective_cm_id: coverage.responsibleCmId,
+          payout_cm_id: coverage.payoutCmId,
+          covered_by_absence: coverage.appliedAbsenceId !== null,
+        };
+      });
 
       const rows = members.map((member) => {
-        const memberCustomers = customers
-          .filter((customer) =>
-            member.profile_id
-              ? customer.account_manager_profile_id === member.profile_id
-              : normalize(customer.account_manager) === normalize(member.name),
-          )
+        const memberCustomers = effectiveCustomers
+          .filter((customer) => customer.effective_cm_id === member.id)
           .map<TeamCustomer>((customer) => ({
             id: customer.id,
             business_name: customer.business_name,
             monthly_price: customer.monthly_price ?? 0,
             status: customer.status,
+            paused_until: customer.paused_until ?? null,
             followers: byCustomer[customer.id]?.followers ?? 0,
             videos_last_7d: byCustomer[customer.id]?.videos_last_7d ?? 0,
             engagement_rate: byCustomer[customer.id]?.engagement_rate ?? 0,
             last_upload_at: customer.last_upload_at,
+            covered_by_absence: customer.covered_by_absence,
+            payout_cm_id: customer.payout_cm_id,
           }));
+        const assignmentHistory = assignments
+          .filter((assignment) => assignment.cm_id === member.id)
+          .map((assignment) => ({
+            id: assignment.id,
+            customer_id: assignment.customer_id,
+            customer_name: customerNameById.get(assignment.customer_id) ?? 'Kund',
+            valid_from: assignment.valid_from,
+            valid_to: assignment.valid_to,
+            handover_note: assignment.handover_note,
+            scheduled_effective_date:
+              assignment.scheduled_change &&
+              typeof assignment.scheduled_change.effective_date === 'string'
+                ? assignment.scheduled_change.effective_date
+                : null,
+          }))
+          .sort(
+            (left, right) =>
+              right.valid_from.localeCompare(left.valid_from) ||
+              left.customer_name.localeCompare(right.customer_name),
+          );
 
         const memberActivities = activities.filter(
           (activity) =>
@@ -154,15 +235,17 @@ export function useTeam() {
           ['active', 'agreed'].includes(customer.status),
         ).length;
         const pipelineCustomers = memberCustomers.filter((customer) =>
-          ['pending', 'invited'].includes(customer.status),
+          ['pending', 'pending_payment', 'pending_invoice', 'invited'].includes(customer.status),
         ).length;
         const uploadingCustomers = memberCustomers.filter(
           (customer) => customer.videos_last_7d > 0,
         ).length;
-        const mrr_ore = memberCustomers.reduce(
-          (sum, customer) => sum + Math.round(customer.monthly_price * 100),
-          0,
-        );
+        const mrr_ore = memberCustomers.reduce((sum, customer) => {
+          const isCommissionable =
+            ['active', 'agreed', 'pending_invoice', 'pending_payment'].includes(customer.status) &&
+            !customer.paused_until;
+          return sum + (isCommissionable ? Math.round(customer.monthly_price * 100) : 0);
+        }, 0);
         const activitySeries = Array.from({ length: 14 }, (_, index) => {
           const dayStart = new Date();
           dayStart.setHours(0, 0, 0, 0);
@@ -237,7 +320,12 @@ export function useTeam() {
           avatar_url: member.avatar_url,
           role: member.role,
           is_active: member.is_active,
+          commission_rate: Number.isFinite(Number(member.commission_rate))
+            ? Number(member.commission_rate)
+            : 0.2,
+          active_absence: findActiveCmAbsence(absences, member.id, today),
           customers: memberCustomers,
+          assignmentHistory,
           customerCount: memberCustomers.length,
           mrr_ore,
           activityCount: recentActivities.length,

@@ -21,6 +21,8 @@
 import { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getAdminRoles, type AdminRole } from '@/lib/admin/admin-roles'
+import { isMissingRelationError } from '@/lib/admin/schema-guards'
 import { jsonError, jsonOk } from '@/lib/server/api-response'
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin'
 
@@ -31,6 +33,7 @@ export interface AuthenticatedUser {
   email: string | null
   role: UserRole
   is_admin: boolean
+  admin_roles: AdminRole[]
 }
 
 /**
@@ -127,11 +130,21 @@ export async function validateApiRequest(
     isAdmin = Boolean(profile?.is_admin)
   }
 
+  let adminRoles: AdminRole[] = []
+  try {
+    adminRoles = await getAdminRoles(admin, session.user.id)
+  } catch (error) {
+    if (!(error instanceof Error) || !isMissingRelationError(error.message)) {
+      throw error
+    }
+  }
+
   const authenticatedUser: AuthenticatedUser = {
     id: session.user.id,
     email: session.user.email ?? profile?.email ?? null,
     role,
     is_admin: isAdmin,
+    admin_roles: adminRoles,
   }
 
   if (
@@ -244,6 +257,45 @@ export function hasRole(user: AuthenticatedUser, roles: UserRole | UserRole[]): 
 export function requireAdmin(user: AuthenticatedUser): void {
   if (!user.is_admin && user.role !== 'admin') {
     throw new AuthError(403, 'Adminbehorighet kravs')
+  }
+}
+
+export function hasAdminScope(
+  user: AuthenticatedUser,
+  requiredScope: AdminRole,
+): boolean {
+  if (!user.is_admin && user.role !== 'admin') {
+    return false
+  }
+
+  // Legacy fallback while older environments/users are provisioned with explicit admin scopes.
+  if (user.admin_roles.length === 0) {
+    return true
+  }
+
+  if (requiredScope === 'operations_admin') {
+    return (
+      user.admin_roles.includes('operations_admin') ||
+      user.admin_roles.includes('super_admin')
+    )
+  }
+
+  return user.admin_roles.includes('super_admin')
+}
+
+export function requireAdminScope(
+  user: AuthenticatedUser,
+  requiredScope: AdminRole,
+  message?: string,
+): void {
+  if (!hasAdminScope(user, requiredScope)) {
+    throw new AuthError(
+      403,
+      message ??
+        (requiredScope === 'super_admin'
+          ? 'Endast super-admin kan utfora den har atgarden'
+          : 'Du saknar ratt admin-behorighet'),
+    )
   }
 }
 

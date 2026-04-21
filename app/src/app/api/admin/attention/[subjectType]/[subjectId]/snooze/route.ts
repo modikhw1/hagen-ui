@@ -4,7 +4,16 @@ import { resolveTeamMemberIdForProfile } from '@/lib/interactions';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { z } from 'zod';
 
-const subjectTypeSchema = z.enum(['invoice', 'onboarding', 'cm_notification', 'customer_blocking', 'demo_response']);
+const subjectTypeSchema = z.enum([
+  'invoice',
+  'onboarding',
+  'cm_notification',
+  'customer_blocking',
+  'demo_response',
+  'cm_assignment',
+  'subscription_pause_resume',
+  'cm_activity',
+]);
 
 const snoozeSchema = z.object({
   days: z.number().int().optional().nullable(),

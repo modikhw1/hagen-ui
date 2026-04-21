@@ -30,7 +30,7 @@ function initialState(): FormState {
     contact_name: '',
     contact_email: '',
     tiktok_handle: '',
-    proposed_concepts_per_week: '3',
+    proposed_concepts_per_week: '2',
     proposed_price_sek: '',
   };
 }
@@ -147,7 +147,7 @@ export default function CreateDemoDialog({ open, onClose, onCreated }: Props) {
                 onChange={(event) => setForm((current) => ({ ...current, proposed_concepts_per_week: event.target.value }))}
                 className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
                 inputMode="numeric"
-                placeholder="3"
+                placeholder="2"
               />
             </Field>
             <Field label="Pris per manad (SEK)">

@@ -2,25 +2,39 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getStudioCustomerStatusMeta } from '@/lib/studio/customer-status';
+import { getStudioCustomerStatusMeta, normalizeStudioCustomerStatus } from '@/lib/studio/customer-status';
 import { buildStudioWorkspaceHref } from '@/lib/studio/navigation';
 import { supabase } from '@/lib/supabase/client';
 
 interface CustomerProfile {
   id: string;
   business_name: string;
-  contact_email: string;
-  customer_contact_name?: string;
-  account_manager?: string;
-  monthly_price: number;
+  contact_email: string | null;
+  customer_contact_name?: string | null;
+  account_manager?: string | null;
+  monthly_price: number | null;
   status: 'pending' | 'active' | 'archived' | 'invited' | 'agreed';
-  created_at: string;
+  created_at: string | null;
   game_plan?: {
     title?: string;
     goals?: string[];
-  };
+  } | null;
   tiktok_handle?: string | null;
   last_history_sync_at?: string | null;
+}
+
+function normalizeGamePlan(value: unknown): CustomerProfile['game_plan'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    title: typeof record.title === 'string' ? record.title : undefined,
+    goals: Array.isArray(record.goals)
+      ? record.goals.filter((goal): goal is string => typeof goal === 'string')
+      : undefined,
+  };
 }
 
 type CustomerStatusFilter = 'all' | CustomerProfile['status'];
@@ -64,7 +78,13 @@ export default function StudioCustomersPage() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setCustomers(data || []);
+      setCustomers(
+        (data || []).map((customer) => ({
+          ...customer,
+          status: normalizeStudioCustomerStatus(customer.status),
+          game_plan: normalizeGamePlan(customer.game_plan),
+        }))
+      );
     } catch (err) {
       console.error('Error fetching customers:', err);
     } finally {
@@ -335,7 +355,7 @@ export default function StudioCustomersPage() {
                     </div>
                   ) : (
                     <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                      {customer.monthly_price > 0 ? `${customer.monthly_price} kr/man` : 'Pris ej satt'}
+                      {(customer.monthly_price ?? 0) > 0 ? `${customer.monthly_price} kr/man` : 'Pris ej satt'}
                     </div>
                   )}
                   {customer.status !== 'archived' && (

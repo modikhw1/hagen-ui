@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { TablesUpdate } from '@/types/database';
 import { withAuth } from '@/lib/auth/api-auth';
 import { resolveCustomerConceptAssignmentNote } from '@/lib/customer-concept-assignment';
 import {
@@ -7,6 +8,7 @@ import {
 import {
   mergeCustomerConceptContentOverrides,
 } from '@/lib/customer-concept-overrides';
+import { asJsonObject } from '@/lib/database/json';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
 
@@ -32,7 +34,7 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
 
   // content boundary — merged overrides
   const mergedContentOverrides = mergeCustomerConceptContentOverrides(
-    existing as Record<string, unknown>,
+    { content_overrides: existing.content_overrides },
     safeBody
   );
 
@@ -53,22 +55,45 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
   // Explicit boundary-organized update payload — no free body passthrough.
   // Each field is intentionally mapped to a boundary: content, assignment,
   // markers, or placement. Stray request body fields are not written.
-  const updates: Record<string, unknown> = {
-    // content boundary
-    content_overrides: Object.keys(mergedContentOverrides).length > 0 ? mergedContentOverrides : {},
-    // assignment boundary
-    status: nextAssignmentStatus,
-    cm_note: assignmentNotePatched ? nextAssignmentNote : undefined,
-    // markers boundary
-    sent_at: nextSentAt,
-    ...(hasOwnKey('tags') ? { tags: safeBody.tags } : {}),
-    ...(hasOwnKey('collection_id') ? { collection_id: safeBody.collection_id } : {}),
-    // placement boundary
-    ...(hasOwnKey('feed_order') ? { feed_order: safeBody.feed_order } : {}),
-    ...(hasOwnKey('planned_publish_at') ? { planned_publish_at: safeBody.planned_publish_at } : {}),
-    // timestamp
+  const updates: TablesUpdate<'customer_concepts'> = {
+    content_overrides: asJsonObject(mergedContentOverrides),
     updated_at: new Date().toISOString(),
   };
+
+  if (nextAssignmentStatus !== undefined) {
+    updates.status = nextAssignmentStatus;
+  }
+
+  if (assignmentNotePatched) {
+    updates.cm_note = nextAssignmentNote ?? null;
+  }
+
+  if (nextSentAt === null || typeof nextSentAt === 'string') {
+    updates.sent_at = nextSentAt;
+  }
+
+  if (hasOwnKey('tags')) {
+    updates.tags = Array.isArray(safeBody.tags)
+      ? safeBody.tags.filter((tag): tag is string => typeof tag === 'string')
+      : null;
+  }
+
+  if (hasOwnKey('collection_id')) {
+    updates.collection_id =
+      typeof safeBody.collection_id === 'string' ? safeBody.collection_id : null;
+  }
+
+  if (hasOwnKey('feed_order')) {
+    updates.feed_order =
+      typeof safeBody.feed_order === 'number' && Number.isFinite(safeBody.feed_order)
+        ? safeBody.feed_order
+        : null;
+  }
+
+  if (hasOwnKey('planned_publish_at')) {
+    updates.planned_publish_at =
+      typeof safeBody.planned_publish_at === 'string' ? safeBody.planned_publish_at : null;
+  }
 
   const { data, error } = await supabase
     .from('customer_concepts')

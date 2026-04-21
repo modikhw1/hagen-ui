@@ -12,6 +12,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { applyScheduledAssignmentChanges } from '@/lib/admin/cm-assignments';
+import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
+import { resumeCustomerSubscription } from '@/lib/stripe/admin-billing';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
 import { applyPriceToSubscription } from '@/lib/stripe/subscription-pricing';
@@ -42,6 +45,12 @@ interface ApplyPriceResult {
   scanned: number;
   applied: number;
   promoted_without_subscription: number;
+  failed: Array<{ customer_profile_id: string; error: string }>;
+}
+
+interface ResumePauseResult {
+  scanned: number;
+  resumed: number;
   failed: Array<{ customer_profile_id: string; error: string }>;
 }
 
@@ -111,10 +120,92 @@ async function runPriceActivationJob(): Promise<ApplyPriceResult> {
       if (promoteError) {
         throw new Error(promoteError.message);
       }
+
+      await syncOperationalSubscriptionState({
+        supabaseAdmin,
+        customerProfileId: profile.id,
+        profile: {
+          id: profile.id,
+          stripe_subscription_id: profile.stripe_subscription_id,
+          paused_until: null,
+          monthly_price: nextPrice,
+          upcoming_monthly_price: null,
+          upcoming_price_effective_date: null,
+        },
+      });
     } catch (err: unknown) {
       result.failed.push({
         customer_profile_id: profile.id,
         error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  }
+
+  return result;
+}
+
+async function runResumePausedSubscriptionsJob(): Promise<ResumePauseResult> {
+  if (!stripe) {
+    throw new Error('Stripe not configured');
+  }
+
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  const today = new Date().toISOString().slice(0, 10);
+  const result: ResumePauseResult = {
+    scanned: 0,
+    resumed: 0,
+    failed: [],
+  };
+
+  const pausedProfiles = await supabaseAdmin
+    .from('customer_profiles')
+    .select('id, stripe_subscription_id, monthly_price, paused_until, upcoming_monthly_price, upcoming_price_effective_date')
+    .not('stripe_subscription_id', 'is', null)
+    .not('paused_until', 'is', null)
+    .lte('paused_until', today)
+    .limit(200);
+
+  if (pausedProfiles.error) {
+    throw new Error(pausedProfiles.error.message);
+  }
+
+  result.scanned = pausedProfiles.data?.length ?? 0;
+
+  for (const profile of pausedProfiles.data ?? []) {
+    try {
+      await resumeCustomerSubscription({
+        supabaseAdmin,
+        stripeClient: stripe,
+        profileId: profile.id,
+      });
+
+      const { error: updateError } = await supabaseAdmin
+        .from('customer_profiles')
+        .update({ paused_until: null } as never)
+        .eq('id', profile.id);
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      await syncOperationalSubscriptionState({
+        supabaseAdmin,
+        customerProfileId: profile.id,
+        profile: {
+          id: profile.id,
+          stripe_subscription_id: profile.stripe_subscription_id,
+          paused_until: null,
+          monthly_price: Number(profile.monthly_price) || 0,
+          upcoming_monthly_price: Number(profile.upcoming_monthly_price) || null,
+          upcoming_price_effective_date: profile.upcoming_price_effective_date,
+        },
+      });
+
+      result.resumed += 1;
+    } catch (error: unknown) {
+      result.failed.push({
+        customer_profile_id: profile.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }
@@ -129,8 +220,20 @@ export async function GET(request: NextRequest) {
       await validateApiRequest(request, ['admin']);
     }
 
-    const result = await runPriceActivationJob();
-    return NextResponse.json(result);
+    const [priceActivation, pauseResumes, scheduledAssignments] = await Promise.all([
+      runPriceActivationJob(),
+      runResumePausedSubscriptionsJob(),
+      (async () => {
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+        return applyScheduledAssignmentChanges({ supabaseAdmin });
+      })(),
+    ]);
+
+    return NextResponse.json({
+      price_activation: priceActivation,
+      pause_resumes: pauseResumes,
+      scheduled_assignments: scheduledAssignments,
+    });
   } catch (error: unknown) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });

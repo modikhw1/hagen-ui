@@ -11,6 +11,7 @@ import {
   normalizeVideo,
   type NormalizedHistoryClip,
 } from '@/lib/studio/tiktok-provider';
+import type { TablesInsert, TablesUpdate } from '@/types/database';
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
@@ -47,7 +48,7 @@ function isMissingOperationLockColumn(message: string): boolean {
 async function updateSyncRun(
   supabase: SupabaseAdmin,
   runId: string | null,
-  patch: Record<string, unknown>
+  patch: TablesUpdate<'sync_runs'>
 ): Promise<void> {
   if (!runId) return;
 
@@ -259,7 +260,7 @@ export async function syncCustomerHistory(
         mode: opts.mode,
         started_at: startedAt,
         status: 'running',
-      })
+      } satisfies TablesInsert<'sync_runs'>)
       .select('id')
       .single();
 

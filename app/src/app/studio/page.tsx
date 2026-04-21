@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { normalizeStudioCustomerStatus } from '@/lib/studio/customer-status';
 import { buildStudioWorkspaceHref } from '@/lib/studio/navigation';
 import { supabase } from '@/lib/supabase/client';
 
 interface CustomerRow {
   id: string;
   business_name: string;
-  account_manager?: string;
+  account_manager?: string | null;
   account_manager_profile_id?: string | null;
   status: string;
 }
@@ -45,7 +46,12 @@ export default function StudioDashboard() {
       .select('id, business_name, account_manager, account_manager_profile_id, status')
       .neq('status', 'archived')
       .order('created_at', { ascending: false });
-    setCustomers(data ?? []);
+    setCustomers(
+      (data ?? []).map((customer) => ({
+        ...customer,
+        status: normalizeStudioCustomerStatus(customer.status),
+      }))
+    );
   };
 
   const fetchLastEmailDates = async () => {

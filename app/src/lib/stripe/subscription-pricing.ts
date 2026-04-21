@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import { DEFAULT_CURRENCY } from './config';
 import { stripeEnvironment } from './dynamic-config';
 import { upsertSubscriptionMirror } from './mirror';
+import { recurringUnitAmountFromMonthlySek } from './price-amounts';
 import { logStripeSync } from './sync-log';
 
 export async function applyPriceToSubscription(args: {
@@ -11,6 +12,8 @@ export async function applyPriceToSubscription(args: {
   monthlyPriceSek: number;
   source: 'admin_manual' | 'scheduled_upcoming';
   supabaseAdmin: SupabaseClient;
+  prorationBehavior?: 'always_invoice' | 'create_prorations' | 'none';
+  prorationDate?: number;
 }) {
   const subscription = await args.stripeClient.subscriptions.retrieve(
     args.subscriptionId,
@@ -27,7 +30,11 @@ export async function applyPriceToSubscription(args: {
   const intervalCount = item.price.recurring?.interval_count ?? 1;
 
   const newPrice = await args.stripeClient.prices.create({
-    unit_amount: Math.round(args.monthlyPriceSek * 100),
+    unit_amount: recurringUnitAmountFromMonthlySek({
+      monthlyPriceSek: args.monthlyPriceSek,
+      interval,
+      intervalCount,
+    }),
     currency: DEFAULT_CURRENCY,
     recurring: { interval, interval_count: intervalCount },
     product: productId,
@@ -35,7 +42,8 @@ export async function applyPriceToSubscription(args: {
 
   const updated = await args.stripeClient.subscriptions.update(subscription.id, {
     items: [{ id: item.id, price: newPrice.id }],
-    proration_behavior: 'create_prorations',
+    proration_behavior: args.prorationBehavior ?? 'create_prorations',
+    proration_date: args.prorationDate,
     metadata: {
       ...subscription.metadata,
       price_source: args.source,

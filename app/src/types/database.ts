@@ -570,8 +570,11 @@ export type Database = {
           id: string
           match_percentage: number | null
           notes: string | null
+          partner_name: string | null
           planned_publish_at: string | null
           produced_at: string | null
+          profile_image_url: string | null
+          profile_name: string | null
           published_at: string | null
           reconciled_at: string | null
           reconciled_by_cm_id: string | null
@@ -587,6 +590,7 @@ export type Database = {
           tiktok_views: number | null
           tiktok_watch_time_seconds: number | null
           updated_at: string | null
+          visual_variant: string | null
           why_it_fits: string | null
         }
         Insert: {
@@ -614,8 +618,11 @@ export type Database = {
           id?: string
           match_percentage?: number | null
           notes?: string | null
+          partner_name?: string | null
           planned_publish_at?: string | null
           produced_at?: string | null
+          profile_image_url?: string | null
+          profile_name?: string | null
           published_at?: string | null
           reconciled_at?: string | null
           reconciled_by_cm_id?: string | null
@@ -631,6 +638,7 @@ export type Database = {
           tiktok_views?: number | null
           tiktok_watch_time_seconds?: number | null
           updated_at?: string | null
+          visual_variant?: string | null
           why_it_fits?: string | null
         }
         Update: {
@@ -658,8 +666,11 @@ export type Database = {
           id?: string
           match_percentage?: number | null
           notes?: string | null
+          partner_name?: string | null
           planned_publish_at?: string | null
           produced_at?: string | null
+          profile_image_url?: string | null
+          profile_name?: string | null
           published_at?: string | null
           reconciled_at?: string | null
           reconciled_by_cm_id?: string | null
@@ -675,6 +686,7 @@ export type Database = {
           tiktok_views?: number | null
           tiktok_watch_time_seconds?: number | null
           updated_at?: string | null
+          visual_variant?: string | null
           why_it_fits?: string | null
         }
         Relationships: [
@@ -2521,7 +2533,14 @@ export type Database = {
         }
         Returns: string
       }
-      shift_feed_order: { Args: { p_customer_id: string }; Returns: undefined }
+      shift_feed_order: {
+        Args: { p_advance_count?: number; p_customer_id: string }
+        Returns: undefined
+      }
+      swap_feed_order: {
+        Args: { p_concept_a: string; p_concept_b: string }
+        Returns: undefined
+      }
       update_concept_with_version: {
         Args: {
           p_backend_data: Json

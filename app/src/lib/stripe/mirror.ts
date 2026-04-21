@@ -1,5 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
+import { recordAuditLog } from '@/lib/admin/audit-log';
+import { buildScheduledPriceChange } from '@/lib/admin/subscription-operational-sync';
+import { isMissingColumnError } from '@/lib/admin/schema-guards';
 
 function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   const parent = (
@@ -32,16 +35,74 @@ function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
     : directSubscription?.id ?? null;
 }
 
-function mapSubStatusToCustomerStatus(
-  status: string,
-  cancelAtEnd: boolean
-): string {
-  if (status === 'active' && !cancelAtEnd) return 'active';
+function mapSubStatusToCustomerStatus(status: string): string {
+  if (status === 'active') return 'active';
   if (status === 'trialing') return 'agreed';
   if (status === 'past_due') return 'past_due';
   if (status === 'canceled') return 'cancelled';
   if (status === 'paused') return 'pending_payment';
   return 'pending';
+}
+
+function isSubscriptionDefinitelyEnded(subscription: Stripe.Subscription, mirroredStatus: string) {
+  if (subscription.cancel_at_period_end && !subscription.ended_at && !subscription.canceled_at) {
+    return false;
+  }
+
+  return (
+    mirroredStatus === 'canceled' ||
+    Boolean(subscription.ended_at) ||
+    Boolean(subscription.canceled_at)
+  );
+}
+
+function extractMissingColumnName(message?: string | null) {
+  if (typeof message !== 'string') return null;
+
+  const postgrestMatch = message.match(/could not find the ['"]([a-zA-Z0-9_]+)['"] column/i);
+  if (postgrestMatch?.[1]) {
+    return postgrestMatch[1];
+  }
+
+  const postgresMatch = message.match(/column ["']?([a-zA-Z0-9_]+)["']? does not exist/i);
+  if (postgresMatch?.[1]) {
+    return postgresMatch[1];
+  }
+
+  return null;
+}
+
+async function upsertWithMissingColumnFallback(params: {
+  supabaseAdmin: SupabaseClient;
+  table: 'invoices' | 'subscriptions';
+  payload: Record<string, unknown>;
+  onConflict: string;
+  errorPrefix: string;
+}) {
+  const payload = { ...params.payload };
+  const prunedColumns = new Set<string>();
+
+  while (true) {
+    const { error } = await params.supabaseAdmin
+      .from(params.table)
+      .upsert(payload as never, { onConflict: params.onConflict });
+
+    if (!error) {
+      return;
+    }
+
+    if (!isMissingColumnError(error.message)) {
+      throw new Error(`${params.errorPrefix}: ${error.message}`);
+    }
+
+    const missingColumn = extractMissingColumnName(error.message);
+    if (!missingColumn || !(missingColumn in payload) || prunedColumns.has(missingColumn)) {
+      throw new Error(`${params.errorPrefix}: ${error.message}`);
+    }
+
+    delete payload[missingColumn];
+    prunedColumns.add(missingColumn);
+  }
 }
 
 export async function syncInvoiceLineItems(params: {
@@ -115,8 +176,10 @@ export async function upsertInvoiceMirror(params: {
         : new Date().toISOString()
       : null;
 
-  const { error: invoiceError } = await supabaseAdmin.from('invoices').upsert(
-    {
+  await upsertWithMissingColumnFallback({
+    supabaseAdmin,
+    table: 'invoices',
+    payload: {
       stripe_invoice_id: invoice.id,
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: stripeSubscriptionId,
@@ -131,14 +194,12 @@ export async function upsertInvoiceMirror(params: {
         ? new Date(invoice.due_date * 1000).toISOString()
         : null,
       paid_at: paidAt,
+      raw: invoice,
       environment,
-    } as never,
-    { onConflict: 'stripe_invoice_id' }
-  );
-
-  if (invoiceError) {
-    throw new Error(`Failed to sync invoice mirror: ${invoiceError.message}`);
-  }
+    },
+    onConflict: 'stripe_invoice_id',
+    errorPrefix: 'Failed to sync invoice mirror',
+  });
 
   if (invoice.lines?.data?.length) {
     await syncInvoiceLineItems({
@@ -177,13 +238,27 @@ export async function upsertSubscriptionMirror(params: {
       : subscription.customer?.id ?? null;
 
   let customerProfileId: string | null = null;
+  let operationalProfile: {
+    paused_until: string | null;
+    monthly_price: number | null;
+    upcoming_monthly_price: number | null;
+    upcoming_price_effective_date: string | null;
+  } | null = null;
   if (stripeCustomerId) {
     const { data } = await supabaseAdmin
       .from('customer_profiles')
-      .select('id')
+      .select('id, paused_until, monthly_price, upcoming_monthly_price, upcoming_price_effective_date')
       .eq('stripe_customer_id', stripeCustomerId)
       .maybeSingle();
     customerProfileId = data?.id ?? null;
+    operationalProfile = data
+      ? {
+          paused_until: data.paused_until,
+          monthly_price: data.monthly_price,
+          upcoming_monthly_price: data.upcoming_monthly_price,
+          upcoming_price_effective_date: data.upcoming_price_effective_date,
+        }
+      : null;
   }
 
   const item = subscription.items.data[0];
@@ -194,64 +269,108 @@ export async function upsertSubscriptionMirror(params: {
     ? 'paused'
     : subscription.status;
 
-  const { error: subscriptionError } = await supabaseAdmin.from('subscriptions').upsert(
-    {
-      stripe_subscription_id: subscription.id,
-      stripe_customer_id: stripeCustomerId,
-      customer_profile_id: customerProfileId,
-      status: mirroredStatus,
-      cancel_at_period_end: subscription.cancel_at_period_end ?? false,
-      amount,
-      interval,
-      interval_count: intervalCount,
-      current_period_start: item?.current_period_start
-        ? new Date(item.current_period_start * 1000).toISOString()
-        : null,
-      current_period_end: item?.current_period_end
-        ? new Date(item.current_period_end * 1000).toISOString()
-        : null,
-      trial_start: subscription.trial_start
-        ? new Date(subscription.trial_start * 1000).toISOString()
-        : null,
-      trial_end: subscription.trial_end
-        ? new Date(subscription.trial_end * 1000).toISOString()
-        : null,
-      canceled_at: subscription.canceled_at
-        ? new Date(subscription.canceled_at * 1000).toISOString()
-        : null,
-      cancel_at: subscription.cancel_at
-        ? new Date(subscription.cancel_at * 1000).toISOString()
-        : null,
-      ended_at: subscription.ended_at
-        ? new Date(subscription.ended_at * 1000).toISOString()
-        : null,
-      environment,
-      created: subscription.created
-        ? new Date(subscription.created * 1000).toISOString()
-        : new Date().toISOString(),
-    } as never,
-    { onConflict: 'stripe_subscription_id' }
-  );
+  const payload = {
+    stripe_subscription_id: subscription.id,
+    stripe_customer_id: stripeCustomerId,
+    customer_profile_id: customerProfileId,
+    status: mirroredStatus,
+    cancel_at_period_end: subscription.cancel_at_period_end ?? false,
+    amount,
+    interval,
+    interval_count: intervalCount,
+    current_period_start: item?.current_period_start
+      ? new Date(item.current_period_start * 1000).toISOString()
+      : null,
+    current_period_end: item?.current_period_end
+      ? new Date(item.current_period_end * 1000).toISOString()
+      : null,
+    trial_start: subscription.trial_start
+      ? new Date(subscription.trial_start * 1000).toISOString()
+      : null,
+    trial_end: subscription.trial_end
+      ? new Date(subscription.trial_end * 1000).toISOString()
+      : null,
+    canceled_at: subscription.canceled_at
+      ? new Date(subscription.canceled_at * 1000).toISOString()
+      : null,
+    cancel_at: subscription.cancel_at
+      ? new Date(subscription.cancel_at * 1000).toISOString()
+      : null,
+    ended_at: subscription.ended_at
+      ? new Date(subscription.ended_at * 1000).toISOString()
+      : null,
+    pause_collection: subscription.pause_collection,
+    pause_until: operationalProfile?.paused_until ?? null,
+    scheduled_price_change: operationalProfile
+      ? buildScheduledPriceChange(operationalProfile)
+      : null,
+    raw: subscription,
+    environment,
+    created: subscription.created
+      ? new Date(subscription.created * 1000).toISOString()
+      : new Date().toISOString(),
+  };
 
-  if (subscriptionError) {
-    throw new Error(
-      `Failed to sync subscription mirror: ${subscriptionError.message}`
-    );
-  }
+  await upsertWithMissingColumnFallback({
+    supabaseAdmin,
+    table: 'subscriptions',
+    payload,
+    onConflict: 'stripe_subscription_id',
+    errorPrefix: 'Failed to sync subscription mirror',
+  });
 
   if (customerProfileId) {
+    const currentCustomerProfile = await supabaseAdmin
+      .from('customer_profiles')
+      .select('id, status, next_invoice_date')
+      .eq('id', customerProfileId)
+      .maybeSingle();
+
     await supabaseAdmin
       .from('customer_profiles')
       .update({
         stripe_subscription_id: subscription.id,
-        status: mapSubStatusToCustomerStatus(
-          mirroredStatus,
-          subscription.cancel_at_period_end ?? false
-        ),
+        status: mapSubStatusToCustomerStatus(mirroredStatus),
         next_invoice_date: item?.current_period_end
           ? new Date(item.current_period_end * 1000).toISOString().slice(0, 10)
           : null,
       } as never)
       .eq('id', customerProfileId);
+
+    if (
+      currentCustomerProfile.data &&
+      currentCustomerProfile.data.status !== 'archived' &&
+      isSubscriptionDefinitelyEnded(subscription, mirroredStatus)
+    ) {
+      const archivedAt = new Date().toISOString().slice(0, 10);
+      const { data: archivedProfile } = await supabaseAdmin
+        .from('customer_profiles')
+        .update({
+          status: 'archived',
+          next_invoice_date: null,
+        } as never)
+        .eq('id', customerProfileId)
+        .select('id, status, next_invoice_date')
+        .maybeSingle();
+
+      await recordAuditLog(supabaseAdmin, {
+        actorUserId: null,
+        actorRole: 'system',
+        action: 'system.customer.auto_archived_after_subscription_end',
+        entityType: 'customer_profile',
+        entityId: customerProfileId,
+        beforeState: currentCustomerProfile.data as Record<string, unknown>,
+        afterState: (archivedProfile ?? {
+          id: customerProfileId,
+          status: 'archived',
+          next_invoice_date: null,
+        }) as Record<string, unknown>,
+        metadata: {
+          stripe_subscription_id: subscription.id,
+          archived_on: archivedAt,
+          mirrored_status: mirroredStatus,
+        },
+      });
+    }
   }
 }

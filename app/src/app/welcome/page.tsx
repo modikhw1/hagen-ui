@@ -11,6 +11,7 @@ import { TikTokProfileCard } from '@/components/onboarding/TikTokProfileCard';
 import { ProcessTimeline } from '@/components/onboarding/ProcessTimeline';
 import { PackageSummary } from '@/components/onboarding/PackageSummary';
 import { OnboardingCTA } from '@/components/onboarding/OnboardingCTA';
+import { GamePlanPreviewCard } from '@/components/onboarding/GamePlanPreviewCard';
 
 interface WelcomeContext {
   customer: { businessName: string; tiktokHandle: string | null; tiktokProfileUrl: string | null };
@@ -24,6 +25,13 @@ interface WelcomeContext {
     billingDayOfMonth: number;
   };
   process: { steps: Array<{ number: string; title: string; description: string }> };
+  gamePlan: {
+    hasGamePlan: boolean;
+    title: string | null;
+    description: string | null;
+    goals: string[];
+    updatedAt: string | null;
+  };
 }
 
 export default function WelcomePage() {
@@ -164,14 +172,24 @@ export default function WelcomePage() {
         {/* 4. Process Timeline */}
         <ProcessTimeline steps={context.process.steps} />
 
-        {/* 5. Package Summary */}
+        {/* 5. Personal Game Plan Preview */}
+        {context.gamePlan?.hasGamePlan ? (
+          <GamePlanPreviewCard
+            title={context.gamePlan.title}
+            description={context.gamePlan.description}
+            goals={context.gamePlan.goals}
+            updatedAt={context.gamePlan.updatedAt}
+          />
+        ) : null}
+
+        {/* 6. Package Summary */}
         <PackageSummary
           pricePerMonth={context.subscription.pricePerMonth}
           interval={context.subscription.interval}
           scopeItems={context.subscription.scopeItems}
         />
 
-        {/* 6. CTA */}
+        {/* 7. CTA */}
         <OnboardingCTA onCheckout={handleCheckout} onExplore={handleExplore} />
       </div>
     </div>

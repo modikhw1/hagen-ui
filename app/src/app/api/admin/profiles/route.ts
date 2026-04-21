@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server';
+import type { TablesUpdate } from '@/types/database';
 import { withAuth } from '@/lib/auth/api-auth';
+import { asJsonObject } from '@/lib/database/json';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
@@ -68,7 +70,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
     }
 
     const supabaseAdmin = createSupabaseAdmin();
-    const updateData: Record<string, unknown> = {
+    const updateData: TablesUpdate<'profiles'> = {
       updated_at: new Date().toISOString(),
     };
 
@@ -77,7 +79,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
     if (industry !== undefined) updateData.industry = industry;
     if (business_name !== undefined) updateData.business_name = business_name;
     if (business_description !== undefined) updateData.business_description = business_description;
-    if (matching_data !== undefined) updateData.matching_data = matching_data;
+    if (matching_data !== undefined) updateData.matching_data = asJsonObject(matching_data);
 
     const { data, error } = await supabaseAdmin
       .from('profiles')

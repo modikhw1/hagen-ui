@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { normalizeCustomerBrief } from '@/lib/database/json';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { resolveGamePlanDocument } from '@/lib/game-plan';
 import DemoView from './DemoView';
@@ -64,7 +65,7 @@ export default async function DemoPage({
       customerId={customerId}
       businessName={customer.business_name}
       logoUrl={customer.logo_url ?? null}
-      brief={customer.brief ?? null}
+      brief={normalizeCustomerBrief(customer.brief)}
       gamePlanHtml={gamePlanHtml}
       concepts={timelineConcepts}
     />

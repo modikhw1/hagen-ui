@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { withAuth } from '@/lib/auth/api-auth';
+import { recordAuditLog } from '@/lib/admin/audit-log';
+import { requireAdminScope, withAuth } from '@/lib/auth/api-auth';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { createManualInvoice } from '@/lib/stripe/admin-billing';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { z } from 'zod';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const createInvoiceSchema = z.object({
   customer_profile_id: z.string().uuid(),
@@ -18,14 +16,20 @@ const createInvoiceSchema = z.object({
   auto_finalize: z.boolean().default(true),
 }).strict();
 
-export const POST = withAuth(async (request: NextRequest) => {
+export const POST = withAuth(async (request: NextRequest, user) => {
+  requireAdminScope(
+    user,
+    'super_admin',
+    'Endast super-admin kan skapa manuella fakturor',
+  );
+
   const body = await request.json();
   const parsed = createInvoiceSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Ogiltig payload' }, { status: 400 });
   }
 
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  const supabaseAdmin = createSupabaseAdmin();
   const invoice = await createManualInvoice({
     supabaseAdmin,
     stripeClient: stripe,
@@ -36,6 +40,21 @@ export const POST = withAuth(async (request: NextRequest) => {
     })),
     daysUntilDue: parsed.data.days_until_due,
     autoFinalize: parsed.data.auto_finalize,
+  });
+
+  await recordAuditLog(supabaseAdmin, {
+    actorUserId: user.id,
+    actorEmail: user.email,
+    actorRole: user.role,
+    action: 'admin.invoice.created',
+    entityType: 'invoice',
+    entityId: invoice.id,
+    metadata: {
+      customer_profile_id: parsed.data.customer_profile_id,
+      item_count: parsed.data.items.length,
+      days_until_due: parsed.data.days_until_due,
+      auto_finalize: parsed.data.auto_finalize,
+    },
   });
 
   return NextResponse.json({ invoice });

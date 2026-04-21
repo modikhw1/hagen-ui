@@ -1,4 +1,7 @@
 import { NextRequest } from 'next/server';
+import { recordAuditLog } from '@/lib/admin/audit-log';
+import { syncCustomerAssignmentFromProfile } from '@/lib/admin/cm-assignments';
+import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
 import { withAuth } from '@/lib/auth/api-auth';
 import { logCustomerCreated, logCustomerInvited } from '@/lib/activity/logger';
 import { inferFirstInvoiceBehavior } from '@/lib/billing/first-invoice';
@@ -134,6 +137,7 @@ export const POST = withAuth(
           ...rest,
           account_manager: assignment.accountManager,
           account_manager_profile_id: assignment.accountManagerProfileId,
+          concepts_per_week: 2,
           monthly_price: pricing_status === 'unknown' ? 0 : monthly_price,
           pricing_status,
           contract_start_date,
@@ -157,6 +161,14 @@ export const POST = withAuth(
         data.id,
         data.business_name,
       );
+      await syncCustomerAssignmentFromProfile({
+        supabaseAdmin,
+        customerProfileId: data.id,
+      });
+      await syncOperationalSubscriptionState({
+        supabaseAdmin,
+        customerProfileId: data.id,
+      });
 
       let customer = data;
       let inviteSent = false;
@@ -192,10 +204,28 @@ export const POST = withAuth(
             data.business_name,
             data.contact_email || rest.contact_email,
           );
+          await syncOperationalSubscriptionState({
+            supabaseAdmin,
+            customerProfileId: data.id,
+          });
         } else {
           warnings.push(`Inbjudan kunde inte skickas: ${inviteResult.error}`);
         }
       }
+
+      await recordAuditLog(supabaseAdmin, {
+        actorUserId: user.id,
+        actorEmail: user.email,
+        actorRole: user.role,
+        action: 'admin.customer.created',
+        entityType: 'customer_profile',
+        entityId: data.id,
+        afterState: customer as unknown as Record<string, unknown>,
+        metadata: {
+          invite_sent: inviteSent,
+          warnings,
+        },
+      });
 
       return jsonOk(
         { customer, invite_sent: inviteSent, warnings },

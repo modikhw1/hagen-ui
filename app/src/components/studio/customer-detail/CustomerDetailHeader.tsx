@@ -1,6 +1,6 @@
 import React from 'react';
 import { AutoSaveTextarea } from '@/components/studio-v2/AutoSaveTextarea';
-import { getStudioCustomerStatusMeta } from '@/lib/studio/customer-status';
+import { getStudioCustomerStatusMeta, normalizeStudioCustomerStatus } from '@/lib/studio/customer-status';
 import { STUDIO_WORKSPACE_SECTIONS } from '@/lib/studio/navigation';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import type { CustomerBrief, Section } from '@/types/studio-v2';
@@ -31,7 +31,7 @@ export function CustomerDetailHeader({
   notesCount,
   draftCount,
 }: CustomerDetailHeaderProps) {
-  const customerStatusMeta = getStudioCustomerStatusMeta(customer.status);
+  const customerStatusMeta = getStudioCustomerStatusMeta(normalizeStudioCustomerStatus(customer.status));
 
   return (
     <div
@@ -101,7 +101,7 @@ export function CustomerDetailHeader({
         <div style={{ fontSize: 13, color: LeTrendColors.textSecondary, marginBottom: 12 }}>
           Pris:
           {' '}
-          {customer.monthly_price > 0 ? `${customer.monthly_price} kr/mån` : 'Pris ej satt'}
+          {(customer.monthly_price ?? 0) > 0 ? `${customer.monthly_price} kr/mån` : 'Pris ej satt'}
         </div>
         <div style={{ marginBottom: 12, fontSize: 11, color: LeTrendColors.textMuted }}>
           Pris och avtal hanteras i Admin.

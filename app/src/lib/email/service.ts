@@ -126,7 +126,7 @@ type CustomerConceptEmailRow = {
   concept_id: string | null;
   match_percentage: number | null;
   why_it_fits: string | null;
-  content_overrides: Record<string, unknown> | null;
+  content_overrides: import('@/types/database').Json | null;
   tiktok_thumbnail_url: string | null;
 };
 

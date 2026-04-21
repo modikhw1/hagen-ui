@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
+import type { TablesUpdate } from '@/types/database';
 import { withAuth } from '@/lib/auth/api-auth';
+import { EMPTY_CUSTOMER_BRIEF, normalizeCustomerBrief } from '@/lib/database/json';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-
-const EMPTY_BRIEF = { tone: '', constraints: '', current_focus: '' };
 
 function extractBriefPatch(body: Record<string, unknown>) {
   const directKeys = ['tone', 'constraints', 'current_focus'] as const;
@@ -56,7 +56,7 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ brief: data?.brief || EMPTY_BRIEF });
+  return NextResponse.json({ brief: normalizeCustomerBrief(data?.brief) });
 }, ['admin', 'content_manager']);
 
 export const PATCH = withAuth(async (request, _user, { params }: { params: Promise<{ customerId: string }> }) => {
@@ -83,14 +83,14 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
   }
 
   const nextBrief = {
-    ...EMPTY_BRIEF,
-    ...(existing?.brief || {}),
+    ...EMPTY_CUSTOMER_BRIEF,
+    ...normalizeCustomerBrief(existing?.brief),
     ...(payload || {}),
   };
 
   const { error } = await supabase
     .from('customer_profiles')
-    .update({ brief: nextBrief })
+    .update({ brief: nextBrief } satisfies TablesUpdate<'customer_profiles'>)
     .eq('id', customerId);
 
   if (error) {

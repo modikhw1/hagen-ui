@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowDownAZ, ArrowUpAZ, Search } from 'lucide-react';
 import AdminAvatar from '@/components/admin/AdminAvatar';
 import InviteCustomerModal from '@/components/admin/customers/InviteCustomerModal';
@@ -19,17 +19,176 @@ const FILTERS = [
   { key: 'archived', label: 'Arkiverade' },
 ] as const;
 
+const FILTER_KEYS = new Set(FILTERS.map((filter) => filter.key));
+const SCROLL_STATE_PREFIX = 'admin:customers:scroll:';
+const PAGE_SIZE = 25;
+
+function normalizeFilter(value: string | null) {
+  if (value && FILTER_KEYS.has(value as (typeof FILTERS)[number]['key'])) {
+    return value as (typeof FILTERS)[number]['key'];
+  }
+
+  return 'all';
+}
+
+function normalizeSort(value: string | null) {
+  return value === 'oldest' ? 'oldest' : 'newest';
+}
+
+function normalizePage(value: string | null) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return 1;
+  }
+
+  return parsed;
+}
+
+function buildCustomersListUrl(pathname: string, params: URLSearchParams) {
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
+function escapeCsv(value: string | number | null | undefined) {
+  if (value == null) return '';
+  const normalized = String(value).replace(/"/g, '""');
+  return /[",\n]/.test(normalized) ? `"${normalized}"` : normalized;
+}
+
+function downloadCustomersCsv(rows: ReturnType<typeof buildExportRows>) {
+  const header = [
+    'Foretag',
+    'E-post',
+    'Kontaktperson',
+    'Status',
+    'Onboarding',
+    'CM',
+    'Prisstatus',
+    'MRR_SEK',
+    'Intervall',
+    'TikTok',
+    'Nasta_faktura',
+    'Tillagd',
+  ];
+  const csv = [
+    header.join(','),
+    ...rows.map((row) =>
+      [
+        row.businessName,
+        row.email,
+        row.contactName,
+        row.status,
+        row.onboardingState,
+        row.accountManager,
+        row.pricingStatus,
+        row.mrrSek,
+        row.interval,
+        row.tiktokHandle,
+        row.nextInvoiceDate,
+        row.createdAt,
+      ].map(escapeCsv).join(','),
+    ),
+  ].join('\n');
+
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  window.URL.revokeObjectURL(url);
+}
+
+function buildExportRows(customers: Array<{
+  business_name: string;
+  contact_email: string;
+  customer_contact_name: string | null;
+  status: string;
+  onboardingState: string;
+  account_manager: string | null;
+  pricing_status: string | null;
+  monthly_price: number | null;
+  subscription_interval?: string | null;
+  tiktok_handle: string | null;
+  next_invoice_date: string | null;
+  created_at: string;
+}>) {
+  return customers.map((customer) => ({
+    businessName: customer.business_name,
+    email: customer.contact_email,
+    contactName: customer.customer_contact_name || '',
+    status: customer.status,
+    onboardingState: onboardingLabel(customer.onboardingState as OnboardingState),
+    accountManager: customer.account_manager || '',
+    pricingStatus: customer.pricing_status === 'unknown' ? 'unknown' : 'fixed',
+    mrrSek:
+      customer.pricing_status === 'unknown'
+        ? ''
+        : Math.max(0, Number(customer.monthly_price) || 0),
+    interval: customer.subscription_interval || 'month',
+    tiktokHandle: customer.tiktok_handle || '',
+    nextInvoiceDate: customer.next_invoice_date || '',
+    createdAt: customer.created_at,
+  }));
+}
+
 export default function CustomersPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data, isLoading, refetch } = useCustomers();
   const { data: team = [] } = useTeamMembers();
   const customers = data?.customers;
   const bufferRows = data?.bufferRows;
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] =
-    useState<(typeof FILTERS)[number]['key']>('all');
-  const [sortByAdded, setSortByAdded] = useState<'newest' | 'oldest'>('newest');
   const [showInvite, setShowInvite] = useState(false);
+  const search = searchParams?.get('q') ?? '';
+  const filter = normalizeFilter(searchParams?.get('filter') ?? null);
+  const sortByAdded = normalizeSort(searchParams?.get('sort') ?? null);
+  const pageFromUrl = normalizePage(searchParams?.get('page') ?? null);
+  const currentListUrl = useMemo(() => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    return buildCustomersListUrl(pathname || '/admin/customers', params);
+  }, [pathname, searchParams]);
+
+  const updateListParams = (updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value && value.trim().length > 0) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    });
+
+    router.replace(buildCustomersListUrl(pathname || '/admin/customers', params), {
+      scroll: false,
+    });
+  };
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    const storageKey = `${SCROLL_STATE_PREFIX}${currentListUrl}`;
+    const storedScroll = window.sessionStorage.getItem(storageKey);
+    if (!storedScroll) {
+      return;
+    }
+
+    const scrollY = Number(storedScroll);
+    window.sessionStorage.removeItem(storageKey);
+    if (!Number.isFinite(scrollY)) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollY, behavior: 'auto' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentListUrl, isLoading]);
 
   const enrichedCustomers = useMemo(() => {
     const today = new Date();
@@ -41,6 +200,8 @@ export default function CustomersPage() {
 
     return customerRows.map((customer) => {
       const buffer = bufferByCustomerId.get(customer.id);
+      const expectedConceptsPerWeek =
+        customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2;
       const blocking = customerBlocking({
         lastPublishedAt: buffer?.last_published_at
           ? new Date(buffer.last_published_at)
@@ -59,7 +220,7 @@ export default function CustomersPage() {
       });
       const onboardingChecklist = {
         contractSigned: true,
-        contentPlanSet: (customer.concepts_per_week ?? 3) >= 1,
+        contentPlanSet: expectedConceptsPerWeek >= 1,
         startConceptsLoaded: Boolean(buffer?.latest_planned_publish_date),
         tiktokHandleConfirmed: Boolean(customer.tiktok_handle),
         firstPublication: Boolean(buffer?.last_published_at),
@@ -75,7 +236,7 @@ export default function CustomersPage() {
           : Math.max(0, blocking.daysSincePublish);
       const bufferStatus = customerBufferStatus(
         {
-          pace: (customer.concepts_per_week ?? 3) as 1 | 2 | 3 | 4 | 5,
+          pace: expectedConceptsPerWeek as 1 | 2 | 3 | 4 | 5,
           latestPlannedPublishDate: buffer?.latest_planned_publish_date
             ? new Date(buffer.latest_planned_publish_date)
             : null,
@@ -93,7 +254,23 @@ export default function CustomersPage() {
         blockingDisplayDays: blockingDisplayDays(blocking),
         bufferStatus,
         onboardingState,
-        isNew: onboardingState === 'invited' || onboardingState === 'cm_ready',
+        onboardingNeedsAttention:
+          onboardingState === 'cm_ready' &&
+          typeof customer.onboarding_state_changed_at === 'string' &&
+          Math.floor(
+            (+today - +(new Date(customer.onboarding_state_changed_at))) / 86_400_000,
+          ) >= 7,
+        onboardingAttentionDays:
+          onboardingState === 'cm_ready' &&
+          typeof customer.onboarding_state_changed_at === 'string'
+            ? Math.max(
+                0,
+                Math.floor(
+                  (+today - +(new Date(customer.onboarding_state_changed_at))) / 86_400_000,
+                ),
+              )
+            : 0,
+        isNew: onboardingState !== 'settled',
       };
     });
   }, [bufferRows, customers]);
@@ -110,9 +287,12 @@ export default function CustomersPage() {
         const matchStatus =
           filter === 'all' ||
           (filter === 'active' &&
-            (c.status === 'active' || c.status === 'agreed')) ||
+            ['active', 'agreed', 'paused', 'past_due'].includes(c.status)) ||
           (filter === 'pipeline' &&
-            (c.status === 'invited' || c.status === 'pending')) ||
+            (c.status === 'invited' ||
+              c.status === 'pending' ||
+              c.status === 'pending_payment' ||
+              c.status === 'pending_invoice')) ||
           c.status === filter;
 
         return matchSearch && matchStatus;
@@ -123,6 +303,24 @@ export default function CustomersPage() {
         return sortByAdded === 'newest' ? right - left : left - right;
       });
   }, [enrichedCustomers, search, filter, sortByAdded]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(pageFromUrl, totalPages);
+  const pageStart = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const pageEnd = Math.min(filtered.length, currentPage * PAGE_SIZE);
+  const exportRows = useMemo(() => buildExportRows(filtered), [filtered]);
+  const paginatedCustomers = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return filtered.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [currentPage, filtered]);
+
+  useEffect(() => {
+    if (pageFromUrl === currentPage) {
+      return;
+    }
+
+    updateListParams({ page: currentPage <= 1 ? null : String(currentPage) });
+  }, [currentPage, pageFromUrl]);
 
   const cmByName = useMemo(() => {
     const map = new Map<string, (typeof team)[number]>();
@@ -139,6 +337,10 @@ export default function CustomersPage() {
     return map;
   }, [team]);
 
+  const updatePage = (page: number) => {
+    updateListParams({ page: page <= 1 ? null : String(page) });
+  };
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -152,12 +354,22 @@ export default function CustomersPage() {
               : `${filtered.length} kund${filtered.length === 1 ? '' : 'er'}`}
           </p>
         </div>
-        <button
-          onClick={() => setShowInvite(true)}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-        >
-          + Bjud in kund
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => downloadCustomersCsv(exportRows)}
+            disabled={exportRows.length === 0}
+            className="rounded-md border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground hover:bg-accent disabled:opacity-50"
+          >
+            Exportera CSV
+          </button>
+          <button
+            onClick={() => setShowInvite(true)}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            + Bjud in kund
+          </button>
+        </div>
       </div>
 
       <div className="mb-5 flex flex-wrap gap-3">
@@ -167,7 +379,9 @@ export default function CustomersPage() {
             type="text"
             placeholder="Sök kund..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(event) =>
+              updateListParams({ q: event.target.value || null, page: null })
+            }
             className="w-full rounded-md border border-border bg-card py-2 pl-9 pr-4 text-sm outline-none focus:border-primary/30"
           />
         </div>
@@ -175,7 +389,12 @@ export default function CustomersPage() {
           {FILTERS.map((f) => (
             <button
               key={f.key}
-              onClick={() => setFilter(f.key)}
+              onClick={() =>
+                updateListParams({
+                  filter: f.key === 'all' ? null : f.key,
+                  page: null,
+                })
+              }
               className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
                 filter === f.key
                   ? 'bg-card text-foreground shadow-sm'
@@ -187,7 +406,12 @@ export default function CustomersPage() {
           ))}
         </div>
         <button
-          onClick={() => setSortByAdded((value) => (value === 'newest' ? 'oldest' : 'newest'))}
+          onClick={() =>
+            updateListParams({
+              sort: sortByAdded === 'newest' ? 'oldest' : null,
+              page: null,
+            })
+          }
           className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-accent"
         >
           {sortByAdded === 'newest' ? <ArrowDownAZ className="h-3.5 w-3.5" /> : <ArrowUpAZ className="h-3.5 w-3.5" />}
@@ -209,7 +433,7 @@ export default function CustomersPage() {
             {isLoading ? 'Laddar…' : 'Inga kunder hittades.'}
           </div>
         ) : (
-          filtered.map((c, i) => {
+          paginatedCustomers.map((c, i) => {
             const cm = c.account_manager
               ? cmByName.get(c.account_manager.toLowerCase())
               : undefined;
@@ -218,9 +442,17 @@ export default function CustomersPage() {
             return (
               <div
                 key={c.id}
-                onClick={() => router.push(`/admin/customers/${c.id}`)}
+                onClick={() => {
+                  window.sessionStorage.setItem(
+                    `${SCROLL_STATE_PREFIX}${currentListUrl}`,
+                    String(window.scrollY),
+                  );
+                  router.push(
+                    `/admin/customers/${c.id}?from=${encodeURIComponent(currentListUrl)}`,
+                  );
+                }}
                 className={`grid cursor-pointer grid-cols-[2fr_1fr_1fr_1fr_120px] items-center gap-4 px-5 py-3.5 transition-colors hover:bg-accent/30 ${
-                  i < filtered.length - 1 ? 'border-b border-border' : ''
+                  i < paginatedCustomers.length - 1 ? 'border-b border-border' : ''
                 }`}
               >
                 <div>
@@ -232,8 +464,17 @@ export default function CustomersPage() {
                     {c.isNew ? <SignalPill label="Ny" tone="info" /> : null}
                     <SignalPill
                       label={onboardingLabel(c.onboardingState)}
-                      tone={onboardingTone(c.onboardingState)}
+                      tone={onboardingTone(
+                        c.onboardingState,
+                        c.onboardingNeedsAttention,
+                      )}
                     />
+                    {c.onboardingNeedsAttention ? (
+                      <SignalPill
+                        label={`Onboarding fastnat ${c.onboardingAttentionDays}d`}
+                        tone="warning"
+                      />
+                    ) : null}
                     <SignalPill
                       label={bufferLabel(c.bufferStatus)}
                       tone={bufferTone(c.bufferStatus)}
@@ -280,6 +521,37 @@ export default function CustomersPage() {
           })
         )}
       </div>
+
+      {filtered.length > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+          <div className="text-muted-foreground">
+            Visar {pageStart}-{pageEnd} av {filtered.length}
+          </div>
+          {totalPages > 1 ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => updatePage(currentPage - 1)}
+                disabled={currentPage <= 1}
+                className="rounded-md border border-border bg-card px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Forra
+              </button>
+              <span className="text-muted-foreground">
+                Sida {currentPage} av {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => updatePage(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                className="rounded-md border border-border bg-card px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Nasta
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <InviteCustomerModal
         open={showInvite}
@@ -328,9 +600,12 @@ function onboardingLabel(state: OnboardingState) {
   return 'Inviterad';
 }
 
-function onboardingTone(state: OnboardingState): 'info' | 'warning' | 'success' {
+function onboardingTone(
+  state: OnboardingState,
+  needsAttention: boolean,
+): 'info' | 'warning' | 'success' {
   if (state === 'live' || state === 'settled') return 'success';
-  if (state === 'cm_ready') return 'warning';
+  if (state === 'cm_ready' && needsAttention) return 'warning';
   return 'info';
 }
 

@@ -44,6 +44,10 @@ async function fetchOperationalData() {
     bufferRows?: OverviewPayload['bufferRows'];
     cmNotifications?: OverviewPayload['cmNotifications'];
     attentionSnoozes?: OverviewPayload['attentionSnoozes'];
+    absences?: OverviewPayload['absences'];
+    invoices?: OverviewPayload['invoices'];
+    scheduledAssignmentChanges?: OverviewPayload['scheduledAssignmentChanges'];
+    attentionFeedSeenAt?: string | null;
   };
 
   if (!response.ok) {
@@ -55,15 +59,18 @@ async function fetchOperationalData() {
     bufferRows: payload.bufferRows ?? [],
     cmNotifications: payload.cmNotifications ?? [],
     attentionSnoozes: payload.attentionSnoozes ?? [],
+    absences: payload.absences ?? [],
+    invoices: payload.invoices ?? [],
+    scheduledAssignmentChanges: payload.scheduledAssignmentChanges ?? [],
+    attentionFeedSeenAt: payload.attentionFeedSeenAt ?? null,
   };
 }
 
 async function fetchOverview(): Promise<OverviewPayload> {
-  const [customers, team, operational, invoicesRes, subsRes, healthRes, costsRes, demosRes] = await Promise.all([
+  const [customers, team, operational, subsRes, healthRes, costsRes, demosRes] = await Promise.all([
     fetchCustomers(),
     fetchTeam(),
     fetchOperationalData(),
-    fetch('/api/admin/invoices?status=open&limit=20&page=1', { credentials: 'include' }),
     fetch('/api/admin/subscriptions?limit=100&page=1', { credentials: 'include' }),
     fetch('/api/admin/billing-health', { credentials: 'include' }),
     fetch('/api/admin/service-costs?days=30', { credentials: 'include' }),
@@ -75,18 +82,16 @@ async function fetchOverview(): Promise<OverviewPayload> {
     team,
     interactions: operational.interactions,
     bufferRows: operational.bufferRows,
-    invoices: ((await safeJson(invoicesRes, { invoices: [] })) as { invoices: Array<OverviewPayload['invoices'][number] & { customer_profile_id?: string }> }).invoices.map(
-      (invoice) => ({
-        ...invoice,
-        customer_id: invoice.customer_id ?? invoice.customer_profile_id,
-      }),
-    ),
+    invoices: operational.invoices,
+    scheduledAssignmentChanges: operational.scheduledAssignmentChanges,
     subscriptions: ((await safeJson(subsRes, { subscriptions: [] })) as { subscriptions: OverviewPayload['subscriptions'] }).subscriptions,
     billingHealth: (await safeJson(healthRes, null)) as OverviewPayload['billingHealth'],
     serviceCosts: (await safeJson(costsRes, { entries: [], total: 0 })) as OverviewPayload['serviceCosts'],
     demos: (await safeJson(demosRes, { sent: 0, converted: 0, demos: [] })) as OverviewPayload['demos'],
     cmNotifications: operational.cmNotifications,
     attentionSnoozes: operational.attentionSnoozes,
+    absences: operational.absences,
+    attentionFeedSeenAt: operational.attentionFeedSeenAt,
   };
 }
 

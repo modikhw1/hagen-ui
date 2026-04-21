@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import ConvertDemoDialog from '@/components/admin/demos/ConvertDemoDialog';
 import CreateDemoDialog from '@/components/admin/demos/CreateDemoDialog';
@@ -34,10 +35,12 @@ type DemosResponse = {
 };
 
 export default function DemosPage() {
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedForConvert, setSelectedForConvert] = useState<DemoApiRow | null>(null);
   const [feedback, setFeedback] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
+  const focusedColumn = searchParams?.get('focus') ?? null;
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin', 'demos-board'],
@@ -102,6 +105,25 @@ export default function DemosPage() {
     [data],
   );
 
+  useEffect(() => {
+    if (!focusedColumn) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-demo-column="${focusedColumn}"]`,
+      );
+      if (!element) {
+        return;
+      }
+
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedColumn]);
+
   if (isLoading) return <div className="text-sm text-muted-foreground">Laddar demos...</div>;
   if (error) {
     return (
@@ -159,7 +181,15 @@ export default function DemosPage() {
 
       <div className="grid gap-4 xl:grid-cols-5">
         {columns.map((column) => (
-          <section key={column.key} className="rounded-xl border border-border bg-card p-4">
+          <section
+            key={column.key}
+            data-demo-column={column.key}
+            className={`rounded-xl border bg-card p-4 ${
+              focusedColumn === column.key
+                ? 'border-primary/50 ring-1 ring-primary/20'
+                : 'border-border'
+            }`}
+          >
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-foreground">{column.label}</h2>
               <span className="text-xs text-muted-foreground">{column.items.length}</span>

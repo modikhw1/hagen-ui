@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { TablesInsert, TablesUpdate } from '@/types/database';
 import { withAuth } from '@/lib/auth/api-auth';
 import { normalizeCustomerNotePayload } from '@/lib/customer-notes';
 import { logInteraction } from '@/lib/interactions';
@@ -30,19 +31,21 @@ export const POST = withAuth(async (request, user, { params }: { params: Promise
     return NextResponse.json({ error: 'Note content is required' }, { status: 400 });
   }
 
+  const insertPayload: TablesInsert<'customer_notes'> = {
+    customer_id: customerId,
+    cm_id: user.id,
+    content: payload.content,
+    content_html: payload.content_html,
+    note_type: payload.note_type,
+    primary_customer_concept_id: payload.primary_customer_concept_id,
+    references: payload.references as never,
+    attachments: payload.attachments as never,
+    updated_at: payload.updated_at,
+  };
+
   const { data, error } = await supabase
     .from('customer_notes')
-    .insert({
-      customer_id: customerId,
-      cm_id: user.id,
-      content: payload.content,
-      content_html: payload.content_html,
-      note_type: payload.note_type,
-      primary_customer_concept_id: payload.primary_customer_concept_id,
-      references: payload.references,
-      attachments: payload.attachments,
-      updated_at: payload.updated_at,
-    })
+    .insert(insertPayload)
     .select()
     .single();
 
@@ -76,17 +79,19 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
   }
 
   const supabase = createSupabaseAdmin();
+  const updatePayload: TablesUpdate<'customer_notes'> = {
+    content: payload.content,
+    content_html: payload.content_html,
+    note_type: payload.note_type,
+    primary_customer_concept_id: payload.primary_customer_concept_id,
+    references: payload.references as never,
+    attachments: payload.attachments as never,
+    updated_at: payload.updated_at,
+  };
+
   const { data, error } = await supabase
     .from('customer_notes')
-    .update({
-      content: payload.content,
-      content_html: payload.content_html,
-      note_type: payload.note_type,
-      primary_customer_concept_id: payload.primary_customer_concept_id,
-      references: payload.references,
-      attachments: payload.attachments,
-      updated_at: payload.updated_at,
-    })
+    .update(updatePayload)
     .eq('id', noteId)
     .eq('customer_id', customerId)
     .select()

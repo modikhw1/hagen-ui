@@ -69,7 +69,7 @@ export const POST = withAuth(async (request: NextRequest, user, { params }: Rout
       customer_contact_name: demo.contact_name,
       tiktok_handle: demo.tiktok_handle,
       tiktok_profile_pic_url: demo.tiktok_profile_pic_url,
-      concepts_per_week: demo.proposed_concepts_per_week ?? 3,
+      concepts_per_week: demo.proposed_concepts_per_week ?? 2,
       monthly_price: monthlyPriceSek,
       pricing_status: pricingStatus,
       contract_start_date: contractStartDate,

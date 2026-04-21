@@ -3,6 +3,10 @@ import Stripe from 'stripe';
 import { stripe, stripeEnvironment } from '@/lib/stripe/dynamic-config';
 import { getStripeConfigEnvNames } from '@/lib/stripe/environment';
 import {
+  upsertCreditNoteMirror,
+  upsertRefundMirror,
+} from '@/lib/stripe/billing-adjustments';
+import {
   upsertInvoiceMirror,
   upsertSubscriptionMirror,
 } from '@/lib/stripe/mirror';
@@ -110,6 +114,30 @@ export async function POST(req: NextRequest) {
           subscription: event.data.object as Stripe.Subscription,
           environment: stripeEnvironment,
         });
+        break;
+      }
+
+      case 'credit_note.created':
+      case 'credit_note.updated': {
+        const creditNote = event.data.object as Stripe.CreditNote;
+        await upsertCreditNoteMirror({
+          supabaseAdmin,
+          creditNote,
+          environment: stripeEnvironment,
+        });
+        break;
+      }
+
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge;
+        for (const refund of charge.refunds?.data ?? []) {
+          await upsertRefundMirror({
+            supabaseAdmin,
+            refund,
+            charge,
+            environment: stripeEnvironment,
+          });
+        }
         break;
       }
 

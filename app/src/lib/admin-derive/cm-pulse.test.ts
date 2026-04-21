@@ -5,6 +5,7 @@ describe('cm-pulse', () => {
   it('aggregates cm status and load', () => {
     const aggregate = cmAggregate({
       cm: { id: 'cm-1', name: 'Maja', avatarUrl: null },
+      activeAbsence: null,
       customers: [
         { id: '1', name: 'A', bufferStatus: 'under', pace: 3, onboardingState: 'live', lastPublishedAt: new Date('2026-04-16') },
         { id: '2', name: 'B', bufferStatus: 'thin', pace: 2, onboardingState: 'cm_ready', lastPublishedAt: new Date('2026-04-15') },
@@ -26,5 +27,25 @@ describe('cm-pulse', () => {
     ] as Array<ReturnType<typeof cmAggregate>>;
 
     expect(sortCmRows(rows, 'standard')[0]?.cmId).toBe('2');
+  });
+
+  it('suppresses red pulse during active absence', () => {
+    const aggregate = cmAggregate({
+      cm: { id: 'cm-1', name: 'Maja', avatarUrl: null },
+      activeAbsence: {
+        absenceType: 'vacation',
+        startsOn: '2026-04-16',
+        endsOn: '2026-04-18',
+        backupCmName: 'Nora',
+      },
+      customers: [
+        { id: '1', name: 'A', bufferStatus: 'under', pace: 3, onboardingState: 'live', lastPublishedAt: new Date('2026-04-16') },
+      ],
+      interactions7d: [],
+      lastInteractionAt: null,
+      now: new Date('2026-04-17'),
+    });
+
+    expect(aggregate.status).toBe('away');
   });
 });

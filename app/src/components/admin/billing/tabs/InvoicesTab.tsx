@@ -1,8 +1,10 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import InvoiceOperationsModal from '@/components/admin/billing/InvoiceOperationsModal';
 import type { EnvFilter } from '@/components/admin/billing/BillingHub';
 import { invoiceStatusConfig } from '@/lib/admin/labels';
 import { formatSek } from '@/lib/admin/money';
@@ -14,6 +16,8 @@ type InvoiceRow = {
   customer_profile_id: string | null;
   amount_due: number;
   status: string;
+  display_status?: string;
+  refund_state?: 'partially_refunded' | 'refunded' | null;
   created_at: string;
   line_items?: Array<{ description: string; amount: number }>;
 };
@@ -22,9 +26,19 @@ type InvoiceResponse = {
   invoices: InvoiceRow[];
 };
 
+const STATUS_FILTERS = [
+  { key: 'all', label: 'Alla' },
+  { key: 'open', label: 'Obetalda' },
+  { key: 'paid', label: 'Betalda' },
+  { key: 'partially_refunded', label: 'Delvis krediterade' },
+] as const;
+
 export default function InvoicesTab({ env }: { env: EnvFilter }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] =
+    useState<(typeof STATUS_FILTERS)[number]['key']>('all');
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'billing', 'invoices', env],
@@ -58,8 +72,22 @@ export default function InvoicesTab({ env }: { env: EnvFilter }) {
   });
 
   const invoices = data?.invoices ?? [];
-  const open = invoices.filter((invoice) => invoice.status === 'open');
-  const paid = invoices.filter((invoice) => invoice.status === 'paid');
+  const filteredInvoices = useMemo(
+    () =>
+      invoices.filter((invoice) => {
+        if (statusFilter === 'all') {
+          return true;
+        }
+
+        return (invoice.display_status ?? invoice.status) === statusFilter;
+      }),
+    [invoices, statusFilter],
+  );
+  const open = invoices.filter((invoice) => (invoice.display_status ?? invoice.status) === 'open');
+  const paid = invoices.filter((invoice) => (invoice.display_status ?? invoice.status) === 'paid');
+  const partiallyRefunded = invoices.filter(
+    (invoice) => (invoice.display_status ?? invoice.status) === 'partially_refunded',
+  );
 
   return (
     <div className="space-y-4">
@@ -74,6 +102,11 @@ export default function InvoicesTab({ env }: { env: EnvFilter }) {
           value={formatSek(paid.reduce((sum, invoice) => sum + invoice.amount_due, 0))}
           className="text-success"
         />
+        <SummaryCard
+          label="Delvis krediterade"
+          value={String(partiallyRefunded.length)}
+          className="text-info"
+        />
         <SummaryCard label="Totalt antal" value={String(invoices.length)} />
         <button
           onClick={() => sync.mutate()}
@@ -81,30 +114,48 @@ export default function InvoicesTab({ env }: { env: EnvFilter }) {
           className="inline-flex items-center gap-1.5 self-start rounded-md border border-border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50 lg:ml-auto"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${sync.isPending ? 'animate-spin' : ''}`} />
-          {sync.isPending ? 'Synkar...' : 'Synka från Stripe'}
+          {sync.isPending ? 'Synkar...' : 'Synka fran Stripe'}
         </button>
       </div>
 
       {sync.isError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {sync.error instanceof Error ? sync.error.message : 'Sync misslyckades. Försök igen om en stund.'}
+          {sync.error instanceof Error ? sync.error.message : 'Sync misslyckades. Forsok igen om en stund.'}
         </div>
       ) : null}
 
+      <div className="flex flex-wrap gap-2">
+        {STATUS_FILTERS.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => setStatusFilter(option.key)}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+              statusFilter === option.key
+                ? 'bg-card text-foreground ring-1 ring-border'
+                : 'bg-secondary text-muted-foreground'
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 border-b border-border bg-secondary/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_140px_120px] gap-4 border-b border-border bg-secondary/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Kund</div>
           <div>Belopp</div>
           <div>Rader</div>
           <div>Skapad</div>
           <div>Status</div>
+          <div />
         </div>
 
         {isLoading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">Laddar...</div>
         ) : (
-          invoices.map((invoice, index) => {
-            const status = invoiceStatusConfig(invoice.status);
+          filteredInvoices.map((invoice, index) => {
+            const status = invoiceStatusConfig(invoice.display_status ?? invoice.status);
             return (
               <div
                 key={invoice.id}
@@ -112,9 +163,9 @@ export default function InvoicesTab({ env }: { env: EnvFilter }) {
                   invoice.customer_profile_id &&
                   router.push(`/admin/customers/${invoice.customer_profile_id}`)
                 }
-                className={`grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 px-5 py-3.5 ${
+                className={`grid grid-cols-[2fr_1fr_1fr_1fr_140px_120px] gap-4 px-5 py-3.5 ${
                   invoice.customer_profile_id ? 'cursor-pointer hover:bg-accent/30' : ''
-                } ${index < invoices.length - 1 ? 'border-b border-border' : ''}`}
+                } ${index < filteredInvoices.length - 1 ? 'border-b border-border' : ''}`}
               >
                 <div className="text-sm font-medium text-foreground">{invoice.customer_name}</div>
                 <div className="text-sm font-semibold text-foreground">{formatSek(invoice.amount_due)}</div>
@@ -128,11 +179,33 @@ export default function InvoicesTab({ env }: { env: EnvFilter }) {
                     {status.label}
                   </span>
                 </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedInvoiceId(invoice.id);
+                    }}
+                    className="rounded-md border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent"
+                  >
+                    Korrigera
+                  </button>
+                </div>
               </div>
             );
           })
         )}
       </div>
+
+      <InvoiceOperationsModal
+        invoiceId={selectedInvoiceId}
+        open={Boolean(selectedInvoiceId)}
+        onClose={() => setSelectedInvoiceId(null)}
+        onUpdated={async () => {
+          setSelectedInvoiceId(null);
+          await queryClient.invalidateQueries({ queryKey: ['admin', 'billing', 'invoices'] });
+        }}
+      />
     </div>
   );
 }

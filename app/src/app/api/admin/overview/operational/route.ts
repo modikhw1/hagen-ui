@@ -1,4 +1,7 @@
 import { withAuth } from '@/lib/auth/api-auth';
+import { listScheduledAssignmentChanges } from '@/lib/admin/cm-assignments';
+import { listCmAbsences } from '@/lib/admin/cm-absences';
+import { getLatestAdminAttentionSeenAt } from '@/lib/admin/events';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
@@ -6,10 +9,11 @@ function isMissingTableError(message?: string) {
   return typeof message === 'string' && message.toLowerCase().includes('relation') && message.toLowerCase().includes('does not exist');
 }
 
-export const GET = withAuth(async () => {
+export const GET = withAuth(async (_request, user) => {
   const supabase = createSupabaseAdmin();
+  const today = new Date().toISOString().slice(0, 10);
 
-  const [interactions, bufferRows, cmNotifications, attentionSnoozes] = await Promise.all([
+  const [interactions, bufferRows, cmNotifications, attentionSnoozes, absences, invoices, scheduledAssignmentChanges, attentionFeedSeenAt] = await Promise.all([
     (((supabase.from('cm_interactions' as never) as never) as {
       select: (value: string) => { order: (column: string, options: { ascending: boolean }) => Promise<{ data: unknown[] | null; error: { message?: string } | null }> };
     }).select('cm_id, customer_id, type, created_at')).order('created_at', { ascending: false }),
@@ -22,6 +26,16 @@ export const GET = withAuth(async () => {
     (((supabase.from('attention_snoozes' as never) as never) as {
       select: (value: string) => Promise<{ data: unknown[] | null; error: { message?: string } | null }>;
     }).select('subject_type, subject_id, snoozed_until, released_at')),
+    listCmAbsences(supabase, { limit: 200 }),
+    supabase
+      .from('invoices')
+      .select('id, stripe_invoice_id, customer_profile_id, amount_due, due_date, status')
+      .eq('status', 'open')
+      .lt('due_date', today)
+      .order('due_date', { ascending: true })
+      .limit(500),
+    listScheduledAssignmentChanges(supabase),
+    getLatestAdminAttentionSeenAt(supabase, user.id),
   ]);
 
   if (interactions.error && !isMissingTableError(interactions.error.message)) {
@@ -36,11 +50,21 @@ export const GET = withAuth(async () => {
   if (attentionSnoozes.error && !isMissingTableError(attentionSnoozes.error.message)) {
     return jsonError(attentionSnoozes.error.message || 'Kunde inte hamta hanteras-markeringar', 500);
   }
+  if (invoices.error && !isMissingTableError(invoices.error.message)) {
+    return jsonError(invoices.error.message || 'Kunde inte hamta forfallna fakturor', 500);
+  }
 
   return jsonOk({
     interactions: interactions.data ?? [],
     bufferRows: bufferRows.data ?? [],
     cmNotifications: cmNotifications.data ?? [],
     attentionSnoozes: attentionSnoozes.data ?? [],
+    absences,
+    invoices: (invoices.data ?? []).map((invoice) => ({
+      ...invoice,
+      customer_id: invoice.customer_profile_id,
+    })),
+    scheduledAssignmentChanges,
+    attentionFeedSeenAt,
   });
 }, ['admin']);

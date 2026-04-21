@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
+import { extractGamePlanEmailData, resolveGamePlanDocument } from '@/lib/game-plan';
 
 const querySchema = z.object({
   profileId: z.string().trim().min(1).max(128),
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
         business_name, contact_email, tiktok_profile_url, tiktok_handle,
         monthly_price, subscription_interval, scope_items, invoice_text,
         first_invoice_behavior, billing_day_of_month,
-        account_manager, account_manager_profile_id
+        account_manager, account_manager_profile_id, game_plan
       `)
       .eq('id', profileId)
       .single();
@@ -102,6 +103,18 @@ export async function GET(req: NextRequest) {
       };
     }
 
+    const { data: gamePlanRecord } = await supabaseAdmin
+      .from('customer_game_plans')
+      .select('html, plain_text, editor_version, updated_at')
+      .eq('customer_id', profileId)
+      .maybeSingle();
+
+    const gamePlanDocument = resolveGamePlanDocument(gamePlanRecord, cp.game_plan);
+    const gamePlanPreview = extractGamePlanEmailData({
+      html: gamePlanDocument.html,
+      plain_text: gamePlanDocument.plainText,
+    });
+
     return NextResponse.json({
       customer: {
         businessName: cp.business_name || 'Ditt företag',
@@ -118,6 +131,13 @@ export async function GET(req: NextRequest) {
         billingDayOfMonth: Number(cp.billing_day_of_month) || 25,
       },
       process: { steps: PROCESS_STEPS },
+      gamePlan: {
+        hasGamePlan: gamePlanDocument.hasGamePlan,
+        title: gamePlanPreview.title || null,
+        description: gamePlanPreview.description || null,
+        goals: Array.isArray(gamePlanPreview.goals) ? gamePlanPreview.goals.slice(0, 3) : [],
+        updatedAt: gamePlanDocument.updatedAt,
+      },
     });
   } catch (error) {
     console.error('Welcome context error:', error);

@@ -34,6 +34,7 @@ CREATE INDEX IF NOT EXISTS feed_motor_signals_active_idx
 ALTER TABLE feed_motor_signals ENABLE ROW LEVEL SECURITY;
 
 -- Policy: authenticated staff (admin/content_manager) can read and write all signals
+DROP POLICY IF EXISTS "staff_all" ON feed_motor_signals;
 CREATE POLICY "staff_all" ON feed_motor_signals
   FOR ALL
   TO authenticated

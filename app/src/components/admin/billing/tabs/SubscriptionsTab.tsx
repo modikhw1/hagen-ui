@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import SubscriptionPriceChangeModal from '@/components/admin/billing/SubscriptionPriceChangeModal';
 import type { EnvFilter } from '@/components/admin/billing/BillingHub';
 import { intervalLabel, subscriptionStatusConfig } from '@/lib/admin/labels';
 import { formatSek } from '@/lib/admin/money';
@@ -27,6 +29,7 @@ type SubscriptionResponse = {
 export default function SubscriptionsTab({ env }: { env: EnvFilter }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const [selectedSubscription, setSelectedSubscription] = useState<SubscriptionRow | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'billing', 'subscriptions', env],
@@ -60,10 +63,10 @@ export default function SubscriptionsTab({ env }: { env: EnvFilter }) {
   const subscriptions = data?.subscriptions ?? [];
   const active = subscriptions.filter(
     (subscription) =>
-      subscription.status === 'active' && !subscription.cancel_at_period_end
+      subscription.status === 'active' && !subscription.cancel_at_period_end,
   );
   const expiring = subscriptions.filter(
-    (subscription) => subscription.cancel_at_period_end
+    (subscription) => subscription.cancel_at_period_end,
   );
   const monthlyRecurringOre = active.reduce((sum, subscription) => {
     if (subscription.interval === 'year') return sum + Math.round(subscription.amount / 12);
@@ -83,23 +86,24 @@ export default function SubscriptionsTab({ env }: { env: EnvFilter }) {
           className="inline-flex items-center gap-1.5 self-start rounded-md border border-border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50 lg:ml-auto"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${sync.isPending ? 'animate-spin' : ''}`} />
-          {sync.isPending ? 'Synkar...' : 'Synka från Stripe'}
+          {sync.isPending ? 'Synkar...' : 'Synka fran Stripe'}
         </button>
       </div>
 
       {sync.isError ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {sync.error instanceof Error ? sync.error.message : 'Sync misslyckades. Försök igen om en stund.'}
+          {sync.error instanceof Error ? sync.error.message : 'Sync misslyckades. Forsok igen om en stund.'}
         </div>
       ) : null}
 
       <div className="overflow-hidden rounded-lg border border-border bg-card">
-        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 border-b border-border bg-secondary/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <div className="grid grid-cols-[2fr_1fr_1fr_1fr_120px_120px] gap-4 border-b border-border bg-secondary/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           <div>Kund</div>
           <div>Pris</div>
-          <div>Nästa period</div>
+          <div>Nasta period</div>
           <div>Intervall</div>
           <div>Status</div>
+          <div />
         </div>
 
         {isLoading ? (
@@ -117,7 +121,7 @@ export default function SubscriptionsTab({ env }: { env: EnvFilter }) {
                   subscription.customer_profile_id &&
                   router.push(`/admin/customers/${subscription.customer_profile_id}`)
                 }
-                className={`grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 px-5 py-3.5 ${
+                className={`grid grid-cols-[2fr_1fr_1fr_1fr_120px_120px] gap-4 px-5 py-3.5 ${
                   subscription.customer_profile_id ? 'cursor-pointer hover:bg-accent/30' : ''
                 } ${index < subscriptions.length - 1 ? 'border-b border-border' : ''}`}
               >
@@ -132,11 +136,46 @@ export default function SubscriptionsTab({ env }: { env: EnvFilter }) {
                     {status.label}
                   </span>
                 </div>
+                <div className="flex justify-end">
+                  {subscription.customer_profile_id ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedSubscription(subscription);
+                      }}
+                      className="rounded-md border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent"
+                    >
+                      Andra pris
+                    </button>
+                  ) : null}
+                </div>
               </div>
             );
           })
         )}
       </div>
+
+      <SubscriptionPriceChangeModal
+        open={Boolean(selectedSubscription)}
+        customerId={selectedSubscription?.customer_profile_id ?? ''}
+        customerName={selectedSubscription?.customer_name ?? ''}
+        currentPriceSek={
+          selectedSubscription
+            ? selectedSubscription.interval === 'year'
+              ? selectedSubscription.amount / 1200
+              : selectedSubscription.interval_count === 3
+                ? selectedSubscription.amount / 300
+                : selectedSubscription.amount / 100
+            : null
+        }
+        onClose={() => setSelectedSubscription(null)}
+        onChanged={async () => {
+          setSelectedSubscription(null);
+          await queryClient.invalidateQueries({ queryKey: ['admin', 'billing', 'subscriptions'] });
+          await queryClient.invalidateQueries({ queryKey: ['admin', 'billing', 'invoices'] });
+        }}
+      />
     </div>
   );
 }

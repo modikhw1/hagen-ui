@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink, Pencil, X } from 'lucide-react';
 import AdminAvatar from '@/components/admin/AdminAvatar';
@@ -10,18 +10,20 @@ import { blockingDisplayDays, customerBlocking } from '@/lib/admin-derive/blocki
 import { deriveOnboardingState, settleIfDue } from '@/lib/admin-derive/onboarding';
 import { formatSek, sekToOre } from '@/lib/admin/money';
 import { customerStatusConfig, intervalLong } from '@/lib/admin/labels';
-import { shortDateSv } from '@/lib/admin/time';
+import { shortDateSv, timeAgoSv } from '@/lib/admin/time';
 import {
+  useCustomerActivity,
   useCustomerDetail,
   useCustomerInvoices,
   useTikTokStats,
-  type CustomerInvoice,
 } from '@/hooks/admin/useCustomerDetail';
 import { useTeamMembers } from '@/hooks/admin/useCustomers';
 import { ChartSVG, smoothData, ViewsScatterChart } from './ChartSVG';
 import PendingInvoiceItems from './PendingInvoiceItems';
 import ContractEditForm from './ContractEditForm';
 import ContactEditForm from './ContactEditForm';
+import InvoiceOperationsModal from '@/components/admin/billing/InvoiceOperationsModal';
+import SubscriptionPriceChangeModal from '@/components/admin/billing/SubscriptionPriceChangeModal';
 import SubscriptionActions from './SubscriptionActions';
 import DiscountModal from './modals/DiscountModal';
 import ManualInvoiceModal from './modals/ManualInvoiceModal';
@@ -53,18 +55,21 @@ function normalizeTikTokProfileInput(value: string) {
 
 export default function CustomerDetailView({ id }: { id: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { data: customer, isLoading, error } = useCustomerDetail(id);
   const { data: invoices = [] } = useCustomerInvoices(id);
   const { data: tiktok } = useTikTokStats(id);
+  const { data: activityData } = useCustomerActivity(id);
   const { data: team = [] } = useTeamMembers();
 
   const [editingContact, setEditingContact] = useState(false);
   const [editingPricing, setEditingPricing] = useState(false);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
   const [showManualInvoice, setShowManualInvoice] = useState(false);
+  const [showPriceChange, setShowPriceChange] = useState(false);
   const [showChangeCM, setShowChangeCM] = useState(false);
-  const [selectedInvoice, setSelectedInvoice] = useState<CustomerInvoice | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [showSubscriptionActions, setShowSubscriptionActions] = useState(false);
   const [tiktokProfileUrlInput, setTiktokProfileUrlInput] = useState('');
   const [savingTikTokProfile, setSavingTikTokProfile] = useState(false);
@@ -76,6 +81,13 @@ export default function CustomerDetailView({ id }: { id: string }) {
   const [updatingAttention, setUpdatingAttention] = useState(false);
   const [attentionMessage, setAttentionMessage] = useState<string | null>(null);
   const [attentionError, setAttentionError] = useState<string | null>(null);
+  const [customerActionPending, setCustomerActionPending] = useState<string | null>(null);
+  const [customerActionError, setCustomerActionError] = useState<string | null>(null);
+  const [customerActionMessage, setCustomerActionMessage] = useState<string | null>(null);
+  const returnTo = searchParams?.get('from') ?? null;
+  const focusSection = searchParams?.get('focus') ?? null;
+  const focusedInvoiceId = searchParams?.get('invoice') ?? null;
+  const openedFocusedInvoice = useRef<string | null>(null);
 
   useEffect(() => {
     setTiktokProfileUrlInput(customer?.tiktok_profile_url || '');
@@ -89,6 +101,44 @@ export default function CustomerDetailView({ id }: { id: string }) {
       setTiktokProfilePreview(null);
     }
   }, [tiktokProfilePreview, tiktokProfileUrlInput]);
+
+  useEffect(() => {
+    if (!focusSection || isLoading) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-admin-section="${focusSection}"]`,
+      );
+      if (!element) {
+        return;
+      }
+
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusSection, isLoading]);
+
+  useEffect(() => {
+    if (
+      focusSection !== 'invoices' ||
+      !focusedInvoiceId ||
+      invoices.length === 0 ||
+      openedFocusedInvoice.current === focusedInvoiceId
+    ) {
+      return;
+    }
+
+    const invoiceExists = invoices.some((invoice) => invoice.id === focusedInvoiceId);
+    if (!invoiceExists) {
+      return;
+    }
+
+    openedFocusedInvoice.current = focusedInvoiceId;
+    setSelectedInvoiceId(focusedInvoiceId);
+  }, [focusSection, focusedInvoiceId, invoices]);
 
   const followerSmoothed = useMemo(
     () => (tiktok ? smoothData(tiktok.follower_history_30d, 7) : []),
@@ -123,6 +173,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
     void queryClient.invalidateQueries({ queryKey: ['admin', 'customer', id] });
     void queryClient.invalidateQueries({ queryKey: ['admin', 'customer', id, 'invoices'] });
     void queryClient.invalidateQueries({ queryKey: ['admin', 'customer', id, 'tiktok'] });
+    void queryClient.invalidateQueries({ queryKey: ['admin', 'customer', id, 'activity'] });
     void queryClient.invalidateQueries({ queryKey: ['admin', 'customer', id, 'pending-items'] });
     void queryClient.invalidateQueries({ queryKey: ['admin', 'customer', id, 'subscription'] });
     void queryClient.invalidateQueries({ queryKey: ['admin', 'customers'] });
@@ -304,7 +355,8 @@ export default function CustomerDetailView({ id }: { id: string }) {
   const visibleBlockingDays = blockingDisplayDays(blocking);
   const onboardingChecklist = {
     contractSigned: true,
-    contentPlanSet: (customer.concepts_per_week ?? 3) >= 1,
+    contentPlanSet:
+      (customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2) >= 1,
     startConceptsLoaded: Boolean(customer.latest_planned_publish_date),
     tiktokHandleConfirmed: Boolean(customer.tiktok_handle),
     firstPublication: Boolean(customer.last_published_at),
@@ -320,7 +372,12 @@ export default function CustomerDetailView({ id }: { id: string }) {
       : Math.max(0, blocking.daysSincePublish);
   const bufferStatus = customerBufferStatus(
     {
-      pace: (customer.concepts_per_week ?? 3) as 1 | 2 | 3 | 4 | 5,
+      pace: (customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2) as
+        | 1
+        | 2
+        | 3
+        | 4
+        | 5,
       latestPlannedPublishDate: customer.latest_planned_publish_date
         ? new Date(customer.latest_planned_publish_date)
         : null,
@@ -334,6 +391,9 @@ export default function CustomerDetailView({ id }: { id: string }) {
     if (!snooze.snoozed_until) return true;
     return new Date(snooze.snoozed_until) > today;
   });
+  const canRecoverInvite = ['invited', 'pending', 'pending_payment', 'pending_invoice'].includes(
+    customer.status,
+  );
 
   const runAttentionSnooze = async (
     subjectType: 'onboarding' | 'customer_blocking',
@@ -453,10 +513,46 @@ export default function CustomerDetailView({ id }: { id: string }) {
     }
   };
 
+  const runCustomerAction = async (action: 'resend_invite') => {
+    setCustomerActionPending(action);
+    setCustomerActionError(null);
+    setCustomerActionMessage(null);
+
+    try {
+      const response = await fetch(`/api/admin/customers/${customer.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error || 'Kunde inte uppdatera kunden');
+      }
+
+      setCustomerActionMessage(payload.message || 'Atgarden genomfordes.');
+      invalidate();
+    } catch (actionError: unknown) {
+      setCustomerActionError(
+        actionError instanceof Error ? actionError.message : 'Kunde inte uppdatera kunden',
+      );
+    } finally {
+      setCustomerActionPending(null);
+    }
+  };
+
   return (
     <div>
       <button
         onClick={() => {
+          if (returnTo?.startsWith('/admin/customers')) {
+            router.push(returnTo, { scroll: false });
+            return;
+          }
           if (window.history.length > 1) {
             router.back();
             return;
@@ -492,7 +588,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="space-y-6 lg:col-span-2">
           {tiktok && thresholds ? (
-            <Section title="TikTok-statistik">
+            <Section title="TikTok-statistik" sectionId="tiktok-stats">
               <div className="mb-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <MetricCard
                   label="Snitt visningar"
@@ -588,6 +684,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
 
           <Section
             title="Avtal & Prissattning"
+            sectionId="contract"
             action={
               <button
                 onClick={() => setEditingPricing((value) => !value)}
@@ -638,6 +735,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
           {customer.next_invoice_date && (customer.monthly_price ?? 0) > 0 ? (
             <Section
               title="Nastkommande faktura"
+              sectionId="upcoming-invoice"
               action={
                 <span className="text-xs text-muted-foreground">
                   {shortDateSv(customer.next_invoice_date)}
@@ -658,7 +756,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
             </Section>
           ) : null}
 
-          <Section title="Fakturahistorik">
+          <Section title="Fakturahistorik" sectionId="invoices">
             {invoices.length === 0 ? (
               <p className="text-sm text-muted-foreground">Inga fakturor annu.</p>
             ) : (
@@ -667,7 +765,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
                   <button
                     key={invoice.id}
                     type="button"
-                    onClick={() => setSelectedInvoice(invoice)}
+                    onClick={() => setSelectedInvoiceId(invoice.id)}
                     className="w-full overflow-hidden rounded-lg border border-border text-left transition-colors hover:border-primary/30"
                   >
                     <div className="flex items-center justify-between px-4 py-3">
@@ -718,7 +816,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
         </div>
 
         <div className="space-y-6">
-          <Section title="Operativ status">
+          <Section title="Operativ status" sectionId="operations">
             <div className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <StatusPill
@@ -827,14 +925,38 @@ export default function CustomerDetailView({ id }: { id: string }) {
             </div>
           </Section>
 
-          <Section title="Content Manager">
+          <Section title="Content Manager" sectionId="cm">
             {cm ? (
-              <div className="flex items-center gap-3">
-                <AdminAvatar name={cm.name} avatarUrl={cm.avatar_url} size="md" />
-                <div>
-                  <div className="text-sm font-semibold text-foreground">{cm.name}</div>
-                  <div className="text-xs text-muted-foreground">{cm.email}</div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <AdminAvatar name={cm.name} avatarUrl={cm.avatar_url} size="md" />
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">{cm.name}</div>
+                    <div className="text-xs text-muted-foreground">{cm.email}</div>
+                  </div>
                 </div>
+                {customer.coverage_absences.length > 0 ? (
+                  <div className="space-y-2">
+                    {customer.coverage_absences.map((absence) => (
+                      <div
+                        key={absence.id}
+                        className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground"
+                      >
+                        <div className="font-semibold text-foreground">
+                          {absence.is_active ? 'Aktiv coverage' : 'Schemalagd coverage'}
+                        </div>
+                        <div>
+                          {absence.starts_on} - {absence.ends_on}
+                          {absence.backup_cm_name ? ` · ${absence.backup_cm_name}` : ''}
+                        </div>
+                        <div>
+                          Payroll: {absence.compensation_mode === 'primary_cm' ? 'ordinarie CM' : 'covering CM'}
+                        </div>
+                        {absence.note ? <div className="mt-1">{absence.note}</div> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Ingen CM tilldelad</p>
@@ -843,6 +965,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
 
           <Section
             title="Kontaktuppgifter"
+            sectionId="contact"
             action={
               <button
                 onClick={() => setEditingContact((value) => !value)}
@@ -872,6 +995,7 @@ export default function CustomerDetailView({ id }: { id: string }) {
 
           <Section
             title="TikTok-profil"
+            sectionId="tiktok-profile"
             action={
               customer.last_history_sync_at ? (
                 <span className="text-[11px] text-muted-foreground">
@@ -984,18 +1108,85 @@ export default function CustomerDetailView({ id }: { id: string }) {
             </div>
           </Section>
 
-          <Section title="Atgarder">
+          <Section title="Aktivitetslogg" sectionId="activity">
+            <div className="space-y-3">
+              {activityData?.schemaWarnings?.length ? (
+                <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
+                  {activityData.schemaWarnings[0]}
+                </div>
+              ) : null}
+
+              {activityData?.activities?.length ? (
+                activityData.activities.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="rounded-md border border-border bg-secondary/20 px-4 py-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-foreground">
+                        {entry.title}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {timeAgoSv(entry.at)}
+                      </div>
+                    </div>
+                    <div className="mt-1 text-sm text-muted-foreground">
+                      {entry.description}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                      <span className="rounded-full bg-background px-2 py-1">
+                        {entry.kind}
+                      </span>
+                      <span>{entry.actorLabel || 'System'}</span>
+                      <span>{shortDateSv(entry.at)}</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border border-border bg-secondary/20 px-4 py-4 text-sm text-muted-foreground">
+                  Ingen historik hittades for kunden an.
+                </div>
+              )}
+            </div>
+          </Section>
+
+          <Section title="Atgarder" sectionId="actions">
             <div className="space-y-2">
+              {canRecoverInvite ? (
+                <div className="rounded-md border border-warning/30 bg-warning/5 px-4 py-4">
+                  <div className="text-sm font-semibold text-foreground">Invite recovery</div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Anvand detta om kunden fastnat i callback-flodet eller ser fel som
+                    &quot;lanken har gatt ut&quot; eller &quot;lanken ar ogiltig&quot;.
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Ny lank skickas till {customer.contact_email}
+                    {customer.invited_at ? ` • senaste invite ${shortDateSv(customer.invited_at)}` : ''}
+                  </div>
+                  <div className="mt-3">
+                    <ActionButton onClick={() => void runCustomerAction('resend_invite')}>
+                      {customerActionPending === 'resend_invite'
+                        ? 'Skickar ny invite...'
+                        : 'Skicka ny invite / recovery-lank'}
+                    </ActionButton>
+                  </div>
+                </div>
+              ) : null}
               <ActionButton onClick={() => setShowChangeCM(true)}>
                 Andra Content Manager
               </ActionButton>
               <ActionButton onClick={() => setShowDiscountModal(true)}>
                 Hantera rabatt
               </ActionButton>
+              {customer.stripe_subscription_id ? (
+                <ActionButton onClick={() => setShowPriceChange(true)}>
+                  Andra abonnemangspris
+                </ActionButton>
+              ) : null}
               <ActionButton onClick={() => setShowManualInvoice(true)}>
                 Skapa manuell faktura
               </ActionButton>
-              {customer.stripe_subscription_id ? (
+              {customer.stripe_subscription_id || customer.status === 'archived' ? (
                 <ActionButton onClick={() => setShowSubscriptionActions((value) => !value)}>
                   Hantera abonnemang
                 </ActionButton>
@@ -1006,6 +1197,16 @@ export default function CustomerDetailView({ id }: { id: string }) {
                   customer={customer}
                   onChanged={invalidate}
                 />
+              ) : null}
+              {customerActionMessage ? (
+                <div className="rounded-md border border-success/30 bg-success/5 px-3 py-2 text-xs text-success">
+                  {customerActionMessage}
+                </div>
+              ) : null}
+              {customerActionError ? (
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  {customerActionError}
+                </div>
               ) : null}
             </div>
           </Section>
@@ -1032,10 +1233,22 @@ export default function CustomerDetailView({ id }: { id: string }) {
           invalidate();
         }}
       />
+      <SubscriptionPriceChangeModal
+        open={showPriceChange}
+        customerId={id}
+        customerName={customer.business_name}
+        currentPriceSek={customer.monthly_price}
+        onClose={() => setShowPriceChange(false)}
+        onChanged={() => {
+          setShowPriceChange(false);
+          invalidate();
+        }}
+      />
       <ChangeCMModal
         open={showChangeCM}
         customerId={id}
         currentCM={customer.account_manager}
+        currentMonthlyPrice={customer.monthly_price}
         team={team}
         onClose={() => setShowChangeCM(false)}
         onChanged={() => {
@@ -1043,22 +1256,32 @@ export default function CustomerDetailView({ id }: { id: string }) {
           invalidate();
         }}
       />
-      <InvoiceDetailModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} onUpdated={invalidate} />
+      <InvoiceOperationsModal
+        invoiceId={selectedInvoiceId}
+        open={Boolean(selectedInvoiceId)}
+        onClose={() => setSelectedInvoiceId(null)}
+        onUpdated={invalidate}
+      />
     </div>
   );
 }
 
 function Section({
   title,
+  sectionId,
   action,
   children,
 }: {
   title: string;
+  sectionId?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-5">
+    <div
+      data-admin-section={sectionId}
+      className="rounded-lg border border-border bg-card p-5"
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {action}
@@ -1182,171 +1405,4 @@ function bufferLabel(status: 'ok' | 'thin' | 'under' | 'paused' | 'blocked') {
   if (status === 'under') return 'Underfylld';
   if (status === 'blocked') return 'Buffrad men blockerad';
   return 'Pausad';
-}
-
-function InvoiceDetailModal({
-  invoice,
-  onClose,
-  onUpdated,
-}: {
-  invoice: CustomerInvoice | null;
-  onClose: () => void;
-  onUpdated: () => void;
-}) {
-  const [pending, setPending] = useState<'pay' | 'void' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setPending(null);
-    setError(null);
-  }, [invoice?.id]);
-
-  if (!invoice) {
-    return null;
-  }
-
-  const statusLabel =
-    invoice.status === 'paid'
-      ? 'Betald'
-      : invoice.status === 'open'
-        ? 'Opppen'
-        : invoice.status === 'void'
-          ? 'Annullerad'
-          : invoice.status;
-  const statusClass =
-    invoice.status === 'paid'
-      ? 'bg-success/10 text-success'
-      : invoice.status === 'open'
-        ? 'bg-warning/10 text-warning'
-        : 'bg-muted text-muted-foreground';
-
-  const runAction = async (action: 'pay' | 'void') => {
-    setPending(action);
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/admin/invoices/${invoice.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ action }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte uppdatera fakturan');
-      }
-
-      onUpdated();
-      onClose();
-    } catch (actionError: unknown) {
-      setError(
-        actionError instanceof Error ? actionError.message : 'Kunde inte uppdatera fakturan'
-      );
-    } finally {
-      setPending(null);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-lg">
-        <div className="border-b border-border px-6 py-4">
-          <div className="font-heading text-lg font-bold text-foreground">Fakturadetaljer</div>
-        </div>
-
-        <div className="space-y-4 px-6 py-5">
-          <div className="flex items-center justify-between">
-            <span className="text-lg font-bold text-foreground">
-              {typeof invoice.amount_due === 'number' ? formatSek(invoice.amount_due) : '-'}
-            </span>
-            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass}`}>
-              {statusLabel}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Skapad" value={shortDateSv(invoice.created_at)} />
-            <Field label="Forfallodatum" value={shortDateSv(invoice.due_date || null)} />
-            <Field label="Faktura-ID" value={invoice.stripe_invoice_id || invoice.id} />
-          </div>
-
-          {invoice.hosted_invoice_url ? (
-            <a
-              href={invoice.hosted_invoice_url}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80"
-            >
-              Oppna Stripe-faktura
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          ) : null}
-
-          {invoice.line_items && invoice.line_items.length > 0 ? (
-            <div>
-              <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
-                Rader
-              </div>
-              <div className="overflow-hidden rounded-lg border border-border">
-                {invoice.line_items.map((item, index) => (
-                  <div
-                    key={`${invoice.id}-${index}`}
-                    className={`flex justify-between px-4 py-2.5 text-sm ${
-                      index < invoice.line_items!.length - 1 ? 'border-b border-border' : ''
-                    }`}
-                  >
-                    <span className="text-foreground">{item.description}</span>
-                    <span className="font-medium text-foreground">{formatSek(item.amount)}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between border-t border-border bg-secondary/50 px-4 py-2.5 text-sm font-semibold">
-                  <span className="text-foreground">Totalt</span>
-                  <span className="text-foreground">
-                    {typeof invoice.amount_due === 'number' ? formatSek(invoice.amount_due) : '-'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap gap-2 pt-2">
-            {invoice.status === 'open' ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void runAction('pay')}
-                  disabled={pending !== null}
-                  className="flex-1 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {pending === 'pay' ? 'Markerar...' : 'Markera som betald'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void runAction('void')}
-                  disabled={pending !== null}
-                  className="rounded-md border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50"
-                >
-                  {pending === 'void' ? 'Annullerar...' : 'Annullera'}
-                </button>
-              </>
-            ) : null}
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-            >
-              Stang
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }

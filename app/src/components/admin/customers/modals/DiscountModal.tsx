@@ -28,7 +28,7 @@ export default function DiscountModal({
     'percent',
   );
   const [value, setValue] = useState(0);
-  const [durationMonths, setDurationMonths] = useState(3);
+  const [durationMonths, setDurationMonths] = useState(1);
   const [ongoing, setOngoing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export default function DiscountModal({
 
     setType('percent');
     setValue(0);
-    setDurationMonths(3);
+    setDurationMonths(1);
     setOngoing(false);
     setError(null);
   }, [open]);
@@ -64,12 +64,12 @@ export default function DiscountModal({
       const payload = await res.json();
 
       if (!res.ok) {
-        throw new Error(payload.error || 'Kunde inte lägga till rabatt');
+        throw new Error(payload.error || 'Kunde inte spara erbjudandet');
       }
 
       onApplied(payload.profile);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Kunde inte lägga till rabatt');
+      setError(e instanceof Error ? e.message : 'Kunde inte spara erbjudandet');
     } finally {
       setLoading(false);
     }
@@ -86,7 +86,7 @@ export default function DiscountModal({
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Lägg till rabatt</DialogTitle>
+          <DialogTitle>Lägg till erbjudande</DialogTitle>
           <DialogDescription>För {customerName}</DialogDescription>
         </DialogHeader>
 
@@ -129,7 +129,7 @@ export default function DiscountModal({
               checked={ongoing}
               onChange={(e) => setOngoing(e.target.checked)}
             />
-            Rabatt tills vidare
+            Prissänkning tills vidare
           </label>
 
           {!ongoing && (
@@ -172,7 +172,7 @@ export default function DiscountModal({
             disabled={loading}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {loading ? 'Sparar...' : 'Spara rabatt'}
+            {loading ? 'Sparar...' : 'Spara erbjudande'}
           </button>
         </div>
       </DialogContent>

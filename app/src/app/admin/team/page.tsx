@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AdminAvatar from '@/components/admin/AdminAvatar';
 import AddCMDialog from '@/components/admin/team/AddCMDialog';
+import CMAbsenceModal from '@/components/admin/team/CMAbsenceModal';
 import CMEditDialog from '@/components/admin/team/CMEditDialog';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import type { DailyDot } from '@/lib/admin-derive/team-flow';
@@ -11,10 +13,13 @@ import { formatSek } from '@/lib/admin/money';
 import { useTeam, type TeamMemberView } from '@/hooks/admin/useTeam';
 
 export default function TeamPage() {
+  const searchParams = useSearchParams();
   const { data: team = [], isLoading, refetch } = useTeam();
   const [selected, setSelected] = useState<TeamMemberView | null>(null);
+  const [absenceTarget, setAbsenceTarget] = useState<TeamMemberView | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [sortMode, setSortMode] = useState<'standard' | 'anomalous'>('standard');
+  const focusedMemberId = searchParams?.get('focus') ?? null;
 
   const cmOptions = useMemo(
     () =>
@@ -40,9 +45,42 @@ export default function TeamPage() {
     });
   }, [sortMode, team]);
 
+  useEffect(() => {
+    if (!focusedMemberId || isLoading) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-team-member-id="${focusedMemberId}"]`,
+      );
+      if (!element) {
+        return;
+      }
+
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusedMemberId, isLoading]);
+
   if (isLoading) {
     return <div className="py-12 text-sm text-muted-foreground">Laddar team...</div>;
   }
+
+  const clearAbsence = async (absenceId: string) => {
+    const response = await fetch(`/api/admin/team/absences/${absenceId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(payload.error || 'Kunde inte avsluta franvaro');
+    }
+
+    await refetch();
+  };
 
   return (
     <div className="space-y-6">
@@ -55,6 +93,12 @@ export default function TeamPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin/team/payroll"
+            className="rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-accent"
+          >
+            Payroll
+          </Link>
           <button
             onClick={() => setSortMode((mode) => (mode === 'standard' ? 'anomalous' : 'standard'))}
             className="rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-accent"
@@ -72,7 +116,15 @@ export default function TeamPage() {
 
       <div className="space-y-4">
         {sortedTeam.map((member) => (
-          <div key={member.id} className="rounded-lg border border-border bg-card p-5">
+          <div
+            key={member.id}
+            data-team-member-id={member.id}
+            className={`rounded-lg border bg-card p-5 ${
+              focusedMemberId === member.id
+                ? 'border-primary/50 ring-1 ring-primary/20'
+                : 'border-border'
+            }`}
+          >
             <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-center">
               <div className="flex min-w-0 flex-1 items-center gap-4">
                 <div className="shrink-0">
@@ -84,6 +136,11 @@ export default function TeamPage() {
                     <span className="rounded-full bg-secondary px-2 py-1 text-[11px] font-medium text-muted-foreground">
                       Avvikelse {Math.round(member.activityDeviation * 100)}%
                     </span>
+                    {member.active_absence ? (
+                      <span className="rounded-full bg-warning/10 px-2 py-1 text-[11px] font-medium text-warning">
+                        Franvarande till {member.active_absence.ends_on}
+                      </span>
+                    ) : null}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {member.city || member.email || 'Ingen ort angiven'}
@@ -111,9 +168,11 @@ export default function TeamPage() {
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">~20% ersattning</span>
+                        <span className="text-muted-foreground">
+                          ~{Math.round(member.commission_rate * 100)}% ersattning
+                        </span>
                         <span className="font-semibold text-foreground">
-                          {formatSek(Math.round(member.mrr_ore * 0.2))}
+                          {formatSek(Math.round(member.mrr_ore * member.commission_rate))}
                         </span>
                       </div>
                       <div className="border-t border-border pt-1.5 text-[11px] text-muted-foreground">
@@ -142,6 +201,12 @@ export default function TeamPage() {
 
               <div className="flex items-center gap-2">
                 <button
+                  onClick={() => setAbsenceTarget(member)}
+                  className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  Satt franvaro
+                </button>
+                <button
                   onClick={() => setSelected(member)}
                   className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
@@ -149,6 +214,29 @@ export default function TeamPage() {
                 </button>
               </div>
             </div>
+
+            {member.active_absence ? (
+              <div className="mb-4 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="font-semibold text-foreground">
+                    Aktiv franvaro {member.active_absence.starts_on} - {member.active_absence.ends_on}
+                  </span>
+                  <span>Typ: {member.active_absence.absence_type}</span>
+                  <span>
+                    Payroll: {member.active_absence.compensation_mode === 'primary_cm' ? 'ordinarie CM' : 'ersattare'}
+                  </span>
+                  {member.active_absence.backup_cm_id ? (
+                    <span>Ersattare kopplad</span>
+                  ) : null}
+                  <button
+                    onClick={() => void clearAbsence(member.active_absence!.id)}
+                    className="ml-auto text-xs font-semibold text-foreground hover:opacity-70"
+                  >
+                    Avsluta franvaro
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {member.customers.length > 0 ? (
               <div className="border-t border-border pt-3">
@@ -179,6 +267,11 @@ export default function TeamPage() {
                       <span className="truncate text-sm text-foreground">
                         {customer.business_name}
                       </span>
+                      {customer.covered_by_absence ? (
+                        <span className="rounded-full bg-info/10 px-2 py-0.5 text-[10px] font-semibold text-info">
+                          Cover
+                        </span>
+                      ) : null}
                     </div>
                     <div className="text-right text-sm text-foreground">
                       {customer.monthly_price > 0
@@ -203,6 +296,35 @@ export default function TeamPage() {
                 Inga kunder kopplade annu.
               </div>
             )}
+
+            {member.assignmentHistory.length > 0 ? (
+              <div className="mt-4 border-t border-border pt-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Historik och handovers
+                </div>
+                <div className="space-y-2">
+                  {member.assignmentHistory.slice(0, 6).map((assignment) => (
+                    <div
+                      key={assignment.id}
+                      className="rounded-md border border-border bg-secondary/20 px-3 py-2 text-xs text-muted-foreground"
+                    >
+                      <div className="font-semibold text-foreground">
+                        {assignment.customer_name}
+                      </div>
+                      <div>
+                        {assignment.valid_from} - {assignment.valid_to || 'nu'}
+                        {assignment.scheduled_effective_date
+                          ? ` · schemalagt byte ${assignment.scheduled_effective_date}`
+                          : ''}
+                      </div>
+                      {assignment.handover_note ? (
+                        <div className="mt-1">{assignment.handover_note}</div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -224,6 +346,19 @@ export default function TeamPage() {
           onClose={() => setSelected(null)}
           onSaved={async () => {
             setSelected(null);
+            await refetch();
+          }}
+        />
+      ) : null}
+
+      {absenceTarget ? (
+        <CMAbsenceModal
+          open={Boolean(absenceTarget)}
+          cm={absenceTarget}
+          team={team}
+          onClose={() => setAbsenceTarget(null)}
+          onSaved={async () => {
+            setAbsenceTarget(null);
             await refetch();
           }}
         />

@@ -26,6 +26,7 @@ type Props = {
 };
 
 export default function AddCMDialog({ open, onClose, onSaved }: Props) {
+  const [role, setRole] = useState<'content_manager' | 'admin'>('content_manager');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -33,16 +34,19 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [color, setColor] = useState(TEAM_COLORS[0]);
+  const [commissionRate, setCommissionRate] = useState('20');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const parsedCommissionRate = Number(commissionRate);
 
   const canSubmit = useMemo(
     () => name.trim().length > 0 && email.trim().length > 0,
-    [email, name]
+    [email, name],
   );
 
   const reset = () => {
+    setRole('content_manager');
     setName('');
     setEmail('');
     setPhone('');
@@ -50,6 +54,7 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
     setBio('');
     setAvatarUrl('');
     setColor(TEAM_COLORS[0]);
+    setCommissionRate('20');
     setError(null);
     setWarning(null);
   };
@@ -64,22 +69,28 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-          body: JSON.stringify({
-            name,
-            email,
-            phone,
-            city,
-            bio,
-            avatar_url: avatarUrl,
-            color,
-            sendInvite: true,
-          }),
+        body: JSON.stringify({
+          name,
+          email,
+          phone,
+          city,
+          bio,
+          avatar_url: avatarUrl,
+          color,
+          role,
+          commission_rate:
+            role === 'content_manager'
+              ? (Number.isFinite(parsedCommissionRate) ? parsedCommissionRate : 20) / 100
+              : 0,
+          sendInvite: true,
+        }),
       });
 
       const payload = (await response.json()) as {
         error?: string;
         warning?: string;
       };
+
       if (!response.ok) {
         throw new Error(payload.error || 'Misslyckades');
       }
@@ -90,7 +101,7 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
       onSaved();
     } catch (submitError) {
       setError(
-        submitError instanceof Error ? submitError.message : 'Misslyckades'
+        submitError instanceof Error ? submitError.message : 'Misslyckades',
       );
     } finally {
       setSubmitting(false);
@@ -107,22 +118,29 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Lägg till CM</DialogTitle>
-          <DialogDescription>
-            Skapa en ny content manager och skicka inbjudan
-          </DialogDescription>
-        </DialogHeader>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+          <DialogTitle>{role === 'admin' ? 'Lagg till admin' : 'Lagg till CM'}</DialogTitle>
+            <DialogDescription>
+              {role === 'admin'
+                ? 'Skapa en ny adminanvandare och skicka inbjudan.'
+                : 'Skapa en ny content manager och skicka inbjudan.'}
+            </DialogDescription>
+          </DialogHeader>
 
         <div className="grid gap-3">
           <div className="flex items-center gap-4 rounded-lg border border-border bg-secondary/30 p-3">
             <AdminAvatar name={name || 'Ny CM'} avatarUrl={avatarUrl || null} size="lg" />
             <div>
-              <div className="text-sm font-semibold text-foreground">{name || 'Ny CM'}</div>
-              <div className="text-xs text-muted-foreground">Lägg till profilbild via URL-fältet nedan</div>
+              <div className="text-sm font-semibold text-foreground">
+                {name || (role === 'admin' ? 'Ny admin' : 'Ny CM')}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Lagg till profilbild via URL-faltet nedan.
+              </div>
             </div>
           </div>
+
           <Field label="Namn">
             <input
               value={name}
@@ -130,6 +148,20 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
               className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
             />
           </Field>
+
+          <Field label="Roll">
+            <select
+              value={role}
+              onChange={(event) =>
+                setRole(event.target.value as 'content_manager' | 'admin')
+              }
+              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+            >
+              <option value="content_manager">Content Manager</option>
+              <option value="admin">Admin</option>
+            </select>
+          </Field>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="E-post">
               <input
@@ -146,6 +178,7 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
               />
             </Field>
           </div>
+
           <Field label="Ort">
             <input
               value={city}
@@ -153,6 +186,7 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
               className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
             />
           </Field>
+
           <Field label="Bio">
             <textarea
               value={bio}
@@ -161,6 +195,7 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
               className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
             />
           </Field>
+
           <Field label="Profilbild (URL)">
             <input
               value={avatarUrl}
@@ -169,7 +204,23 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
               placeholder="https://..."
             />
           </Field>
-          <Field label="Färg">
+
+          {role === 'content_manager' ? (
+            <Field label="Kommission (%)">
+              <input
+                value={commissionRate}
+                onChange={(event) => setCommissionRate(event.target.value)}
+                inputMode="decimal"
+                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+              />
+            </Field>
+          ) : (
+            <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+              Admin-invites skapas utan payrollfokus. Kommission anvands bara for CMs.
+            </div>
+          )}
+
+          <Field label="Farg">
             <div className="flex flex-wrap gap-2">
               {TEAM_COLORS.map((item) => (
                 <button
@@ -185,16 +236,16 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
             </div>
           </Field>
 
-          {error && (
+          {error ? (
             <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
               {error}
             </div>
-          )}
-          {warning && (
+          ) : null}
+          {warning ? (
             <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning">
               {warning}
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
@@ -209,7 +260,11 @@ export default function AddCMDialog({ open, onClose, onSaved }: Props) {
             disabled={!canSubmit || submitting}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {submitting ? 'Skapar…' : 'Lägg till och bjud in'}
+            {submitting
+              ? 'Skapar...'
+              : role === 'admin'
+                ? 'Lagg till admin och bjud in'
+                : 'Lagg till CM och bjud in'}
           </button>
         </div>
       </DialogContent>

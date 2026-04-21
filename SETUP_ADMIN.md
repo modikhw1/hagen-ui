@@ -1,217 +1,91 @@
-# 🔧 Setup Guide: Fixa Admin-access
+# Setup Admin Access
 
-## Problem du upplever:
-1. ❌ Loggas ut när du trycker på /admin
-2. ❌ dev@letrend.se kan inte logga in efter registrering
+Den har guiden galler den nuvarande repo-modellen.
 
-## Lösning (Steg-för-steg):
+Kanonisk migrationskedja:
 
-### Steg 1: Kör Database Migration
+- `supabase/migrations`
 
-Du behöver köra migration för att lägga till `role`-kolumnen i databasen.
+Legacy/referens:
 
-**Alternativ A: Via Supabase Dashboard (Rekommenderad)**
+- `app/supabase/migrations`
 
-1. Öppna [Supabase Dashboard](https://supabase.com/dashboard)
-2. Välj ditt projekt
-3. Gå till **SQL Editor** (vänster meny)
-4. Klicka **New Query**
-5. Kopiera innehållet från: `app/supabase/migrations/006_role_based_access.sql`
-6. Klistra in i SQL Editor
-7. Klicka **Run** (eller Ctrl+Enter)
+Applicera inte gamla migrationer under `app/supabase/migrations` i nya eller uppdaterade miljoer.
 
-**Alternativ B: Via Supabase CLI**
+## 1. Applicera kanoniska migrationer
+
+Kor fran repo-roten:
 
 ```bash
-cd app
 npx supabase db push
 ```
 
-### Steg 2: Sätt din email som admin
+Om den lankade remote-historiken blockerar `db push`, folj instruktionerna i [supabase/PRODUCTION_DEPLOY.md](/C:/Users/praiseworthy/Desktop/hagen-ui/supabase/PRODUCTION_DEPLOY.md).
 
-Efter migration, kör detta i Supabase SQL Editor:
+## 2. Kontrollera att anvandaren finns
 
-```sql
--- Sätt din email som admin
-UPDATE profiles
-SET role = 'admin', is_admin = true
-WHERE email = 'modikhw@gmail.com';
+Om anvandaren inte redan finns i Auth:
 
--- Om du också vill sätta dev@letrend.se som admin:
-UPDATE profiles
-SET role = 'admin', is_admin = true
-WHERE email = 'dev@letrend.se';
+1. Skapa eller bjud in anvandaren via appen eller Supabase Auth.
+2. Bekrafta email om projektet kraver det.
 
--- Verifiera att det fungerade:
-SELECT email, role, is_admin
-FROM profiles
-WHERE email IN ('modikhw@gmail.com', 'dev@letrend.se');
-```
+## 3. Ge admin-roll via `user_roles`
 
-### Steg 3: Logga ut och logga in igen
+Repo-sanningen for RBAC ar `public.user_roles` + `public.has_role(...)`.
+`profiles.role` och `profiles.is_admin` ar kompatibilitetsfalt, inte primar sann kalla.
 
-1. Öppna din app (http://localhost:3000)
-2. Klicka **Logga ut** (om inloggad)
-3. Logga in med din email
-4. Testa att gå till `/admin` - nu ska det fungera! ✅
-
----
-
-## För att registrera nya användare (dev@letrend.se):
-
-### Problem: Email-bekräftelse krävs
-
-Om du inte får en bekräftelse-email, kan du:
-
-**Option 1: Bekräfta manuellt i Supabase**
-
-1. Gå till Supabase Dashboard
-2. Klicka **Authentication** → **Users**
-3. Hitta `dev@letrend.se`
-4. Klicka på användaren
-5. Sätt **Email Confirmed** till `true`
-6. Spara
-
-**Option 2: Stäng av email-bekräftelse (endast development)**
-
-1. Gå till Supabase Dashboard
-2. Klicka **Authentication** → **Settings**
-3. Scrolla ner till **Email Auth**
-4. Stäng av **Enable email confirmations**
-5. Spara
-
-Nu kan du registrera och logga in direkt utan bekräftelse.
-
----
-
-## Verifiera att allt fungerar:
-
-```bash
-# 1. Kolla att migrationen kördes:
-# Gå till Supabase → Database → Tables → profiles
-# Du ska se en kolumn "role" med type "user_role"
-
-# 2. Kolla att din användare är admin:
-# Kör i SQL Editor:
-SELECT email, role, is_admin FROM profiles WHERE email = 'modikhw@gmail.com';
-# Ska visa: role = 'admin', is_admin = true
-
-# 3. Testa admin-access:
-# - Logga in på http://localhost:3000
-# - Gå till http://localhost:3000/admin
-# - Om du kommer in utan att loggas ut = SUCCESS! ✅
-```
-
----
-
-## Om du fortfarande har problem:
-
-### Fel 1: "Column 'role' does not exist"
-
-→ **Lösning:** Migration inte kördes. Kör Steg 1 igen.
-
-### Fel 2: Omdirigeras till "/" med error=admin_required
-
-→ **Lösning:** Din användare är inte admin. Kör Steg 2 igen och verifiera:
-```sql
-SELECT email, role, is_admin FROM profiles WHERE email = 'din-email@example.com';
-```
-
-### Fel 3: dev@letrend.se kan inte logga in
-
-→ **Lösning:** Email-bekräftelse krävs. Följ "För att registrera nya användare" ovan.
-
-### Fel 4: Sidan laddas inte / 500 error
-
-→ **Lösning:** Kolla console i browser (F12) och kolla terminalen där `npm run dev` körs.
-
----
-
-## Snabbt test-script:
+Kor i Supabase SQL Editor:
 
 ```sql
--- Kör detta i Supabase SQL Editor för att verifiera setup:
-
--- 1. Kolla att role-kolumn finns:
-SELECT column_name, data_type
-FROM information_schema.columns
-WHERE table_name = 'profiles' AND column_name = 'role';
-
--- 2. Lista alla användare och deras roller:
-SELECT
-  email,
-  role,
-  is_admin,
-  created_at
-FROM profiles
-ORDER BY created_at DESC;
-
--- 3. Sätt flera användare som admin (om du vill):
-UPDATE profiles
-SET role = 'admin', is_admin = true
-WHERE email IN (
-  'modikhw@gmail.com',
-  'dev@letrend.se',
-  'hej@letrend.se'
-);
+insert into public.user_roles (user_id, role)
+select p.id, 'admin'::public.app_role
+from public.profiles p
+where p.email in ('din-email@example.com', 'dev@letrend.se')
+on conflict (user_id, role) do nothing;
 ```
 
----
+## 4. Verifiera rollen
 
-## När det fungerar:
-
-Du ska kunna:
-- ✅ Logga in med din email
-- ✅ Gå till `/admin` utan att loggas ut
-- ✅ Se admin dashboard
-- ✅ Gå till `/studio` också (admins har access till både admin och studio)
-
-Content Managers (mahmoud@letrend.se) ska kunna:
-- ✅ Gå till `/studio`
-- ❌ Inte komma åt `/admin` (redirectas med error=access_denied)
-
----
-
-## Kort om "applicera routes"
-
-När jag sa "applicera withAuth() på routes" menade jag:
-
-**Före** (osäkert):
-```typescript
-export async function GET(request: NextRequest) {
-  // Ingen auth check - vem som helst kan anropa
-  const data = await supabase.from('customers').select('*')
-  return NextResponse.json(data)
-}
+```sql
+select
+  p.email,
+  public.has_role(p.id, 'admin'::public.app_role) as is_admin,
+  array_agg(ur.role order by ur.role) filter (where ur.role is not null) as roles
+from public.profiles p
+left join public.user_roles ur on ur.user_id = p.id
+where p.email in ('din-email@example.com', 'dev@letrend.se')
+group by p.id, p.email
+order by p.email;
 ```
 
-**Efter** (säkert):
-```typescript
-import { withAuth } from '@/lib/auth/api-auth'
+Forvanta `is_admin = true` for den anvandare som ska ha adminaccess.
 
-export const GET = withAuth(
-  async (request, user) => {
-    // user är validerad och har rätt role
-    const data = await supabase.from('customers').select('*')
-    return NextResponse.json(data)
-  },
-  ['admin'] // Endast admins
-)
-```
+## 5. Logga ut och in igen
 
-Detta är redan gjort för:
-- ✅ `/api/admin/customers` (GET, POST)
-- ✅ `/api/studio/email/send` (POST)
+Efter att rollen ar satt:
 
-Men behöver göras för alla andra API routes under `/api/admin/**` och `/api/studio/**`.
+1. Logga ut ur appen.
+2. Logga in igen.
+3. Testa `/admin`.
 
-Jag kan hjälpa dig göra detta för alla routes när du vill!
+## Vanliga fel
 
----
+`error=admin_required` eller redirect bort fran `/admin`
 
-## Hjälp?
+- Kontrollera att raden i `public.user_roles` finns.
+- Kontrollera att `public.has_role(...)` returnerar `true`.
+- Logga ut och in igen sa att sessionen laddas om.
 
-Om något inte fungerar, visa mig:
-1. Felmeddelandet (från browser console eller terminal)
-2. Vilken email du försöker logga in med
-3. Resultatet av SQL-query: `SELECT email, role, is_admin FROM profiles WHERE email = 'din-email'`
+`column "environment" does not exist` i admin-billingvyer
+
+- Root-migrationerna ar inte fullt applicerade. Kor `npx supabase db push` fran repo-roten.
+
+`supabase db push` blockerad av gammal migration history
+
+- Folj repair-stegen i [supabase/PRODUCTION_DEPLOY.md](/C:/Users/praiseworthy/Desktop/hagen-ui/supabase/PRODUCTION_DEPLOY.md).
+
+## Kort sammanfattning
+
+- Schema sanning: `supabase/migrations`
+- RBAC sanning: `public.user_roles`
+- Policy-checks: `public.has_role(auth.uid(), 'admin'::public.app_role)`

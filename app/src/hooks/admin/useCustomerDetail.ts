@@ -15,6 +15,7 @@ export type CustomerDetail = {
   pricing_status: 'fixed' | 'unknown';
   status: string;
   created_at: string;
+  invited_at: string | null;
   agreed_at: string | null;
   next_invoice_date: string | null;
   contract_start_date: string | null;
@@ -28,6 +29,7 @@ export type CustomerDetail = {
   tiktok_profile_url: string | null;
   tiktok_user_id: string | null;
   concepts_per_week: number | null;
+  expected_concepts_per_week: number | null;
   paused_until: string | null;
   onboarding_state: 'invited' | 'cm_ready' | 'live' | 'settled' | null;
   onboarding_state_changed_at: string | null;
@@ -45,6 +47,20 @@ export type CustomerDetail = {
     snoozed_until: string | null;
     released_at: string | null;
     note: string | null;
+  }>;
+  coverage_absences: Array<{
+    id: string;
+    cm_id: string;
+    cm_name: string | null;
+    backup_cm_id: string | null;
+    backup_cm_name: string | null;
+    absence_type: string;
+    compensation_mode: 'covering_cm' | 'primary_cm';
+    starts_on: string;
+    ends_on: string;
+    note: string | null;
+    is_active: boolean;
+    is_upcoming: boolean;
   }>;
 };
 
@@ -76,6 +92,16 @@ export type CustomerSubscription = {
   cancel_at_period_end: boolean;
   current_period_end: string | null;
   current_period_start: string | null;
+};
+
+export type CustomerActivityEntry = {
+  id: string;
+  at: string;
+  kind: 'audit' | 'cm_activity' | 'game_plan' | 'concept';
+  title: string;
+  description: string;
+  actorLabel: string | null;
+  actorRole: string | null;
 };
 
 export type TikTokStats = {
@@ -121,6 +147,7 @@ function mapCustomer(raw: CustomerResponse): CustomerDetail {
     pricing_status: raw.pricing_status === 'unknown' ? 'unknown' : 'fixed',
     status: String(raw.status || ''),
     created_at: String(raw.created_at || ''),
+    invited_at: typeof raw.invited_at === 'string' ? raw.invited_at : null,
     agreed_at: typeof raw.agreed_at === 'string' ? raw.agreed_at : null,
     next_invoice_date:
       typeof raw.next_invoice_date === 'string' ? raw.next_invoice_date : null,
@@ -159,6 +186,10 @@ function mapCustomer(raw: CustomerResponse): CustomerDetail {
       typeof raw.tiktok_user_id === 'string' ? raw.tiktok_user_id : null,
     concepts_per_week:
       typeof raw.concepts_per_week === 'number' ? raw.concepts_per_week : null,
+    expected_concepts_per_week:
+      typeof raw.expected_concepts_per_week === 'number'
+        ? raw.expected_concepts_per_week
+        : null,
     paused_until:
       typeof raw.paused_until === 'string' ? raw.paused_until : null,
     onboarding_state:
@@ -219,6 +250,43 @@ function mapCustomer(raw: CustomerResponse): CustomerDetail {
               entry,
             ): entry is CustomerDetail['attention_snoozes'][number] =>
               entry !== null && Boolean(entry.subject_id),
+          )
+      : [],
+    coverage_absences: Array.isArray(raw.coverage_absences)
+      ? raw.coverage_absences
+          .map((value) => {
+            if (!value || typeof value !== 'object') return null;
+            const entry = value as Record<string, unknown>;
+            return {
+              id: typeof entry.id === 'string' ? entry.id : '',
+              cm_id: typeof entry.cm_id === 'string' ? entry.cm_id : '',
+              cm_name: typeof entry.cm_name === 'string' ? entry.cm_name : null,
+              backup_cm_id:
+                typeof entry.backup_cm_id === 'string' ? entry.backup_cm_id : null,
+              backup_cm_name:
+                typeof entry.backup_cm_name === 'string'
+                  ? entry.backup_cm_name
+                  : null,
+              absence_type:
+                typeof entry.absence_type === 'string'
+                  ? entry.absence_type
+                  : 'temporary_coverage',
+              compensation_mode:
+                entry.compensation_mode === 'primary_cm'
+                  ? 'primary_cm'
+                  : 'covering_cm',
+              starts_on: typeof entry.starts_on === 'string' ? entry.starts_on : '',
+              ends_on: typeof entry.ends_on === 'string' ? entry.ends_on : '',
+              note: typeof entry.note === 'string' ? entry.note : null,
+              is_active: Boolean(entry.is_active),
+              is_upcoming: Boolean(entry.is_upcoming),
+            };
+          })
+          .filter(
+            (
+              entry,
+            ): entry is CustomerDetail['coverage_absences'][number] =>
+              entry !== null && Boolean(entry.id) && Boolean(entry.starts_on) && Boolean(entry.ends_on),
           )
       : [],
   };
@@ -364,5 +432,35 @@ export function useTikTokStats(id: string) {
 
       return (await res.json()) as TikTokStats | null;
     },
+  });
+}
+
+export function useCustomerActivity(id: string) {
+  return useQuery({
+    queryKey: ['admin', 'customer', id, 'activity'],
+    queryFn: async (): Promise<{
+      activities: CustomerActivityEntry[];
+      schemaWarnings: string[];
+    }> => {
+      const res = await fetch(`/api/admin/customers/${id}/activity-log`, {
+        credentials: 'include',
+      });
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        activities?: CustomerActivityEntry[];
+        schemaWarnings?: string[];
+      };
+
+      if (!res.ok) {
+        throw new Error(payload.error || 'Kunde inte ladda aktivitetsloggen');
+      }
+
+      return {
+        activities: Array.isArray(payload.activities) ? payload.activities : [],
+        schemaWarnings: Array.isArray(payload.schemaWarnings) ? payload.schemaWarnings : [],
+      };
+    },
+    staleTime: 30_000,
   });
 }

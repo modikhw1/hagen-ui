@@ -6,12 +6,14 @@ import {
 } from '@/lib/customer-concept-lifecycle';
 import { resolveCustomerConceptAssignmentNote } from '@/lib/customer-concept-assignment';
 import { resolveCustomerConceptContentOverrides } from '@/lib/customer-concept-overrides';
+import { asJsonObject } from '@/lib/database/json';
+import type { Json } from '@/types/database';
 import type { CustomerFeedBucket, CustomerFeedResponse, CustomerFeedSlot } from '@/types/customer-feed';
 
 type FeedConceptRecord = {
   id?: string | null;
-  backend_data?: Record<string, unknown> | null;
-  overrides?: Record<string, unknown> | null;
+  backend_data?: Json | null;
+  overrides?: Json | null;
   is_active?: boolean | null;
 } | null;
 
@@ -20,7 +22,7 @@ type FeedConceptRelation = FeedConceptRecord | FeedConceptRecord[];
 type RawCustomerFeedRow = {
   id: string;
   concept_id: string | null;
-  content_overrides: Record<string, unknown> | null;
+  content_overrides: Json | null;
   match_percentage: number | null;
   status: string | null;
   feed_order: number | null;
@@ -85,8 +87,9 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
   }
 
   const concept = getConceptRecord(row.concepts);
-  const baseOverrides = (concept?.overrides ?? {}) as Record<string, unknown>;
-  const backendData = (concept?.backend_data ?? {}) as Record<string, unknown>;
+  const baseOverrides = asJsonObject(concept?.overrides);
+  const backendData = asJsonObject(concept?.backend_data);
+  const rawContentOverrides = asJsonObject(row.content_overrides);
   const contentOverrides = resolveCustomerConceptContentOverrides(row);
 
   const rawTitle =
@@ -109,8 +112,8 @@ function buildCustomerFeedSlot(row: RawCustomerFeedRow): CustomerFeedSlot | null
     readString(backendData.script_sv);
 
   const productionNotes = sanitizeProductionNotes(
-    readStringArray(row.content_overrides?.production_checklist) ??
-      readStringArray(row.content_overrides?.productionNotes_sv) ??
+    readStringArray(rawContentOverrides.production_checklist) ??
+      readStringArray(rawContentOverrides.productionNotes_sv) ??
       readStringArray(baseOverrides.productionNotes_sv) ??
       readStringArray(backendData.productionNotes_sv)
   );

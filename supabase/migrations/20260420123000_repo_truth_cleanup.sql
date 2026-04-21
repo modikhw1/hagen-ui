@@ -55,8 +55,18 @@ alter table public.customer_profiles
     or discount_type in ('none', 'percent', 'amount', 'free_months')
   );
 
-drop trigger if exists trg_tt_tokens_updated_at on public.tiktok_oauth_tokens;
-drop policy if exists "tt_tokens_no_client" on public.tiktok_oauth_tokens;
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_name = 'tiktok_oauth_tokens'
+  ) then
+    execute 'drop trigger if exists trg_tt_tokens_updated_at on public.tiktok_oauth_tokens';
+    execute 'drop policy if exists "tt_tokens_no_client" on public.tiktok_oauth_tokens';
+  end if;
+end $$;
 drop table if exists public.tiktok_oauth_tokens cascade;
 
 commit;

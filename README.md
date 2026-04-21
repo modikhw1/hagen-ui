@@ -1,6 +1,7 @@
 # hagen-ui
 
-`app/` ar source of truth for produkten.
+`app/` ar source of truth for applikationskoden.
+`supabase/migrations` ar source of truth for schema och RBAC-patchar.
 
 ## Nuvarande status
 
@@ -92,7 +93,8 @@ Appen kor pa `http://localhost:3000`.
 - `app/src/contexts` - auth/profile contexts
 - `app/src/hooks` - login/dashboard/state-hooks
 - `app/src/lib` - domanlogik, Stripe, Supabase helpers
-- `app/supabase/migrations` - DB schema/migrations
+- `supabase/migrations` - kanonisk DB schema/migrations
+- `app/supabase/migrations` - legacy/referens, bygg inte vidare har
 - `app/tests` - Playwright smoke + auth flows
 
 ## Bas-kommandon

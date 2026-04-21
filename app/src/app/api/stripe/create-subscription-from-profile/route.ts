@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { validateApiRequest } from '@/lib/auth/api-auth';
+import { recurringUnitAmountFromMonthlyOre } from '@/lib/stripe/price-amounts';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -104,8 +105,15 @@ export async function POST(request: NextRequest) {
     const monthlyPrice = profile.monthly_price || 0;
     const priceWithVAT = Math.round(monthlyPrice * 100 * 1.25); // Price in öre including 25% VAT
 
+    const monthlyPriceWithVATOre = priceWithVAT;
+    const recurringPriceWithVATOre = recurringUnitAmountFromMonthlyOre({
+      monthlyPriceOre: monthlyPriceWithVATOre,
+      interval: stripeInterval,
+      intervalCount,
+    });
+
     const price = await stripe.prices.create({
-      unit_amount: priceWithVAT, // Price including VAT
+      unit_amount: recurringPriceWithVATOre, // Price including VAT for the full Stripe interval
       currency: 'sek',
       recurring: {
         interval: stripeInterval,

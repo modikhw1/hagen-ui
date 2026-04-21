@@ -97,7 +97,12 @@ export default function AdminOverviewPage() {
           <h2 className="text-sm font-semibold text-foreground">Kraver uppmarksamhet</h2>
           <span className="text-xs text-muted-foreground">Sorterad enligt operativ modell</span>
         </div>
-        <AttentionList items={derived.attentionItems} />
+        <AttentionList
+          items={derived.attentionItems}
+          lastSeenAt={data.attentionFeedSeenAt}
+          trackSeen
+          surface="overview"
+        />
       </section>
 
       <section>

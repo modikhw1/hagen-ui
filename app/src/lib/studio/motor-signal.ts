@@ -8,6 +8,8 @@
  */
 
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import { asJsonObject } from '@/lib/database/json';
+import type { TablesInsert, TablesUpdate } from '@/types/database';
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
@@ -56,7 +58,7 @@ export async function classifyMotorSignal(
 
   if (!data) return null;
 
-  const payload = (data.payload ?? {}) as FeedMotorSignalPayload;
+  const payload = asJsonObject(data.payload) as FeedMotorSignalPayload;
   if (payload.kind === 'fresh_activity' || payload.kind === 'backfill') {
     return payload.kind;
   }
@@ -72,7 +74,7 @@ export interface FeedMotorSignalPayload {
   imported_count?: number;
   latest_published_at?: string | null;
   kind?: MotorSignalKind;
-  [key: string]: unknown;
+  [key: string]: import('@/types/database').Json | undefined;
 }
 
 /**
@@ -104,7 +106,7 @@ export async function createMotorSignalNudge(
     .maybeSingle();
 
   if (existing) {
-    const existingPayload = (existing.payload ?? {}) as FeedMotorSignalPayload;
+    const existingPayload = asJsonObject(existing.payload) as FeedMotorSignalPayload;
     const existingCount =
       typeof existingPayload.imported_count === 'number' && Number.isFinite(existingPayload.imported_count)
         ? Math.max(0, Math.floor(existingPayload.imported_count))
@@ -129,7 +131,7 @@ export async function createMotorSignalNudge(
 
     const { error } = await supabase
       .from('feed_motor_signals')
-      .update({ payload: mergedPayload })
+      .update({ payload: mergedPayload } satisfies TablesUpdate<'feed_motor_signals'>)
       .eq('id', existing.id);
 
     if (error) {
@@ -148,13 +150,15 @@ export async function createMotorSignalNudge(
         : inferMotorSignalKind(latestPublishedAt),
   };
 
+  const insertPayload: TablesInsert<'feed_motor_signals'> = {
+    customer_id: customerId,
+    signal_type: 'nudge',
+    payload: nextPayload,
+  };
+
   const { data: inserted, error } = await supabase
     .from('feed_motor_signals')
-    .insert({
-      customer_id: customerId,
-      signal_type: 'nudge',
-      payload: nextPayload,
-    })
+    .insert(insertPayload)
     .select('id')
     .single();
 
@@ -177,7 +181,7 @@ export async function autoResolveMotorSignals(
 ): Promise<void> {
   await supabase
     .from('feed_motor_signals')
-    .update({ auto_resolved_at: resolvedAt })
+    .update({ auto_resolved_at: resolvedAt } satisfies TablesUpdate<'feed_motor_signals'>)
     .eq('customer_id', customerId)
     .is('acknowledged_at', null)
     .is('auto_resolved_at', null);
@@ -193,6 +197,6 @@ export async function acknowledgeMotorSignal(
 ): Promise<void> {
   await supabase
     .from('feed_motor_signals')
-    .update({ acknowledged_at: acknowledgedAt })
+    .update({ acknowledged_at: acknowledgedAt } satisfies TablesUpdate<'feed_motor_signals'>)
     .eq('id', signalId);
 }

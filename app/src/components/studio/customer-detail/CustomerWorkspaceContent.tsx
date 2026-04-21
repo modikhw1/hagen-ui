@@ -31,6 +31,7 @@ import { AutoSaveTextarea } from '@/components/studio-v2/AutoSaveTextarea';
 import { ConceptEditWizard } from '@/components/studio-v2/ConceptEditWizard';
 import { clearClientCache, fetchAndCacheClient, readClientCache, writeClientCache } from '@/lib/client-cache';
 import { detectLinkType, getHostname, normalizeHref } from '@/components/gameplan-editor/utils/link-helpers';
+import { normalizeCustomerBrief } from '@/lib/database/json';
 import { normalizeWeeklySummaryPreferences } from '@/lib/email/helpers';
 import type {
   CustomerBrief,
@@ -53,7 +54,7 @@ import {
   getStudioFeedOrderLabel,
 } from '@/lib/customer-concept-lifecycle';
 import type { ConceptSectionKey } from '@/lib/studio-v2-concept-content';
-import { getStudioCustomerStatusMeta } from '@/lib/studio/customer-status';
+import { getStudioCustomerStatusMeta, normalizeStudioCustomerStatus } from '@/lib/studio/customer-status';
 import {
   buildStudioWorkspaceHref,
   STUDIO_WORKSPACE_SECTIONS,
@@ -961,7 +962,12 @@ function CustomerWorkspacePageContent() {
             .single();
 
           if (error) throw error;
-          return customerData as WorkspaceCustomerProfile;
+          return {
+            ...customerData,
+            brief: normalizeCustomerBrief(customerData.brief),
+            status: normalizeStudioCustomerStatus(customerData.status),
+            monthly_price: customerData.monthly_price ?? 0,
+          } as WorkspaceCustomerProfile;
         },
         WORKSPACE_CACHE_TTL_MS,
         { force }
@@ -2488,7 +2494,7 @@ function CustomerWorkspacePageContent() {
   const latestEmailJob = emailJobs[0] || null;
   const latestSentEmailJob = emailJobs.find((job) => job.sent_at) || null;
   const activeSectionMeta = getStudioWorkspaceSectionMeta(activeSection);
-  const customerStatusMeta = getStudioCustomerStatusMeta(customer.status);
+  const customerStatusMeta = getStudioCustomerStatusMeta(normalizeStudioCustomerStatus(customer.status));
 
   return (
     <div>
@@ -2564,7 +2570,7 @@ function CustomerWorkspacePageContent() {
             )}
 
             <div style={{ fontSize: 13, color: LeTrendColors.textSecondary, marginBottom: 12 }}>
-              Pris: {customer.monthly_price > 0 ? `${customer.monthly_price} kr/mÃ¥n` : 'Pris ej satt'}
+              Pris: {(customer.monthly_price ?? 0) > 0 ? `${customer.monthly_price} kr/mÃ¥n` : 'Pris ej satt'}
             </div>
             <div style={{ marginBottom: 12, fontSize: 11, color: LeTrendColors.textMuted }}>
               Pris och avtal hanteras i Admin.

@@ -6,9 +6,12 @@ const pricingStatusSchema = z.enum(['fixed', 'unknown']);
 const subscriptionIntervalSchema = z.enum(['month', 'quarter', 'year']);
 const customerStatusSchema = z.enum([
   'pending',
+  'pending_payment',
   'pending_invoice',
   'active',
+  'paused',
   'past_due',
+  'canceled',
   'cancelled',
   'archived',
   'invited',

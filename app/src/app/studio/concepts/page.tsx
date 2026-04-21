@@ -860,7 +860,7 @@ export default function StudioConceptsPage() {
     try {
       const { data } = await supabase
         .from('customer_concepts')
-        .select('concept_id, customer_profile_id, created_at');
+        .select('concept_id, customer_profile_id, added_at');
       if (!data) return;
 
       const counts: Record<string, number> = {};
@@ -879,13 +879,13 @@ export default function StudioConceptsPage() {
         const customerId = row.customer_profile_id as string;
         counts[conceptId] = (counts[conceptId] ?? 0) + 1;
         customerCounts[customerId] = (customerCounts[customerId] ?? 0) + 1;
-        if (typeof row.created_at === 'string') {
-          if (!customerLatest[customerId] || row.created_at > customerLatest[customerId]) {
-            customerLatest[customerId] = row.created_at;
+        if (typeof row.added_at === 'string') {
+          if (!customerLatest[customerId] || row.added_at > customerLatest[customerId]) {
+            customerLatest[customerId] = row.added_at;
           }
           if (ownedCustomerIds.has(customerId)) {
-            if (!conceptLatestUsed[conceptId] || row.created_at > conceptLatestUsed[conceptId]) {
-              conceptLatestUsed[conceptId] = row.created_at;
+            if (!conceptLatestUsed[conceptId] || row.added_at > conceptLatestUsed[conceptId]) {
+              conceptLatestUsed[conceptId] = row.added_at;
             }
           }
         }

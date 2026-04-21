@@ -7,8 +7,10 @@ import {
 } from '@/lib/customer-concept-lifecycle';
 import { resolveCustomerConceptAssignmentNote } from '@/lib/customer-concept-assignment';
 import { resolveCustomerConceptContentOverrides } from '@/lib/customer-concept-overrides';
+import { asJsonObject } from '@/lib/database/json';
 import { display } from '@/lib/display';
 import { translateClipToConcept, type BackendClip, type ClipOverride, type TranslatedConcept } from '@/lib/translator';
+import type { Json } from '@/types/database';
 import type {
   CustomerConceptDetailResponse,
   CustomerConceptListItem,
@@ -16,8 +18,8 @@ import type {
 } from '@/types/customer-concept';
 
 type FeedConceptRecord = {
-  backend_data?: Record<string, unknown> | null;
-  overrides?: Record<string, unknown> | null;
+  backend_data?: Json | null;
+  overrides?: Json | null;
 } | null;
 
 type FeedConceptRelation = FeedConceptRecord | FeedConceptRecord[];
@@ -26,7 +28,7 @@ export type RawCustomerConceptDetailRow = {
   id: string;
   /** Null for imported-history rows (concept_id IS NULL in storage). */
   concept_id: string | null;
-  content_overrides: Record<string, unknown> | null;
+  content_overrides: Json | null;
   match_percentage: number | null;
   status: string | null;
   tags: string[] | null;
@@ -48,7 +50,7 @@ export type RawCustomerConceptListRow = {
   id: string;
   /** Null for imported-history rows (concept_id IS NULL in storage). */
   concept_id: string | null;
-  content_overrides: Record<string, unknown> | null;
+  content_overrides: Json | null;
   match_percentage: number | null;
   status: string | null;
   tags: string[] | null;
@@ -66,15 +68,15 @@ export function buildCustomerConceptDetailResponse(
   row: RawCustomerConceptDetailRow
 ): CustomerConceptDetailResponse {
   const concept = getConceptRecord(row.concepts);
-  const rawBackendData = (concept?.backend_data ?? {}) as Record<string, unknown>;
+  const rawBackendData = asJsonObject(concept?.backend_data);
   const backendData: BackendClip = {
     ...(rawBackendData as unknown as BackendClip),
     id: readString(rawBackendData.id) ?? row.concept_id ?? '',
     url: readString(rawBackendData.url) ?? '',
   };
-  const baseOverrides = (concept?.overrides ?? {}) as ClipOverride;
+  const baseOverrides = asJsonObject(concept?.overrides) as ClipOverride;
   const translated = translateClipToConcept(backendData, baseOverrides);
-  const rawContentOverrides = (row.content_overrides ?? {}) as Record<string, unknown>;
+  const rawContentOverrides = asJsonObject(row.content_overrides);
   const contentOverrides = resolveCustomerConceptContentOverrides(row);
 
   const assignmentStatus = normalizeCustomerConceptAssignmentStatus(row.status);
@@ -145,20 +147,20 @@ export function buildCustomerConceptListItem(
   row: RawCustomerConceptListRow
 ): CustomerConceptListItem {
   const concept = getConceptRecord(row.concepts);
-  const rawBackendData = (concept?.backend_data ?? {}) as Record<string, unknown>;
+  const rawBackendData = asJsonObject(concept?.backend_data);
   const backendData: BackendClip = {
     ...(rawBackendData as unknown as BackendClip),
     id: readString(rawBackendData.id) ?? row.concept_id ?? '',
     url: readString(rawBackendData.url) ?? '',
   };
-  const baseOverrides = (concept?.overrides ?? {}) as ClipOverride;
+  const baseOverrides = asJsonObject(concept?.overrides) as ClipOverride;
   const contentOverrides = resolveCustomerConceptContentOverrides(row);
   const assignmentStatus = normalizeCustomerConceptAssignmentStatus(row.status);
   const assignmentNote = sanitizeText(resolveCustomerConceptAssignmentNote(row));
 
   const translated = translateClipToConcept(backendData, baseOverrides);
 
-  const rawContentOverrides = (row.content_overrides ?? {}) as Record<string, unknown>;
+  const rawContentOverrides = asJsonObject(row.content_overrides);
 
   const placementBucket = getCustomerConceptPlacementBucket(row.feed_order);
   const placementLabel = getCustomerConceptPlacementLabel(row.feed_order);

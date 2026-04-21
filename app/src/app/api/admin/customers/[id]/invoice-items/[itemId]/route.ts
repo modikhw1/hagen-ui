@@ -1,20 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { recordAuditLog } from '@/lib/admin/audit-log';
 import { withAuth } from '@/lib/auth/api-auth';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { deletePendingInvoiceItem } from '@/lib/stripe/admin-billing';
 import { assertInvoiceItemBelongsToCustomer } from '@/lib/stripe/customer-access';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 interface RouteParams {
   params: Promise<{ id: string; itemId: string }>;
 }
 
-export const DELETE = withAuth(async (_request: NextRequest, _user, { params }: RouteParams) => {
+export const DELETE = withAuth(async (_request: NextRequest, user, { params }: RouteParams) => {
   const { id, itemId } = await params;
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  const supabaseAdmin = createSupabaseAdmin();
 
   const { data: profile, error } = await supabaseAdmin
     .from('customer_profiles')
@@ -44,6 +42,18 @@ export const DELETE = withAuth(async (_request: NextRequest, _user, { params }: 
     supabaseAdmin,
     stripeClient: stripe,
     itemId,
+  });
+
+  await recordAuditLog(supabaseAdmin, {
+    actorUserId: user.id,
+    actorEmail: user.email,
+    actorRole: user.role,
+    action: 'admin.invoice_item.deleted',
+    entityType: 'customer_profile',
+    entityId: id,
+    metadata: {
+      item_id: itemId,
+    },
   });
 
   return NextResponse.json({ success: true });

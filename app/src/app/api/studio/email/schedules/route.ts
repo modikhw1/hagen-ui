@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type { TablesInsert, TablesUpdate } from '@/types/database';
 import { withAuth } from '@/lib/auth/api-auth';
+import { asJsonObject } from '@/lib/database/json';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 const schedulePayloadSchema = z.object({
@@ -68,12 +70,12 @@ export const POST = withAuth(async (request: NextRequest) => {
       nextSend.setDate(nextSend.getDate() + 7);
     }
 
-    const scheduleData = {
+    const scheduleData: TablesInsert<'email_schedules'> = {
       customer_profile_id,
       schedule_type,
       day_of_week: day_of_week !== undefined ? day_of_week : 1,
       send_time: send_time || '09:00',
-      rules: rules || {},
+      rules: asJsonObject(rules),
       email_subject: email_subject || 'Veckouppdatering - LeTrend',
       email_intro: email_intro || 'Hej! Här är veckans sammanfattning:',
       email_outro: email_outro || 'Med vänliga hälsningar,\nLeTrend',
@@ -90,9 +92,13 @@ export const POST = withAuth(async (request: NextRequest) => {
 
     let result;
     if (existing) {
+      const updateData: TablesUpdate<'email_schedules'> = {
+        ...scheduleData,
+        updated_at: new Date().toISOString(),
+      };
       const { data, error } = await supabase
         .from('email_schedules')
-        .update({ ...scheduleData, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', existing.id)
         .select()
         .single();

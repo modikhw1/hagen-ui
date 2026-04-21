@@ -1,0 +1,30 @@
+name: Attention Maintenance
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  attention-maintenance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: POST /api/cron/attention-maintenance
+        run: |
+          http_status=$(curl -s \
+            -o /tmp/attention_response.json \
+            -w "%{http_code}" \
+            -X POST "${{ vars.APP_URL }}/api/cron/attention-maintenance" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+
+          echo "HTTP status: $http_status"
+          echo "Response:"
+          jq '.' /tmp/attention_response.json 2>/dev/null || cat /tmp/attention_response.json
+
+          if [ "$http_status" != "200" ]; then
+            echo "Attention maintenance failed, expected 200 but got $http_status"
+            exit 1
+          fi
