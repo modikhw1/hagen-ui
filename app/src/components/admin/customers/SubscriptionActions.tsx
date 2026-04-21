@@ -2,27 +2,24 @@
 
 import { useMemo, useState } from 'react';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
-import {
-  archiveCustomer,
-  callCustomerAction,
-} from '@/lib/admin/api-client';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
-import {
-  useCustomerInvoices,
-  useCustomerSubscription,
-  type CustomerDetail,
-} from '@/hooks/admin/useCustomerDetail';
+import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
+import { useCustomerInvoices } from '@/hooks/admin/useCustomerInvoices';
+import { useCustomerSubscription } from '@/hooks/admin/useCustomerSubscription';
 import { formatSek } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
+import { archiveCustomer, callCustomerAction } from '@/lib/admin/api-client';
 
 export default function SubscriptionActions({
   customerId,
   customer,
   onChanged,
+  variant = 'all',
 }: {
   customerId: string;
   customer: CustomerDetail;
   onChanged: () => void;
+  variant?: 'all' | 'safe' | 'danger';
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -85,11 +82,13 @@ export default function SubscriptionActions({
         : latestPaidInvoice
           ? `Abonnemanget stoppas omedelbart och en kreditnota skapas mot senaste betalda fakturan pa ${formatSek(Math.round(Number(creditAmountSek || 0) * 100))}.`
           : 'Det finns ingen betald faktura att kreditera mot. Den har atgarden kommer att misslyckas.';
+  const showSafe = variant === 'all' || variant === 'safe';
+  const showDanger = variant === 'all' || variant === 'danger';
 
   return (
     <>
       <div className="space-y-3">
-        {customer.status === 'archived' ? (
+        {showSafe && customer.status === 'archived' ? (
           <ActionButton
             onClick={() => void run({ action: 'reactivate_archive' })}
             disabled={pending !== null}
@@ -100,7 +99,7 @@ export default function SubscriptionActions({
           </ActionButton>
         ) : null}
 
-        {subscription ? (
+        {showSafe && subscription ? (
           <div className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
             <div className="font-semibold text-foreground">
               Status: {statusLabel(subscription.status, subscription.cancel_at_period_end)}
@@ -114,7 +113,8 @@ export default function SubscriptionActions({
           </div>
         ) : null}
 
-        {subscription &&
+        {showSafe &&
+        subscription &&
         subscription.status === 'active' &&
         !subscription.cancel_at_period_end ? (
           <div className="rounded-md border border-border p-3">
@@ -145,7 +145,8 @@ export default function SubscriptionActions({
           </div>
         ) : null}
 
-        {subscription &&
+        {showSafe &&
+        subscription &&
         (subscription.status === 'paused' || subscription.cancel_at_period_end) ? (
           <ActionButton
             onClick={() => void run({ action: 'resume_subscription' })}
@@ -159,7 +160,8 @@ export default function SubscriptionActions({
           </ActionButton>
         ) : null}
 
-        {subscription &&
+        {showDanger &&
+        subscription &&
         subscription.status !== 'canceled' &&
         subscription.status !== 'cancelled' &&
         !subscription.cancel_at_period_end ? (
@@ -228,7 +230,7 @@ export default function SubscriptionActions({
           </div>
         ) : null}
 
-        {customer.status !== 'archived' ? (
+        {showDanger && customer.status !== 'archived' ? (
           <ActionButton
             onClick={() => setConfirmAction('archive')}
             disabled={pending !== null}

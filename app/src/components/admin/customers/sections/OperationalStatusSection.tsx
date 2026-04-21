@@ -7,7 +7,7 @@ import {
   bufferLabel,
   CustomerChecklistRow,
   CustomerRouteError,
-  CustomerRouteLoading,
+  CustomerSectionSkeleton,
   CustomerSection,
   CustomerStatusPill,
   onboardingLabel,
@@ -23,7 +23,7 @@ export default function OperationalStatusSection({ customerId }: { customerId: s
   );
 
   if (isLoading) {
-    return <CustomerRouteLoading label="Laddar operativ status..." />;
+    return <CustomerSectionSkeleton blocks={4} />;
   }
 
   if (error || !customer || !derived) {

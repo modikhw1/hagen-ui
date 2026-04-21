@@ -8,9 +8,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { callCustomerAction } from '@/lib/admin/api-client';
-import type { TeamMemberRow } from '@/hooks/admin/useCustomers';
 import { formatSek } from '@/lib/admin/money';
+import { callCustomerAction } from '@/lib/admin/api-client';
+import type { TeamMemberRow } from '@/hooks/admin/useTeamMembers';
 
 type Mode = 'now' | 'scheduled' | 'temporary';
 

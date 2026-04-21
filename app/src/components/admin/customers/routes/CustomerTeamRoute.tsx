@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import AdminAvatar from '@/components/admin/AdminAvatar';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
-import { useTeamMembers } from '@/hooks/admin/useCustomers';
+import { useTeamMembers } from '@/hooks/admin/useTeamMembers';
 import { CustomerRouteError, CustomerRouteLoading, CustomerSection } from './shared';
 
 export default function CustomerTeamRoute({ customerId }: { customerId: string }) {

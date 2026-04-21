@@ -8,7 +8,7 @@ import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   CustomerActionButton,
   CustomerRouteError,
-  CustomerRouteLoading,
+  CustomerSectionSkeleton,
   CustomerSection,
 } from '@/components/admin/customers/routes/shared';
 
@@ -43,7 +43,7 @@ export default function TikTokProfileSection({ customerId }: { customerId: strin
   }, [tiktokProfilePreview, tiktokProfileUrlInput]);
 
   if (isLoading) {
-    return <CustomerRouteLoading label="Laddar TikTok-profil..." />;
+    return <CustomerSectionSkeleton blocks={3} />;
   }
 
   if (error || !customer) {

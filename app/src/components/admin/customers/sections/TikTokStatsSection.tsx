@@ -2,12 +2,12 @@
 
 import { useMemo } from 'react';
 import { ChartSVG, smoothData, ViewsScatterChart } from '@/components/admin/customers/ChartSVG';
-import { useTikTokStats } from '@/hooks/admin/useCustomerDetail';
+import { useTikTokStats } from '@/hooks/admin/useCustomerTikTokStats';
 import { getLikeRateTier, getSuccessThresholds } from '@/lib/customer-detail/success';
 import {
   CustomerMetricCard,
   CustomerRouteError,
-  CustomerRouteLoading,
+  CustomerSectionSkeleton,
   CustomerSection,
 } from '@/components/admin/customers/routes/shared';
 
@@ -19,7 +19,7 @@ export default function TikTokStatsSection({ customerId }: { customerId: string 
   );
 
   if (isLoading) {
-    return <CustomerRouteLoading label="Laddar TikTok..." />;
+    return <CustomerSectionSkeleton blocks={4} />;
   }
 
   if (error) {

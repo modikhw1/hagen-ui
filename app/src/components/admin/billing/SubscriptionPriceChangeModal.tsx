@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { shortDateSv } from '@/lib/admin/time';
 import {
   Dialog,
   DialogContent,
@@ -8,8 +9,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { callCustomerAction } from '@/lib/admin/api-client';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { formatSek } from '@/lib/admin/money';
+import { callCustomerAction } from '@/lib/admin/api-client';
 
 type PreviewPayload = {
   mode: 'now' | 'next_period';
@@ -198,6 +207,34 @@ export default function SubscriptionPriceChangeModal({
 
             {preview ? (
               <div className="space-y-3">
+                <div className="rounded-md border border-border bg-background px-4 py-3">
+                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                    Prisdiff
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <span className="text-sm text-muted-foreground line-through">
+                      {formatSek(preview.current_price_ore)}
+                    </span>
+                    <span className="text-muted-foreground">→</span>
+                    <span
+                      className={`text-lg font-semibold ${
+                        preview.new_price_ore > preview.current_price_ore
+                          ? 'text-success'
+                          : preview.new_price_ore < preview.current_price_ore
+                            ? 'text-warning'
+                            : 'text-foreground'
+                      }`}
+                    >
+                      {formatSek(preview.new_price_ore)}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {mode === 'now'
+                      ? 'Andringen slar igenom direkt med prorata.'
+                      : `Andringen planeras till ${shortDateSv(preview.effective_date)}.`}
+                  </div>
+                </div>
+
                 <div className="grid gap-3 sm:grid-cols-3">
                   <Metric label="Nuvarande manadspris" value={formatSek(preview.current_price_ore)} />
                   <Metric label="Nytt manadspris" value={formatSek(preview.new_price_ore)} />
@@ -217,28 +254,34 @@ export default function SubscriptionPriceChangeModal({
                       Inga Stripe-rader att visa for den har andringen.
                     </div>
                   ) : (
-                    preview.line_items.map((lineItem, index) => (
-                      <div
-                        key={lineItem.id}
-                        className={`flex items-start justify-between gap-4 px-4 py-3 ${
-                          index < preview.line_items.length - 1 ? 'border-b border-border' : ''
-                        }`}
-                      >
-                        <div>
-                          <div className="text-sm font-medium text-foreground">
-                            {lineItem.description}
-                          </div>
-                          {(lineItem.period_start || lineItem.period_end) ? (
-                            <div className="text-xs text-muted-foreground">
-                              {lineItem.period_start?.slice(0, 10) || '-'} till {lineItem.period_end?.slice(0, 10) || '-'}
-                            </div>
-                          ) : null}
-                        </div>
-                        <div className="text-sm font-semibold text-foreground">
-                          {formatSek(lineItem.amount_ore)}
-                        </div>
-                      </div>
-                    ))
+                    <Table>
+                      <TableHeader className="bg-secondary/40">
+                        <TableRow>
+                          <TableHead>Beskrivning</TableHead>
+                          <TableHead>Period</TableHead>
+                          <TableHead className="text-right">Belopp</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {preview.line_items.map((lineItem) => (
+                          <TableRow key={lineItem.id}>
+                            <TableCell>
+                              <div className="text-sm font-medium text-foreground">
+                                {lineItem.description}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {lineItem.period_start || lineItem.period_end
+                                ? `${lineItem.period_start?.slice(0, 10) || '-'} till ${lineItem.period_end?.slice(0, 10) || '-'}`
+                                : '-'}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-foreground">
+                              {formatSek(lineItem.amount_ore)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   )}
                 </div>
               </div>

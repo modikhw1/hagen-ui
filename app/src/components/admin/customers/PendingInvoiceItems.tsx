@@ -2,6 +2,9 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { FilePlus2 } from 'lucide-react';
+import EmptyState from '@/components/admin/EmptyState';
+import { Skeleton } from '@/components/ui/skeleton';
 import { formatSek, sekToOre } from '@/lib/admin/money';
 import { usePendingInvoiceItemsRefresh } from '@/hooks/admin/useAdminRefresh';
 
@@ -155,9 +158,16 @@ export default function PendingInvoiceItems({ customerId }: { customerId: string
       )}
 
       {isLoading ? (
-        <div className="text-sm text-muted-foreground">Laddar...</div>
+        <div className="space-y-2">
+          <Skeleton className="h-14 w-full rounded-md" />
+          <Skeleton className="h-14 w-full rounded-md" />
+        </div>
       ) : items.length === 0 ? (
-        <div className="text-sm text-muted-foreground">Inga pending items.</div>
+        <EmptyState
+          icon={FilePlus2}
+          title="Inga pending items"
+          hint="Nya tillagg du lagger har foljer med pa nasta faktura."
+        />
       ) : (
         <div className="space-y-2">
           {items.map((item) => (

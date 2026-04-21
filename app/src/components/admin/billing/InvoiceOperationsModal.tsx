@@ -4,6 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -237,36 +245,51 @@ export default function InvoiceOperationsModal({
                         Inga fakturarader hittades.
                       </div>
                     ) : (
-                      invoice.line_items.map((lineItem, index) => (
-                        <label
-                          key={lineItem.stripe_line_item_id}
-                          className={`flex cursor-pointer items-start gap-3 px-4 py-3 ${
-                            index < invoice.line_items.length - 1 ? 'border-b border-border' : ''
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="invoice-line"
-                            checked={selectedLineId === lineItem.stripe_line_item_id}
-                            onChange={() => {
-                              setSelectedLineId(lineItem.stripe_line_item_id);
-                              setCreditAmountOre(String(lineItem.amount));
-                              setRefundAmountOre(String(lineItem.amount));
-                            }}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm font-medium text-foreground">{lineItem.description}</div>
-                            {(lineItem.period_start || lineItem.period_end) ? (
-                              <div className="text-xs text-muted-foreground">
-                                {lineItem.period_start?.slice(0, 10) || '-'} till {lineItem.period_end?.slice(0, 10) || '-'}
-                              </div>
-                            ) : null}
-                          </div>
-                          <div className="text-sm font-semibold text-foreground">
-                            {formatSek(lineItem.amount)}
-                          </div>
-                        </label>
-                      ))
+                      <Table>
+                        <TableHeader className="bg-secondary/40">
+                          <TableRow>
+                            <TableHead>Beskrivning</TableHead>
+                            <TableHead>Period</TableHead>
+                            <TableHead className="text-right">Belopp</TableHead>
+                            <TableHead className="w-24 text-right">Val</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {invoice.line_items.map((lineItem) => {
+                            const isSelected = selectedLineId === lineItem.stripe_line_item_id;
+                            return (
+                              <TableRow
+                                key={lineItem.stripe_line_item_id}
+                                data-state={isSelected ? 'selected' : undefined}
+                              >
+                                <TableCell>
+                                  <div className="font-medium text-foreground">{lineItem.description}</div>
+                                </TableCell>
+                                <TableCell className="text-xs text-muted-foreground">
+                                  {lineItem.period_start || lineItem.period_end
+                                    ? `${lineItem.period_start?.slice(0, 10) || '-'} till ${lineItem.period_end?.slice(0, 10) || '-'}`
+                                    : '-'}
+                                </TableCell>
+                                <TableCell className="text-right font-semibold text-foreground">
+                                  {formatSek(lineItem.amount)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <input
+                                    type="radio"
+                                    name="invoice-line"
+                                    checked={isSelected}
+                                    onChange={() => {
+                                      setSelectedLineId(lineItem.stripe_line_item_id);
+                                      setCreditAmountOre(String(lineItem.amount));
+                                      setRefundAmountOre(String(lineItem.amount));
+                                    }}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
                     )}
                   </div>
                 </div>

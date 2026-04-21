@@ -2,7 +2,7 @@
 
 import { History } from 'lucide-react';
 import EmptyState from '@/components/admin/EmptyState';
-import { useCustomerActivity } from '@/hooks/admin/useCustomerDetail';
+import { useCustomerActivity } from '@/hooks/admin/useCustomerActivity';
 import { shortDateSv, timeAgoSv } from '@/lib/admin/time';
 import { CustomerRouteError, CustomerRouteLoading, CustomerSection } from './shared';
 

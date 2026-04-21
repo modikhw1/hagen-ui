@@ -24,6 +24,11 @@ export default function AttentionPanel({
   const [updatingAttention, setUpdatingAttention] = useState(false);
   const [attentionMessage, setAttentionMessage] = useState<string | null>(null);
   const [attentionError, setAttentionError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{
+    label: string;
+    description: string;
+    run: () => Promise<void>;
+  } | null>(null);
 
   const runAttentionSnooze = async (
     subjectType: 'onboarding' | 'customer_blocking',
@@ -157,28 +162,103 @@ export default function AttentionPanel({
       <div className="space-y-2">
         {blocking.state !== 'none' ? (
           <>
-            <CustomerActionButton onClick={() => void runAttentionSnooze('customer_blocking', 3)} disabled={updatingAttention}>
+            <CustomerActionButton
+              onClick={() =>
+                setConfirmAction({
+                  label: 'Markera blockerad kund i 3 dagar',
+                  description:
+                    'Kunden markeras som hanterad i tre dagar och lyfts bort ur attention-flodet under tiden.',
+                  run: () => runAttentionSnooze('customer_blocking', 3),
+                })
+              }
+              disabled={updatingAttention}
+            >
               Markera blockerad kund som hanteras i 3 dagar
             </CustomerActionButton>
-            <CustomerActionButton onClick={() => void runAttentionSnooze('customer_blocking', 7)} disabled={updatingAttention}>
+            <CustomerActionButton
+              onClick={() =>
+                setConfirmAction({
+                  label: 'Markera blockerad kund i 7 dagar',
+                  description:
+                    'Kunden markeras som hanterad i sju dagar och visas igen nar snoozen lopar ut.',
+                  run: () => runAttentionSnooze('customer_blocking', 7),
+                })
+              }
+              disabled={updatingAttention}
+            >
               Markera blockerad kund som hanteras i 7 dagar
             </CustomerActionButton>
-            <CustomerActionButton onClick={() => void setPlannedPause(7)} disabled={updatingAttention}>
+            <CustomerActionButton
+              onClick={() =>
+                setConfirmAction({
+                  label: 'Satt planerad paus i 7 dagar',
+                  description:
+                    'Detta lagger en planerad paus pa kunden i sju dagar och andrar den operativa signaleringen.',
+                  run: () => setPlannedPause(7),
+                })
+              }
+              disabled={updatingAttention}
+            >
               Satt planerad paus i 7 dagar
             </CustomerActionButton>
             {customer.paused_until ? (
-              <CustomerActionButton onClick={() => void setPlannedPause(null)} disabled={updatingAttention}>
+              <CustomerActionButton
+                onClick={() =>
+                  setConfirmAction({
+                    label: 'Ta bort planerad paus',
+                    description:
+                      'Den planerade pausen tas bort och kunden atergar till ordinarie operativ status.',
+                    run: () => setPlannedPause(null),
+                  })
+                }
+                disabled={updatingAttention}
+              >
                 Ta bort planerad paus
               </CustomerActionButton>
             ) : null}
           </>
         ) : null}
         {onboardingState === 'cm_ready' ? (
-          <CustomerActionButton onClick={() => void runAttentionSnooze('onboarding', 3)} disabled={updatingAttention}>
+          <CustomerActionButton
+            onClick={() =>
+              setConfirmAction({
+                label: 'Markera onboarding i 3 dagar',
+                description:
+                  'Onboarding flaggas som hanterad i tre dagar for att minska brus i attention-vyn.',
+                run: () => runAttentionSnooze('onboarding', 3),
+              })
+            }
+            disabled={updatingAttention}
+          >
             Markera onboarding som hanteras i 3 dagar
           </CustomerActionButton>
         ) : null}
       </div>
+
+      {confirmAction ? (
+        <div className="rounded-md border border-border bg-secondary/20 p-3">
+          <div className="text-sm font-semibold text-foreground">{confirmAction.label}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{confirmAction.description}</div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void confirmAction.run().finally(() => setConfirmAction(null))}
+              disabled={updatingAttention}
+              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              {updatingAttention ? 'Arbetar...' : 'Bekrafta'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmAction(null)}
+              disabled={updatingAttention}
+              className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-foreground disabled:opacity-50"
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

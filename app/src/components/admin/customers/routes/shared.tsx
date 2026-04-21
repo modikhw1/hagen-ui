@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { LikeRateTier } from '@/lib/customer-detail/success';
 
 const likeRateTierClass: Record<LikeRateTier, string> = {
@@ -177,5 +178,37 @@ export function CustomerRouteError({ message }: { message: string }) {
 }
 
 export function CustomerRouteLoading({ label = 'Laddar kund...' }: { label?: string }) {
-  return <div className="rounded-lg border border-border bg-card p-5 text-sm text-muted-foreground">{label}</div>;
+  return (
+    <div className="rounded-lg border border-border bg-card p-5">
+      <span className="sr-only">{label}</span>
+      <div className="space-y-4">
+        <Skeleton className="h-4 w-32" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Skeleton className="h-24 w-full rounded-lg" />
+          <Skeleton className="h-24 w-full rounded-lg" />
+        </div>
+        <Skeleton className="h-32 w-full rounded-lg" />
+      </div>
+    </div>
+  );
+}
+
+export function CustomerSectionSkeleton({
+  blocks = 3,
+}: {
+  blocks?: number;
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <Skeleton className="h-4 w-36" />
+        <Skeleton className="h-8 w-24 rounded-full" />
+      </div>
+      <div className="space-y-3">
+        {Array.from({ length: blocks }, (_, index) => (
+          <Skeleton key={index} className="h-16 w-full rounded-lg" />
+        ))}
+      </div>
+    </div>
+  );
 }
