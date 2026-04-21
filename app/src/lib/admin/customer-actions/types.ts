@@ -11,6 +11,7 @@ export type ActionResult = Response | Record<string, unknown>;
 
 export interface AdminActionContext {
   id: string;
+  requestId: string;
   user: AuthenticatedUser;
   supabaseAdmin: SupabaseAdminClient;
   stripeClient: Stripe | null;

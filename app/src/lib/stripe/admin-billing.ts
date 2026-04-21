@@ -20,7 +20,11 @@ import {
 } from './price-amounts';
 import { applyPriceToSubscription } from './subscription-pricing';
 
-type Ctx = { supabaseAdmin: SupabaseClient; stripeClient: Stripe | null };
+type Ctx = {
+  supabaseAdmin: SupabaseClient;
+  stripeClient: Stripe | null;
+  requestId?: string | null;
+};
 
 export interface BillingDiscountInput {
   type: 'percent' | 'amount' | 'free_months';
@@ -717,7 +721,7 @@ export async function pauseCustomerSubscription(
     metadata: {
       pause_until: args.pauseUntil ?? '',
     },
-  });
+  }, args.requestId ? { idempotencyKey: `cust-${args.profileId}:pause:${args.requestId}` } : undefined);
   await upsertSubscriptionMirror({
     supabaseAdmin: args.supabaseAdmin,
     subscription: sub,
@@ -736,7 +740,7 @@ export async function resumeCustomerSubscription(args: Ctx & { profileId: string
     metadata: {
       pause_until: '',
     },
-  });
+  }, args.requestId ? { idempotencyKey: `cust-${args.profileId}:resume:${args.requestId}` } : undefined);
   await upsertSubscriptionMirror({
     supabaseAdmin: args.supabaseAdmin,
     subscription: sub,
@@ -751,7 +755,7 @@ export async function cancelCustomerSubscription(args: Ctx & CancelSubscriptionI
   if (args.mode === 'end_of_period') {
     const sub = await stripe.subscriptions.update(profile.stripe_subscription_id!, {
       cancel_at_period_end: true,
-    });
+    }, args.requestId ? { idempotencyKey: `cust-${args.profileId}:cancel-eop:${args.requestId}` } : undefined);
     await upsertSubscriptionMirror({
       supabaseAdmin: args.supabaseAdmin,
       subscription: sub,
@@ -760,10 +764,14 @@ export async function cancelCustomerSubscription(args: Ctx & CancelSubscriptionI
     return { subscription: sub, creditNote: null };
   }
 
-  const canceledSubscription = await stripe.subscriptions.cancel(profile.stripe_subscription_id!, {
-    prorate: false,
-    invoice_now: false,
-  });
+  const canceledSubscription = await stripe.subscriptions.cancel(
+    profile.stripe_subscription_id!,
+    {
+      prorate: false,
+      invoice_now: false,
+    },
+    args.requestId ? { idempotencyKey: `cust-${args.profileId}:cancel-now:${args.requestId}` } : undefined,
+  );
 
   await upsertSubscriptionMirror({
     supabaseAdmin: args.supabaseAdmin,
@@ -875,6 +883,7 @@ export async function applySubscriptionPriceChange(
     supabaseAdmin: args.supabaseAdmin,
     prorationBehavior: 'always_invoice',
     prorationDate: Math.floor(Date.now() / 1000),
+    requestId: args.requestId ?? null,
   });
 
   return {

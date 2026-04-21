@@ -24,6 +24,7 @@ export async function handleChangeSubscriptionPrice(
     profileId: ctx.id,
     monthlyPriceSek: input.monthly_price,
     mode: input.mode,
+    requestId: ctx.requestId,
   });
 
   const updatePayload: TablesUpdate<'customer_profiles'> =
@@ -68,6 +69,7 @@ export async function handleChangeSubscriptionPrice(
       mode: input.mode,
       monthly_price: input.monthly_price,
       effective_date: result.effectiveDate,
+      idempotency_key: ctx.requestId,
     },
   });
 

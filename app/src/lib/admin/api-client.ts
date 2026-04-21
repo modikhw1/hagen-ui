@@ -65,9 +65,10 @@ export async function callCustomerAction(
   payload: CustomerAction,
 ): Promise<CustomerActionResult> {
   const parsedPayload = customerActionSchema.parse(payload);
+  const requestId = crypto.randomUUID();
   const response = await fetch(`/api/admin/customers/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-request-id': requestId },
     credentials: 'include',
     body: JSON.stringify(parsedPayload),
   });

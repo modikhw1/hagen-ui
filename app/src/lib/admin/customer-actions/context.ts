@@ -24,6 +24,7 @@ export async function createAdminActionContext(
 
   return {
     id,
+    requestId: request.headers.get('x-request-id') || crypto.randomUUID(),
     user,
     supabaseAdmin,
     stripeClient: stripe,

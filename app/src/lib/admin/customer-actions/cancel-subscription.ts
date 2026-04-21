@@ -26,6 +26,7 @@ export async function handleCancelSubscription(
     creditAmountOre: input.credit_amount_ore ?? null,
     invoiceId: input.invoice_id ?? null,
     memo: input.memo ?? null,
+    requestId: ctx.requestId,
   });
 
   await ctx.supabaseAdmin
@@ -51,6 +52,7 @@ export async function handleCancelSubscription(
       mode: input.mode,
       credit_amount_ore: input.credit_amount_ore ?? null,
       credit_note_id: result.creditNote?.id ?? null,
+      idempotency_key: ctx.requestId,
     },
   });
 

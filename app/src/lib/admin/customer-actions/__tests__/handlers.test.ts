@@ -121,6 +121,7 @@ const {
 function createContext(overrides: Partial<AdminActionContext> = {}): AdminActionContext {
   return {
     id: 'customer-1',
+    requestId: 'req-test-1',
     user: {
       id: 'user-1',
       email: 'admin@example.com',

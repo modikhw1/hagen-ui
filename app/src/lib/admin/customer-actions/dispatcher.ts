@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { requireAdminScope } from '@/lib/auth/api-auth';
+import { adminActionPolicy } from '@/lib/auth/admin-scopes';
 import {
   customerActionSchema,
   type CustomerAction,
@@ -23,47 +24,37 @@ async function dispatchParsedCustomerAction(
   ctx: AdminActionContext,
   action: CustomerAction,
 ): Promise<ActionResult> {
+  const requiredScope = adminActionPolicy[action.action];
+  requireAdminScope(
+    ctx.user,
+    requiredScope,
+    requiredScope === 'super_admin'
+      ? 'Endast super-admin kan utfora den har billing-atgarden'
+      : undefined,
+  );
+
   switch (action.action) {
     case 'send_invite':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handleSendInvite(ctx, action);
     case 'activate':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handleActivate(ctx, action);
     case 'send_reminder':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handleSendReminder(ctx, action);
     case 'resend_invite':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handleResendInvite(ctx, action);
     case 'reactivate_archive':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handleReactivate(ctx, action);
     case 'set_temporary_coverage':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handleSetTemporaryCoverage(ctx, action);
     case 'cancel_subscription':
-      requireAdminScope(
-        ctx.user,
-        'super_admin',
-        'Endast super-admin kan avsluta eller kreditera abonnemang',
-      );
       return handleCancelSubscription(ctx, action);
     case 'pause_subscription':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handlePauseSubscription(ctx, action);
     case 'resume_subscription':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handleResumeSubscription(ctx, action);
     case 'change_subscription_price':
-      requireAdminScope(
-        ctx.user,
-        'super_admin',
-        'Endast super-admin kan andra abonnemangspris',
-      );
       return handleChangeSubscriptionPrice(ctx, action);
     case 'change_account_manager':
-      requireAdminScope(ctx.user, 'operations_admin');
       return handleChangeAccountManager(ctx, action);
   }
 }

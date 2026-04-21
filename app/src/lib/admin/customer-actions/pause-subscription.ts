@@ -23,6 +23,7 @@ export async function handlePauseSubscription(
     stripeClient: ctx.stripeClient,
     profileId: ctx.id,
     pauseUntil,
+    requestId: ctx.requestId,
   });
 
   const { data: profile, error } = await ctx.supabaseAdmin
@@ -54,6 +55,7 @@ export async function handlePauseSubscription(
     afterState: profile as unknown as Record<string, unknown>,
     metadata: {
       pause_until: pauseUntil,
+      idempotency_key: ctx.requestId,
     },
   });
 

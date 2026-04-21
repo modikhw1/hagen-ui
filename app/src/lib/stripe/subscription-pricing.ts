@@ -14,6 +14,7 @@ export async function applyPriceToSubscription(args: {
   supabaseAdmin: SupabaseClient;
   prorationBehavior?: 'always_invoice' | 'create_prorations' | 'none';
   prorationDate?: number;
+  requestId?: string | null;
 }) {
   const subscription = await args.stripeClient.subscriptions.retrieve(
     args.subscriptionId,
@@ -29,27 +30,34 @@ export async function applyPriceToSubscription(args: {
   const interval = item.price.recurring?.interval ?? 'month';
   const intervalCount = item.price.recurring?.interval_count ?? 1;
 
-  const newPrice = await args.stripeClient.prices.create({
-    unit_amount: recurringUnitAmountFromMonthlySek({
-      monthlyPriceSek: args.monthlyPriceSek,
-      interval,
-      intervalCount,
-    }),
-    currency: DEFAULT_CURRENCY,
-    recurring: { interval, interval_count: intervalCount },
-    product: productId,
-  });
-
-  const updated = await args.stripeClient.subscriptions.update(subscription.id, {
-    items: [{ id: item.id, price: newPrice.id }],
-    proration_behavior: args.prorationBehavior ?? 'create_prorations',
-    proration_date: args.prorationDate,
-    metadata: {
-      ...subscription.metadata,
-      price_source: args.source,
-      price_changed_at: new Date().toISOString(),
+  const newPrice = await args.stripeClient.prices.create(
+    {
+      unit_amount: recurringUnitAmountFromMonthlySek({
+        monthlyPriceSek: args.monthlyPriceSek,
+        interval,
+        intervalCount,
+      }),
+      currency: DEFAULT_CURRENCY,
+      recurring: { interval, interval_count: intervalCount },
+      product: productId,
     },
-  });
+    args.requestId ? { idempotencyKey: `sub-${subscription.id}:price-create:${args.requestId}` } : undefined,
+  );
+
+  const updated = await args.stripeClient.subscriptions.update(
+    subscription.id,
+    {
+      items: [{ id: item.id, price: newPrice.id }],
+      proration_behavior: args.prorationBehavior ?? 'create_prorations',
+      proration_date: args.prorationDate,
+      metadata: {
+        ...subscription.metadata,
+        price_source: args.source,
+        price_changed_at: new Date().toISOString(),
+      },
+    },
+    args.requestId ? { idempotencyKey: `sub-${subscription.id}:price-update:${args.requestId}` } : undefined,
+  );
 
   await upsertSubscriptionMirror({
     supabaseAdmin: args.supabaseAdmin,
