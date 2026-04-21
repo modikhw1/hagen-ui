@@ -4,6 +4,7 @@ import { recordAuditLog } from '@/lib/admin/audit-log';
 import { changeCustomerAssignment } from '@/lib/admin/cm-assignments';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import { jsonError } from '@/lib/server/api-response';
+import { buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ChangeAccountManagerInput = Extract<
@@ -45,11 +46,11 @@ export async function handleChangeAccountManager(
     entityId: ctx.id,
     beforeState: ctx.beforeProfile,
     afterState: profile as unknown as Record<string, unknown>,
-    metadata: {
+    metadata: buildCustomerActionAuditMetadata(ctx, {
       effective_date: assignment.effectiveDate,
       next_cm_id: assignment.nextCmId,
       handover_note: input.handover_note ?? null,
-    },
+    }),
   });
 
   return {

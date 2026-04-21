@@ -3,7 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import type { EnvFilter } from '@/lib/admin/billing';
-import { customerKeys, qk } from '@/hooks/admin/cache-keys';
+import {
+  invalidateAfterCustomerWrite,
+  invalidateBilling,
+} from '@/lib/admin/invalidate';
+import { qk } from '@/lib/admin/queryKeys';
 
 export function useCustomerRouteRefresh(customerId: string) {
   const router = useRouter();
@@ -11,16 +15,8 @@ export function useCustomerRouteRefresh(customerId: string) {
 
   return async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) }),
-      queryClient.invalidateQueries({ queryKey: customerKeys.invoices(customerId) }),
-      queryClient.invalidateQueries({ queryKey: customerKeys.tiktok(customerId) }),
-      queryClient.invalidateQueries({ queryKey: customerKeys.activity(customerId) }),
-      queryClient.invalidateQueries({ queryKey: customerKeys.pendingItems(customerId) }),
-      queryClient.invalidateQueries({ queryKey: customerKeys.subscription(customerId) }),
-      queryClient.invalidateQueries({ queryKey: ['admin', 'customers'] }),
-      queryClient.invalidateQueries({ queryKey: qk.billing.subscriptions('all') }),
-      queryClient.invalidateQueries({ queryKey: qk.billing.invoices('all') }),
-      queryClient.invalidateQueries({ queryKey: qk.overviewRoot() }),
+      invalidateAfterCustomerWrite(queryClient, customerId),
+      invalidateBilling(queryClient),
     ]);
 
     router.refresh();
@@ -33,8 +29,10 @@ export function useOverviewRefresh() {
 
   return async (customerId?: string | null) => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: qk.overviewRoot() }),
-      customerId ? queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) }) : Promise.resolve(),
+      queryClient.invalidateQueries({ queryKey: qk.overview.main() }),
+      customerId
+        ? queryClient.invalidateQueries({ queryKey: qk.customers.detail(customerId) })
+        : Promise.resolve(),
     ]);
     router.refresh();
   };
@@ -45,7 +43,7 @@ export function useBillingInvoicesRefresh(env: EnvFilter) {
   const queryClient = useQueryClient();
 
   return async () => {
-    await queryClient.invalidateQueries({ queryKey: qk.billing.invoices(env) });
+    await invalidateBilling(queryClient, env);
     router.refresh();
   };
 }
@@ -55,10 +53,7 @@ export function useBillingSubscriptionsRefresh(env: EnvFilter) {
   const queryClient = useQueryClient();
 
   return async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: qk.billing.subscriptions(env) }),
-      queryClient.invalidateQueries({ queryKey: qk.billing.invoices(env) }),
-    ]);
+    await invalidateBilling(queryClient, env);
     router.refresh();
   };
 }
@@ -69,8 +64,8 @@ export function usePendingInvoiceItemsRefresh(customerId: string) {
 
   return async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: customerKeys.pendingItems(customerId) }),
-      queryClient.invalidateQueries({ queryKey: customerKeys.invoices(customerId) }),
+      queryClient.invalidateQueries({ queryKey: qk.customers.pendingItems(customerId) }),
+      queryClient.invalidateQueries({ queryKey: qk.customers.invoices(customerId) }),
     ]);
     router.refresh();
   };

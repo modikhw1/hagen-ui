@@ -1,9 +1,9 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withAuth } from '@/lib/auth/api-auth';
 import { previewSubscriptionPriceChange } from '@/lib/stripe/admin-billing';
 import { stripe } from '@/lib/stripe/dynamic-config';
-import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { jsonError } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 const requestSchema = z
@@ -40,7 +40,15 @@ export const POST = withAuth(
       mode: parsed.data.mode,
     });
 
-    return jsonOk({ preview });
+    return NextResponse.json(
+      { preview },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'private, max-age=10',
+        },
+      },
+    );
   },
   ['admin'],
 );

@@ -5,7 +5,7 @@ import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-opera
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import { resumeCustomerSubscription } from '@/lib/stripe/admin-billing';
 import { jsonError } from '@/lib/server/api-response';
-import { toOperationalProfileInput } from './shared';
+import { buildCustomerActionAuditMetadata, toOperationalProfileInput } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ResumeSubscriptionInput = Extract<
@@ -22,6 +22,7 @@ export async function handleResumeSubscription(
     supabaseAdmin: ctx.supabaseAdmin,
     stripeClient: ctx.stripeClient,
     profileId: ctx.id,
+    requestId: ctx.requestId,
   });
 
   const { data: profile, error } = await ctx.supabaseAdmin
@@ -51,6 +52,9 @@ export async function handleResumeSubscription(
     entityId: String(ctx.beforeProfile?.stripe_subscription_id ?? ctx.id),
     beforeState: ctx.beforeProfile,
     afterState: profile as unknown as Record<string, unknown>,
+    metadata: buildCustomerActionAuditMetadata(ctx, {
+      idempotency_key: ctx.requestId,
+    }),
   });
 
   return { success: true, subscription, profile };

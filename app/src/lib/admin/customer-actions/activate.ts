@@ -4,6 +4,7 @@ import { recordAuditLog } from '@/lib/admin/audit-log';
 import { buildCustomerPayload } from '@/lib/admin/customer-detail/load';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import { jsonError } from '@/lib/server/api-response';
+import { buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ActivateInput = Extract<CustomerAction, { action: 'activate' }>;
@@ -33,6 +34,7 @@ export async function handleActivate(
     entityId: ctx.id,
     beforeState: ctx.beforeProfile,
     afterState: data as unknown as Record<string, unknown>,
+    metadata: buildCustomerActionAuditMetadata(ctx),
   });
 
   return buildCustomerPayload(data);

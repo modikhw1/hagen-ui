@@ -10,6 +10,7 @@ import { upsertSubscriptionMirror } from '@/lib/stripe/mirror';
 import { stripeEnvironment } from '@/lib/stripe/dynamic-config';
 import { resumeCustomerSubscription } from '@/lib/stripe/admin-billing';
 import { jsonError } from '@/lib/server/api-response';
+import { buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ReactivateInput = Extract<CustomerAction, { action: 'reactivate_archive' }>;
@@ -97,6 +98,7 @@ export async function handleReactivate(
       supabaseAdmin: ctx.supabaseAdmin,
       stripeClient: ctx.stripeClient,
       profileId: ctx.id,
+      requestId: ctx.requestId,
     });
   }
 
@@ -136,10 +138,10 @@ export async function handleReactivate(
     entityId: ctx.id,
     beforeState: ctx.beforeProfile,
     afterState: profile as unknown as Record<string, unknown>,
-    metadata: {
+    metadata: buildCustomerActionAuditMetadata(ctx, {
       stripe_customer_id: stripeCustomerId,
       stripe_subscription_id: stripeSubscriptionId,
-    },
+    }),
   });
 
   return {

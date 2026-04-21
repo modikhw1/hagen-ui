@@ -7,6 +7,7 @@ import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import { sendCustomerInvite } from '@/lib/customers/invite';
 import { getAppUrl } from '@/lib/url/public';
 import { jsonError } from '@/lib/server/api-response';
+import { buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ResendInviteInput = Extract<CustomerAction, { action: 'resend_invite' }>;
@@ -45,10 +46,10 @@ export async function handleResendInvite(
     entityId: ctx.id,
     beforeState: ctx.beforeProfile,
     afterState: inviteResult.profile,
-    metadata: {
+    metadata: buildCustomerActionAuditMetadata(ctx, {
       stripe_customer_id: inviteResult.stripeCustomerId,
       stripe_subscription_id: inviteResult.stripeSubscriptionId,
-    },
+    }),
   });
 
   return {

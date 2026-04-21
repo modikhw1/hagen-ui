@@ -12,6 +12,7 @@ import {
   resolveEffectiveCustomerCoverage,
   type CmAbsenceRecord,
 } from '@/lib/admin/cm-absences';
+import { qk } from '@/lib/admin/queryKeys';
 
 type TeamMemberRow = {
   id: string;
@@ -150,9 +151,9 @@ async function fetchTeamOverview(): Promise<TeamOverviewResponse> {
   };
 }
 
-export function useTeam() {
+export function useTeam(sortMode: 'standard' | 'anomalous' = 'standard') {
   return useQuery({
-    queryKey: ['admin', 'team-full'],
+    queryKey: [...qk.team.list(), sortMode] as const,
     queryFn: async () => {
       const { members, customers, activities, assignments, absences, byCustomer } = await fetchTeamOverview();
       const today = new Date().toISOString().slice(0, 10);
@@ -345,10 +346,22 @@ export function useTeam() {
 
       const maxActivity = Math.max(...rows.map((row) => row.activityCount), 1);
 
-      return rows.map((row) => ({
+      const normalizedRows = rows.map((row) => ({
         ...row,
         activityRatio: row.activityCount / maxActivity,
       }));
+
+      return [...normalizedRows].sort((left, right) => {
+        if (sortMode === 'anomalous') {
+          const rightDeviation = right.activityDeviation;
+          const leftDeviation = left.activityDeviation;
+          if (rightDeviation !== leftDeviation) {
+            return rightDeviation - leftDeviation;
+          }
+        }
+
+        return right.mrr_ore - left.mrr_ore || right.customerCount - left.customerCount;
+      });
     },
   });
 }

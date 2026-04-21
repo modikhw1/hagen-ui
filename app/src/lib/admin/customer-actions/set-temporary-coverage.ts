@@ -8,6 +8,7 @@ import {
 } from '@/lib/admin/cm-absences';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import { jsonError } from '@/lib/server/api-response';
+import { buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type TemporaryCoverageInput = Extract<
@@ -65,9 +66,7 @@ export async function handleSetTemporaryCoverage(
     entityId: absence.id,
     beforeState: null,
     afterState: absence as unknown as Record<string, unknown>,
-    metadata: {
-      customer_profile_id: ctx.id,
-    },
+    metadata: buildCustomerActionAuditMetadata(ctx),
   });
 
   return {

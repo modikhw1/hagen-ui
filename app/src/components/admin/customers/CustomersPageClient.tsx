@@ -202,6 +202,7 @@ export default function CustomersPageClient({
               <Link
                 key={customer.id}
                 href={`/admin/customers/${customer.id}`}
+                prefetch
                 scroll={false}
                 className={`grid grid-cols-[2fr_1fr_1fr_1fr_120px] items-center gap-4 px-5 py-3.5 transition-colors hover:bg-accent/30 ${
                   index < rows.length - 1 ? 'border-b border-border' : ''

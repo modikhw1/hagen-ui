@@ -16,6 +16,7 @@ import {
   createStripeArtifacts,
   persistPendingStripeAttachments,
 } from './send-invite-support';
+import { buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type SendInviteInput = Extract<CustomerAction, { action: 'send_invite' }>;
@@ -132,14 +133,14 @@ export async function handleSendInvite(
       entityType: 'customer_profile',
       entityId: ctx.id,
       beforeState: ctx.beforeProfile,
-      metadata: {
+      metadata: buildCustomerActionAuditMetadata(ctx, {
         invite_attempt_nonce: attemptNonce,
         stripe_customer_id: artifacts.customerId,
         stripe_subscription_id: artifacts.subscriptionId,
         stripe_product_id: artifacts.productId,
         stripe_price_id: artifacts.priceId,
         error: updateError.message,
-      },
+      }),
     });
     return jsonError(updateError.message, 500);
   }
@@ -168,11 +169,11 @@ export async function handleSendInvite(
     entityId: ctx.id,
     beforeState: ctx.beforeProfile,
     afterState: profile as unknown as Record<string, unknown>,
-    metadata: {
+    metadata: buildCustomerActionAuditMetadata(ctx, {
       stripe_customer_id: artifacts.customerId,
       stripe_subscription_id: artifacts.subscriptionId,
       invite_attempt_nonce: attemptNonce,
-    },
+    }),
   });
 
   return {

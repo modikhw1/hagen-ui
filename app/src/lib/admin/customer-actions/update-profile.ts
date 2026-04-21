@@ -9,7 +9,11 @@ import { applyPriceToSubscription } from '@/lib/stripe/subscription-pricing';
 import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';
 import { jsonError } from '@/lib/server/api-response';
 import type { TablesUpdate } from '@/types/database';
-import { buildValidationErrorResponse, toOperationalProfileInput } from './shared';
+import {
+  buildCustomerActionAuditMetadata,
+  buildValidationErrorResponse,
+  toOperationalProfileInput,
+} from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 export async function updateCustomerProfile(
@@ -128,6 +132,7 @@ export async function updateCustomerProfile(
       monthlyPriceSek: syncedPrice,
       source: upcomingDueNow ? 'scheduled_upcoming' : 'admin_manual',
       supabaseAdmin: ctx.supabaseAdmin,
+      requestId: ctx.requestId,
     });
 
     if (upcomingDueNow) {
@@ -192,6 +197,14 @@ export async function updateCustomerProfile(
     entityId: ctx.id,
     beforeState: ctx.beforeProfile,
     afterState: data as unknown as Record<string, unknown>,
+    metadata: buildCustomerActionAuditMetadata(ctx, {
+      idempotency_key:
+        hasActiveStripeSubscription &&
+        nextPricingStatus === 'fixed' &&
+        (upcomingDueNow || (monthlyPriceChanged && nextMonthlyPrice > 0))
+          ? ctx.requestId
+          : null,
+    }),
   });
 
   return buildCustomerPayload(data);

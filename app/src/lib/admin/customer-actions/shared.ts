@@ -4,6 +4,7 @@ import type { z } from 'zod';
 import { AuthError } from '@/lib/auth/api-auth';
 import { jsonError } from '@/lib/server/api-response';
 import type { Tables } from '@/types/database';
+import type { AdminActionContext } from './types';
 
 export function buildValidationErrorResponse(error: z.ZodError) {
   return jsonError('Ogiltig payload', 400, {
@@ -53,5 +54,15 @@ export function toOperationalProfileInput(
       typeof profile.upcoming_price_effective_date === 'string'
         ? profile.upcoming_price_effective_date
         : null,
+  };
+}
+
+export function buildCustomerActionAuditMetadata(
+  ctx: Pick<AdminActionContext, 'id'>,
+  extra?: Record<string, unknown> | null,
+) {
+  return {
+    customer_profile_id: ctx.id,
+    ...(extra ?? {}),
   };
 }

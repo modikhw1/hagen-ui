@@ -6,6 +6,124 @@ import {
   type CustomerActionSuccessResult,
 } from '@/lib/admin/schemas/customer-actions';
 
+type QueryValue = string | number | boolean | null | undefined;
+
+export type ApiOptions = {
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
+  query?: Record<string, QueryValue>;
+};
+
+export class ApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+    public readonly field?: string,
+    public readonly raw?: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+type RequestOptions = ApiOptions & {
+  body?: unknown;
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+};
+
+function buildUrl(path: string, query?: Record<string, QueryValue>) {
+  if (!query) return path;
+
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value === null || value === undefined) continue;
+    params.set(key, String(value));
+  }
+
+  const queryString = params.toString();
+  if (!queryString) return path;
+  return `${path}${path.includes('?') ? '&' : '?'}${queryString}`;
+}
+
+async function parseJson(response: Response) {
+  return response.json().catch(() => ({}));
+}
+
+function resolveMessage(payload: unknown, fallback: string) {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'error' in payload &&
+    typeof payload.error === 'string'
+  ) {
+    return payload.error;
+  }
+
+  return fallback;
+}
+
+function resolveField(payload: unknown) {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'field' in payload &&
+    typeof payload.field === 'string'
+  ) {
+    return payload.field;
+  }
+
+  return undefined;
+}
+
+async function requestJson<T>(path: string, options: RequestOptions): Promise<T> {
+  const headers = new Headers({
+    Accept: 'application/json',
+    ...options.headers,
+  });
+
+  if (options.method !== 'GET' && options.body !== undefined) {
+    headers.set('Content-Type', headers.get('Content-Type') ?? 'application/json');
+  }
+
+  const response = await fetch(buildUrl(path, options.query), {
+    method: options.method,
+    credentials: 'include',
+    signal: options.signal,
+    headers,
+    body:
+      options.method === 'GET' || options.body === undefined
+        ? undefined
+        : JSON.stringify(options.body),
+  });
+
+  const payload = await parseJson(response);
+  if (!response.ok) {
+    throw new ApiError(
+      response.status,
+      resolveMessage(payload, 'Kunde inte kontakta servern'),
+      resolveField(payload),
+      payload,
+    );
+  }
+
+  return payload as T;
+}
+
+export const apiClient = {
+  get<T>(path: string, opts?: ApiOptions) {
+    return requestJson<T>(path, { ...opts, method: 'GET' });
+  },
+  post<T>(path: string, body: unknown, opts?: ApiOptions) {
+    return requestJson<T>(path, { ...opts, body, method: 'POST' });
+  },
+  patch<T>(path: string, body: unknown, opts?: ApiOptions) {
+    return requestJson<T>(path, { ...opts, body, method: 'PATCH' });
+  },
+  delete<T>(path: string, opts?: ApiOptions) {
+    return requestJson<T>(path, { ...opts, method: 'DELETE' });
+  },
+};
+
 export type CustomerActionResult =
   | ({ ok: true } & CustomerActionSuccessResult)
   | {
@@ -16,7 +134,7 @@ export type CustomerActionResult =
     };
 
 async function parseActionResponse(response: Response): Promise<CustomerActionResult> {
-  const payload = await response.json().catch(() => ({}));
+  const payload = await parseJson(response);
 
   if (!response.ok) {
     const parsedError = customerActionErrorSchema.safeParse(payload);

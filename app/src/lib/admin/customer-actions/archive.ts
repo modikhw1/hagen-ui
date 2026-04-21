@@ -3,6 +3,7 @@ import 'server-only';
 import { requireAdminScope } from '@/lib/auth/api-auth';
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { archiveStripeCustomer } from '@/lib/stripe/admin-billing';
+import { buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 export async function handleArchiveCustomer(
@@ -40,9 +41,7 @@ export async function handleArchiveCustomer(
     entityId: ctx.id,
     beforeState: ctx.beforeProfile,
     afterState: data as unknown as Record<string, unknown>,
-    metadata: {
-      cleanup,
-    },
+    metadata: buildCustomerActionAuditMetadata(ctx, { cleanup }),
   });
 
   return {
