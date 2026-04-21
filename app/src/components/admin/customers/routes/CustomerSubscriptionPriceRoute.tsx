@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import SubscriptionPriceChangeModal from '@/components/admin/billing/SubscriptionPriceChangeModal';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
-import { useCustomerRouteRefresh } from './useCustomerRouteRefresh';
+import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 
 export default function CustomerSubscriptionPriceRoute({
   customerId,

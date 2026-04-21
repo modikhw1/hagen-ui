@@ -1,8 +1,9 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { formatSek, sekToOre } from '@/lib/admin/money';
+import { usePendingInvoiceItemsRefresh } from '@/hooks/admin/useAdminRefresh';
 
 type PendingInvoiceItem = {
   id: string;
@@ -14,7 +15,7 @@ type PendingInvoiceItem = {
 };
 
 export default function PendingInvoiceItems({ customerId }: { customerId: string }) {
-  const qc = useQueryClient();
+  const refreshPendingItems = usePendingInvoiceItemsRefresh(customerId);
   const [showForm, setShowForm] = useState(false);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState(0);
@@ -39,13 +40,6 @@ export default function PendingInvoiceItems({ customerId }: { customerId: string
     },
   });
 
-  const invalidate = async () => {
-    await qc.invalidateQueries({
-      queryKey: ['admin', 'customer', customerId, 'pending-items'],
-    });
-    await qc.invalidateQueries({ queryKey: ['admin', 'customer', customerId, 'invoices'] });
-  };
-
   const handleCreate = async () => {
     setSubmitting(true);
     setError(null);
@@ -66,7 +60,7 @@ export default function PendingInvoiceItems({ customerId }: { customerId: string
       setDescription('');
       setAmount(0);
       setShowForm(false);
-      await invalidate();
+      await refreshPendingItems();
     } catch (createError: unknown) {
       setError(
         createError instanceof Error
@@ -93,7 +87,7 @@ export default function PendingInvoiceItems({ customerId }: { customerId: string
         const payload = await response.json();
         throw new Error(payload.error || 'Kunde inte ta bort fakturatillagg');
       }
-      await invalidate();
+      await refreshPendingItems();
     } catch (deleteError: unknown) {
       setError(
         deleteError instanceof Error

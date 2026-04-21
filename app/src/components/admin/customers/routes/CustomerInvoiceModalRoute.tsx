@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import InvoiceOperationsModal from '@/components/admin/billing/InvoiceOperationsModal';
-import { useCustomerRouteRefresh } from './useCustomerRouteRefresh';
+import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 
 export default function CustomerInvoiceModalRoute({
   customerId,

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import type { OnboardingState, BlockingSignal } from '@/lib/admin-derive';
 import { shortDateSv } from '@/lib/admin/time';
-import { useCustomerRouteRefresh } from '@/components/admin/customers/routes/useCustomerRouteRefresh';
+import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 import { CustomerActionButton } from '@/components/admin/customers/routes/shared';
 
 export default function AttentionPanel({

@@ -7,7 +7,7 @@ import PendingInvoiceItems from '@/components/admin/customers/PendingInvoiceItem
 import { useCustomerDetail, useCustomerInvoices } from '@/hooks/admin/useCustomerDetail';
 import { formatSek, sekToOre } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
-import { useCustomerRouteRefresh } from './useCustomerRouteRefresh';
+import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   CustomerActionButton,
   CustomerRouteError,

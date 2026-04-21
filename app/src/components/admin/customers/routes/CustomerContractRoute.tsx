@@ -7,7 +7,7 @@ import DiscountModal from '@/components/admin/customers/modals/DiscountModal';
 import { intervalLong } from '@/lib/admin/labels';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { shortDateSv } from '@/lib/admin/time';
-import { useCustomerRouteRefresh } from './useCustomerRouteRefresh';
+import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   CustomerActionButton,
   CustomerField,

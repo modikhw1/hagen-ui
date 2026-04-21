@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { TikTokProfilePreview } from '@/lib/tiktok/profile';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
-import { useCustomerRouteRefresh } from '@/components/admin/customers/routes/useCustomerRouteRefresh';
+import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   CustomerActionButton,
   CustomerRouteError,

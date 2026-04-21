@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import ChangeCMModal from '@/components/admin/customers/modals/ChangeCMModal';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { useTeamMembers } from '@/hooks/admin/useCustomers';
-import { useCustomerRouteRefresh } from './useCustomerRouteRefresh';
+import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 
 export default function CustomerChangeCMRoute({ customerId }: { customerId: string }) {
   const router = useRouter();

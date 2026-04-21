@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { formatSek } from '@/lib/admin/money';
-import { qk } from '@/lib/admin/queryKeys';
 import { shortDateSv } from '@/lib/admin/time';
+import { useOverviewRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   attentionSeverity,
   attentionTimestamp,
@@ -28,7 +28,7 @@ export default function AttentionList({
   trackSeen?: boolean;
   surface?: 'overview' | 'notifications';
 }) {
-  const queryClient = useQueryClient();
+  const refreshOverview = useOverviewRefresh();
   const parsedLastSeenAt = lastSeenAt ? new Date(lastSeenAt) : null;
 
   useEffect(() => {
@@ -45,9 +45,9 @@ export default function AttentionList({
         keepalive: true,
       });
 
-      await queryClient.invalidateQueries({ queryKey: qk.overviewRoot() });
+      await refreshOverview();
     })();
-  }, [mode, queryClient, surface, trackSeen]);
+  }, [mode, refreshOverview, surface, trackSeen]);
 
   const mutateAttention = useMutation({
     mutationFn: async (item: AttentionItem) => {
@@ -78,12 +78,7 @@ export default function AttentionList({
     },
     onSuccess: async (item) => {
       const customerId = customerIdForItem(item);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: qk.overviewRoot() }),
-        customerId
-          ? queryClient.invalidateQueries({ queryKey: ['admin', 'customer', customerId] })
-          : Promise.resolve(),
-      ]);
+      await refreshOverview(customerId);
     },
   });
 

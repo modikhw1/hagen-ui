@@ -7,7 +7,7 @@ import SubscriptionActions from '@/components/admin/customers/SubscriptionAction
 import { useCustomerDetail, useCustomerSubscription } from '@/hooks/admin/useCustomerDetail';
 import { formatSek } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
-import { useCustomerRouteRefresh } from './useCustomerRouteRefresh';
+import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   CustomerRouteError,
   CustomerRouteLoading,
