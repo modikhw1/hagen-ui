@@ -40,7 +40,9 @@ export default function CMEditDialog({
   const [city, setCity] = useState(cm.city || '');
   const [bio, setBio] = useState(cm.bio || '');
   const [avatarUrl, setAvatarUrl] = useState(cm.avatar_url || '');
-  const [commissionRate, setCommissionRate] = useState(String(Math.round(cm.commission_rate * 100)));
+  const [commissionRate, setCommissionRate] = useState(
+    String(Math.round(cm.commission_rate * 100)),
+  );
   const [reassignTo, setReassignTo] = useState('');
   const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -102,7 +104,8 @@ export default function CMEditDialog({
           city,
           bio,
           avatar_url: avatarUrl,
-          commission_rate: (Number.isFinite(parsedCommissionRate) ? parsedCommissionRate : 20) / 100,
+          commission_rate:
+            (Number.isFinite(parsedCommissionRate) ? parsedCommissionRate : 20) / 100,
         }),
       });
 
@@ -114,9 +117,7 @@ export default function CMEditDialog({
       await reassignCustomers();
       onSaved();
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : 'Misslyckades',
-      );
+      setError(saveError instanceof Error ? saveError.message : 'Misslyckades');
     } finally {
       setSubmitting(false);
     }
@@ -141,9 +142,7 @@ export default function CMEditDialog({
 
       onSaved();
     } catch (archiveError) {
-      setError(
-        archiveError instanceof Error ? archiveError.message : 'Misslyckades',
-      );
+      setError(archiveError instanceof Error ? archiveError.message : 'Misslyckades');
     } finally {
       setSubmitting(false);
     }
@@ -155,9 +154,7 @@ export default function CMEditDialog({
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Redigera CM</DialogTitle>
-            <DialogDescription>
-              Uppdatera profil, kommission och kundansvar.
-            </DialogDescription>
+            <DialogDescription>Uppdatera profil, kommission och kundansvar.</DialogDescription>
           </DialogHeader>
 
           <div className="mb-4 flex items-center gap-4">
@@ -293,10 +290,7 @@ export default function CMEditDialog({
               <Check className="h-3.5 w-3.5" />
               Spara
             </button>
-            <button
-              onClick={onClose}
-              className="rounded-md border border-border px-4 py-2 text-sm"
-            >
+            <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm">
               Avbryt
             </button>
             <div className="flex-1" />

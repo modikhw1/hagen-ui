@@ -99,8 +99,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const resolvedRole = resolveLegacyProfileRole(data as { role?: string | null; is_admin?: boolean | null });
         const resolvedIsAdmin = resolvedRole === 'admin';
 
+        const baseProfile = data as Omit<Profile, 'role' | 'is_admin'> &
+          Partial<Pick<Profile, 'role' | 'is_admin'>>;
+
         const profile = {
-          ...(data as Profile),
+          ...baseProfile,
           role: resolvedRole,
           is_admin: resolvedIsAdmin,
         } as Profile;

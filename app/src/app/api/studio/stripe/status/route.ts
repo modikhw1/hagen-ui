@@ -17,7 +17,7 @@ const stripeEnvironment = getStripeEnvironment();
 const stripeConfigNames = getStripeConfigEnvNames(stripeEnvironment);
 const stripeSecretKey = process.env[stripeConfigNames.secretKey];
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: '2026-02-25.clover' })
+  ? new Stripe(stripeSecretKey, { apiVersion: '2025-12-15.clover' })
   : null;
 
 export const POST = withAuth(async (request: NextRequest) => {
