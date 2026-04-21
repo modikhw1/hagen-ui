@@ -1269,6 +1269,7 @@ export type Database = {
           from_demo_id: string | null
           game_plan: Json | null
           id: string
+          invite_attempt_nonce: number
           invited_at: string | null
           invoice_text: string | null
           last_history_sync_at: string | null
@@ -1330,6 +1331,7 @@ export type Database = {
           from_demo_id?: string | null
           game_plan?: Json | null
           id?: string
+          invite_attempt_nonce?: number
           invited_at?: string | null
           invoice_text?: string | null
           last_history_sync_at?: string | null
@@ -1391,6 +1393,7 @@ export type Database = {
           from_demo_id?: string | null
           game_plan?: Json | null
           id?: string
+          invite_attempt_nonce?: number
           invited_at?: string | null
           invoice_text?: string | null
           last_history_sync_at?: string | null
@@ -2243,6 +2246,60 @@ export type Database = {
           source?: string | null
         }
         Relationships: []
+      }
+      pending_stripe_attachments: {
+        Row: {
+          created_at: string
+          customer_profile_id: string
+          id: string
+          metadata: Json
+          reason: string
+          stripe_customer_id: string | null
+          stripe_price_id: string | null
+          stripe_product_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          customer_profile_id: string
+          id?: string
+          metadata?: Json
+          reason?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          customer_profile_id?: string
+          id?: string
+          metadata?: Json
+          reason?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
+          stripe_product_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_stripe_attachments_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_stripe_attachments_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
       }
       profiles: {
         Row: {
