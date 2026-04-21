@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ExternalLink, Pencil, X } from 'lucide-react';
 import AdminAvatar from '@/components/admin/AdminAvatar';
+import { callCustomerAction } from '@/lib/admin/api-client';
 import { customerBufferStatus } from '@/lib/admin-derive/buffer';
 import { blockingDisplayDays, customerBlocking } from '@/lib/admin-derive/blocking';
 import { deriveOnboardingState, settleIfDue } from '@/lib/admin-derive/onboarding';
@@ -519,22 +520,13 @@ export default function CustomerDetailView({ id }: { id: string }) {
     setCustomerActionMessage(null);
 
     try {
-      const response = await fetch(`/api/admin/customers/${customer.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ action }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        message?: string;
-      };
+      const result = await callCustomerAction(customer.id, { action });
 
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte uppdatera kunden');
+      if (!result.ok) {
+        throw new Error(result.error || 'Kunde inte uppdatera kunden');
       }
 
-      setCustomerActionMessage(payload.message || 'Atgarden genomfordes.');
+      setCustomerActionMessage(result.message || 'Atgarden genomfordes.');
       invalidate();
     } catch (actionError: unknown) {
       setCustomerActionError(

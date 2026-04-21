@@ -12,8 +12,143 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
+      admin_user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["admin_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["admin_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["admin_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      attention_snoozes: {
+        Row: {
+          id: string
+          note: string | null
+          release_reason: string | null
+          released_at: string | null
+          snoozed_at: string
+          snoozed_by_admin_id: string
+          snoozed_until: string | null
+          subject_id: string
+          subject_type: Database["public"]["Enums"]["attention_subject_type"]
+        }
+        Insert: {
+          id?: string
+          note?: string | null
+          release_reason?: string | null
+          released_at?: string | null
+          snoozed_at?: string
+          snoozed_by_admin_id: string
+          snoozed_until?: string | null
+          subject_id: string
+          subject_type: Database["public"]["Enums"]["attention_subject_type"]
+        }
+        Update: {
+          id?: string
+          note?: string | null
+          release_reason?: string | null
+          released_at?: string | null
+          snoozed_at?: string
+          snoozed_by_admin_id?: string
+          snoozed_until?: string | null
+          subject_id?: string
+          subject_type?: Database["public"]["Enums"]["attention_subject_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attention_snoozes_snoozed_by_admin_id_fkey"
+            columns: ["snoozed_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_log: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_role: string | null
+          actor_user_id: string | null
+          after_state: Json | null
+          before_state: Json | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_role?: string | null
+          actor_user_id?: string | null
+          after_state?: Json | null
+          before_state?: Json | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: []
+      }
       auto_edit_sessions: {
         Row: {
           audio_selection: Json | null
@@ -74,6 +209,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auto_edit_sessions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
           {
             foreignKeyName: "auto_edit_sessions_template_id_fkey"
@@ -191,6 +333,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "auto_edit_templates_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+          {
             foreignKeyName: "auto_edit_templates_design_system_id_fkey"
             columns: ["design_system_id"]
             isOneToOne: false
@@ -199,38 +348,128 @@ export type Database = {
           },
         ]
       }
+      cm_absences: {
+        Row: {
+          absence_type: string
+          backup_cm_id: string | null
+          cm_id: string
+          compensation_mode: string
+          created_at: string
+          created_by: string | null
+          customer_profile_id: string | null
+          ends_on: string
+          id: string
+          note: string | null
+          starts_on: string
+          updated_at: string
+        }
+        Insert: {
+          absence_type?: string
+          backup_cm_id?: string | null
+          cm_id: string
+          compensation_mode?: string
+          created_at?: string
+          created_by?: string | null
+          customer_profile_id?: string | null
+          ends_on: string
+          id?: string
+          note?: string | null
+          starts_on: string
+          updated_at?: string
+        }
+        Update: {
+          absence_type?: string
+          backup_cm_id?: string | null
+          cm_id?: string
+          compensation_mode?: string
+          created_at?: string
+          created_by?: string | null
+          customer_profile_id?: string | null
+          ends_on?: string
+          id?: string
+          note?: string | null
+          starts_on?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_absences_backup_cm_id_fkey"
+            columns: ["backup_cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_absences_cm_id_fkey"
+            columns: ["cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_absences_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_absences_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
       cm_activities: {
         Row: {
           activity_type: string
           cm_email: string
+          cm_id: string | null
+          cm_name: string | null
           cm_user_id: string | null
           created_at: string | null
           customer_profile_id: string | null
           description: string
           id: string
           metadata: Json | null
+          type: string | null
         }
         Insert: {
           activity_type: string
           cm_email: string
+          cm_id?: string | null
+          cm_name?: string | null
           cm_user_id?: string | null
           created_at?: string | null
           customer_profile_id?: string | null
           description: string
           id?: string
           metadata?: Json | null
+          type?: string | null
         }
         Update: {
           activity_type?: string
           cm_email?: string
+          cm_id?: string | null
+          cm_name?: string | null
           cm_user_id?: string | null
           created_at?: string | null
           customer_profile_id?: string | null
           description?: string
           id?: string
           metadata?: Json | null
+          type?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cm_activities_cm_id_fkey"
+            columns: ["cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cm_activities_cm_user_id_fkey"
             columns: ["cm_user_id"]
@@ -245,63 +484,119 @@ export type Database = {
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "cm_activities_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
         ]
       }
-      cm_notifications: {
+      cm_assignments: {
         Row: {
+          cm_id: string | null
           created_at: string
-          customer_id: string | null
-          from_cm_id: string
+          customer_id: string
+          handover_note: string | null
           id: string
-          message: string
-          priority: string
-          resolution_note: string | null
-          resolved_at: string | null
-          resolved_by_admin_id: string | null
+          scheduled_change: Json | null
+          updated_at: string
+          valid_from: string
+          valid_to: string | null
         }
         Insert: {
+          cm_id?: string | null
           created_at?: string
-          customer_id?: string | null
-          from_cm_id: string
+          customer_id: string
+          handover_note?: string | null
           id?: string
-          message: string
-          priority?: string
-          resolution_note?: string | null
-          resolved_at?: string | null
-          resolved_by_admin_id?: string | null
+          scheduled_change?: Json | null
+          updated_at?: string
+          valid_from?: string
+          valid_to?: string | null
         }
         Update: {
+          cm_id?: string | null
           created_at?: string
-          customer_id?: string | null
-          from_cm_id?: string
+          customer_id?: string
+          handover_note?: string | null
           id?: string
-          message?: string
-          priority?: string
-          resolution_note?: string | null
-          resolved_at?: string | null
-          resolved_by_admin_id?: string | null
+          scheduled_change?: Json | null
+          updated_at?: string
+          valid_from?: string
+          valid_to?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "cm_notifications_customer_id_fkey"
+            foreignKeyName: "cm_assignments_cm_id_fkey"
+            columns: ["cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_assignments_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cm_notifications_from_cm_id_fkey"
-            columns: ["from_cm_id"]
+            foreignKeyName: "cm_assignments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      cm_interactions: {
+        Row: {
+          cm_id: string
+          created_at: string
+          customer_id: string | null
+          id: string
+          metadata: Json | null
+          type: string
+        }
+        Insert: {
+          cm_id: string
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          metadata?: Json | null
+          type: string
+        }
+        Update: {
+          cm_id?: string
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          metadata?: Json | null
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_interactions_cm_id_fkey"
+            columns: ["cm_id"]
             isOneToOne: false
             referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cm_notifications_resolved_by_admin_id_fkey"
-            columns: ["resolved_by_admin_id"]
+            foreignKeyName: "cm_interactions_customer_id_fkey"
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: "team_members"
+            referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_interactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
         ]
       }
@@ -324,6 +619,71 @@ export type Database = {
             columns: ["cm_id"]
             isOneToOne: true
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cm_notifications: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          from_cm_id: string
+          id: string
+          message: string
+          priority: Database["public"]["Enums"]["cm_notification_priority"]
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by_admin_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          from_cm_id: string
+          id?: string
+          message: string
+          priority?: Database["public"]["Enums"]["cm_notification_priority"]
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by_admin_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          from_cm_id?: string
+          id?: string
+          message?: string
+          priority?: Database["public"]["Enums"]["cm_notification_priority"]
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by_admin_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_notifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_notifications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "cm_notifications_from_cm_id_fkey"
+            columns: ["from_cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_notifications_resolved_by_admin_id_fkey"
+            columns: ["resolved_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
         ]
@@ -356,50 +716,6 @@ export type Database = {
             columns: ["cm_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      attention_snoozes: {
-        Row: {
-          id: string
-          note: string | null
-          release_reason: string | null
-          released_at: string | null
-          snoozed_at: string
-          snoozed_by_admin_id: string
-          snoozed_until: string | null
-          subject_id: string
-          subject_type: string
-        }
-        Insert: {
-          id?: string
-          note?: string | null
-          release_reason?: string | null
-          released_at?: string | null
-          snoozed_at?: string
-          snoozed_by_admin_id: string
-          snoozed_until?: string | null
-          subject_id: string
-          subject_type: string
-        }
-        Update: {
-          id?: string
-          note?: string | null
-          release_reason?: string | null
-          released_at?: string | null
-          snoozed_at?: string
-          snoozed_by_admin_id?: string
-          snoozed_until?: string | null
-          subject_id?: string
-          subject_type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "attention_snoozes_snoozed_by_admin_id_fkey"
-            columns: ["snoozed_by_admin_id"]
-            isOneToOne: false
-            referencedRelation: "team_members"
             referencedColumns: ["id"]
           },
         ]
@@ -705,6 +1021,34 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "customer_concepts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_concepts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "customer_concepts_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_concepts_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+          {
             foreignKeyName: "customer_concepts_reconciled_by_cm_id_fkey"
             columns: ["reconciled_by_cm_id"]
             isOneToOne: false
@@ -716,20 +1060,6 @@ export type Database = {
             columns: ["reconciled_customer_concept_id"]
             isOneToOne: false
             referencedRelation: "customer_concepts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_concepts_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customer_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "customer_concepts_customer_profile_id_fkey"
-            columns: ["customer_profile_id"]
-            isOneToOne: false
-            referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
           {
@@ -777,6 +1107,13 @@ export type Database = {
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "customer_design_systems_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
         ]
       }
       customer_game_plans: {
@@ -817,6 +1154,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_game_plans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: true
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
           {
             foreignKeyName: "customer_game_plans_updated_by_fkey"
@@ -883,6 +1227,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "customer_notes_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+          {
             foreignKeyName: "customer_notes_primary_customer_concept_id_fkey"
             columns: ["primary_customer_concept_id"]
             isOneToOne: false
@@ -899,8 +1250,8 @@ export type Database = {
           billing_day_of_month: number | null
           brief: Json | null
           business_name: string
-          concepts_per_week: number | null
           concepts: Json | null
+          concepts_per_week: number
           contact_email: string | null
           contacts: Json | null
           contract_metadata: Json | null
@@ -909,9 +1260,11 @@ export type Database = {
           customer_contact_name: string | null
           discount_duration_months: number | null
           discount_end_date: string | null
+          discount_ends_at: string | null
           discount_start_date: string | null
           discount_type: string | null
           discount_value: number | null
+          expected_concepts_per_week: number
           first_invoice_behavior: string | null
           from_demo_id: string | null
           game_plan: Json | null
@@ -922,8 +1275,9 @@ export type Database = {
           last_upload_at: string | null
           logo_url: string | null
           monthly_price: number | null
-          onboarding_state: string | null
-          onboarding_state_changed_at: string | null
+          next_invoice_date: string | null
+          onboarding_state: string
+          onboarding_state_changed_at: string
           operation_lock_until: string | null
           paused_until: string | null
           pending_history_advance_at: string | null
@@ -943,6 +1297,8 @@ export type Database = {
           tiktok_profile_url: string | null
           tiktok_user_id: string | null
           upcoming_monthly_price: number | null
+          upcoming_price_change_at: string | null
+          upcoming_price_change_value: number | null
           upcoming_price_effective_date: string | null
           updated_at: string | null
           upload_schedule: string[] | null
@@ -955,8 +1311,8 @@ export type Database = {
           billing_day_of_month?: number | null
           brief?: Json | null
           business_name: string
-          concepts_per_week?: number | null
           concepts?: Json | null
+          concepts_per_week?: number
           contact_email?: string | null
           contacts?: Json | null
           contract_metadata?: Json | null
@@ -965,9 +1321,11 @@ export type Database = {
           customer_contact_name?: string | null
           discount_duration_months?: number | null
           discount_end_date?: string | null
+          discount_ends_at?: string | null
           discount_start_date?: string | null
           discount_type?: string | null
           discount_value?: number | null
+          expected_concepts_per_week?: number
           first_invoice_behavior?: string | null
           from_demo_id?: string | null
           game_plan?: Json | null
@@ -978,8 +1336,9 @@ export type Database = {
           last_upload_at?: string | null
           logo_url?: string | null
           monthly_price?: number | null
-          onboarding_state?: string | null
-          onboarding_state_changed_at?: string | null
+          next_invoice_date?: string | null
+          onboarding_state?: string
+          onboarding_state_changed_at?: string
           operation_lock_until?: string | null
           paused_until?: string | null
           pending_history_advance_at?: string | null
@@ -999,6 +1358,8 @@ export type Database = {
           tiktok_profile_url?: string | null
           tiktok_user_id?: string | null
           upcoming_monthly_price?: number | null
+          upcoming_price_change_at?: string | null
+          upcoming_price_change_value?: number | null
           upcoming_price_effective_date?: string | null
           updated_at?: string | null
           upload_schedule?: string[] | null
@@ -1011,8 +1372,8 @@ export type Database = {
           billing_day_of_month?: number | null
           brief?: Json | null
           business_name?: string
-          concepts_per_week?: number | null
           concepts?: Json | null
+          concepts_per_week?: number
           contact_email?: string | null
           contacts?: Json | null
           contract_metadata?: Json | null
@@ -1021,9 +1382,11 @@ export type Database = {
           customer_contact_name?: string | null
           discount_duration_months?: number | null
           discount_end_date?: string | null
+          discount_ends_at?: string | null
           discount_start_date?: string | null
           discount_type?: string | null
           discount_value?: number | null
+          expected_concepts_per_week?: number
           first_invoice_behavior?: string | null
           from_demo_id?: string | null
           game_plan?: Json | null
@@ -1034,8 +1397,9 @@ export type Database = {
           last_upload_at?: string | null
           logo_url?: string | null
           monthly_price?: number | null
-          onboarding_state?: string | null
-          onboarding_state_changed_at?: string | null
+          next_invoice_date?: string | null
+          onboarding_state?: string
+          onboarding_state_changed_at?: string
           operation_lock_until?: string | null
           paused_until?: string | null
           pending_history_advance_at?: string | null
@@ -1055,6 +1419,8 @@ export type Database = {
           tiktok_profile_url?: string | null
           tiktok_user_id?: string | null
           upcoming_monthly_price?: number | null
+          upcoming_price_change_at?: string | null
+          upcoming_price_change_value?: number | null
           upcoming_price_effective_date?: string | null
           updated_at?: string | null
           upload_schedule?: string[] | null
@@ -1077,6 +1443,24 @@ export type Database = {
           },
         ]
       }
+      debug_log: {
+        Row: {
+          id: number
+          msg: string | null
+          ts: string | null
+        }
+        Insert: {
+          id?: number
+          msg?: string | null
+          ts?: string | null
+        }
+        Update: {
+          id?: number
+          msg?: string | null
+          ts?: string | null
+        }
+        Relationships: []
+      }
       demos: {
         Row: {
           company_name: string
@@ -1093,7 +1477,7 @@ export type Database = {
           resolved_at: string | null
           responded_at: string | null
           sent_at: string | null
-          status: string
+          status: Database["public"]["Enums"]["demo_status"]
           status_changed_at: string
           tiktok_handle: string | null
           tiktok_profile_pic_url: string | null
@@ -1113,7 +1497,7 @@ export type Database = {
           resolved_at?: string | null
           responded_at?: string | null
           sent_at?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["demo_status"]
           status_changed_at?: string
           tiktok_handle?: string | null
           tiktok_profile_pic_url?: string | null
@@ -1133,7 +1517,7 @@ export type Database = {
           resolved_at?: string | null
           responded_at?: string | null
           sent_at?: string | null
-          status?: string
+          status?: Database["public"]["Enums"]["demo_status"]
           status_changed_at?: string
           tiktok_handle?: string | null
           tiktok_profile_pic_url?: string | null
@@ -1147,62 +1531,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      feed_motor_signals: {
-        Row: {
-          acknowledged_at: string | null
-          auto_resolved_at: string | null
-          created_at: string | null
-          customer_id: string
-          id: string
-          payload: Json | null
-          signal_type: string
-        }
-        Insert: {
-          acknowledged_at?: string | null
-          auto_resolved_at?: string | null
-          created_at?: string | null
-          customer_id: string
-          id?: string
-          payload?: Json | null
-          signal_type?: string
-        }
-        Update: {
-          acknowledged_at?: string | null
-          auto_resolved_at?: string | null
-          created_at?: string | null
-          customer_id?: string
-          id?: string
-          payload?: Json | null
-          signal_type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "feed_motor_signals_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customer_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      debug_log: {
-        Row: {
-          id: number
-          msg: string | null
-          ts: string | null
-        }
-        Insert: {
-          id?: number
-          msg?: string | null
-          ts?: string | null
-        }
-        Update: {
-          id?: number
-          msg?: string | null
-          ts?: string | null
-        }
-        Relationships: []
       }
       email_history: {
         Row: {
@@ -1251,6 +1579,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_history_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
           {
             foreignKeyName: "email_history_scheduled_from_fkey"
@@ -1337,6 +1672,13 @@ export type Database = {
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "email_jobs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
         ]
       }
       email_log: {
@@ -1381,6 +1723,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_log_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
         ]
       }
@@ -1441,6 +1790,91 @@ export type Database = {
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "email_schedules_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          payload: Json
+          read_at: string | null
+          severity: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          severity?: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          payload?: Json
+          read_at?: string | null
+          severity?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      feed_motor_signals: {
+        Row: {
+          acknowledged_at: string | null
+          auto_resolved_at: string | null
+          created_at: string | null
+          customer_id: string
+          id: string
+          payload: Json | null
+          signal_type: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          auto_resolved_at?: string | null
+          created_at?: string | null
+          customer_id: string
+          id?: string
+          payload?: Json | null
+          signal_type?: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          auto_resolved_at?: string | null
+          created_at?: string | null
+          customer_id?: string
+          id?: string
+          payload?: Json | null
+          signal_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_motor_signals_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feed_motor_signals_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
         ]
       }
       feed_spans: {
@@ -1451,9 +1885,11 @@ export type Database = {
           color_index: number
           created_at: string | null
           customer_id: string
+          end_feed_order: number | null
           frac_end: number
           frac_start: number
           id: string
+          start_feed_order: number | null
           title: string
           updated_at: string | null
         }
@@ -1464,9 +1900,11 @@ export type Database = {
           color_index?: number
           created_at?: string | null
           customer_id: string
+          end_feed_order?: number | null
           frac_end: number
           frac_start: number
           id?: string
+          start_feed_order?: number | null
           title?: string
           updated_at?: string | null
         }
@@ -1477,9 +1915,11 @@ export type Database = {
           color_index?: number
           created_at?: string | null
           customer_id?: string
+          end_feed_order?: number | null
           frac_end?: number
           frac_start?: number
           id?: string
+          start_feed_order?: number | null
           title?: string
           updated_at?: string | null
         }
@@ -1497,6 +1937,71 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feed_spans_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      feedplan_concepts: {
+        Row: {
+          body: Json | null
+          created_at: string
+          created_by_cm_id: string | null
+          customer_id: string
+          id: string
+          planned_publish_date: string | null
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          body?: Json | null
+          created_at?: string
+          created_by_cm_id?: string | null
+          customer_id: string
+          id?: string
+          planned_publish_date?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: Json | null
+          created_at?: string
+          created_by_cm_id?: string | null
+          customer_id?: string
+          id?: string
+          planned_publish_date?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedplan_concepts_created_by_cm_id_fkey"
+            columns: ["created_by_cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedplan_concepts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedplan_concepts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
         ]
       }
@@ -1577,6 +2082,65 @@ export type Database = {
           },
         ]
       }
+      invoice_line_items: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          data: Json
+          description: string | null
+          environment: string | null
+          id: string
+          period_end: string | null
+          period_start: string | null
+          quantity: number | null
+          stripe_invoice_id: string
+          stripe_invoice_item_id: string | null
+          stripe_line_item_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          data?: Json
+          description?: string | null
+          environment?: string | null
+          id?: string
+          period_end?: string | null
+          period_start?: string | null
+          quantity?: number | null
+          stripe_invoice_id: string
+          stripe_invoice_item_id?: string | null
+          stripe_line_item_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          data?: Json
+          description?: string | null
+          environment?: string | null
+          id?: string
+          period_end?: string | null
+          period_start?: string | null
+          quantity?: number | null
+          stripe_invoice_id?: string
+          stripe_invoice_item_id?: string | null
+          stripe_line_item_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_line_items_stripe_invoice_id_fkey"
+            columns: ["stripe_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["stripe_invoice_id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount_due: number
@@ -1590,7 +2154,6 @@ export type Database = {
           id: string
           invoice_pdf: string | null
           paid_at: string | null
-          raw: Json | null
           status: string
           stripe_customer_id: string
           stripe_invoice_id: string
@@ -1610,7 +2173,6 @@ export type Database = {
           id?: string
           invoice_pdf?: string | null
           paid_at?: string | null
-          raw?: Json | null
           status: string
           stripe_customer_id: string
           stripe_invoice_id: string
@@ -1630,7 +2192,6 @@ export type Database = {
           id?: string
           invoice_pdf?: string | null
           paid_at?: string | null
-          raw?: Json | null
           status?: string
           stripe_customer_id?: string
           stripe_invoice_id?: string
@@ -1647,6 +2208,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "invoices_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+          {
             foreignKeyName: "invoices_user_profile_id_fkey"
             columns: ["user_profile_id"]
             isOneToOne: false
@@ -1654,54 +2222,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      invoice_line_items: {
-        Row: {
-          amount: number
-          created_at: string
-          currency: string
-          data: Json | null
-          description: string
-          environment: string | null
-          id: string
-          period_end: string | null
-          period_start: string | null
-          quantity: number
-          stripe_invoice_id: string
-          stripe_invoice_item_id: string | null
-          stripe_line_item_id: string
-        }
-        Insert: {
-          amount?: number
-          created_at?: string
-          currency?: string
-          data?: Json | null
-          description?: string
-          environment?: string | null
-          id?: string
-          period_end?: string | null
-          period_start?: string | null
-          quantity?: number
-          stripe_invoice_id: string
-          stripe_invoice_item_id?: string | null
-          stripe_line_item_id: string
-        }
-        Update: {
-          amount?: number
-          created_at?: string
-          currency?: string
-          data?: Json | null
-          description?: string
-          environment?: string | null
-          id?: string
-          period_end?: string | null
-          period_start?: string | null
-          quantity?: number
-          stripe_invoice_id?: string
-          stripe_invoice_item_id?: string | null
-          stripe_line_item_id?: string
-        }
-        Relationships: []
       }
       leads: {
         Row: {
@@ -1857,7 +2377,6 @@ export type Database = {
         Row: {
           calls: number
           cost_sek: number
-          created_at: string
           date: string
           id: string
           metadata: Json | null
@@ -1866,7 +2385,6 @@ export type Database = {
         Insert: {
           calls?: number
           cost_sek?: number
-          created_at?: string
           date: string
           id?: string
           metadata?: Json | null
@@ -1875,7 +2393,6 @@ export type Database = {
         Update: {
           calls?: number
           cost_sek?: number
-          created_at?: string
           date?: string
           id?: string
           metadata?: Json | null
@@ -1883,55 +2400,35 @@ export type Database = {
         }
         Relationships: []
       }
-      sync_runs: {
+      settings: {
         Row: {
-          customer_id: string
-          error: string | null
-          fetched_count: number | null
-          finished_at: string | null
-          id: string
-          imported_count: number | null
-          mode: string
-          reconciled: boolean | null
-          started_at: string
-          stats_updated_count: number | null
-          status: string
+          created_at: string
+          default_billing_interval: string
+          default_commission_rate: number
+          default_currency: string
+          default_payment_terms_days: number
+          id: boolean
+          updated_at: string
         }
         Insert: {
-          customer_id: string
-          error?: string | null
-          fetched_count?: number | null
-          finished_at?: string | null
-          id?: string
-          imported_count?: number | null
-          mode: string
-          reconciled?: boolean | null
-          started_at?: string
-          stats_updated_count?: number | null
-          status?: string
+          created_at?: string
+          default_billing_interval?: string
+          default_commission_rate?: number
+          default_currency?: string
+          default_payment_terms_days?: number
+          id?: boolean
+          updated_at?: string
         }
         Update: {
-          customer_id?: string
-          error?: string | null
-          fetched_count?: number | null
-          finished_at?: string | null
-          id?: string
-          imported_count?: number | null
-          mode?: string
-          reconciled?: boolean | null
-          started_at?: string
-          stats_updated_count?: number | null
-          status?: string
+          created_at?: string
+          default_billing_interval?: string
+          default_commission_rate?: number
+          default_currency?: string
+          default_payment_terms_days?: number
+          id?: boolean
+          updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "sync_runs_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customer_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       stepper_email_imports: {
         Row: {
@@ -2029,6 +2526,84 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_credit_notes: {
+        Row: {
+          created_at: string
+          credit_amount: number
+          currency: string
+          customer_profile_id: string | null
+          effective_at: string | null
+          environment: string | null
+          id: string
+          memo: string | null
+          out_of_band_amount: number
+          raw: Json | null
+          reason: string | null
+          refund_amount: number
+          status: string
+          stripe_credit_note_id: string
+          stripe_customer_id: string | null
+          stripe_invoice_id: string | null
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credit_amount?: number
+          currency?: string
+          customer_profile_id?: string | null
+          effective_at?: string | null
+          environment?: string | null
+          id?: string
+          memo?: string | null
+          out_of_band_amount?: number
+          raw?: Json | null
+          reason?: string | null
+          refund_amount?: number
+          status?: string
+          stripe_credit_note_id: string
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credit_amount?: number
+          currency?: string
+          customer_profile_id?: string | null
+          effective_at?: string | null
+          environment?: string | null
+          id?: string
+          memo?: string | null
+          out_of_band_amount?: number
+          raw?: Json | null
+          reason?: string | null
+          refund_amount?: number
+          status?: string
+          stripe_credit_note_id?: string
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_credit_notes_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_credit_notes_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
       stripe_processed_events: {
         Row: {
           event_id: string
@@ -2047,10 +2622,79 @@ export type Database = {
         }
         Relationships: []
       }
+      stripe_refunds: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          customer_profile_id: string | null
+          environment: string | null
+          id: string
+          raw: Json | null
+          reason: string | null
+          status: string
+          stripe_charge_id: string | null
+          stripe_customer_id: string | null
+          stripe_invoice_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_refund_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          customer_profile_id?: string | null
+          environment?: string | null
+          id?: string
+          raw?: Json | null
+          reason?: string | null
+          status?: string
+          stripe_charge_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_refund_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          customer_profile_id?: string | null
+          environment?: string | null
+          id?: string
+          raw?: Json | null
+          reason?: string | null
+          status?: string
+          stripe_charge_id?: string | null
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_refund_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stripe_refunds_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stripe_refunds_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
       stripe_sync_log: {
         Row: {
           created_at: string
-          environment: string | null
+          environment: string
           error_message: string | null
           event_id: string | null
           event_type: string
@@ -2064,7 +2708,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
-          environment?: string | null
+          environment?: string
           error_message?: string | null
           event_id?: string | null
           event_type: string
@@ -2078,7 +2722,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
-          environment?: string | null
+          environment?: string
           error_message?: string | null
           event_id?: string | null
           event_type?: string
@@ -2108,8 +2752,8 @@ export type Database = {
           id: string
           interval: string | null
           interval_count: number | null
-          pause_collection: Json | null
-          raw: Json | null
+          pause_until: string | null
+          scheduled_price_change: Json | null
           status: string
           stripe_customer_id: string
           stripe_subscription_id: string
@@ -2133,8 +2777,8 @@ export type Database = {
           id?: string
           interval?: string | null
           interval_count?: number | null
-          pause_collection?: Json | null
-          raw?: Json | null
+          pause_until?: string | null
+          scheduled_price_change?: Json | null
           status: string
           stripe_customer_id: string
           stripe_subscription_id: string
@@ -2158,8 +2802,8 @@ export type Database = {
           id?: string
           interval?: string | null
           interval_count?: number | null
-          pause_collection?: Json | null
-          raw?: Json | null
+          pause_until?: string | null
+          scheduled_price_change?: Json | null
           status?: string
           stripe_customer_id?: string
           stripe_subscription_id?: string
@@ -2177,8 +2821,201 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "subscriptions_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+          {
             foreignKeyName: "subscriptions_user_profile_id_fkey"
             columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_runs: {
+        Row: {
+          customer_id: string
+          error: string | null
+          fetched_count: number | null
+          finished_at: string | null
+          id: string
+          imported_count: number | null
+          mode: string
+          reconciled: boolean | null
+          started_at: string
+          stats_updated_count: number | null
+          status: string
+        }
+        Insert: {
+          customer_id: string
+          error?: string | null
+          fetched_count?: number | null
+          finished_at?: string | null
+          id?: string
+          imported_count?: number | null
+          mode: string
+          reconciled?: boolean | null
+          started_at?: string
+          stats_updated_count?: number | null
+          status?: string
+        }
+        Update: {
+          customer_id?: string
+          error?: string | null
+          fetched_count?: number | null
+          finished_at?: string | null
+          id?: string
+          imported_count?: number | null
+          mode?: string
+          reconciled?: boolean | null
+          started_at?: string
+          stats_updated_count?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_runs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_runs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      team_customer_history: {
+        Row: {
+          assigned_at: string
+          created_at: string
+          customer_profile_id: string | null
+          id: string
+          notes: string | null
+          team_member_id: string | null
+          unassigned_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_at?: string
+          created_at?: string
+          customer_profile_id?: string | null
+          id?: string
+          notes?: string | null
+          team_member_id?: string | null
+          unassigned_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_at?: string
+          created_at?: string
+          customer_profile_id?: string | null
+          id?: string
+          notes?: string | null
+          team_member_id?: string | null
+          unassigned_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_customer_history_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_customer_history_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "team_customer_history_team_member_id_fkey"
+            columns: ["team_member_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          color: string
+          commission_rate: number
+          created_at: string | null
+          email: string
+          expertise: string[] | null
+          id: string
+          invited_at: string | null
+          is_active: boolean | null
+          name: string
+          notes: string | null
+          phone: string | null
+          profile_id: string | null
+          region: string | null
+          responsibility_area: string | null
+          role: string
+          start_date: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          color?: string
+          commission_rate?: number
+          created_at?: string | null
+          email: string
+          expertise?: string[] | null
+          id?: string
+          invited_at?: string | null
+          is_active?: boolean | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          profile_id?: string | null
+          region?: string | null
+          responsibility_area?: string | null
+          role?: string
+          start_date?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          color?: string
+          commission_rate?: number
+          created_at?: string | null
+          email?: string
+          expertise?: string[] | null
+          id?: string
+          invited_at?: string | null
+          is_active?: boolean | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          profile_id?: string | null
+          region?: string | null
+          responsibility_area?: string | null
+          role?: string
+          start_date?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_profile_id_fkey"
+            columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2214,6 +3051,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiktok_publications_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
         ]
       }
@@ -2261,6 +3105,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tiktok_stats_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
         ]
       }
@@ -2318,109 +3169,12 @@ export type Database = {
             referencedRelation: "customer_profiles"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      team_customer_history: {
-        Row: {
-          assigned_at: string
-          created_at: string
-          customer_profile_id: string | null
-          id: string
-          notes: string | null
-          team_member_id: string | null
-          unassigned_at: string | null
-          updated_at: string
-        }
-        Insert: {
-          assigned_at?: string
-          created_at?: string
-          customer_profile_id?: string | null
-          id?: string
-          notes?: string | null
-          team_member_id?: string | null
-          unassigned_at?: string | null
-          updated_at?: string
-        }
-        Update: {
-          assigned_at?: string
-          created_at?: string
-          customer_profile_id?: string | null
-          id?: string
-          notes?: string | null
-          team_member_id?: string | null
-          unassigned_at?: string | null
-          updated_at?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "team_customer_history_customer_profile_id_fkey"
+            foreignKeyName: "tiktok_videos_customer_profile_id_fkey"
             columns: ["customer_profile_id"]
             isOneToOne: false
-            referencedRelation: "customer_profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "team_customer_history_team_member_id_fkey"
-            columns: ["team_member_id"]
-            isOneToOne: false
-            referencedRelation: "team_members"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      team_members: {
-        Row: {
-          avatar_url: string | null
-          color: string
-          created_at: string | null
-          email: string
-          id: string
-          is_active: boolean | null
-          name: string
-          phone: string | null
-          profile_id: string | null
-          responsibility_area: string | null
-          role: string
-          start_date: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          avatar_url?: string | null
-          color?: string
-          created_at?: string | null
-          email: string
-          id?: string
-          is_active?: boolean | null
-          name: string
-          phone?: string | null
-          profile_id?: string | null
-          responsibility_area?: string | null
-          role?: string
-          start_date?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          avatar_url?: string | null
-          color?: string
-          created_at?: string | null
-          email?: string
-          id?: string
-          is_active?: boolean | null
-          name?: string
-          phone?: string | null
-          profile_id?: string | null
-          responsibility_area?: string | null
-          role?: string
-          start_date?: string | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "team_members_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
           },
         ]
       }
@@ -2492,7 +3246,130 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      cm_temporary_coverage: {
+        Row: {
+          cm_id: string | null
+          compensation_mode: string | null
+          covering_for_cm_id: string | null
+          created_at: string | null
+          customer_profile_id: string | null
+          ends_on: string | null
+          from: string | null
+          id: string | null
+          note: string | null
+          starts_on: string | null
+          to: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          cm_id?: string | null
+          compensation_mode?: string | null
+          covering_for_cm_id?: string | null
+          created_at?: string | null
+          customer_profile_id?: string | null
+          ends_on?: string | null
+          from?: string | null
+          id?: string | null
+          note?: string | null
+          starts_on?: string | null
+          to?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          cm_id?: string | null
+          compensation_mode?: string | null
+          covering_for_cm_id?: string | null
+          created_at?: string | null
+          customer_profile_id?: string | null
+          ends_on?: string | null
+          from?: string | null
+          id?: string | null
+          note?: string | null
+          starts_on?: string | null
+          to?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_absences_backup_cm_id_fkey"
+            columns: ["covering_for_cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_absences_cm_id_fkey"
+            columns: ["cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_absences_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cm_absences_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      v_cm_interactions_7d: {
+        Row: {
+          cm_id: string | null
+          cnt: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cm_interactions_cm_id_fkey"
+            columns: ["cm_id"]
+            isOneToOne: false
+            referencedRelation: "team_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_customer_buffer: {
+        Row: {
+          assigned_cm_id: string | null
+          concepts_per_week: number | null
+          customer_id: string | null
+          last_published_at: string | null
+          latest_planned_publish_date: string | null
+          paused_until: string | null
+        }
+        Insert: {
+          assigned_cm_id?: string | null
+          concepts_per_week?: number | null
+          customer_id?: string | null
+          last_published_at?: never
+          latest_planned_publish_date?: never
+          paused_until?: string | null
+        }
+        Update: {
+          assigned_cm_id?: string | null
+          concepts_per_week?: number | null
+          customer_id?: string | null
+          last_published_at?: never
+          latest_planned_publish_date?: never
+          paused_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_profiles_account_manager_profile_id_fkey"
+            columns: ["assigned_cm_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       change_user_role: {
@@ -2553,7 +3430,26 @@ export type Database = {
       }
     }
     Enums: {
+      admin_role: "super_admin" | "operations_admin"
       app_role: "admin" | "content_manager" | "customer" | "user"
+      attention_subject_type:
+        | "invoice"
+        | "onboarding"
+        | "cm_notification"
+        | "customer_blocking"
+        | "demo_response"
+        | "cm_assignment"
+        | "subscription_pause_resume"
+        | "cm_activity"
+      cm_notification_priority: "normal" | "urgent"
+      demo_status:
+        | "draft"
+        | "sent"
+        | "opened"
+        | "responded"
+        | "won"
+        | "lost"
+        | "expired"
       user_role: "admin" | "content_manager" | "customer" | "user"
     }
     CompositeTypes: {
@@ -2680,9 +3576,33 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
+      admin_role: ["super_admin", "operations_admin"],
       app_role: ["admin", "content_manager", "customer", "user"],
+      attention_subject_type: [
+        "invoice",
+        "onboarding",
+        "cm_notification",
+        "customer_blocking",
+        "demo_response",
+        "cm_assignment",
+        "subscription_pause_resume",
+        "cm_activity",
+      ],
+      cm_notification_priority: ["normal", "urgent"],
+      demo_status: [
+        "draft",
+        "sent",
+        "opened",
+        "responded",
+        "won",
+        "lost",
+        "expired",
+      ],
       user_role: ["admin", "content_manager", "customer", "user"],
     },
   },

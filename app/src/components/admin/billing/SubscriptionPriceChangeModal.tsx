@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { callCustomerAction } from '@/lib/admin/api-client';
 import { formatSek } from '@/lib/admin/money';
 
 type PreviewPayload = {
@@ -102,20 +103,14 @@ export default function SubscriptionPriceChangeModal({
     setError(null);
 
     try {
-      const response = await fetch(`/api/admin/customers/${customerId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          action: 'change_subscription_price',
-          monthly_price: Number(monthlyPrice),
-          mode,
-        }),
+      const result = await callCustomerAction(customerId, {
+        action: 'change_subscription_price',
+        monthly_price: Number(monthlyPrice),
+        mode,
       });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
 
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte spara prisandringen');
+      if (!result.ok) {
+        throw new Error(result.error || 'Kunde inte spara prisandringen');
       }
 
       onChanged();

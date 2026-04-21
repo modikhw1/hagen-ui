@@ -28,6 +28,15 @@ import {
   customerPatchSchema,
   sendInviteActionSchema,
 } from "@/lib/schemas/customer";
+import {
+  cancelSubscriptionActionSchema,
+  changeAccountManagerActionSchema,
+  changeSubscriptionPriceActionSchema,
+  pauseSubscriptionActionSchema,
+  reactivateArchiveActionSchema,
+  resendInviteActionSchema,
+  setTemporaryCoverageActionSchema,
+} from "@/lib/admin/schemas/customer-actions";
 import { z } from "zod";
 import {
   applySubscriptionPriceChange,
@@ -45,63 +54,6 @@ import type { TablesUpdate } from "@/types/database";
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
-
-const pauseSubscriptionActionSchema = z
-  .object({
-    action: z.literal("pause_subscription"),
-    pause_until: z.string().trim().min(1).optional().nullable(),
-  })
-  .strict();
-
-const cancelSubscriptionActionSchema = z
-  .object({
-    action: z.literal("cancel_subscription"),
-    mode: z.enum(["end_of_period", "immediate", "immediate_with_credit"]).default("end_of_period"),
-    credit_amount_ore: z.number().int().min(0).optional().nullable(),
-    invoice_id: z.string().uuid().optional().nullable(),
-    memo: z.string().trim().max(1000).optional().nullable(),
-  })
-  .strict();
-
-const changeSubscriptionPriceActionSchema = z
-  .object({
-    action: z.literal("change_subscription_price"),
-    monthly_price: z.number().min(0).max(1_000_000),
-    mode: z.enum(["now", "next_period"]),
-  })
-  .strict();
-
-const changeAccountManagerActionSchema = z
-  .object({
-    action: z.literal("change_account_manager"),
-    cm_id: z.string().uuid().optional().nullable(),
-    effective_date: z.string().trim().min(1),
-    handover_note: z.string().trim().max(1000).optional().nullable(),
-  })
-  .strict();
-
-const resendInviteActionSchema = z
-  .object({
-    action: z.literal("resend_invite"),
-  })
-  .strict();
-
-const reactivateArchiveActionSchema = z
-  .object({
-    action: z.literal("reactivate_archive"),
-  })
-  .strict();
-
-const setTemporaryCoverageActionSchema = z
-  .object({
-    action: z.literal("set_temporary_coverage"),
-    covering_cm_id: z.string().uuid(),
-    starts_on: z.string().trim().min(1),
-    ends_on: z.string().trim().min(1),
-    note: z.string().trim().max(1000).optional().nullable(),
-    compensation_mode: z.enum(["covering_cm", "primary_cm"]).default("covering_cm"),
-  })
-  .strict();
 
 function isMissingRelationError(message?: string | null) {
   return (
@@ -249,48 +201,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
           .select("*")
           .eq("id", id)
           .single(),
-        (((supabaseAdmin.from("v_customer_buffer" as never) as never) as {
-          select: (
-            columns: string,
-          ) => {
-            eq: (
-              column: string,
-              value: string,
-            ) => {
-              maybeSingle: () => Promise<{
-                data: Record<string, unknown> | null;
-                error: { message?: string } | null;
-              }>;
-            };
-          };
-        }).select(
+        supabaseAdmin.from("v_customer_buffer").select(
           "customer_id, assigned_cm_id, concepts_per_week, paused_until, latest_planned_publish_date, last_published_at",
-        )).eq("customer_id", id).maybeSingle(),
-        (((supabaseAdmin.from("attention_snoozes" as never) as never) as {
-          select: (
-            columns: string,
-          ) => {
-            in: (
-              column: string,
-              values: string[],
-            ) => {
-              eq: (
-                innerColumn: string,
-                innerValue: string,
-              ) => {
-                is: (
-                  nullableColumn: string,
-                  nullableValue: null,
-                ) => Promise<{
-                  data: Array<Record<string, unknown>> | null;
-                  error: { message?: string } | null;
-                }>;
-              };
-            };
-          };
-        }).select(
+        ).eq("customer_id", id).maybeSingle(),
+        supabaseAdmin.from("attention_snoozes").select(
           "subject_type, subject_id, snoozed_until, released_at, note",
-        )).in("subject_type", ["onboarding", "customer_blocking"])
+        ).in("subject_type", ["onboarding", "customer_blocking"])
           .eq("subject_id", id)
           .is("released_at", null),
         listEnrichedCmAbsences(supabaseAdmin, {
@@ -787,7 +703,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
               ? beforeProfile.agreed_at
               : reactivatedAt,
           paused_until: null,
-        } as never)
+        })
         .eq("id", id)
         .select("id")
         .single();
@@ -866,18 +782,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         return jsonError("Kunden hittades inte", 404);
       }
 
-      const currentAssignment = await (((supabaseAdmin.from("cm_assignments" as never) as never) as {
-        select: (columns: string) => {
-          eq: (column: string, value: string) => {
-            is: (innerColumn: string, innerValue: null) => {
-              maybeSingle: () => Promise<{
-                data: { cm_id: string | null } | null;
-                error: { message?: string } | null;
-              }>;
-            };
-          };
-        };
-      }).select("cm_id")).eq("customer_id", id).is("valid_to", null).maybeSingle();
+      const currentAssignment = await supabaseAdmin
+        .from("cm_assignments")
+        .select("cm_id")
+        .eq("customer_id", id)
+        .is("valid_to", null)
+        .maybeSingle();
 
       if (currentAssignment.error) {
         return jsonError(currentAssignment.error.message || "Kunde inte lasa CM-assignment", 500);
@@ -945,7 +855,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .from("customer_profiles")
         .update({
           paused_until: null,
-        } as never)
+        })
         .eq("id", id);
 
       await syncOperationalSubscriptionState({
@@ -988,7 +898,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .from("customer_profiles")
         .update({
           paused_until: pauseUntil,
-        } as never)
+        })
         .eq("id", id)
         .select()
         .single();
@@ -1047,7 +957,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         .from("customer_profiles")
         .update({
           paused_until: null,
-        } as never)
+        })
         .eq("id", id)
         .select()
         .single();

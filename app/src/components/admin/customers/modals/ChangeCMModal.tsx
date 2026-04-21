@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { callCustomerAction } from '@/lib/admin/api-client';
 import type { TeamMemberRow } from '@/hooks/admin/useCustomers';
 import { formatSek } from '@/lib/admin/money';
 
@@ -138,37 +139,25 @@ export default function ChangeCMModal({
     setError(null);
 
     try {
-      const response =
+      const result =
         mode === 'temporary'
-          ? await fetch(`/api/admin/customers/${customerId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({
-                action: 'set_temporary_coverage',
-                covering_cm_id: selected,
-                starts_on: effectiveDate,
-                ends_on: coverageEndDate,
-                note: handoverNote || null,
-                compensation_mode: compensationMode,
-              }),
+          ? await callCustomerAction(customerId, {
+              action: 'set_temporary_coverage',
+              covering_cm_id: selected,
+              starts_on: effectiveDate,
+              ends_on: coverageEndDate,
+              note: handoverNote || null,
+              compensation_mode: compensationMode,
             })
-          : await fetch(`/api/admin/customers/${customerId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              credentials: 'include',
-              body: JSON.stringify({
-                action: 'change_account_manager',
-                cm_id: selected || null,
-                effective_date: mode === 'scheduled' ? effectiveDate : today,
-                handover_note: handoverNote || null,
-              }),
+          : await callCustomerAction(customerId, {
+              action: 'change_account_manager',
+              cm_id: selected || null,
+              effective_date: mode === 'scheduled' ? effectiveDate : today,
+              handover_note: handoverNote || null,
             });
 
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte uppdatera CM');
+      if (!result.ok) {
+        throw new Error(result.error || 'Kunde inte uppdatera CM');
       }
 
       onChanged();

@@ -3,6 +3,11 @@
 import { useMemo, useState } from 'react';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
 import {
+  archiveCustomer,
+  callCustomerAction,
+} from '@/lib/admin/api-client';
+import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
+import {
   useCustomerInvoices,
   useCustomerSubscription,
   type CustomerDetail,
@@ -37,21 +42,25 @@ export default function SubscriptionActions({
     [invoices],
   );
 
-  const run = async (body: Record<string, unknown>, method: 'PATCH' | 'DELETE' = 'PATCH') => {
-    setPending(String(body.action ?? method));
+  const run = async (
+    body: CustomerAction | null,
+    method: 'PATCH' | 'DELETE' = 'PATCH',
+  ) => {
+    setPending(body?.action ?? (method === 'DELETE' ? 'archive' : method));
     setError(null);
 
     try {
-      const res = await fetch(`/api/admin/customers/${customerId}`, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: method === 'PATCH' ? JSON.stringify(body) : undefined,
-      });
+      let result;
+      if (method === 'DELETE') {
+        result = await archiveCustomer(customerId);
+      } else if (body) {
+        result = await callCustomerAction(customerId, body);
+      } else {
+        throw new Error('Saknar action-payload');
+      }
 
-      if (!res.ok) {
-        const payload = await res.json();
-        throw new Error(payload.error || 'Misslyckades');
+      if (!result.ok) {
+        throw new Error(result.error || 'Misslyckades');
       }
 
       setConfirmAction(null);
@@ -269,7 +278,7 @@ export default function SubscriptionActions({
         title="Arkivera kund?"
         description="Kundprofilen markeras som arkiverad och tillhorande Stripe-resurser stadas enligt arkiveringsflodet."
         confirmLabel="Arkivera kund"
-        onConfirm={() => void run({ action: 'archive' }, 'DELETE')}
+        onConfirm={() => void run(null, 'DELETE')}
         pending={pending === 'archive'}
       />
     </>
