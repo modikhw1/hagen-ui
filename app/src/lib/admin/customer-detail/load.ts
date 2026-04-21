@@ -10,12 +10,26 @@ import type { Database, Tables } from '@/types/database';
 type CustomerProfileRow = Tables<'customer_profiles'>;
 type CustomerBufferRow = Database['public']['Views']['v_customer_buffer']['Row'];
 type AttentionSnoozeRow = Database['public']['Tables']['attention_snoozes']['Row'];
+type CustomerDetailRpcPayload = {
+  profile: Record<string, unknown> | null;
+  buffer_row?: Record<string, unknown> | null;
+  attention_snoozes?: Array<Record<string, unknown>>;
+  coverage_absences?: Array<Record<string, unknown>>;
+};
 
 export function isMissingRelationError(message?: string | null) {
   return (
     typeof message === 'string' &&
     message.toLowerCase().includes('relation') &&
     message.toLowerCase().includes('does not exist')
+  );
+}
+
+function isMissingFunctionError(message?: string | null) {
+  const normalized = message?.toLowerCase() ?? '';
+  return (
+    normalized.includes('admin_get_customer_detail') &&
+    (normalized.includes('does not exist') || normalized.includes('could not find the function'))
   );
 }
 
@@ -29,14 +43,6 @@ export function buildCustomerPayload(
 ) {
   return {
     customer: {
-      ...profile,
-      latest_planned_publish_date:
-        options?.bufferRow?.latest_planned_publish_date ?? null,
-      last_published_at: options?.bufferRow?.last_published_at ?? null,
-      attention_snoozes: options?.attentionSnoozes ?? [],
-      coverage_absences: options?.coverageAbsences ?? [],
-    },
-    profile: {
       ...profile,
       latest_planned_publish_date:
         options?.bufferRow?.latest_planned_publish_date ?? null,
@@ -124,7 +130,69 @@ export async function loadCustomerDetail(params: {
   };
 }) {
   const { supabaseAdmin, id, user } = params;
+  const rpcPayload = await loadCustomerDetailFromRpc(supabaseAdmin, id);
+  const fallbackPayload =
+    rpcPayload ?? (await loadCustomerDetailFromRelations(supabaseAdmin, id));
+  const profile = fallbackPayload.profile;
 
+  if (!user.is_admin && user.role !== 'admin') {
+    const isAssignedContentManager =
+      user.role === 'content_manager' &&
+      profile?.account_manager_profile_id === user.id;
+    const isCustomerOwner =
+      user.role === 'customer' &&
+      (profile?.user_id === user.id || profile?.id === user.id);
+
+    if (!isAssignedContentManager && !isCustomerOwner) {
+      const accessError = new Error('Du saknar behorighet');
+      Object.assign(accessError, { statusCode: 403 });
+      throw accessError;
+    }
+  }
+
+  return buildCustomerPayload(profile as Record<string, unknown>, {
+    bufferRow: (fallbackPayload.bufferRow ?? null) as CustomerBufferRow | null,
+    attentionSnoozes: (fallbackPayload.attentionSnoozes ?? []) as AttentionSnoozeRow[],
+    coverageAbsences: fallbackPayload.coverageAbsences,
+  });
+}
+
+async function loadCustomerDetailFromRpc(
+  supabaseAdmin: SupabaseClient<Database>,
+  id: string,
+) {
+  const { data, error } = await (supabaseAdmin.rpc(
+    'admin_get_customer_detail' as never,
+    { p_id: id } as never,
+  ) as unknown as Promise<{
+    data: CustomerDetailRpcPayload | null;
+    error: { message?: string } | null;
+  }>);
+
+  if (error) {
+    if (isMissingFunctionError(error.message)) {
+      return null;
+    }
+
+    throw new Error(error.message || 'Kunde inte hamta kunddetaljer');
+  }
+
+  if (!data?.profile) {
+    throw new Error('Kunden hittades inte');
+  }
+
+  return {
+    profile: data.profile,
+    bufferRow: data.buffer_row ?? null,
+    attentionSnoozes: data.attention_snoozes ?? [],
+    coverageAbsences: data.coverage_absences ?? [],
+  };
+}
+
+async function loadCustomerDetailFromRelations(
+  supabaseAdmin: SupabaseClient<Database>,
+  id: string,
+) {
   const [{ data: profile, error }, bufferResult, snoozesResult, coverageAbsences] =
     await Promise.all([
       supabaseAdmin
@@ -165,22 +233,8 @@ export async function loadCustomerDetail(params: {
     );
   }
 
-  if (!user.is_admin && user.role !== 'admin') {
-    const isAssignedContentManager =
-      user.role === 'content_manager' &&
-      profile?.account_manager_profile_id === user.id;
-    const isCustomerOwner =
-      user.role === 'customer' &&
-      (profile?.user_id === user.id || profile?.id === user.id);
-
-    if (!isAssignedContentManager && !isCustomerOwner) {
-      const accessError = new Error('Du saknar behorighet');
-      Object.assign(accessError, { statusCode: 403 });
-      throw accessError;
-    }
-  }
-
-  return buildCustomerPayload(profile as Record<string, unknown>, {
+  return {
+    profile: profile as Record<string, unknown>,
     bufferRow: (bufferResult.data ?? null) as CustomerBufferRow | null,
     attentionSnoozes: (snoozesResult.data ?? []) as AttentionSnoozeRow[],
     coverageAbsences: coverageAbsences.map((absence) => ({
@@ -197,7 +251,7 @@ export async function loadCustomerDetail(params: {
       is_active: absence.is_active,
       is_upcoming: absence.is_upcoming,
     })),
-  });
+  };
 }
 
 export type { CustomerProfileRow };

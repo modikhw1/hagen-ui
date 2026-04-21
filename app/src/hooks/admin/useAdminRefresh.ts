@@ -4,8 +4,11 @@ import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import type { EnvFilter } from '@/lib/admin/billing';
 import {
-  invalidateAfterCustomerWrite,
+  invalidateCustomerAssignment,
+  invalidateCustomerBilling,
+  invalidateCustomerRoute,
   invalidateBilling,
+  invalidateOverview,
 } from '@/lib/admin/invalidate';
 import { qk } from '@/lib/admin/queryKeys';
 
@@ -14,11 +17,27 @@ export function useCustomerRouteRefresh(customerId: string) {
   const queryClient = useQueryClient();
 
   return async () => {
-    await Promise.all([
-      invalidateAfterCustomerWrite(queryClient, customerId),
-      invalidateBilling(queryClient),
-    ]);
+    await invalidateCustomerRoute(queryClient, customerId);
+    router.refresh();
+  };
+}
 
+export function useCustomerBillingRefresh(customerId: string) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  return async () => {
+    await invalidateCustomerBilling(queryClient, customerId);
+    router.refresh();
+  };
+}
+
+export function useCustomerAssignmentRefresh(customerId: string) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+
+  return async () => {
+    await invalidateCustomerAssignment(queryClient, customerId);
     router.refresh();
   };
 }
@@ -28,12 +47,7 @@ export function useOverviewRefresh() {
   const queryClient = useQueryClient();
 
   return async (customerId?: string | null) => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: qk.overview.main() }),
-      customerId
-        ? queryClient.invalidateQueries({ queryKey: qk.customers.detail(customerId) })
-        : Promise.resolve(),
-    ]);
+    await invalidateOverview(queryClient, customerId);
     router.refresh();
   };
 }

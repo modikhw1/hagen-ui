@@ -342,8 +342,8 @@ export function resolveAbsenceCoverage(params: {
     .filter((segment): segment is CoverageSegment => segment !== null);
 }
 
-export function findActiveCmAbsence(
-  absences: CmAbsenceRecord[],
+export function findActiveCmAbsence<T extends CmAbsenceRecord>(
+  absences: T[],
   cmId: string,
   asOfDate: string,
 ) {
@@ -414,8 +414,8 @@ async function findOverlappingAbsences(
   });
 }
 
-function pickApplicableAbsence(
-  absences: CmAbsenceRecord[],
+function pickApplicableAbsence<T extends CmAbsenceRecord>(
+  absences: T[],
   customerId: string | null,
   asOfDate: string,
 ) {

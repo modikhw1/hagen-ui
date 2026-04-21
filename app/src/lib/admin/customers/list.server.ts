@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { Tables } from '@/types/database';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { deriveCustomerOperationalSignals, type BlockingState, type CustomerBufferStatus, type OnboardingState } from '@/lib/admin-derive/index.server';
 
@@ -59,17 +60,6 @@ export function parseCustomerListParams(searchParams: Record<string, string | st
   };
 }
 
-function matchesFilter(status: string, filter: CustomerListFilter) {
-  if (filter === 'all') return true;
-  if (filter === 'active') {
-    return ['active', 'agreed', 'paused', 'past_due'].includes(status);
-  }
-  if (filter === 'pipeline') {
-    return ['invited', 'pending', 'pending_payment', 'pending_invoice'].includes(status);
-  }
-  return status === 'archived';
-}
-
 export async function loadAdminCustomers(params: {
   search: string;
   filter: CustomerListFilter;
@@ -77,22 +67,81 @@ export async function loadAdminCustomers(params: {
   page: number;
   pageSize?: number;
 }) {
+  type CustomerProfileRow = Tables<'customer_profiles'>;
   const supabaseAdmin = createSupabaseAdmin();
   const pageSize = params.pageSize ?? 25;
-  const [{ data: customers, error: customerError }, { data: bufferRows, error: bufferError }, { data: teamRows, error: teamError }] =
-    await Promise.all([
-      supabaseAdmin.from('customer_profiles').select('*').order('created_at', { ascending: false }),
-      supabaseAdmin
-        .from('v_customer_buffer')
-        .select(
-          'customer_id, assigned_cm_id, concepts_per_week, paused_until, latest_planned_publish_date, last_published_at',
-        ),
-      supabaseAdmin
-        .from('team_members')
-        .select('id, name, email, color')
-        .eq('is_active', true)
-        .order('name'),
+  const ascending = params.sort === 'oldest';
+  const requestedPage = params.page;
+  const startIndex = (requestedPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize - 1;
+  const q = params.search.trim();
+  let customerQuery = supabaseAdmin
+    .from('customer_profiles')
+    .select('*', { count: 'exact' });
+
+  if (q) {
+    const pattern = `%${q}%`;
+    customerQuery = customerQuery.or(
+      `business_name.ilike.${pattern},contact_email.ilike.${pattern}`,
+    );
+  }
+
+  if (params.filter === 'active') {
+    customerQuery = customerQuery.in('status', ['active', 'agreed', 'paused', 'past_due']);
+  } else if (params.filter === 'pipeline') {
+    customerQuery = customerQuery.in('status', [
+      'invited',
+      'pending',
+      'pending_payment',
+      'pending_invoice',
     ]);
+  } else if (params.filter === 'archived') {
+    customerQuery = customerQuery.eq('status', 'archived');
+  }
+
+  const [customerResult, teamResult] = await Promise.all([
+    customerQuery.order('created_at', { ascending }).range(startIndex, endIndex),
+    supabaseAdmin
+      .from('team_members')
+      .select('id, name, email, color')
+      .eq('is_active', true)
+      .order('name'),
+  ]);
+
+  let customers: CustomerProfileRow[] = (customerResult.data ?? []) as CustomerProfileRow[];
+  const customerError = customerResult.error;
+  const total = customerResult.count ?? customers.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+
+  if (!customerError && total > 0 && requestedPage > totalPages) {
+    const correctedStart = (page - 1) * pageSize;
+    const correctedEnd = correctedStart + pageSize - 1;
+    const correctedResult = await customerQuery
+      .order('created_at', { ascending })
+      .range(correctedStart, correctedEnd);
+
+    customers = (correctedResult.data ?? []) as CustomerProfileRow[];
+
+    if (correctedResult.error) {
+      throw new Error(correctedResult.error.message || 'Kunde inte hamta kunder');
+    }
+  }
+
+  const customerIds = customers.map((customer) => customer.id);
+  const bufferResult =
+    customerIds.length > 0
+      ? await supabaseAdmin
+          .from('v_customer_buffer')
+          .select(
+            'customer_id, assigned_cm_id, concepts_per_week, paused_until, latest_planned_publish_date, last_published_at',
+          )
+          .in('customer_id', customerIds)
+      : { data: [], error: null };
+  const bufferRows = bufferResult.data ?? [];
+  const bufferError = bufferResult.error;
+  const teamRows = teamResult.data ?? [];
+  const teamError = teamResult.error;
 
   if (customerError) {
     throw new Error(customerError.message);
@@ -107,80 +156,60 @@ export async function loadAdminCustomers(params: {
   }
 
   const today = new Date();
-  const q = params.search.toLowerCase();
   const bufferByCustomerId = new Map((bufferRows ?? []).map((row) => [row.customer_id, row]));
+  const rows = customers.map((customer) => {
+    const buffer = bufferByCustomerId.get(customer.id);
+    const signals = deriveCustomerOperationalSignals({
+      status: customer.status ?? 'pending',
+      created_at: customer.created_at ?? new Date(0).toISOString(),
+      agreed_at: customer.agreed_at ?? null,
+      onboarding_state:
+        customer.onboarding_state === 'cm_ready' ||
+        customer.onboarding_state === 'live' ||
+        customer.onboarding_state === 'settled' ||
+        customer.onboarding_state === 'invited'
+          ? customer.onboarding_state
+          : null,
+      expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
+      concepts_per_week: customer.concepts_per_week ?? null,
+      latest_planned_publish_date: buffer?.latest_planned_publish_date ?? null,
+      last_published_at: buffer?.last_published_at ?? null,
+      paused_until: customer.paused_until ?? null,
+      tiktok_handle: customer.tiktok_handle ?? null,
+      attention_snoozes: [],
+    }, today);
 
-  const filtered = (customers ?? [])
-    .map((customer) => {
-      const buffer = bufferByCustomerId.get(customer.id);
-      const signals = deriveCustomerOperationalSignals({
-        status: customer.status ?? 'pending',
-        created_at: customer.created_at ?? new Date(0).toISOString(),
-        agreed_at: customer.agreed_at ?? null,
-        onboarding_state:
-          customer.onboarding_state === 'cm_ready' ||
-          customer.onboarding_state === 'live' ||
-          customer.onboarding_state === 'settled' ||
-          customer.onboarding_state === 'invited'
-            ? customer.onboarding_state
-            : null,
-        expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
-        concepts_per_week: customer.concepts_per_week ?? null,
-        latest_planned_publish_date: buffer?.latest_planned_publish_date ?? null,
-        last_published_at: buffer?.last_published_at ?? null,
-        paused_until: customer.paused_until ?? null,
-        tiktok_handle: customer.tiktok_handle ?? null,
-        attention_snoozes: [],
-      }, today);
+    const onboardingAttentionDays =
+      signals.onboardingState === 'cm_ready' && customer.onboarding_state_changed_at
+        ? Math.max(
+            0,
+            Math.floor(
+              (today.getTime() - new Date(customer.onboarding_state_changed_at).getTime()) /
+                86_400_000,
+            ),
+          )
+        : 0;
 
-      const onboardingAttentionDays =
-        signals.onboardingState === 'cm_ready' && customer.onboarding_state_changed_at
-          ? Math.max(
-              0,
-              Math.floor(
-                (today.getTime() - new Date(customer.onboarding_state_changed_at).getTime()) /
-                  86_400_000,
-              ),
-            )
-          : 0;
-
-      return {
-        id: customer.id,
-        business_name: customer.business_name ?? '',
-        contact_email: customer.contact_email ?? '',
-        customer_contact_name: customer.customer_contact_name ?? null,
-        account_manager: customer.account_manager ?? null,
-        monthly_price: customer.monthly_price ?? null,
-        pricing_status: customer.pricing_status === 'unknown' ? 'unknown' : 'fixed',
-        created_at: customer.created_at ?? new Date(0).toISOString(),
-        status: customer.status ?? 'pending',
-        onboardingState: signals.onboardingState,
-        onboardingNeedsAttention: signals.onboardingState === 'cm_ready' && onboardingAttentionDays >= 7,
-        onboardingAttentionDays,
-        bufferStatus: signals.bufferStatus,
-        blocking: { state: signals.blocking.state },
-        blockingDisplayDays: signals.visibleBlockingDays,
-        isNew: signals.onboardingState !== 'settled',
-      } satisfies AdminCustomerListItem;
-    })
-    .filter((customer) => {
-      const matchesSearch =
-        !q ||
-        customer.business_name.toLowerCase().includes(q) ||
-        customer.contact_email.toLowerCase().includes(q);
-      return matchesSearch && matchesFilter(customer.status, params.filter);
-    })
-    .sort((left, right) => {
-      const leftValue = new Date(left.created_at).getTime();
-      const rightValue = new Date(right.created_at).getTime();
-      return params.sort === 'newest' ? rightValue - leftValue : leftValue - rightValue;
-    });
-
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(params.page, totalPages);
-  const startIndex = (page - 1) * pageSize;
-  const rows = filtered.slice(startIndex, startIndex + pageSize);
+    return {
+      id: customer.id,
+      business_name: customer.business_name ?? '',
+      contact_email: customer.contact_email ?? '',
+      customer_contact_name: customer.customer_contact_name ?? null,
+      account_manager: customer.account_manager ?? null,
+      monthly_price: customer.monthly_price ?? null,
+      pricing_status: customer.pricing_status === 'unknown' ? 'unknown' : 'fixed',
+      created_at: customer.created_at ?? new Date(0).toISOString(),
+      status: customer.status ?? 'pending',
+      onboardingState: signals.onboardingState,
+      onboardingNeedsAttention:
+        signals.onboardingState === 'cm_ready' && onboardingAttentionDays >= 7,
+      onboardingAttentionDays,
+      bufferStatus: signals.bufferStatus,
+      blocking: { state: signals.blocking.state },
+      blockingDisplayDays: signals.visibleBlockingDays,
+      isNew: signals.onboardingState !== 'settled',
+    } satisfies AdminCustomerListItem;
+  });
 
   return {
     rows,

@@ -41,7 +41,7 @@ export const teamCustomerSchema = z.object({
 export const dailyDotSchema = z.object({
   date: z.coerce.date(),
   count: z.number(),
-  level: z.string(),
+  level: z.enum(['empty', 'low', 'mid', 'high', 'peak']),
   isWeekend: z.boolean(),
 });
 
@@ -113,5 +113,6 @@ export const teamOverviewSchema = z.object({
 });
 
 export type TeamMemberRow = z.infer<typeof teamMemberSchema>;
+export type TeamCustomer = z.infer<typeof teamCustomerSchema>;
 export type TeamMemberView = z.infer<typeof teamMemberViewSchema>;
 export type TeamOverviewDTO = z.infer<typeof teamOverviewSchema>;

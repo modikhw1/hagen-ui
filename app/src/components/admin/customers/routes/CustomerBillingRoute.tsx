@@ -10,7 +10,7 @@ import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { useCustomerInvoices } from '@/hooks/admin/useCustomerInvoices';
 import { formatSek, sekToOre } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
-import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
+import { useCustomerBillingRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   CustomerActionButton,
   CustomerRouteError,
@@ -21,7 +21,7 @@ import {
 export default function CustomerBillingRoute({ customerId }: { customerId: string }) {
   const { data: customer, isLoading, error } = useCustomerDetail(customerId);
   const { data: invoices = [] } = useCustomerInvoices(customerId);
-  const refresh = useCustomerRouteRefresh(customerId);
+  const refresh = useCustomerBillingRefresh(customerId);
   const [showManualInvoice, setShowManualInvoice] = useState(false);
 
   if (isLoading) {

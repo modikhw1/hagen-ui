@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import SubscriptionActions from '@/components/admin/customers/SubscriptionActions';
-import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
+import { useCustomerBillingRefresh } from '@/hooks/admin/useAdminRefresh';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { useCustomerSubscription } from '@/hooks/admin/useCustomerSubscription';
 import { formatSek } from '@/lib/admin/money';
@@ -21,7 +21,7 @@ export default function CustomerSubscriptionRoute({
     customerId,
     customer?.stripe_subscription_id ?? null,
   );
-  const refresh = useCustomerRouteRefresh(customerId);
+  const refresh = useCustomerBillingRefresh(customerId);
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);

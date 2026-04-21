@@ -1,8 +1,10 @@
 import { getAdminSettings } from '@/lib/admin/settings';
-import { listCmAbsences } from '@/lib/admin/cm-absences';
-import { withAuth } from '@/lib/auth/api-auth';
-import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { listEnrichedCmAbsences } from '@/lib/admin/cm-absences';
+import { buildTeamOverview } from '@/lib/admin/server/team-overview';
+import { requireScope, withAuth } from '@/lib/auth/api-auth';
+import { jsonError } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import { z } from 'zod';
 
 type NormalizedActivityRow = {
   cm_id: string | null;
@@ -122,7 +124,21 @@ async function fetchAssignments() {
   };
 }
 
-export const GET = withAuth(async () => {
+const querySchema = z
+  .object({
+    sort: z.enum(['standard', 'anomalous']).optional(),
+  })
+  .strict();
+
+export const GET = withAuth(async (_request, user) => {
+  requireScope(user, 'team.read');
+  const parsed = querySchema.safeParse({
+    sort: _request.nextUrl.searchParams.get('sort') ?? undefined,
+  });
+  if (!parsed.success) {
+    return jsonError('Ogiltiga query-parametrar', 400);
+  }
+
   const supabase = createSupabaseAdmin();
   const settings = await getAdminSettings(supabase);
   const activityCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
@@ -144,7 +160,7 @@ export const GET = withAuth(async () => {
       .select('customer_profile_id, followers, videos_last_24h, engagement_rate, snapshot_date')
       .gte('snapshot_date', statsCutoff)
       .order('snapshot_date', { ascending: false }),
-    listCmAbsences(supabase, { limit: 200 }),
+    listEnrichedCmAbsences(supabase, { limit: 200 }),
     fetchAssignments(),
   ]);
 
@@ -211,21 +227,55 @@ export const GET = withAuth(async () => {
     byCustomer[key] = current;
   }
 
-  return jsonOk({
-    members: normalizedTeam,
-    customers: customersResult.data ?? [],
+  const payload = buildTeamOverview({
+    members: normalizedTeam as Array<{
+      id: string;
+      name: string;
+      email: string | null;
+      phone: string | null;
+      role: string;
+      color: string | null;
+      is_active: boolean;
+      profile_id: string | null;
+      bio: string | null;
+      region: string | null;
+      avatar_url: string | null;
+      commission_rate: number | null;
+    }>,
+    customers: (customersResult.data ?? []) as Array<{
+      id: string;
+      business_name: string;
+      monthly_price: number | null;
+      status: string;
+      paused_until?: string | null;
+      account_manager_profile_id: string | null;
+      account_manager: string | null;
+      last_upload_at: string | null;
+    }>,
     activities: activitiesResult.data,
     assignments: assignmentsResult.data,
-    byCustomer,
     absences,
-    schemaWarnings: [
-      ...schemaWarnings,
-      ...(assignmentsResult.usedFallback
-        ? ['Tabellen cm_assignments saknas i denna miljo. Team-vyn visar bara nuvarande kunder utan periodhistorik.']
-        : []),
-      ...(activitiesResult.usedLegacyFallback
-        ? ['cm_activities anvander legacy-kolumner i denna miljo och normaliseras i API-lagret.']
-        : []),
-    ],
+    byCustomer,
+    sortMode: parsed.data.sort ?? 'standard',
+  });
+
+  for (const warning of [
+    ...schemaWarnings,
+    ...(assignmentsResult.usedFallback
+      ? ['Tabellen cm_assignments saknas i denna miljo. Team-vyn visar bara nuvarande kunder utan periodhistorik.']
+      : []),
+    ...(activitiesResult.usedLegacyFallback
+      ? ['cm_activities anvander legacy-kolumner i denna miljo och normaliseras i API-lagret.']
+      : []),
+  ]) {
+    console.warn('[admin.team.overview]', warning);
+  }
+
+  return new Response(JSON.stringify(payload), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'private, max-age=30',
+    },
   });
 }, ['admin']);

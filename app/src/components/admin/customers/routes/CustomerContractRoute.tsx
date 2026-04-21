@@ -7,7 +7,7 @@ import DiscountModal from '@/components/admin/customers/modals/DiscountModal';
 import { intervalLong } from '@/lib/admin/labels';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { shortDateSv } from '@/lib/admin/time';
-import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
+import { useCustomerBillingRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   CustomerActionButton,
   CustomerField,
@@ -18,7 +18,7 @@ import {
 
 export default function CustomerContractRoute({ customerId }: { customerId: string }) {
   const { data: customer, isLoading, error } = useCustomerDetail(customerId);
-  const refresh = useCustomerRouteRefresh(customerId);
+  const refresh = useCustomerBillingRefresh(customerId);
   const [editingPricing, setEditingPricing] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [showDiscountModal, setShowDiscountModal] = useState(false);
