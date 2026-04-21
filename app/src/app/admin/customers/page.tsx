@@ -447,9 +447,7 @@ export default function CustomersPage() {
                     `${SCROLL_STATE_PREFIX}${currentListUrl}`,
                     String(window.scrollY),
                   );
-                  router.push(
-                    `/admin/customers/${c.id}?from=${encodeURIComponent(currentListUrl)}`,
-                  );
+                  router.push(`/admin/customers/${c.id}`);
                 }}
                 className={`grid cursor-pointer grid-cols-[2fr_1fr_1fr_1fr_120px] items-center gap-4 px-5 py-3.5 transition-colors hover:bg-accent/30 ${
                   i < paginatedCustomers.length - 1 ? 'border-b border-border' : ''

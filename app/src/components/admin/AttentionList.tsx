@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { formatSek } from '@/lib/admin/money';
+import { qk } from '@/lib/admin/queryKeys';
 import { shortDateSv } from '@/lib/admin/time';
 import {
   attentionSeverity,
@@ -44,7 +45,7 @@ export default function AttentionList({
         keepalive: true,
       });
 
-      await queryClient.invalidateQueries({ queryKey: ['admin', 'overview'] });
+      await queryClient.invalidateQueries({ queryKey: qk.overviewRoot() });
     })();
   }, [mode, queryClient, surface, trackSeen]);
 
@@ -78,7 +79,7 @@ export default function AttentionList({
     onSuccess: async (item) => {
       const customerId = customerIdForItem(item);
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['admin', 'overview'] }),
+        queryClient.invalidateQueries({ queryKey: qk.overviewRoot() }),
         customerId
           ? queryClient.invalidateQueries({ queryKey: ['admin', 'customer', customerId] })
           : Promise.resolve(),
@@ -175,18 +176,18 @@ function hrefForItem(item: AttentionItem) {
       return `/admin/team?focus=${item.subjectId}`;
     case 'cm_notification':
       return item.customerId
-        ? `/admin/customers/${item.customerId}?focus=cm`
+        ? `/admin/customers/${item.customerId}/team`
         : '/admin/team';
     case 'invoice_unpaid':
-      return `/admin/customers/${item.customerId}?focus=invoices&invoice=${item.id}`;
+      return `/admin/customers/${item.customerId}/billing/${item.id}`;
     case 'onboarding_stuck':
-      return `/admin/customers/${item.customerId}?focus=operations`;
+      return `/admin/customers/${item.customerId}`;
     case 'customer_blocked':
-      return `/admin/customers/${item.customerId}?focus=operations`;
+      return `/admin/customers/${item.customerId}`;
     case 'cm_change_due_today':
-      return `/admin/customers/${item.customerId}?focus=cm`;
+      return `/admin/customers/${item.customerId}/team`;
     case 'pause_resume_due_today':
-      return `/admin/customers/${item.customerId}?focus=operations`;
+      return `/admin/customers/${item.customerId}`;
   }
 }
 
