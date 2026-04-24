@@ -27,7 +27,7 @@ ON public.invoices(status, created_at DESC);
 -- 5. PERFORMANCE: Optimize v_customer_buffer lookups
 -- This helps the scalar subqueries inside the view
 CREATE INDEX IF NOT EXISTS idx_tiktok_publications_customer_date 
-ON public.tiktok_publications(customer_profile_id, published_at DESC);
+ON public.tiktok_publications(customer_id, published_at DESC);
 
 -- 6. PERFORMANCE: Support payroll view joins and lookups
 -- v_admin_payroll_period depends on joining invoices to line items

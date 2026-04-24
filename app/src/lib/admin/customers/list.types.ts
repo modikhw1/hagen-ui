@@ -31,6 +31,7 @@ export type AdminCustomerListItem = {
   derived_status: DerivedCustomerStatus | null;
   last_upload_at?: string | null;
   concepts_per_week?: number | null;
+  planned_concepts_count?: number | null;
   scheduled_cm_change?: {
     effective_date: string;
     next_cm_name: string;

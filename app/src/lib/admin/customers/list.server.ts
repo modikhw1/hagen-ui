@@ -187,6 +187,7 @@ async function loadAdminCustomersSnapshot(params: {
       }),
       last_upload_at: customer.last_upload_at ?? null,
       concepts_per_week: customer.concepts_per_week ?? null,
+      planned_concepts_count: customer.planned_concepts_count ?? 0,
       scheduled_cm_change: customer.scheduled_cm_change
         ? {
             effective_date: customer.scheduled_cm_change.effective_date,

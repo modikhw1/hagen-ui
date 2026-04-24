@@ -1,20 +1,18 @@
 'use client';
 
-import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
-import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
-import { CustomerSection, CustomerSectionSkeleton } from '@/components/admin/customers/routes/shared';
+import { CustomerSection, CustomerSectionSkeleton, CustomerField } from '@/components/admin/customers/routes/shared';
 import { InlineEditField } from '@/components/admin/ui/form/InlineEditField';
 
 export default function ContactSection({ customerId }: { customerId: string }) {
   const { data: customer, isLoading } = useCustomerDetail(customerId);
   const update = useCustomerMutation(customerId, 'update_profile');
 
-  if (isLoading) return <CustomerSectionSkeleton blocks={2} />;
+  if (isLoading) return <CustomerSectionSkeleton blocks={3} />;
   if (!customer) return null;
 
   return (
     <CustomerSection title="Kontaktuppgifter">
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="space-y-5">
         <InlineEditField
           label="E-post"
           value={customer.contact_email}
@@ -26,8 +24,9 @@ export default function ContactSection({ customerId }: { customerId: string }) {
         />
         <InlineEditField
           label="Telefon"
-          value={customer.phone}
+          value={customer.phone || ''}
           inputType="tel"
+          placeholder="Ej satt"
           onSave={async (next) => {
             await update.mutateAsync({ phone: String(next) });
           }}

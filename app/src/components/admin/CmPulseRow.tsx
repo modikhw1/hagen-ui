@@ -43,7 +43,7 @@ export default function CmPulseRow({
                   · {attentionCount} {attentionCount === 1 ? 'varningsflagga' : 'varningsflaggor'}
                 </span>
               )}
-              <span>· {aggregate.counts.n_ok + attentionCount + (aggregate.counts.n_paused || 0)} { (aggregate.counts.n_ok + attentionCount + (aggregate.counts.n_paused || 0)) === 1 ? 'kund' : 'kunder'}</span>
+              <span>· {aggregate.totalCustomers} { aggregate.totalCustomers === 1 ? 'kund' : 'kunder'}</span>
             </div>
             {aggregate.lastInteractionAt && (
               <div className="mt-0.5 text-[10px] text-muted-foreground">

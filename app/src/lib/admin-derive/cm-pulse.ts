@@ -16,6 +16,7 @@ export type CmPulseInput = {
     pace: 1 | 2 | 3 | 4 | 5;
     onboardingState: 'invited' | 'cm_ready' | 'live' | 'settled';
     lastPublishedAt?: Date | null;
+    plannedConceptsCount?: number;
   }[];
   interactions7d: { type: string; created_at: Date }[];
   lastInteractionAt: Date | null;
@@ -37,31 +38,35 @@ export function cmAggregate(input: CmPulseInput) {
     ? differenceInCalendarDays(input.now, input.lastInteractionAt)
     : 999;
 
-  const interaction_count_7d = input.interactions7d.length;
+  // x = total concepts currently planned across all active customers
+  const planned_concepts_total = active.reduce((sum, customer) => sum + (customer.plannedConceptsCount || 0), 0);
+  
+  // y = total expected concepts per week across all active customers
   const expected_concepts_7d = active.reduce((sum, customer) => sum + customer.pace, 0);
 
   let status: CmStatus;
   if (input.activeAbsence) status = 'away';
-  else if (last_interaction_days >= 5 || n_under >= 2) status = 'needs_action';
-  else if (n_under === 1 || n_thin >= 2 || last_interaction_days >= 3) status = 'watch';
+  else if (last_interaction_days >= 5 || n_under >= 2 || (expected_concepts_7d > 0 && planned_concepts_total < expected_concepts_7d * 0.5)) status = 'needs_action';
+  else if (n_under === 1 || n_thin >= 2 || last_interaction_days >= 3 || (expected_concepts_7d > 0 && planned_concepts_total < expected_concepts_7d)) status = 'watch';
   else status = 'ok';
 
   const fillPct = expected_concepts_7d === 0
     ? 100
-    : Math.min(150, Math.round((interaction_count_7d / expected_concepts_7d) * 100));
+    : Math.min(150, Math.round((planned_concepts_total / expected_concepts_7d) * 100));
 
   return {
     cmId: input.cm.id,
     status,
     activeAbsence: input.activeAbsence ?? null,
     counts: { n_under, n_thin, n_blocked, n_ok, n_paused },
+    totalCustomers: input.customers.length,
     lastInteractionAt: input.lastInteractionAt,
     last_interaction_days,
-    interaction_count_7d,
+    planned_concepts_total,
     expected_concepts_7d,
     fillPct,
     overflow: fillPct > 100,
-    barLabel: `${interaction_count_7d}/${expected_concepts_7d} koncept`,
+    barLabel: `${planned_concepts_total}/${expected_concepts_7d} koncept`,
     newCustomers: input.customers.filter((customer) => customer.onboardingState === 'invited' || customer.onboardingState === 'cm_ready'),
     recentPublications: [...input.customers]
       .filter((customer) => customer.lastPublishedAt)

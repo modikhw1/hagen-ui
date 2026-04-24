@@ -171,6 +171,7 @@ export function deriveOverview(
               | 5,
           onboardingState: customer.onboardingState,
           lastPublishedAt: customer.lastPublishedAt,
+          plannedConceptsCount: customer.planned_concepts_count ?? 0,
         })),
         interactions7d: memberInteractions,
         lastInteractionAt: memberInteractions[0]?.created_at ?? null,

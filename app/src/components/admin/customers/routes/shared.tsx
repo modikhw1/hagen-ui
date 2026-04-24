@@ -58,32 +58,34 @@ export function CustomerMetricCard({
   value,
   sub,
   title,
-  emphasis = 'default',
+  emphasis,
 }: {
   label: string;
   value: ReactNode;
-  sub: string;
+  sub?: string;
   title?: string;
-  emphasis?: 'default' | 'success' | LikeRateTier;
+  emphasis?: 'success' | 'warning' | 'danger' | 'info';
 }) {
-  const valueClass =
-    emphasis === 'default'
-      ? 'text-foreground'
-      : emphasis === 'success'
-        ? 'text-status-success-fg'
-        : likeRateTierClass[emphasis];
-  const subClass =
-    emphasis === 'poor' || emphasis === 'ok' || emphasis === 'good' || emphasis === 'great'
-      ? likeRateTierClass[emphasis]
-      : 'text-muted-foreground';
+  const toneClass = 
+    emphasis === 'success' ? 'text-status-success-fg' :
+    emphasis === 'warning' ? 'text-status-warning-fg' :
+    emphasis === 'danger'  ? 'text-status-danger-fg' :
+    emphasis === 'info'    ? 'text-status-info-fg' : 
+    'text-foreground';
 
   return (
-    <div className="rounded-lg bg-secondary/50 p-3" title={title}>
-      <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+    <div className="rounded-lg bg-secondary/50 p-3.5 border border-border/5 shadow-sm" title={title}>
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
         {label}
       </div>
-      <div className={`font-heading text-xl font-bold ${valueClass}`}>{value}</div>
-      <div className={`mt-0.5 text-[10px] ${subClass}`}>{sub}</div>
+      <div className={cn("text-base font-bold", toneClass)}>
+        {value}
+      </div>
+      {sub && (
+        <div className="mt-1 text-[10px] font-medium text-muted-foreground">
+          {sub}
+        </div>
+      )}
     </div>
   );
 }

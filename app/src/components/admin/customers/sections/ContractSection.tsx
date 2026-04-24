@@ -5,7 +5,7 @@ import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
 import { oreToSek, sekToOre } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
-import { CustomerSection, CustomerSectionSkeleton } from '@/components/admin/customers/routes/shared';
+import { CustomerSection, CustomerSectionSkeleton, CustomerField } from '@/components/admin/customers/routes/shared';
 import { InlineEditField } from '@/components/admin/ui/form/InlineEditField';
 import { DiscountPreview } from '../modals/DiscountPreview';
 import DiscountModal from '../modals/DiscountModal';
@@ -20,7 +20,7 @@ export default function ContractSection({ customerId }: { customerId: string }) 
 
   return (
     <CustomerSection title="Avtal & pris">
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
         <InlineEditField
           label="Företagsnamn"
           value={customer.business_name}
@@ -28,7 +28,7 @@ export default function ContractSection({ customerId }: { customerId: string }) 
             await update.mutateAsync({ business_name: String(next) });
           }}
           validate={(raw) => !raw.trim() ? 'Namnet kan inte vara tomt' : null}
-          className="sm:col-span-2 border-b border-border pb-4 mb-2"
+          className="sm:col-span-2 border-b border-border/50 pb-5 mb-1"
         />
 
         <InlineEditField
@@ -43,31 +43,34 @@ export default function ContractSection({ customerId }: { customerId: string }) 
           validate={(raw) => Number(raw) < 0 ? 'Priset kan inte vara negativt' : null}
         />
 
-        <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Faktureringsintervall</div>
-          <div className="text-sm text-foreground">
-            {customer.subscription_interval === 'month' ? 'Månadsvis' : 
-             customer.subscription_interval === 'quarter' ? 'Kvartalsvis' : 
-             customer.subscription_interval === 'year' ? 'Årsvis' : customer.subscription_interval}
-          </div>
-        </div>
+        <CustomerField 
+          label="Intervall" 
+          value={customer.subscription_interval === 'month' ? 'Månadsvis' : 
+                 customer.subscription_interval === 'quarter' ? 'Kvartalsvis' : 
+                 customer.subscription_interval === 'year' ? 'Årsvis' : customer.subscription_interval || '—'} 
+        />
 
-        <div className="space-y-1">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Nästa faktura</div>
-          <div className="text-sm text-foreground">{shortDateSv(customer.next_invoice_date) ?? '—'}</div>
-        </div>
+        <CustomerField 
+          label="Nästa faktura" 
+          value={shortDateSv(customer.next_invoice_date) ?? '—'} 
+        />
 
-        <div className="space-y-1 sm:col-span-2 border-t border-border pt-4 mt-2">
-          <div className="flex items-center justify-between">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Rabatt</div>
+        <CustomerField 
+          label="Kund sedan" 
+          value={shortDateSv(customer.created_at) ?? '—'} 
+        />
+
+        <div className="sm:col-span-2 border-t border-border/50 pt-5 mt-1">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Rabatt</div>
             <button 
               onClick={() => setDiscountOpen(true)}
-              className="text-[10px] font-semibold text-primary hover:underline uppercase"
+              className="text-[10px] font-bold text-primary hover:text-primary/80 uppercase tracking-tight transition-colors"
             >
               Hantera
             </button>
           </div>
-          <DiscountPreview customer={customer} className="mt-1" />
+          <DiscountPreview customer={customer} />
         </div>
       </div>
 
