@@ -62,7 +62,7 @@ export async function syncCustomerAssignmentFromProfile(params: {
     .maybeSingle();
 
   if (customerError || !customer) {
-    throw new Error(customerError?.message || 'Kunden kunde inte lasas');
+    throw new Error(customerError?.message || 'Kunden kunde inte läsas');
   }
 
   const teamMember = await findAssignedTeamMember(
@@ -97,7 +97,7 @@ export async function syncCustomerAssignmentFromProfile(params: {
       {
         valid_to: formatDateOnly(addDays(parseDateOnly(today), -1)),
         scheduled_change: null,
-        handover_note: handoverNote ?? `Reassigned from ${customer.business_name || customer.id}.`,
+        handover_note: handoverNote ?? `Omfördelad från ${customer.business_name || customer.id}.`,
       },
     );
   }
@@ -120,7 +120,12 @@ export async function changeCustomerAssignment(params: {
   nextCmId: string | null;
   effectiveDate: string;
   handoverNote?: string | null;
-}) {
+}): Promise<{
+  profile: Record<string, unknown> | null;
+  status: 'applied' | 'scheduled';
+  effectiveDate: string;
+  nextCmId: string | null;
+}> {
   const today = formatDateOnly(new Date());
   const effectiveDate = params.effectiveDate < today ? today : params.effectiveDate;
   const activeAssignment = await readActiveAssignment(params.supabaseAdmin, params.customerProfileId);
@@ -131,6 +136,7 @@ export async function changeCustomerAssignment(params: {
   if (activeAssignment?.cm_id === (nextMember?.id ?? null)) {
     if (effectiveDate <= today) {
       return {
+        profile: null,
         status: 'applied' as const,
         effectiveDate,
         nextCmId: nextMember?.id ?? null,
@@ -141,6 +147,7 @@ export async function changeCustomerAssignment(params: {
       scheduled_change: null,
     });
     return {
+      profile: null,
       status: 'scheduled' as const,
       effectiveDate,
       nextCmId: nextMember?.id ?? null,
@@ -167,13 +174,14 @@ export async function changeCustomerAssignment(params: {
       });
     }
 
-    await updateCustomerProfileAssignment(
+    const profile = await updateCustomerProfileAssignment(
       params.supabaseAdmin,
       params.customerProfileId,
       nextMember,
     );
 
     return {
+      profile,
       status: 'applied' as const,
       effectiveDate,
       nextCmId: nextMember?.id ?? null,
@@ -181,7 +189,7 @@ export async function changeCustomerAssignment(params: {
   }
 
   if (!activeAssignment) {
-    throw new Error('Kunden saknar aktiv CM-assignment att schemalagga fran');
+    throw new Error('Kunden saknar aktiv CM-assignment att schemalägga från');
   }
 
   await updateAssignment(params.supabaseAdmin, activeAssignment.id, {
@@ -196,6 +204,7 @@ export async function changeCustomerAssignment(params: {
   });
 
   return {
+    profile: null,
     status: 'scheduled' as const,
     effectiveDate,
     nextCmId: nextMember?.id ?? null,
@@ -281,7 +290,7 @@ export async function listScheduledAssignmentChanges(
       return [];
     }
 
-    throw new Error(result.error.message || 'Kunde inte lasa schemalagda CM-byten');
+    throw new Error(result.error.message || 'Kunde inte läsa schemalagda CM-byten');
   }
 
   const customerIds = Array.from(new Set((result.data ?? []).map((row) => row.customer_id)));
@@ -341,6 +350,41 @@ export async function listScheduledAssignmentChanges(
     .sort((left, right) => left.effective_date.localeCompare(right.effective_date));
 }
 
+export async function cancelScheduledAssignmentChange(params: {
+  supabaseAdmin: SupabaseClient;
+  customerProfileId: string;
+}) {
+  const activeAssignment = await readActiveAssignment(params.supabaseAdmin, params.customerProfileId);
+  if (!activeAssignment?.scheduled_change) {
+    return false;
+  }
+
+  await updateAssignment(params.supabaseAdmin, activeAssignment.id, {
+    scheduled_change: null,
+  });
+  return true;
+}
+
+export async function rescheduleScheduledAssignmentChange(params: {
+  supabaseAdmin: SupabaseClient;
+  customerProfileId: string;
+  effectiveDate: string;
+}) {
+  const activeAssignment = await readActiveAssignment(params.supabaseAdmin, params.customerProfileId);
+  if (!activeAssignment?.scheduled_change) {
+    return false;
+  }
+
+  await updateAssignment(params.supabaseAdmin, activeAssignment.id, {
+    scheduled_change: {
+      ...activeAssignment.scheduled_change,
+      effective_date: params.effectiveDate,
+      scheduled_at: new Date().toISOString(),
+    },
+  });
+  return true;
+}
+
 async function findAssignedTeamMember(
   supabaseAdmin: SupabaseClient,
   customer: CustomerAssignmentSource,
@@ -371,7 +415,7 @@ async function findAssignedTeamMember(
   }).select('id, name, email, profile_id')).ilike('name', customer.account_manager.trim()).maybeSingle();
 
   if (byName.error) {
-    throw new Error(byName.error.message || 'Kunde inte sla upp teammedlem');
+    throw new Error(byName.error.message || 'Kunde inte slå upp teammedlem');
   }
 
   return byName.data;
@@ -420,7 +464,7 @@ async function readActiveAssignment(
 
   if (result.error) {
     if (isMissingRelationError(result.error.message)) return null;
-    throw new Error(result.error.message || 'Kunde inte lasa aktiv assignment');
+    throw new Error(result.error.message || 'Kunde inte läsa aktiv assignment');
   }
 
   return result.data?.[0] ?? null;
@@ -468,9 +512,13 @@ async function updateCustomerProfileAssignment(
       account_manager: teamMember?.email ?? teamMember?.name ?? null,
       account_manager_profile_id: teamMember?.profile_id ?? null,
     } as never)
-    .eq('id', customerProfileId);
+    .eq('id', customerProfileId)
+    .select('*')
+    .single();
 
   if (result.error) {
     throw new Error(result.error.message || 'Kunde inte uppdatera kundens CM-koppling');
   }
+
+  return result.data as unknown as Record<string, unknown>;
 }

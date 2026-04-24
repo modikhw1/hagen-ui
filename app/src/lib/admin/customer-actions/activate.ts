@@ -3,8 +3,7 @@ import 'server-only';
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { buildCustomerPayload } from '@/lib/admin/customer-detail/load';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
-import { jsonError } from '@/lib/server/api-response';
-import { buildCustomerActionAuditMetadata } from './shared';
+import { actionFailure, actionSuccess, buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ActivateInput = Extract<CustomerAction, { action: 'activate' }>;
@@ -22,7 +21,7 @@ export async function handleActivate(
     .single();
 
   if (error) {
-    return jsonError(error.message, 500);
+    return actionFailure({ error: error.message, statusCode: 500 });
   }
 
   await recordAuditLog(ctx.supabaseAdmin, {
@@ -37,5 +36,5 @@ export async function handleActivate(
     metadata: buildCustomerActionAuditMetadata(ctx),
   });
 
-  return buildCustomerPayload(data);
+  return actionSuccess(buildCustomerPayload(data));
 }

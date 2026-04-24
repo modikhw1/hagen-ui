@@ -6,6 +6,7 @@ type AdminAvatarProps = {
   name: string;
   avatarUrl?: string | null;
   size?: 'sm' | 'md' | 'lg';
+  fallbackColor?: string;
 };
 
 const sizeClass = {
@@ -24,6 +25,7 @@ export default function AdminAvatar({
   name,
   avatarUrl,
   size = 'md',
+  fallbackColor,
 }: AdminAvatarProps) {
   const initial = name.trim().charAt(0).toUpperCase() || '?';
 
@@ -41,7 +43,11 @@ export default function AdminAvatar({
 
   return (
     <div
-      className={`${sizeClass[size]} flex shrink-0 items-center justify-center rounded-full border border-border bg-secondary font-semibold text-foreground`}
+      className={`${sizeClass[size]} flex shrink-0 items-center justify-center rounded-full border border-black/5 font-extrabold text-white`}
+      style={{ 
+        backgroundColor: fallbackColor || '#94a3b8',
+        textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+      }}
       aria-label={name}
     >
       {initial}

@@ -9,15 +9,18 @@ import {
 import { parseDto } from '@/lib/admin/dtos/parse';
 import { qk } from '@/lib/admin/queryKeys';
 
-export function useCustomerSubscription(id: string, stripeSubscriptionId: string | null) {
+export function useCustomerSubscription(id: string) {
   return useQuery({
-    queryKey: qk.customers.subscription(id, stripeSubscriptionId),
-    enabled: Boolean(id && stripeSubscriptionId),
+    queryKey: qk.customers.subscription(id),
+    enabled: Boolean(id),
     queryFn: async ({ signal }): Promise<CustomerSubscription | null> => {
       const payload = await apiClient.get(`/api/admin/customers/${id}/subscription`, {
         signal,
       });
-      return (await parseDto(customerSubscriptionPayloadSchema, payload)).subscription;
+      return (await parseDto(customerSubscriptionPayloadSchema, payload, {
+        name: 'customerSubscriptionPayload',
+        path: `/api/admin/customers/${id}/subscription`,
+      })).subscription;
     },
     staleTime: 60_000,
     refetchOnWindowFocus: false,

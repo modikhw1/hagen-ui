@@ -755,9 +755,8 @@ export default function StudioConceptsPage() {
         params.set('created_by', user.id);
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
 
       const response = await fetch(`/api/admin/concepts?${params.toString()}`, {
         headers: session?.access_token

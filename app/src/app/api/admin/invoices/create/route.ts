@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordAuditLog } from '@/lib/admin/audit-log';
+import { createManualInvoiceSchema } from '@/lib/admin/schemas/invoice-create';
 import { requireAdminScope, withAuth } from '@/lib/auth/api-auth';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { createManualInvoice } from '@/lib/stripe/admin-billing';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { z } from 'zod';
-
-const createInvoiceSchema = z.object({
-  customer_profile_id: z.string().uuid(),
-  items: z.array(z.object({
-    description: z.string().trim().min(1).max(500),
-    amount: z.number().min(0),
-  })).min(1),
-  days_until_due: z.number().int().min(1).max(90).default(14),
-  auto_finalize: z.boolean().default(true),
-}).strict();
 
 export const POST = withAuth(async (request: NextRequest, user) => {
   requireAdminScope(
@@ -24,7 +14,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
   );
 
   const body = await request.json();
-  const parsed = createInvoiceSchema.safeParse(body);
+  const parsed = createManualInvoiceSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: 'Ogiltig payload' }, { status: 400 });
   }

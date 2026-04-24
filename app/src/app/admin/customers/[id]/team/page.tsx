@@ -1,10 +1,6 @@
-import CustomerTeamRoute from '@/components/admin/customers/routes/CustomerTeamRoute';
+import { permanentRedirect } from 'next/navigation';
 
-export default async function CustomerTeamPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <CustomerTeamRoute customerId={id} />;
+  permanentRedirect(`/admin/customers/${id}/operations#cm`);
 }

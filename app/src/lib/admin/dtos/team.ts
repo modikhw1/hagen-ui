@@ -6,7 +6,6 @@ export const teamMemberSchema = z.object({
   email: z.string().nullable(),
   phone: z.string().nullable().optional(),
   commission_rate: z.number().nullable().optional(),
-  color: z.string().nullable(),
   profile_id: z.string().nullable(),
   is_active: z.boolean(),
   avatar_url: z.string().nullable(),
@@ -24,13 +23,30 @@ export const teamMembersPayloadSchema = z.object({
   members: z.array(teamMemberSchema).default([]),
 });
 
+export const teamMemberLiteSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string().nullable(),
+  role: z.string().nullable().optional(),
+  is_active: z.boolean(),
+  commission_rate: z.number().nullable().default(0),
+  avatar_url: z.string().nullable(),
+});
+
+export const teamMembersLitePayloadSchema = z.object({
+  members: z.array(teamMemberLiteSchema).default([]),
+});
+
 export const teamCustomerSchema = z.object({
   id: z.string(),
+  name: z.string().optional(),
   business_name: z.string(),
+  mrr_ore: z.number().optional(),
   monthly_price: z.number(),
   status: z.string(),
   paused_until: z.string().nullable().optional(),
   followers: z.number(),
+  flow_score: z.number().nullable().optional(),
   videos_last_7d: z.number(),
   engagement_rate: z.number(),
   last_upload_at: z.string().nullable(),
@@ -42,6 +58,7 @@ export const dailyDotSchema = z.object({
   date: z.coerce.date(),
   count: z.number(),
   level: z.enum(['empty', 'low', 'mid', 'high', 'peak']),
+  intensity: z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3)]).optional(),
   isWeekend: z.boolean(),
 });
 
@@ -52,7 +69,6 @@ export const teamMemberViewSchema = z.object({
   phone: z.string().nullable(),
   city: z.string().nullable(),
   bio: z.string().nullable(),
-  color: z.string(),
   avatar_url: z.string().nullable(),
   role: z.string(),
   is_active: z.boolean(),
@@ -80,6 +96,8 @@ export const teamMemberViewSchema = z.object({
       id: z.string(),
       customer_id: z.string(),
       customer_name: z.string(),
+      starts_on: z.string().optional(),
+      ends_on: z.string().nullable().optional(),
       valid_from: z.string(),
       valid_to: z.string().nullable(),
       handover_note: z.string().nullable(),
@@ -102,17 +120,23 @@ export const teamMemberViewSchema = z.object({
   activityBaseline: z.number(),
   activityAverage7d: z.number(),
   activityDeviation: z.number(),
-  customerLoadClass: z.enum(['w-1/4', 'w-1/2', 'w-full']),
+  customerLoadLevel: z.enum(['ok', 'warn', 'overload']),
+  customerLoadClass: z.enum(['ok', 'warn', 'overload']).optional(),
   customerLoadLabel: z.string(),
   overloaded: z.boolean(),
+  isCovering: z.boolean().optional(),
 });
 
 export const teamOverviewSchema = z.object({
   members: z.array(teamMemberViewSchema),
   asOfDate: z.string(),
+  schemaWarnings: z.array(z.string()).optional(),
+  buildDurationMs: z.number().optional(),
 });
 
 export type TeamMemberRow = z.infer<typeof teamMemberSchema>;
+export type TeamMemberLite = z.infer<typeof teamMemberLiteSchema>;
 export type TeamCustomer = z.infer<typeof teamCustomerSchema>;
+export type DailyDot = z.infer<typeof dailyDotSchema>;
 export type TeamMemberView = z.infer<typeof teamMemberViewSchema>;
 export type TeamOverviewDTO = z.infer<typeof teamOverviewSchema>;

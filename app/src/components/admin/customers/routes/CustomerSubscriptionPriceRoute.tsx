@@ -2,28 +2,26 @@
 
 import { useRouter } from 'next/navigation';
 import SubscriptionPriceChangeModal from '@/components/admin/billing/SubscriptionPriceChangeModal';
-import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { useCustomerBillingRefresh } from '@/hooks/admin/useAdminRefresh';
 
 export default function CustomerSubscriptionPriceRoute({
   customerId,
+  customerName,
+  currentPriceSek,
 }: {
   customerId: string;
+  customerName: string;
+  currentPriceSek: number | null;
 }) {
   const router = useRouter();
   const refresh = useCustomerBillingRefresh(customerId);
-  const { data: customer } = useCustomerDetail(customerId);
-
-  if (!customer) {
-    return null;
-  }
 
   return (
     <SubscriptionPriceChangeModal
       open
       customerId={customerId}
-      customerName={customer.business_name}
-      currentPriceSek={customer.monthly_price}
+      customerName={customerName}
+      currentPriceSek={currentPriceSek}
       onClose={() => router.push(`/admin/customers/${customerId}/subscription`, { scroll: false })}
       onChanged={() => {
         void refresh();

@@ -17,26 +17,15 @@ import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
  * aligned with the detail route (GET /api/customer/concepts/[conceptId]).
  */
 export const GET = withAuth(async (_request, user) => {
-  const supabase = createSupabaseAdmin();
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('matching_data')
-    .eq('id', user.id)
-    .single();
-
-  if (profileError || !profile) {
-    return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-  }
-
-  const customerProfileId = (profile.matching_data as Record<string, unknown>)
+  const customerProfileId = (user.matching_data as Record<string, unknown>)
     ?.customer_profile_id as string | undefined;
 
   if (!customerProfileId) {
     return NextResponse.json({ concepts: [] });
   }
 
-  const { data: rows, error } = await supabase
+  const supabaseAdmin = createSupabaseAdmin();
+  const { data: rows, error } = await supabaseAdmin
     .from('customer_concepts')
     .select(`
       id,
@@ -68,7 +57,7 @@ export const GET = withAuth(async (_request, user) => {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const concepts = (rows ?? []).map((row) => buildCustomerConceptListItem(row));
+  const concepts = (rows ?? []).map((row: any) => buildCustomerConceptListItem(row));
 
   return NextResponse.json({ concepts });
 }, ['customer', 'admin', 'content_manager']);

@@ -1,3 +1,3 @@
 export default function Head() {
-  return <title>Oversikt | LeTrend Admin</title>;
+  return <title>Översikt | LeTrend Admin</title>;
 }

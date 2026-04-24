@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Check, Trash2, RefreshCw } from 'lucide-react';
 import type { TikTokProfilePreview } from '@/lib/tiktok/profile';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
+import { apiClient } from '@/lib/admin/api-client';
 import {
   CustomerActionButton,
   CustomerRouteError,
   CustomerSectionSkeleton,
   CustomerSection,
 } from '@/components/admin/customers/routes/shared';
+import { cn } from '@/lib/utils';
 
 function normalizeTikTokProfileInput(value: string) {
   return value.trim().replace(/^@/, '').toLowerCase();
@@ -19,243 +21,162 @@ function normalizeTikTokProfileInput(value: string) {
 export default function TikTokProfileSection({ customerId }: { customerId: string }) {
   const { data: customer, isLoading, error } = useCustomerDetail(customerId);
   const refresh = useCustomerRouteRefresh(customerId);
-  const [tiktokProfileUrlInput, setTiktokProfileUrlInput] = useState('');
-  const [savingTikTokProfile, setSavingTikTokProfile] = useState(false);
-  const [verifyingTikTokProfile, setVerifyingTikTokProfile] = useState(false);
-  const [fetchingProfileHistory, setFetchingProfileHistory] = useState(false);
-  const [tiktokProfileError, setTiktokProfileError] = useState<string | null>(null);
-  const [tiktokProfileMessage, setTiktokProfileMessage] = useState<string | null>(null);
-  const [tiktokProfilePreview, setTiktokProfilePreview] = useState<TikTokProfilePreview | null>(
-    null,
-  );
+  const [input, setInput] = useState('');
+  const [step, setStep] = useState<'input' | 'verify' | 'save'>('input');
+  const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [preview, setPreview] = useState<TikTokProfilePreview | null>(null);
 
   useEffect(() => {
-    setTiktokProfileUrlInput(customer?.tiktok_profile_url || '');
+    if (customer?.tiktok_profile_url) {
+      setInput(customer.tiktok_profile_url);
+    }
   }, [customer?.tiktok_profile_url]);
 
-  useEffect(() => {
-    if (!tiktokProfilePreview) return;
+  if (isLoading) return <CustomerSectionSkeleton blocks={2} />;
+  if (error || !customer) return <CustomerRouteError message={error?.message || 'Hittade inte kunden'} />;
 
-    const inputHandle = normalizeTikTokProfileInput(tiktokProfileUrlInput);
-    if (!inputHandle || inputHandle !== normalizeTikTokProfileInput(tiktokProfilePreview.handle)) {
-      setTiktokProfilePreview(null);
-    }
-  }, [tiktokProfilePreview, tiktokProfileUrlInput]);
-
-  if (isLoading) {
-    return <CustomerSectionSkeleton blocks={3} />;
-  }
-
-  if (error || !customer) {
-    return <CustomerRouteError message={error?.message || 'Kunden hittades inte.'} />;
-  }
-
-  const handleVerifyTikTokProfile = async () => {
-    if (verifyingTikTokProfile) return null;
-
-    const input = tiktokProfileUrlInput.trim();
-    if (!input) {
-      setTiktokProfilePreview(null);
-      setTiktokProfileError('Ange en TikTok-profil forst.');
-      setTiktokProfileMessage(null);
-      return null;
-    }
-
-    setVerifyingTikTokProfile(true);
-    setTiktokProfileError(null);
-    setTiktokProfileMessage(null);
-
+  const onVerify = async () => {
+    setBusy(true);
+    setErrorMsg(null);
     try {
-      const response = await fetch(
-        `/api/admin/tiktok/profile-preview?input=${encodeURIComponent(input)}`,
-        { credentials: 'include' },
-      );
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        preview?: TikTokProfilePreview;
-      };
-
-      if (!response.ok || !payload.preview) {
-        throw new Error(payload.error || 'Kunde inte verifiera TikTok-profilen');
-      }
-
-      setTiktokProfilePreview(payload.preview);
-      setTiktokProfileMessage(
-        `Verifierade @${payload.preview.handle}. Spara for att koppla profilen.`,
-      );
-      return payload.preview;
-    } catch (previewError) {
-      setTiktokProfilePreview(null);
-      setTiktokProfileError(
-        previewError instanceof Error
-          ? previewError.message
-          : 'Kunde inte verifiera TikTok-profilen',
-      );
-      return null;
+      const payload = await apiClient.get<{ preview?: TikTokProfilePreview }>('/api/admin/tiktok/profile-preview', {
+        query: { input },
+      });
+      if (!payload.preview) throw new Error('Kunde inte hitta profilen');
+      setPreview(payload.preview);
+      setStep('save');
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Verifiering misslyckades');
     } finally {
-      setVerifyingTikTokProfile(false);
+      setBusy(false);
     }
   };
 
-  const handleSaveTikTokProfile = async () => {
-    if (savingTikTokProfile) return;
-
-    const input = tiktokProfileUrlInput.trim();
-    if (input) {
-      const inputHandle = normalizeTikTokProfileInput(input);
-      const preview =
-        tiktokProfilePreview &&
-        normalizeTikTokProfileInput(tiktokProfilePreview.handle) === inputHandle
-          ? tiktokProfilePreview
-          : null;
-
-      if (!preview) {
-        setTiktokProfileError('Verifiera profilen innan du sparar den.');
-        setTiktokProfileMessage(null);
-        return;
-      }
-    }
-
-    setSavingTikTokProfile(true);
-    setTiktokProfileError(null);
-    setTiktokProfileMessage(null);
-
+  const onSave = async () => {
+    setBusy(true);
+    setErrorMsg(null);
     try {
-      const response = await fetch(`/api/studio-v2/customers/${customer.id}/profile`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          tiktok_profile_url: input || null,
-          tiktok_profile_preview: tiktokProfilePreview,
-        }),
+      await apiClient.patch(`/api/studio-v2/customers/${customer.id}/profile`, {
+        tiktok_profile_url: input || null,
+        tiktok_profile_preview: preview,
       });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte spara TikTok-profilen');
-      }
-
-      setTiktokProfileMessage(input ? 'TikTok-profilen sparades.' : 'TikTok-profilen togs bort.');
       await refresh();
-    } catch (saveError) {
-      setTiktokProfileError(
-        saveError instanceof Error ? saveError.message : 'Kunde inte spara TikTok-profilen',
-      );
+      setStep('input');
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Kunde inte spara');
     } finally {
-      setSavingTikTokProfile(false);
+      setBusy(false);
     }
   };
 
-  const handleFetchTikTokProfile = async () => {
-    if (fetchingProfileHistory || !customer.tiktok_handle || !customer.tiktok_profile_url) {
-      return;
-    }
-
-    setFetchingProfileHistory(true);
-    setTiktokProfileError(null);
-    setTiktokProfileMessage(null);
-
+  const onUnlink = async () => {
+    if (!confirm('Vill du verkligen ta bort kopplingen?')) return;
+    setBusy(true);
     try {
-      const response = await fetch(`/api/studio-v2/customers/${customer.id}/fetch-profile-history`, {
-        method: 'POST',
-        credentials: 'include',
+      await apiClient.patch(`/api/studio-v2/customers/${customer.id}/profile`, {
+        tiktok_profile_url: null,
+        tiktok_profile_preview: null,
       });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte hamta profilhistorik');
-      }
-
-      setTiktokProfileMessage('Profilhistorik hamtas nu.');
       await refresh();
-    } catch (historyError) {
-      setTiktokProfileError(
-        historyError instanceof Error ? historyError.message : 'Kunde inte hamta profilhistorik',
-      );
+      setInput('');
+      setStep('input');
+    } catch (e) {
+      setErrorMsg('Kunde inte ta bort koppling');
     } finally {
-      setFetchingProfileHistory(false);
+      setBusy(false);
     }
   };
 
   return (
     <CustomerSection title="TikTok-profil">
-      <div className="space-y-3">
-        <div>
-          <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-            Profil-URL
-          </div>
-          <input
-            value={tiktokProfileUrlInput}
-            onChange={(event) => setTiktokProfileUrlInput(event.target.value)}
-            placeholder="https://www.tiktok.com/@konto"
-            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
-          />
-        </div>
-
+      <div className="space-y-4">
         {customer.tiktok_handle ? (
-          <div className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
-            <div className="font-semibold text-foreground">@{customer.tiktok_handle}</div>
-            {customer.tiktok_user_id ? <div>TikTok-ID: {customer.tiktok_user_id}</div> : null}
+          <div className="flex items-center justify-between rounded-lg border border-border bg-secondary/20 p-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-foreground">@{customer.tiktok_handle}</span>
+                <span className="rounded-full bg-status-success-bg px-2 py-0.5 text-[10px] font-medium text-status-success-fg">Kopplad</span>
+              </div>
+              <div className="mt-0.5 truncate text-[10px] text-muted-foreground">{customer.tiktok_profile_url}</div>
+            </div>
+            <button 
+              onClick={onUnlink} 
+              disabled={busy}
+              className="rounded-md p-2 text-muted-foreground hover:bg-status-danger-bg hover:text-status-danger-fg transition-colors"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
           </div>
         ) : (
-          <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-warning">
-            Ingen profil ar kopplad an. Spara forst ratt TikTok-URL sa att studioflodet kan byggas
-            fran ratt konto.
+          <div className="space-y-3">
+            {step === 'input' && (
+              <>
+                <div className="text-xs text-muted-foreground">Koppla en TikTok-profil för att börja hämta statistik och videor.</div>
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="https://www.tiktok.com/@konto"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                />
+                <CustomerActionButton onClick={onVerify} disabled={busy || !input.trim()}>
+                  {busy ? 'Verifierar...' : 'Verifiera profil'}
+                </CustomerActionButton>
+              </>
+            )}
+
+            {step === 'save' && preview && (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex items-center gap-3">
+                    {preview.cover_image_url && (
+                      <img src={preview.cover_image_url} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-semibold text-foreground">@{preview.handle}</div>
+                      <div className="truncate text-[11px] text-muted-foreground">{preview.title || preview.author_name}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <CustomerActionButton onClick={() => setStep('input')} disabled={busy} className="bg-secondary">
+                    Tillbaka
+                  </CustomerActionButton>
+                  <CustomerActionButton onClick={onSave} disabled={busy} className="bg-primary text-primary-foreground">
+                    {busy ? 'Sparar...' : 'Spara & koppla'}
+                  </CustomerActionButton>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {tiktokProfilePreview ? (
-          <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-3 text-xs text-muted-foreground">
-            <div className="font-semibold text-foreground">
-              Verifierad profil: @{tiktokProfilePreview.handle}
-            </div>
-            {tiktokProfilePreview.author_name ? <div>{tiktokProfilePreview.author_name}</div> : null}
-            {tiktokProfilePreview.title ? <div className="mt-1">{tiktokProfilePreview.title}</div> : null}
-            <a
-              href={tiktokProfilePreview.canonical_url}
-              target="_blank"
-              rel="noreferrer"
-              className="mt-2 inline-flex items-center gap-1 font-medium text-primary hover:text-primary/80"
-            >
-              Oppna profilen
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
+        {errorMsg && (
+          <div className="rounded-md border border-status-danger-fg/30 bg-status-danger-bg px-3 py-2 text-xs text-status-danger-fg">
+            {errorMsg}
           </div>
-        ) : null}
+        )}
 
-        {tiktokProfileMessage ? (
-          <div className="rounded-md border border-success/30 bg-success/5 px-3 py-2 text-xs text-success">
-            {tiktokProfileMessage}
-          </div>
-        ) : null}
-        {tiktokProfileError ? (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-            {tiktokProfileError}
-          </div>
-        ) : null}
-
-        <div className="flex flex-col gap-2">
-          <CustomerActionButton onClick={() => void handleVerifyTikTokProfile()} disabled={verifyingTikTokProfile || !tiktokProfileUrlInput.trim()}>
-            {verifyingTikTokProfile ? 'Verifierar profil...' : 'Verifiera profil'}
-          </CustomerActionButton>
-          <CustomerActionButton
-            onClick={() => void handleSaveTikTokProfile()}
-            disabled={savingTikTokProfile || (Boolean(tiktokProfileUrlInput.trim()) && !tiktokProfilePreview)}
+        {customer.tiktok_handle && (
+          <button
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await apiClient.post(`/api/studio-v2/customers/${customer.id}/fetch-profile-history`, {});
+                alert('Historik hämtas nu.');
+              } catch (e) {
+                setErrorMsg('Kunde inte hämta historik');
+              } finally {
+                setBusy(false);
+              }
+            }}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
-            {savingTikTokProfile
-              ? 'Sparar profil...'
-              : tiktokProfileUrlInput.trim()
-                ? 'Spara verifierad profil'
-                : 'Ta bort TikTok-profil'}
-          </CustomerActionButton>
-          <CustomerActionButton
-            onClick={() => void handleFetchTikTokProfile()}
-            disabled={fetchingProfileHistory || !customer.tiktok_handle || !customer.tiktok_profile_url}
-          >
-            {fetchingProfileHistory ? 'Hamtar profil...' : 'Hamta profil till kunden'}
-          </CustomerActionButton>
-        </div>
+            <RefreshCw className={cn("h-3 w-3", busy && "animate-spin")} />
+            Hämta full historik
+          </button>
+        )}
       </div>
     </CustomerSection>
   );

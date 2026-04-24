@@ -198,7 +198,27 @@ export async function POST(request: NextRequest) {
           customer_profile_id: profileId,
           amount_due: invoice.amount_due,
           amount_paid: invoice.amount_paid || 0,
+          subtotal_ore: invoice.subtotal ?? invoice.amount_due,
+          total_ore: invoice.total ?? invoice.amount_due,
+          tax_ore: Math.max(0, (invoice.total ?? invoice.amount_due) - (invoice.subtotal ?? invoice.amount_due)),
           currency: invoice.currency,
+          invoice_number: invoice.number ?? null,
+          payment_intent_id: (() => {
+            const paymentIntent = (
+              invoice as typeof invoice & {
+                payment_intent?: string | { id?: string | null } | null;
+              }
+            ).payment_intent;
+
+            if (!paymentIntent) {
+              return null;
+            }
+
+            return typeof paymentIntent === 'string'
+              ? paymentIntent
+              : paymentIntent.id ?? null;
+          })(),
+          dispute_status: invoice.status === 'uncollectible' ? 'uncollectible' : null,
           status: invoice.status as string,
           hosted_invoice_url: invoice.hosted_invoice_url || null,
           invoice_pdf: invoice.invoice_pdf || null,

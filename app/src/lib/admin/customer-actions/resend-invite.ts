@@ -1,13 +1,17 @@
 import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
 import { profileToInvitePayload } from '@/lib/admin/customer-detail/load';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import { sendCustomerInvite } from '@/lib/customers/invite';
 import { getAppUrl } from '@/lib/url/public';
-import { jsonError } from '@/lib/server/api-response';
-import { buildCustomerActionAuditMetadata } from './shared';
+import {
+  actionFailure,
+  actionSuccess,
+  buildCustomerActionAuditMetadata,
+} from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ResendInviteInput = Extract<CustomerAction, { action: 'resend_invite' }>;
@@ -18,19 +22,23 @@ export async function handleResendInvite(
 ): Promise<ActionResult> {
   void input;
   if (!ctx.beforeProfile) {
-    return jsonError('Kunden hittades inte', 404);
+    return actionFailure({ error: SERVER_COPY.customerNotFound, statusCode: 404 });
   }
 
   const inviteResult = await sendCustomerInvite({
     supabaseAdmin: ctx.supabaseAdmin,
     stripeClient: ctx.stripeClient,
     profileId: ctx.id,
+    actorUserId: ctx.user.id,
     payload: profileToInvitePayload(ctx.beforeProfile),
     appUrl: getAppUrl(),
   });
 
   if (!inviteResult.ok) {
-    return jsonError(inviteResult.error, inviteResult.status);
+    return actionFailure({
+      error: inviteResult.error,
+      statusCode: inviteResult.status,
+    });
   }
 
   await syncOperationalSubscriptionState({
@@ -52,9 +60,8 @@ export async function handleResendInvite(
     }),
   });
 
-  return {
-    success: true,
+  return actionSuccess({
     profile: inviteResult.profile,
     message: 'Ny invite skickades.',
-  };
+  });
 }

@@ -15,7 +15,10 @@ export function useCustomerInvoices(id: string) {
     enabled: Boolean(id),
     queryFn: async ({ signal }): Promise<CustomerInvoice[]> => {
       const payload = await apiClient.get(`/api/admin/customers/${id}/invoices`, { signal });
-      return (await parseDto(customerInvoicesPayloadSchema, payload)).invoices;
+      return (await parseDto(customerInvoicesPayloadSchema, payload, {
+        name: 'customerInvoicesPayload',
+        path: `/api/admin/customers/${id}/invoices`,
+      })).invoices;
     },
     staleTime: 60_000,
     refetchOnWindowFocus: false,

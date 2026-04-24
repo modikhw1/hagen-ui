@@ -4,12 +4,6 @@
  * Denna fil behålls bara för (a) icke-admin ytor som ännu inte migrerats,
  * och (b) DB-lagrade hex-färger som behöver matchas (t.ex. team_members.color).
  */
-/**
- * LeTrend Design System
- *
- * Centralized design tokens for consistent styling across admin and studio.
- * Based on CSS variables in globals.css
- */
 
 export const LeTrendColors = {
   // Brand colors
@@ -132,20 +126,6 @@ export const LeTrendGradients = {
   gradientSuccess: 'linear-gradient(145deg, #5A8F5A, #4A7A4A)',
 } as const;
 
-/**
- * Helper function to create consistent card styles
- */
-export const cardStyle = (variant: 'default' | 'elevated' | 'flat' = 'default') => ({
-  background: LeTrendColors.cream,
-  borderRadius: LeTrendRadius.xl,
-  border: variant === 'flat' ? `1px solid ${LeTrendColors.border}` : 'none',
-  boxShadow: variant === 'elevated' ? LeTrendShadows.lg : variant === 'default' ? LeTrendShadows.md : 'none',
-  padding: LeTrendSpacing['2xl'],
-});
-
-/**
- * Helper function for button styles
- */
 export const buttonStyle = (variant: 'primary' | 'secondary' | 'ghost' = 'primary') => {
   const base = {
     padding: `${LeTrendSpacing.md} ${LeTrendSpacing.xl}`,
@@ -179,9 +159,6 @@ export const buttonStyle = (variant: 'primary' | 'secondary' | 'ghost' = 'primar
   return variants[variant];
 };
 
-/**
- * Helper for consistent input styles
- */
 export const inputStyle = () => ({
   padding: `${LeTrendSpacing.md} ${LeTrendSpacing.lg}`,
   borderRadius: LeTrendRadius.md,
@@ -192,17 +169,4 @@ export const inputStyle = () => ({
   color: LeTrendColors.textPrimary,
   outline: 'none',
   transition: 'border-color 0.2s ease',
-});
-
-/**
- * Decorative divider
- */
-export const decorativeDivider = () => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: LeTrendColors.textMuted,
-  fontSize: LeTrendTypography.fontSize.sm,
-  letterSpacing: '4px',
-  margin: `${LeTrendSpacing['2xl']} 0`,
 });

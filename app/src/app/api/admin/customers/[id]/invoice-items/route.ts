@@ -10,6 +10,7 @@ const invoiceItemSchema = z.object({
   description: z.string().trim().min(1).max(500),
   amount: z.number().min(0),
   currency: z.string().trim().min(3).max(3).default('sek'),
+  internal_note: z.string().trim().max(1000).optional().nullable(),
 }).strict();
 
 interface RouteParams {
@@ -45,6 +46,7 @@ export const POST = withAuth(async (request: NextRequest, user, { params }: Rout
       description: parsed.data.description,
       amountSek: parsed.data.amount,
       currency: parsed.data.currency,
+      metadata: parsed.data.internal_note ? { internal_note: parsed.data.internal_note } : undefined,
     },
   });
 
@@ -60,6 +62,7 @@ export const POST = withAuth(async (request: NextRequest, user, { params }: Rout
       description: parsed.data.description,
       amount: parsed.data.amount,
       currency: parsed.data.currency,
+      internal_note: parsed.data.internal_note,
     },
   });
 

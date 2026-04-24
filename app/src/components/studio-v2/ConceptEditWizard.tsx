@@ -38,7 +38,7 @@ export function ConceptEditWizard({
     setScript(overrides.script || details?.script_sv || '');
     setWhyItFits(overrides.why_it_fits || details?.whyItWorks_sv || '');
     setInstructions(overrides.filming_instructions || '');
-  }, [concept?.id, details]);
+  }, [concept, details]);
 
   // When opening for a planning-relevant concept, scroll to and focus the script field
   useEffect(() => {

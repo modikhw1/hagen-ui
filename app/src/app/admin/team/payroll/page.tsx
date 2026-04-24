@@ -1,1 +1,5 @@
-export { default } from '@/app/admin/payroll/page';
+import { redirect } from 'next/navigation';
+
+export default function TeamPayrollPage() {
+  redirect('/admin/payroll');
+}

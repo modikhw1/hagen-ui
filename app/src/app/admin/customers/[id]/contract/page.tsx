@@ -1,10 +1,6 @@
-import CustomerContractRoute from '@/components/admin/customers/routes/CustomerContractRoute';
+import { permanentRedirect } from 'next/navigation';
 
-export default async function CustomerContractPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <CustomerContractRoute customerId={id} />;
+  permanentRedirect(`/admin/customers/${id}/operations#contract`);
 }

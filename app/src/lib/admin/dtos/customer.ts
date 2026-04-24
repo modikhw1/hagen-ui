@@ -1,8 +1,34 @@
 import { z } from 'zod';
 
-const customerStatusSchema = z.string();
+const customerStatusSchema = z.enum([
+  'active',
+  'invited',
+  'paused',
+  'archived',
+  'churned',
+  'lead',
+  'agreed',
+  'pending',
+  'pending_invoice',
+  'pending_payment',
+  'past_due',
+]);
+const derivedCustomerStatusSchema = z.enum([
+  'invited_new',
+  'invited_stale',
+  'live_underfilled',
+  'live_healthy',
+  'new',
+  'invited',
+  'live',
+  'paused',
+  'underfilled',
+  'escalated',
+  'archived',
+]);
 const onboardingStateSchema = z.enum(['invited', 'cm_ready', 'live', 'settled']).nullable();
 const pricingStatusSchema = z.enum(['fixed', 'unknown']).nullable();
+const subscriptionIntervalSchema = z.enum(['month', 'quarter', 'year']).nullable();
 
 export const customerListSchema = z.object({
   id: z.string(),
@@ -12,10 +38,13 @@ export const customerListSchema = z.object({
   phone: z.string().nullable(),
   account_manager: z.string().nullable(),
   account_manager_profile_id: z.string().nullable(),
+  cm_avatar_url: z.string().nullable().optional(),
+  cm_initial_color: z.string().nullable().optional(),
   monthly_price: z.number().nullable(),
-  subscription_interval: z.string().nullable().optional(),
+  subscription_interval: subscriptionIntervalSchema.optional(),
   pricing_status: pricingStatusSchema,
   status: customerStatusSchema,
+  derived_status: derivedCustomerStatusSchema.optional(),
   created_at: z.string(),
   agreed_at: z.string().nullable(),
   concepts_per_week: z.number().nullable(),
@@ -27,6 +56,7 @@ export const customerListSchema = z.object({
   next_invoice_date: z.string().nullable(),
   stripe_customer_id: z.string().nullable(),
   stripe_subscription_id: z.string().nullable(),
+  preview_image_url: z.string().nullable().optional(),
 });
 
 export const customerBufferSchema = z.object({
@@ -40,11 +70,24 @@ export const customerBufferSchema = z.object({
 
 export const customerListPayloadSchema = z.object({
   customers: z.array(customerListSchema),
+});
+
+export const customerBufferPayloadSchema = z.object({
   bufferRows: z.array(customerBufferSchema).default([]),
 });
 
 export const customerAttentionSnoozeSchema = z.object({
-  subject_type: z.enum(['onboarding', 'customer_blocking']),
+  subject_type: z.enum([
+    'onboarding',
+    'customer_blocking',
+    'invoice',
+    'cm_low_activity',
+    'cm_notification',
+    'demo_response',
+    'cm_assignment',
+    'subscription_pause_resume',
+    'cm_activity',
+  ]),
   subject_id: z.string(),
   snoozed_until: z.string().nullable(),
   released_at: z.string().nullable(),
@@ -66,6 +109,29 @@ export const customerCoverageAbsenceSchema = z.object({
   is_upcoming: z.boolean(),
 });
 
+const upcomingPriceChangeSchema = z.union([
+  z
+    .object({
+      effective_date: z.string(),
+      price_ore: z.number(),
+    })
+    .strict(),
+  z
+    .object({
+      effective_date: z.string(),
+      price: z.number(),
+    })
+    .strict()
+    .transform(({ effective_date, price }) => ({
+      effective_date,
+      price_ore: Math.round(price * 100),
+    })),
+]);
+const nullableUpcomingPriceChangeSchema = z.preprocess(
+  (value) => (value === undefined ? null : value),
+  upcomingPriceChangeSchema.nullable(),
+);
+
 export const customerDetailSchema = z.object({
   id: z.string(),
   business_name: z.string(),
@@ -74,22 +140,20 @@ export const customerDetailSchema = z.object({
   phone: z.string().nullable(),
   account_manager: z.string().nullable(),
   account_manager_profile_id: z.string().nullable(),
+  cm_avatar_url: z.string().nullable().optional(),
+  cm_initial_color: z.string().nullable().optional(),
   monthly_price: z.number().nullable(),
   subscription_interval: z.enum(['month', 'quarter', 'year']),
   pricing_status: z.enum(['fixed', 'unknown']),
-  status: z.string(),
+  status: customerStatusSchema,
+  derived_status: derivedCustomerStatusSchema.optional(),
   created_at: z.string(),
   invited_at: z.string().nullable(),
   agreed_at: z.string().nullable(),
   next_invoice_date: z.string().nullable(),
   contract_start_date: z.string().nullable(),
   billing_day_of_month: z.number().nullable(),
-  upcoming_price_change: z
-    .object({
-      effective_date: z.string(),
-      price: z.number(),
-    })
-    .nullable(),
+  upcoming_price_change: nullableUpcomingPriceChangeSchema,
   discount_type: z.enum(['none', 'percent', 'amount', 'free_months']).nullable(),
   discount_value: z.number().nullable(),
   discount_duration_months: z.number().nullable(),
@@ -97,6 +161,7 @@ export const customerDetailSchema = z.object({
   tiktok_handle: z.string().nullable(),
   tiktok_profile_url: z.string().nullable(),
   tiktok_user_id: z.string().nullable(),
+  preview_image_url: z.string().nullable().optional(),
   concepts_per_week: z.number().nullable(),
   expected_concepts_per_week: z.number().nullable(),
   paused_until: z.string().nullable(),
@@ -122,6 +187,7 @@ export const customerActivityEntrySchema = z.object({
   id: z.string(),
   at: z.string(),
   kind: z.enum(['audit', 'cm_activity', 'game_plan', 'concept']),
+  entityType: z.string().nullable().optional(),
   title: z.string(),
   description: z.string(),
   actorLabel: z.string().nullable(),
@@ -163,6 +229,7 @@ export const tikTokStatsSchema = z.object({
 export type CustomerListRow = z.infer<typeof customerListSchema>;
 export type CustomerBufferRow = z.infer<typeof customerBufferSchema>;
 export type CustomerListPayload = z.infer<typeof customerListPayloadSchema>;
+export type CustomerBufferPayload = z.infer<typeof customerBufferPayloadSchema>;
 export type CustomerDetail = z.infer<typeof customerDetailSchema>;
 export type CustomerActivityEntry = z.infer<typeof customerActivityEntrySchema>;
 export type CustomerActivityPayload = z.infer<typeof customerActivityPayloadSchema>;

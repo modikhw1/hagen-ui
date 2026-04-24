@@ -22,7 +22,16 @@ type CustomerOperationalInput = {
   paused_until: string | null;
   tiktok_handle: string | null;
   attention_snoozes: Array<{
-    subject_type: 'onboarding' | 'customer_blocking';
+    subject_type:
+      | 'onboarding'
+      | 'customer_blocking'
+      | 'invoice'
+      | 'cm_notification'
+      | 'demo_response'
+      | 'cm_assignment'
+      | 'subscription_pause_resume'
+      | 'cm_activity'
+      | 'cm_low_activity';
     subject_id: string;
     snoozed_until: string | null;
     released_at: string | null;

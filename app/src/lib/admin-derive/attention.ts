@@ -1,11 +1,11 @@
 export type AttentionItem =
-  | { kind: 'cm_notification'; id: string; subjectType: 'cm_notification'; subjectId: string; priority: 'normal' | 'urgent'; createdAt: Date; from: string; message: string; customerId: string | null }
-  | { kind: 'invoice_unpaid'; id: string; subjectType: 'invoice'; subjectId: string; customerId: string; daysPastDue: number; amount_ore: number }
-  | { kind: 'onboarding_stuck'; id: string; subjectType: 'onboarding'; subjectId: string; customerId: string; daysSinceCmReady: number }
-  | { kind: 'demo_responded'; id: string; subjectType: 'demo_response'; subjectId: string; respondedAt: Date; companyName: string }
-  | { kind: 'customer_blocked'; id: string; subjectType: 'customer_blocking'; subjectId: string; customerId: string; daysBlocked: number }
-  | { kind: 'cm_change_due_today'; id: string; subjectType: 'cm_assignment'; subjectId: string; customerId: string; customerName: string; currentCmName: string | null; nextCmName: string | null; effectiveDate: Date }
-  | { kind: 'pause_resume_due_today'; id: string; subjectType: 'subscription_pause_resume'; subjectId: string; customerId: string; customerName: string; resumeDate: Date }
+  | { kind: 'cm_notification'; id: string; subjectType: 'cm_notification'; subjectId: string; priority: 'normal' | 'urgent'; createdAt: Date; from: string; message: string; customerId: string | null; cmName?: string }
+  | { kind: 'invoice_unpaid'; id: string; subjectType: 'invoice'; subjectId: string; customerId: string; customerName: string; invoiceNumber: string | null; daysPastDue: number; amount_ore: number; hostedInvoiceUrl: string | null; cmName?: string }
+  | { kind: 'onboarding_stuck'; id: string; subjectType: 'onboarding'; subjectId: string; customerId: string; customerName: string; daysSinceCmReady: number; cmName?: string }
+  | { kind: 'demo_responded'; id: string; subjectType: 'demo_response'; subjectId: string; respondedAt: Date; companyName: string; cmName?: string }
+  | { kind: 'customer_blocked'; id: string; subjectType: 'customer_blocking'; subjectId: string; customerId: string; customerName: string; daysBlocked: number; cmName?: string }
+  | { kind: 'cm_change_due_today'; id: string; subjectType: 'cm_assignment'; subjectId: string; customerId: string; customerName: string; currentCmName: string | null; nextCmName: string | null; effectiveDate: Date; cmName?: string }
+  | { kind: 'pause_resume_due_today'; id: string; subjectType: 'subscription_pause_resume'; subjectId: string; customerId: string; customerName: string; resumeDate: Date; cmName?: string }
   | { kind: 'cm_low_activity'; id: string; subjectType: 'cm_activity'; subjectId: string; customerId: null; cmName: string; interactionCount7d: number; expectedConcepts7d: number; lastInteractionDays: number };
 
 export type AttentionSeverity = 'critical' | 'high' | 'medium' | 'info';
@@ -103,6 +103,11 @@ export function sortAttention(items: AttentionItem[], now: Date = new Date()) {
       return b.lastInteractionDays - a.lastInteractionDays;
     }
 
+    const kindDiff = KIND_RANK[a.kind] - KIND_RANK[b.kind];
+    if (kindDiff !== 0) {
+      return kindDiff;
+    }
+
     const aTime = attentionTimestamp(a, now);
     const bTime = attentionTimestamp(b, now);
     const timeDiff = +(bTime ?? new Date(0)) - +(aTime ?? new Date(0));
@@ -110,6 +115,6 @@ export function sortAttention(items: AttentionItem[], now: Date = new Date()) {
       return timeDiff;
     }
 
-    return KIND_RANK[a.kind] - KIND_RANK[b.kind];
+    return a.id.localeCompare(b.id);
   });
 }

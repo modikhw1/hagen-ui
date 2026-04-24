@@ -1,88 +1,86 @@
 'use client';
 
-import { timeAgoSv } from '@/lib/admin/time';
-import type { cmAggregate } from '@/lib/admin-derive/cm-pulse';
+import { cmStatusLabel } from '@/lib/admin/labels';
 
 export default function CmPulseHover({
   aggregate,
 }: {
-  aggregate: ReturnType<typeof cmAggregate>;
+  aggregate: any;
 }) {
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-semibold text-foreground">CM-puls</div>
-        <span className="rounded-full bg-secondary px-2 py-1 text-[11px] font-medium text-muted-foreground">
-          {aggregate.status === 'needs_action'
-            ? 'Behover atgard'
-            : aggregate.status === 'watch'
-              ? 'Bevaka'
-              : aggregate.status === 'away'
-                ? 'Franvarande'
-                : 'I fas'}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2">
+        <div className="text-sm font-bold text-foreground uppercase tracking-tight">CM-puls</div>
+        <span className="rounded-full bg-secondary/80 px-2 py-0.5 text-[10px] font-bold text-muted-foreground uppercase">
+          {cmStatusLabel(aggregate.status as any)}
         </span>
       </div>
 
-      <div className="space-y-1 text-xs">
+      <div className="space-y-1.5 text-xs">
         {aggregate.activeAbsence ? (
           <Row
-            label="Franvaro"
+            label="Frånvaro"
             value={`${aggregate.activeAbsence.startsOn} - ${aggregate.activeAbsence.endsOn}`}
           />
         ) : null}
-        <Row label="Veckans tempo" value={aggregate.barLabel} />
-        <Row label="Senaste interaktion" value={`${aggregate.last_interaction_days} dagar sedan`} />
-        <Row label="Tunna kunder" value={String(aggregate.counts.n_thin)} />
-        <Row label="Under mal" value={String(aggregate.counts.n_under)} />
-        <Row label="Blockerad av kund" value={String(aggregate.counts.n_blocked)} />
+        <Row 
+          label="Veckans tempo" 
+          value={aggregate.barLabel} 
+          highlight={aggregate.interaction_count_7d < aggregate.expected_concepts_7d} 
+          danger={aggregate.interaction_count_7d < aggregate.expected_concepts_7d}
+        />
+        <Row label="Senaste interaktion" value={aggregate.last_interaction_days === 0 ? 'Idag' : `${aggregate.last_interaction_days} dagar sedan`} />
+        <div className="pt-2 space-y-1.5 border-t border-border/50 mt-1">
+          <Row label="Behöver fler koncept" value={String(aggregate.counts.n_thin)} highlight={aggregate.counts.n_thin > 0} />
+          <Row label="Under planerat tempo" value={String(aggregate.counts.n_under)} highlight={aggregate.counts.n_under > 0} danger={aggregate.counts.n_under > 0} />
+          <Row label="Väntar på kunden"     value={String(aggregate.counts.n_blocked)} />
+        </div>
       </div>
 
+      {aggregate.newCustomers && aggregate.newCustomers.length > 0 && (
+        <div className="border-t border-border/50 pt-2.5">
+          <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Nya kunder</div>
+          <div className="space-y-1.5">
+            {aggregate.newCustomers.map((customer: any) => (
+              <div key={customer.id} className="flex justify-between gap-3 text-[11px]">
+                <span className="truncate text-foreground font-medium">{customer.name}</span>
+                <span className="shrink-0 text-muted-foreground tabular-nums">
+                  {customer.onboardingState === 'cm_ready' ? 'CM redo' : 'Inbjuden'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {aggregate.activeAbsence?.backupCmName ? (
-        <div className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
+        <div className="rounded-md border border-border bg-status-info-bg/10 px-3 py-2 text-[11px] text-status-info-fg">
           Aktiv coverage via {aggregate.activeAbsence.backupCmName}.
         </div>
       ) : null}
-
-      {aggregate.recentPublications.length > 0 && (
-        <div className="border-t border-border pt-2">
-          <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Senaste publiceringar</div>
-          <div className="space-y-1">
-            {aggregate.recentPublications.map((customer) => (
-              <div key={customer.id} className="flex justify-between gap-3 text-xs">
-                <span className="truncate text-foreground">{customer.name}</span>
-                <span className="shrink-0 text-muted-foreground">
-                  {customer.lastPublishedAt ? timeAgoSv(customer.lastPublishedAt.toISOString()) : '-'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {aggregate.newCustomers.length > 0 && (
-        <div className="border-t border-border pt-2">
-          <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">Nya kunder</div>
-          <div className="space-y-1">
-            {aggregate.newCustomers.map((customer) => (
-              <div key={customer.id} className="flex justify-between gap-3 text-xs">
-                <span className="truncate text-foreground">{customer.name}</span>
-                <span className="shrink-0 text-muted-foreground">
-                  {customer.onboardingState === 'cm_ready' ? 'CM redo' : 'Inviterad'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ 
+  label, 
+  value, 
+  highlight,
+  danger 
+}: { 
+  label: string; 
+  value: string; 
+  highlight?: boolean;
+  danger?: boolean;
+}) {
   return (
     <div className="flex justify-between gap-3">
       <span className="text-muted-foreground">{label}</span>
-      <span className="text-right font-medium text-foreground">{value}</span>
+      <span className={`text-right font-semibold ${
+        danger ? 'text-status-danger-fg' : highlight ? 'text-status-warning-fg' : 'text-foreground'
+      }`}>
+        {value}
+      </span>
     </div>
   );
 }

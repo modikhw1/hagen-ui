@@ -2151,16 +2151,22 @@ export type Database = {
           created_at: string
           currency: string
           customer_profile_id: string | null
+          dispute_status: string | null
           due_date: string | null
           environment: string | null
           hosted_invoice_url: string | null
           id: string
+          invoice_number: string | null
           invoice_pdf: string | null
           paid_at: string | null
+          payment_intent_id: string | null
           status: string
+          subtotal_ore: number
           stripe_customer_id: string
           stripe_invoice_id: string
           stripe_subscription_id: string | null
+          tax_ore: number
+          total_ore: number
           updated_at: string
           user_profile_id: string | null
         }
@@ -2170,16 +2176,22 @@ export type Database = {
           created_at?: string
           currency?: string
           customer_profile_id?: string | null
+          dispute_status?: string | null
           due_date?: string | null
           environment?: string | null
           hosted_invoice_url?: string | null
           id?: string
+          invoice_number?: string | null
           invoice_pdf?: string | null
           paid_at?: string | null
+          payment_intent_id?: string | null
           status: string
+          subtotal_ore?: number
           stripe_customer_id: string
           stripe_invoice_id: string
           stripe_subscription_id?: string | null
+          tax_ore?: number
+          total_ore?: number
           updated_at?: string
           user_profile_id?: string | null
         }
@@ -2189,16 +2201,22 @@ export type Database = {
           created_at?: string
           currency?: string
           customer_profile_id?: string | null
+          dispute_status?: string | null
           due_date?: string | null
           environment?: string | null
           hosted_invoice_url?: string | null
           id?: string
+          invoice_number?: string | null
           invoice_pdf?: string | null
           paid_at?: string | null
+          payment_intent_id?: string | null
           status?: string
+          subtotal_ore?: number
           stripe_customer_id?: string
           stripe_invoice_id?: string
           stripe_subscription_id?: string | null
+          tax_ore?: number
+          total_ore?: number
           updated_at?: string
           user_profile_id?: string | null
         }
@@ -3392,6 +3410,91 @@ export type Database = {
           },
         ]
       }
+      v_admin_billing_mrr: {
+        Row: {
+          environment: string | null
+          mrr_ore: number | null
+        }
+        Relationships: []
+      }
+      v_admin_invoices: {
+        Row: {
+          amount_due: number | null
+          amount_paid: number | null
+          created_at: string | null
+          currency: string | null
+          customer_name: string | null
+          customer_profile_id: string | null
+          display_status: string | null
+          dispute_status: string | null
+          due_date: string | null
+          environment: string | null
+          hosted_invoice_url: string | null
+          id: string | null
+          invoice_number: string | null
+          payment_intent_id: string | null
+          refund_state: string | null
+          refunded_ore: number | null
+          status: string | null
+          subtotal_ore: number | null
+          stripe_customer_id: string | null
+          stripe_invoice_id: string | null
+          tax_ore: number | null
+          total_ore: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
+      v_admin_subscriptions: {
+        Row: {
+          amount: number | null
+          cancel_at_period_end: boolean | null
+          canceled_at: string | null
+          created: string | null
+          currency: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          customer_name: string | null
+          customer_profile_id: string | null
+          environment: string | null
+          id: string | null
+          interval: string | null
+          interval_count: number | null
+          status: string | null
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "v_customer_buffer"
+            referencedColumns: ["customer_id"]
+          },
+        ]
+      }
       v_customer_buffer: {
         Row: {
           assigned_cm_id: string | null
@@ -3487,7 +3590,20 @@ export type Database = {
       }
     }
     Enums: {
-      admin_role: "super_admin" | "operations_admin"
+      admin_role:
+        | "super_admin"
+        | "operations_admin"
+        | "billing.invoices.read"
+        | "billing.invoices.write"
+        | "billing.subscriptions.read"
+        | "billing.subscriptions.write"
+        | "billing.health.read"
+        | "billing.health.retry"
+        | "team.read"
+        | "team.write"
+        | "team.archive"
+        | "team.absences.write"
+        | "overview.read"
       app_role: "admin" | "content_manager" | "customer" | "user"
       attention_subject_type:
         | "invoice"
@@ -3638,7 +3754,21 @@ export const Constants = {
   },
   public: {
     Enums: {
-      admin_role: ["super_admin", "operations_admin"],
+      admin_role: [
+        "super_admin",
+        "operations_admin",
+        "billing.invoices.read",
+        "billing.invoices.write",
+        "billing.subscriptions.read",
+        "billing.subscriptions.write",
+        "billing.health.read",
+        "billing.health.retry",
+        "team.read",
+        "team.write",
+        "team.archive",
+        "team.absences.write",
+        "overview.read",
+      ],
       app_role: ["admin", "content_manager", "customer", "user"],
       attention_subject_type: [
         "invoice",

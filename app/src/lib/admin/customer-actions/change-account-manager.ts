@@ -3,8 +3,10 @@ import 'server-only';
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { changeCustomerAssignment } from '@/lib/admin/cm-assignments';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
-import { jsonError } from '@/lib/server/api-response';
-import { buildCustomerActionAuditMetadata } from './shared';
+import {
+  actionSuccess,
+  buildCustomerActionAuditMetadata,
+} from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ChangeAccountManagerInput = Extract<
@@ -23,16 +25,7 @@ export async function handleChangeAccountManager(
     effectiveDate: input.effective_date,
     handoverNote: input.handover_note ?? null,
   });
-
-  const { data: profile, error } = await ctx.supabaseAdmin
-    .from('customer_profiles')
-    .select('*')
-    .eq('id', ctx.id)
-    .single();
-
-  if (error) {
-    return jsonError(error.message, 500);
-  }
+  const profile = assignment.profile ?? (ctx.beforeProfile as unknown as Record<string, unknown>);
 
   await recordAuditLog(ctx.supabaseAdmin, {
     actorUserId: ctx.user.id,
@@ -53,9 +46,12 @@ export async function handleChangeAccountManager(
     }),
   });
 
-  return {
-    success: true,
+  return actionSuccess({
     profile,
-    assignment,
-  };
+    assignment: {
+      status: assignment.status,
+      effectiveDate: assignment.effectiveDate,
+      nextCmId: assignment.nextCmId,
+    },
+  });
 }

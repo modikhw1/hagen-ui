@@ -1,433 +1,282 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
+import { ModeButton } from '@/components/admin/_primitives';
+import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
+import { captureAdminError } from '@/lib/admin/admin-telemetry';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  calculateCmChangePreview,
+  type CmChangePreviewInput,
+} from '@/lib/admin/cm-change-preview';
+import { hashToHsl } from '@/lib/admin/color';
+import { changeCmCopy, teamCopy } from '@/lib/admin/copy/team';
 import { formatSek } from '@/lib/admin/money';
-import { callCustomerAction } from '@/lib/admin/api-client';
-import type { TeamMemberRow } from '@/hooks/admin/useTeamMembers';
+import { todayDateInput } from '@/lib/admin/time';
+import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
+import { usePreviewCmChange } from '@/hooks/admin/usePreviewCmChange';
+import { useTeamMembers, type TeamMemberRow } from '@/hooks/admin/useTeamMembers';
+import { Search, UserPlus } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 type Mode = 'now' | 'scheduled' | 'temporary';
 
 export default function ChangeCMModal({
   open,
   customerId,
-  currentCM,
+  currentCmId,
   currentMonthlyPrice,
-  team,
-  onClose,
+  onOpenChange,
   onChanged,
 }: {
   open: boolean;
   customerId: string;
-  currentCM: string | null;
-  currentMonthlyPrice: number | null;
-  team: TeamMemberRow[];
-  onClose: () => void;
-  onChanged: () => void;
+  currentCmId: string | null;
+  currentMonthlyPrice?: number | null;
+  onOpenChange: (open: boolean) => void;
+  onChanged?: () => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const [selected, setSelected] = useState('');
   const [mode, setMode] = useState<Mode>('now');
+  const [selectedOverride, setSelectedOverride] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const today = todayDateInput();
   const [effectiveDate, setEffectiveDate] = useState(today);
   const [coverageEndDate, setCoverageEndDate] = useState(today);
   const [handoverNote, setHandoverNote] = useState('');
-  const [compensationMode, setCompensationMode] = useState<'covering_cm' | 'primary_cm'>('covering_cm');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [compensationMode, setCompensationMode] = useState<'covering_cm' | 'primary_cm'>(
+    'covering_cm',
+  );
 
+  const teamQuery = useTeamMembers();
+  const activeTeam = useMemo(
+    () => (teamQuery.data ?? []).filter((m) => m.is_active),
+    [teamQuery.data],
+  );
+
+  const selected = selectedOverride ?? currentCmId ?? '';
+  
   const currentMember = useMemo(
-    () =>
-      team.find((member) => member.email === currentCM || member.name === currentCM) ?? null,
-    [currentCM, team],
+    () => activeTeam.find((m) => m.id === currentCmId) ?? null,
+    [activeTeam, currentCmId],
   );
+  
   const nextMember = useMemo(
-    () => team.find((member) => member.id === selected) ?? null,
-    [selected, team],
+    () => activeTeam.find((m) => m.id === selected) ?? null,
+    [activeTeam, selected],
   );
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
+  const changeMutation = useCustomerMutation(customerId, 'change_account_manager');
+  const temporaryMutation = useCustomerMutation(customerId, 'set_temporary_coverage');
 
-    const initial =
-      team.find((member) => member.email === currentCM || member.name === currentCM)?.id || '';
-    setSelected(initial);
-    setMode('now');
-    setEffectiveDate(today);
-    setCoverageEndDate(today);
-    setHandoverNote('');
-    setCompensationMode('covering_cm');
-    setError(null);
-  }, [currentCM, open, team, today]);
+  const sortedTeam = useMemo(
+    () =>
+      [...activeTeam].sort((left, right) => {
+        const leftIsCurrent = currentMember?.id === left.id ? 0 : 1;
+        const rightIsCurrent = currentMember?.id === right.id ? 0 : 1;
+        return leftIsCurrent - rightIsCurrent || left.name.localeCompare(right.name, 'sv');
+      }),
+    [activeTeam, currentMember?.id],
+  );
 
-  const preview = useMemo(() => {
-    const parsedPriceOre = Math.round((Number(currentMonthlyPrice) || 0) * 100);
-    if (!parsedPriceOre || !nextMember) {
-      return null;
-    }
-
-    const effective = new Date(`${effectiveDate}T00:00:00`);
-    const anchor =
-      effective.getDate() >= 25
-        ? new Date(effective.getFullYear(), effective.getMonth() + 1, 25)
-        : new Date(effective.getFullYear(), effective.getMonth(), 25);
-    const periodStart = new Date(anchor.getFullYear(), anchor.getMonth() - 1, 25);
-    const periodEnd = new Date(anchor.getFullYear(), anchor.getMonth(), 24);
-    const totalDays = Math.round((anchor.getTime() - periodStart.getTime()) / 86_400_000);
-
-    const currentSliceDays =
-      effective <= periodStart
-        ? 0
-        : Math.max(
-            0,
-            Math.round((effective.getTime() - periodStart.getTime()) / 86_400_000),
-          );
-    const nextSliceDays =
-      mode === 'temporary'
-        ? Math.max(
-            0,
-            Math.min(
-              totalDays - currentSliceDays,
-              Math.round(
-                (new Date(`${coverageEndDate}T00:00:00`).getTime() - effective.getTime()) /
-                  86_400_000,
-              ) + 1,
-            ),
-          )
-        : Math.max(0, totalDays - currentSliceDays);
-    const currentCommissionRate = Number(currentMember?.commission_rate ?? 0.2);
-    const nextCommissionRate = Number(nextMember.commission_rate ?? 0.2);
-    const coverPayoutOre = Math.round(
-      (parsedPriceOre * nextSliceDays / totalDays) * nextCommissionRate,
+  const filteredTeam = useMemo(() => {
+    if (!deferredSearch) return sortedTeam;
+    return sortedTeam.filter((m) => 
+      `${m.name} ${m.email}`.toLowerCase().includes(deferredSearch)
     );
+  }, [deferredSearch, sortedTeam]);
 
+  const validation = useMemo(() => {
+    if (mode === 'temporary' && !currentMember) return { ok: false, reason: 'Kunden saknar primär CM' };
+    if (mode === 'temporary' && selected === currentCmId) return { ok: false, reason: 'Välj en annan CM för coverage' };
+    if (!selected && mode === 'temporary') return { ok: false, reason: 'Välj en CM' };
+    return { ok: true };
+  }, [mode, currentMember, selected, currentCmId]);
+
+  const previewInput = useMemo<CmChangePreviewInput | null>(() => {
+    if (!validation.ok) return null;
     return {
-      label: `${periodStart.toISOString().slice(0, 10)} - ${periodEnd.toISOString().slice(0, 10)}`,
-      currentSliceDays,
-      nextSliceDays,
-      currentPayoutOre: Math.round(
-        (parsedPriceOre * currentSliceDays / totalDays) * currentCommissionRate,
-      ),
-      nextPayoutOre:
-        compensationMode === 'primary_cm' && mode === 'temporary'
-          ? 0
-          : coverPayoutOre,
-      retainedPayoutOre:
-        compensationMode === 'primary_cm' && mode === 'temporary'
-          ? coverPayoutOre
-          : 0,
+      mode,
+      effective_date: mode === 'now' ? today : effectiveDate,
+      coverage_end_date: mode === 'temporary' ? coverageEndDate : null,
+      compensation_mode: compensationMode,
+      current_monthly_price: currentMonthlyPrice ?? 0,
+      current: currentMember ? { id: currentMember.id, name: currentMember.name, commission_rate: Number(currentMember.commission_rate) } : null,
+      next: nextMember ? { id: nextMember.id, name: nextMember.name, commission_rate: Number(nextMember.commission_rate) } : null,
     };
-  }, [
-    compensationMode,
-    coverageEndDate,
-    currentMember?.commission_rate,
-    currentMonthlyPrice,
-    effectiveDate,
-    mode,
-    nextMember,
-  ]);
+  }, [validation.ok, mode, today, effectiveDate, coverageEndDate, compensationMode, currentMonthlyPrice, currentMember, nextMember]);
 
-  const save = async () => {
-    setLoading(true);
-    setError(null);
+  const previewQuery = usePreviewCmChange(customerId, previewInput);
+  const preview = previewQuery.data;
 
-    try {
-      const result =
-        mode === 'temporary'
-          ? await callCustomerAction(customerId, {
-              action: 'set_temporary_coverage',
-              covering_cm_id: selected,
-              starts_on: effectiveDate,
-              ends_on: coverageEndDate,
-              note: handoverNote || null,
-              compensation_mode: compensationMode,
-            })
-          : await callCustomerAction(customerId, {
-              action: 'change_account_manager',
-              cm_id: selected || null,
-              effective_date: mode === 'scheduled' ? effectiveDate : today,
-              handover_note: handoverNote || null,
-            });
-
-      if (!result.ok) {
-        throw new Error(result.error || 'Kunde inte uppdatera CM');
-      }
-
-      onChanged();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Kunde inte uppdatera CM');
-    } finally {
-      setLoading(false);
+  const handleSave = async () => {
+    if (mode === 'temporary') {
+      await temporaryMutation.mutateAsync({
+        covering_cm_id: selected,
+        starts_on: effectiveDate,
+        ends_on: coverageEndDate,
+        note: handoverNote || null,
+        compensation_mode: compensationMode,
+      });
+    } else {
+      await changeMutation.mutateAsync({
+        cm_id: selected || null,
+        effective_date: mode === 'scheduled' ? effectiveDate : today,
+        handover_note: handoverNote || null,
+      });
     }
+    onChanged?.();
+    onOpenChange(false);
   };
 
-  const disableSave =
-    loading ||
-    (mode === 'temporary' && (!currentMember || !selected || coverageEndDate < effectiveDate));
+  const isPending = changeMutation.isPending || temporaryMutation.isPending;
 
   return (
-    <Dialog
+    <AdminFormDialog
       open={open}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          onClose();
-        }
-      }}
+      onClose={() => onOpenChange(false)}
+      title="Byt Content Manager"
+      size="lg"
+      footer={
+        <div className="flex w-full flex-col gap-3">
+          {preview && (
+            <div className="flex items-center justify-between gap-3 rounded-md bg-secondary/40 px-3 py-2 text-[11px]">
+              <span className="text-muted-foreground">{preview.period.label}</span>
+              <span className="font-semibold text-foreground">
+                {preview.current.name}: {formatSek(preview.current.payout_ore)} · {preview.next.name}: {formatSek(preview.next.payout_ore)}
+              </span>
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <button onClick={() => onOpenChange(false)} className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent">
+              Avbryt
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isPending || !validation.ok || !selected}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              {isPending ? 'Sparar...' : mode === 'now' ? 'Byt CM nu' : mode === 'scheduled' ? 'Schemalägg byte' : 'Sätt temporary coverage'}
+            </button>
+          </div>
+        </div>
+      }
     >
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Andra Content Manager</DialogTitle>
-          <DialogDescription>
-            Permanent handover eller tillfallig coverage. Payroll delar perioden 25 till 25 pro rata.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="grid gap-2 sm:grid-cols-3">
-            <ModeButton
-              active={mode === 'now'}
-              onClick={() => setMode('now')}
-              title="Byt nu"
-              description="Ny CM tar over fran idag."
-            />
-            <ModeButton
-              active={mode === 'scheduled'}
-              onClick={() => setMode('scheduled')}
-              title="Schemalagg"
-              description="Bytet aktiveras pa valt datum."
-            />
-            <ModeButton
-              active={mode === 'temporary'}
-              onClick={() => setMode('temporary')}
-              title="Temp coverage"
-              description="Tackning med start- och slutdatum."
-            />
-          </div>
-
-          {mode !== 'now' ? (
-            <div className={`grid gap-3 ${mode === 'temporary' ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}>
-              <div>
-                <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Startdatum
-                </div>
-                <input
-                  type="date"
-                  value={effectiveDate}
-                  min={today}
-                  onChange={(event) => setEffectiveDate(event.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-              </div>
-              {mode === 'temporary' ? (
-                <div>
-                  <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                    Slutdatum
-                  </div>
-                  <input
-                    type="date"
-                    value={coverageEndDate}
-                    min={effectiveDate}
-                    onChange={(event) => setCoverageEndDate(event.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="space-y-3">
-            {mode !== 'temporary' ? (
-              <label className="flex items-center gap-3 rounded-md border border-border p-3 text-sm">
-                <input
-                  type="radio"
-                  checked={selected === ''}
-                  onChange={() => setSelected('')}
-                />
-                Ingen CM tilldelad
-              </label>
-            ) : null}
-
-            {team.map((member) => (
-              <label
-                key={member.id}
-                className={`flex items-center gap-3 rounded-md border p-3 text-sm ${
-                  selected === member.id ? 'border-primary bg-primary/5' : 'border-border'
-                }`}
-              >
-                <input
-                  type="radio"
-                  checked={selected === member.id}
-                  onChange={() => setSelected(member.id)}
-                />
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-primary-foreground"
-                    style={{ backgroundColor: member.color || '#6B4423' }}
-                  >
-                    {member.name.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="font-semibold text-foreground">{member.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {member.email || 'Saknar e-post'}
-                      {typeof member.commission_rate === 'number'
-                        ? ` · ${Math.round(member.commission_rate * 100)}% kommission`
-                        : ''}
-                    </div>
-                  </div>
-                </div>
-              </label>
-            ))}
-          </div>
-
-          {mode === 'temporary' ? (
-            <div className="rounded-md border border-border bg-secondary/30 p-3">
-              <div className="mb-2 text-sm font-semibold text-foreground">Provision under tackning</div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <ModeButton
-                  active={compensationMode === 'covering_cm'}
-                  onClick={() => setCompensationMode('covering_cm')}
-                  title="Tackande CM far provision"
-                  description="Ansvar och ersattning ligger pa cover under perioden."
-                />
-                <ModeButton
-                  active={compensationMode === 'primary_cm'}
-                  onClick={() => setCompensationMode('primary_cm')}
-                  title="Ordinarie CM behaller provision"
-                  description="Cover tar ansvar, men payout ligger kvar pa ordinarie CM."
-                />
-              </div>
-            </div>
-          ) : null}
-
-          <div>
-            <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-              Intern notering
-            </div>
-            <textarea
-              value={handoverNote}
-              onChange={(event) => setHandoverNote(event.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              placeholder={
-                mode === 'temporary'
-                  ? 'Notering till coverage, franvaro och payroll.'
-                  : 'Valfri intern notering till audit och payroll.'
-              }
-            />
-          </div>
-
-          {preview ? (
-            <div className="rounded-md border border-border bg-secondary/30 p-3">
-              <div className="text-sm font-semibold text-foreground">
-                Pro rata-preview for perioden {preview.label}
-              </div>
-              <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                <PreviewCard
-                  title={currentMember?.name || 'Nuvarande CM'}
-                  subtitle={`${preview.currentSliceDays} dagar`}
-                  value={formatSek(preview.currentPayoutOre + preview.retainedPayoutOre)}
-                />
-                <PreviewCard
-                  title={nextMember?.name || 'Ny CM'}
-                  subtitle={`${preview.nextSliceDays} dagar`}
-                  value={formatSek(preview.nextPayoutOre)}
-                />
-              </div>
-              {mode === 'temporary' && compensationMode === 'primary_cm' ? (
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Ordinarie CM behaller provision for cover-dagarna, men tackande CM tar operativt ansvar.
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {mode === 'temporary' && !currentMember ? (
-            <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning">
-              Kunden saknar ordinarie CM. Tillfallig coverage kan bara laggas pa en befintlig ansvarig CM.
-            </div>
-          ) : null}
-
-          {error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          ) : null}
+      <div className="space-y-6">
+        <div className="grid gap-2 sm:grid-cols-3">
+          {(['now', 'scheduled', 'temporary'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={cn(
+                "rounded-lg border p-3 text-left transition-colors",
+                mode === m ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+              )}
+            >
+              <div className="font-semibold text-xs">{changeCmCopy[m as keyof typeof changeCmCopy] as string}</div>
+              <div className="text-[10px] text-muted-foreground mt-1 leading-tight">{changeCmCopy[`${m}Description` as keyof typeof changeCmCopy] as string}</div>
+            </button>
+          ))}
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="rounded-md border border-border px-4 py-2 text-sm"
-          >
-            Avbryt
-          </button>
-          <button
-            onClick={() => void save()}
-            disabled={disableSave}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-          >
-            {loading
-              ? 'Sparar...'
-              : mode === 'scheduled'
-                ? 'Schemalagg byte'
-                : mode === 'temporary'
-                  ? 'Skapa coverage'
-                  : 'Byt CM'}
-          </button>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {mode !== 'now' && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Startdatum</label>
+              <input type="date" value={effectiveDate} min={today} onChange={e => setEffectiveDate(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+            </div>
+          )}
+          {mode === 'temporary' && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Slutdatum</label>
+              <input type="date" value={coverageEndDate} min={effectiveDate} onChange={e => setCoverageEndDate(e.target.value)} className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" />
+            </div>
+          )}
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
-function ModeButton({
-  active,
-  onClick,
-  title,
-  description,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  description: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-md border px-3 py-3 text-left ${
-        active ? 'border-primary bg-primary/5' : 'border-border bg-background'
-      }`}
-    >
-      <div className="text-sm font-semibold text-foreground">{title}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{description}</div>
-    </button>
-  );
-}
+        <div className="relative">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <input
+            placeholder="Sök CM..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-md border border-border bg-background pl-9 pr-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+          />
+        </div>
 
-function PreviewCard({
-  title,
-  subtitle,
-  value,
-}: {
-  title: string;
-  subtitle: string;
-  value: string;
-}) {
-  return (
-    <div className="rounded-md border border-border bg-background px-3 py-2">
-      <div className="text-sm font-semibold text-foreground">{title}</div>
-      <div className="text-xs text-muted-foreground">{subtitle}</div>
-      <div className="mt-2 text-sm font-semibold text-foreground">{value}</div>
-    </div>
+        <div className="grid gap-2 sm:grid-cols-2 max-h-[300px] overflow-y-auto pr-1">
+          {filteredTeam.map((member) => (
+            <label
+              key={member.id}
+              className={cn(
+                "flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors",
+                selected === member.id ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+              )}
+            >
+              <input type="radio" checked={selected === member.id} onChange={() => setSelectedOverride(member.id)} className="sr-only" />
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: hashToHsl(member.id) }}>
+                {member.name.charAt(0)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-foreground">{member.name}</div>
+                <div className="truncate text-[10px] text-muted-foreground">{member.email}</div>
+              </div>
+              {member.id === currentCmId && (
+                <span className="rounded-full bg-secondary px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">Nuvarande</span>
+              )}
+            </label>
+          ))}
+        </div>
+
+        {mode === 'temporary' && (
+          <div className="rounded-lg border border-border bg-secondary/20 p-4">
+            <div className="mb-3 text-xs font-semibold">Kompensation</div>
+            <div className="flex gap-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setCompensationMode('covering_cm')}
+                      className={cn(
+                        "flex-1 rounded-md border py-2 text-xs font-medium transition-colors",
+                        compensationMode === 'covering_cm' ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background hover:bg-accent"
+                      )}
+                    >
+                      Backup CM
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Kompensation tillfaller den som täcker upp.</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setCompensationMode('primary_cm')}
+                      className={cn(
+                        "flex-1 rounded-md border py-2 text-xs font-medium transition-colors",
+                        compensationMode === 'primary_cm' ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background hover:bg-accent"
+                      )}
+                    >
+                      Primär CM
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Ordinarie CM behåller sin kommission.</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Anteckning / Överlämning</label>
+          <textarea
+            value={handoverNote}
+            onChange={(e) => setHandoverNote(e.target.value)}
+            rows={2}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            placeholder="Valfri notering om varför bytet sker..."
+          />
+        </div>
+      </div>
+    </AdminFormDialog>
   );
 }

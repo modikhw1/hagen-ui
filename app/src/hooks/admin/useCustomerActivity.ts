@@ -17,7 +17,10 @@ export function useCustomerActivity(id: string) {
       const payload = await apiClient.get(`/api/admin/customers/${id}/activity-log`, {
         signal,
       });
-      return parseDto(customerActivityPayloadSchema, payload);
+      return parseDto(customerActivityPayloadSchema, payload, {
+        name: 'customerActivityPayload',
+        path: `/api/admin/customers/${id}/activity-log`,
+      });
     },
     staleTime: 30_000,
     refetchOnWindowFocus: true,

@@ -5,7 +5,7 @@ export default function CustomerSubscriptionLayout({
   modal,
 }: {
   children: ReactNode;
-  modal?: ReactNode;
+  modal: ReactNode;
 }) {
   return (
     <>

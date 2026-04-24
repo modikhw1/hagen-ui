@@ -20,7 +20,10 @@ export function useCustomerTikTokStats(id: string) {
       if (payload === null) {
         return null;
       }
-      return parseDto(tikTokStatsSchema, payload);
+      return parseDto(tikTokStatsSchema, payload, {
+        name: 'tikTokStats',
+        path: `/api/admin/customers/${id}/tiktok-stats`,
+      });
     },
     staleTime: 300_000,
     refetchOnWindowFocus: false,

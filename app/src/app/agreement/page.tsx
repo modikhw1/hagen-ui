@@ -63,8 +63,8 @@ function AgreementContent() {
 
   useEffect(() => {
     const requireAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) return;
 
       const redirectTarget = `/agreement${window.location.search}`;
       router.replace(`/login?redirect=${encodeURIComponent(redirectTarget)}`);

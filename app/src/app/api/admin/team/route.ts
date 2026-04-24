@@ -1,477 +1,191 @@
-import { NextRequest } from 'next/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
-import { getAdminSettings } from '@/lib/admin/settings';
-import { recordAuditLog } from '@/lib/admin/audit-log';
-import { syncAdminAccessRole } from '@/lib/admin/admin-roles';
-import { isMissingColumnError } from '@/lib/admin/schema-guards';
-import { withAuth } from '@/lib/auth/api-auth';
-import { getAppUrl } from '@/lib/url/public';
-import type { Database } from '@/types/database';
-import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { z } from 'zod';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
+import { withRequestContext } from '@/lib/admin/customer-actions/with-request-context';
+import { enforceAdminReadRateLimit } from '@/lib/admin/server/read-rate-limit';
+import { loadAdminTeamOverview } from '@/lib/admin/server/team';
+import { requireScope, withAuth } from '@/lib/auth/api-auth';
+import { jsonError } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
-const TEAM_COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-type TeamRole = Extract<Database['public']['Enums']['user_role'], 'admin' | 'content_manager'>;
+const querySchema = z
+  .object({
+    sort: z.enum(['standard', 'anomalous', 'name']).optional(),
+    includeInactive: z.enum(['0', '1']).optional(),
+    includeAbsences: z.enum(['0', '1']).optional(),
+  })
+  .strict();
 
-type TeamMemberRecord = {
-  id: string;
-  name: string;
-  email: string | null;
-  phone: string | null;
-  role: string | null;
-  color: string | null;
-  is_active: boolean | null;
-  commission_rate?: number | null;
-};
+function nowMs() {
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
 
-type TeamListRow = Record<string, unknown>;
+function formatDuration(value: number) {
+  return Number.isFinite(value) ? value.toFixed(1) : '0.0';
+}
 
-const TEAM_MEMBER_SELECT =
-  'id, name, email, phone, role, color, is_active, commission_rate, created_at, profile_id, avatar_url, bio, region, expertise, start_date, notes, invited_at';
-const TEAM_MEMBER_SELECT_LEGACY =
-  'id, name, email, phone, role, color, is_active, created_at, profile_id, avatar_url, bio, region, expertise, start_date, notes, invited_at';
-
-async function ensureTeamMemberProfile(params: {
-  supabaseAdmin: SupabaseClient<Database>;
-  memberId: string;
-  userId: string;
-  email: string;
-  name: string;
-  role: TeamRole;
+function deriveTeamMemberStatus(params: {
+  hasActiveAbsence: boolean;
+  overloaded: boolean;
+  activityDeviation: number;
 }) {
-  const { supabaseAdmin, memberId, userId, email, name, role } = params;
-  const isAdmin = role === 'admin';
+  if (params.hasActiveAbsence) return 'absent' as const;
+  if (params.overloaded) return 'overloaded' as const;
+  if (params.activityDeviation >= 0.6) return 'attention' as const;
+  return 'standard' as const;
+}
 
-  const { data: existingProfile } = await supabaseAdmin
-    .from('profiles')
-    .select('id, matching_data')
-    .eq('id', userId)
-    .maybeSingle();
-
-  const matchingData =
-    existingProfile?.matching_data &&
-    typeof existingProfile.matching_data === 'object' &&
-    !Array.isArray(existingProfile.matching_data)
-      ? existingProfile.matching_data
-      : {};
-
-  if (existingProfile?.id) {
-    await supabaseAdmin
-      .from('profiles')
-      .update({
-        email,
-        business_name: name,
-        role,
-        is_admin: isAdmin,
-        matching_data: matchingData,
-      })
-      .eq('id', userId);
-  } else {
-    await supabaseAdmin.from('profiles').insert({
-      id: userId,
-      email,
-      business_name: name,
-      business_description: null,
-      social_links: {},
-      tone: [],
-      energy: null,
-      industry: null,
-      matching_data: {},
-      has_paid: false,
-      has_concepts: false,
-      is_admin: isAdmin,
-      role,
-    });
+function lastActivityAt(member: {
+  customers?: Array<{ last_upload_at?: string | null }>;
+  assignmentHistory?: Array<{ valid_from?: string }>;
+}) {
+  const uploads = (member.customers ?? [])
+    .map((customer) => customer.last_upload_at)
+    .filter((value): value is string => typeof value === 'string');
+  const latestUpload = uploads.length > 0 ? uploads.sort().at(-1) ?? null : null;
+  if (latestUpload) {
+    return latestUpload;
   }
+  const latestAssignment = (member.assignmentHistory ?? [])
+    .map((assignment) => assignment.valid_from)
+    .filter((value): value is string => typeof value === 'string')
+    .sort()
+    .at(-1);
+  return latestAssignment ?? null;
+}
 
-  await supabaseAdmin
-    .from('team_members')
-    .update({ profile_id: userId })
-    .eq('id', memberId);
-
-  await supabaseAdmin
-    .from('user_roles')
-    .upsert({ user_id: userId, role }, { onConflict: 'user_id,role' });
-
-  await syncAdminAccessRole({
+export const GET = withAuth(async (request, user) => {
+  const supabaseAdmin = createSupabaseAdmin();
+  return withRequestContext({
+    request,
+    route: request.nextUrl.pathname,
+    action: 'team_list_get',
+    actorUserId: user.id,
     supabaseAdmin,
-    userId,
-    shouldHaveAdminAccess: isAdmin,
-  });
-}
+    execute: async () => {
+      const requestStart = nowMs();
+      try {
+        requireScope(user, 'team.read');
 
-async function fetchTeamMembers(params: {
-  supabaseAdmin: SupabaseClient<Database>;
-  includeInactive: boolean;
-  defaultCommissionRate: number;
-}) {
-  const { supabaseAdmin, includeInactive, defaultCommissionRate } = params;
+        const limitedResponse = await enforceAdminReadRateLimit({
+          supabaseAdmin,
+          actorUserId: user.id,
+          actorEmail: user.email,
+          actorRole: user.role,
+          route: request.nextUrl.pathname,
+          action: 'team_list_get',
+        });
+        if (limitedResponse) {
+          return limitedResponse;
+        }
 
-  let query = supabaseAdmin
-    .from('team_members')
-    .select(TEAM_MEMBER_SELECT)
-    .order('name');
+        const parsed = querySchema.safeParse({
+          sort: request.nextUrl.searchParams.get('sort') ?? undefined,
+          includeInactive: request.nextUrl.searchParams.get('includeInactive') ?? undefined,
+          includeAbsences: request.nextUrl.searchParams.get('includeAbsences') ?? undefined,
+        });
+        if (!parsed.success) {
+          return jsonError(SERVER_COPY.invalidQuery, 400);
+        }
 
-  if (!includeInactive) {
-    query = query.eq('is_active', true);
-  }
+        const includeInactive = parsed.data.includeInactive === '1';
+        const includeAbsences = parsed.data.includeAbsences !== '0';
+        const sort = parsed.data.sort ?? 'anomalous';
+        const sourceSort = sort === 'name' ? 'standard' : sort;
+        const result = await loadAdminTeamOverview(sourceSort);
 
-  const primary = await query;
-  if (!primary.error) {
-    return {
-      members: (primary.data ?? []) as unknown as TeamListRow[],
-      schemaWarnings: [] as string[],
-    };
-  }
+        if (process.env.NODE_ENV !== 'production' && result.members.length > 0) {
+          // Temporary safety log for DTO mismatch diagnostics on /admin/team.
+          console.log('[team] sample member', JSON.stringify(result.members[0], null, 2));
+        }
 
-  if (!isMissingColumnError(primary.error.message)) {
-    throw new Error(primary.error.message);
-  }
+        let members = result.members
+          .filter((member) => includeInactive || member.is_active)
+          .map((member) => {
+            const hasActiveAbsence = Boolean(member.active_absence);
+            const derived_status = deriveTeamMemberStatus({
+              hasActiveAbsence,
+              overloaded: member.overloaded,
+              activityDeviation: member.activityDeviation,
+            });
+            const overload_score = Math.max(
+              0,
+              Math.min(1, Number(member.customerCount || 0) / 12),
+            );
 
-  const fallback = includeInactive
-    ? await (((supabaseAdmin.from('team_members' as never) as never) as {
-        select: (columns: string) => {
-          order: (column: string) => Promise<{
-            data: TeamListRow[] | null;
-            error: { message?: string } | null;
-          }>;
+            return {
+              ...member,
+              customer_count: member.customerCount,
+              cm_avatar_url: member.avatar_url ?? null,
+              overload_score,
+              derived_status,
+              absence_active: includeAbsences && member.active_absence
+                ? {
+                    type: member.active_absence.absence_type,
+                    ends_on: member.active_absence.ends_on ?? null,
+                    backup_cm_name: member.active_absence.backup_cm_name ?? null,
+                  }
+                : undefined,
+              last_activity_at: lastActivityAt(member),
+            };
+          });
+
+        if (sort === 'name') {
+          members = [...members].sort((left, right) => left.name.localeCompare(right.name));
+        } else if (sort === 'standard') {
+          members = [...members].sort(
+            (left, right) =>
+              Number(right.customer_count || 0) - Number(left.customer_count || 0) ||
+              left.name.localeCompare(right.name),
+          );
+        } else {
+          const rank = {
+            attention: 0,
+            absent: 1,
+            overloaded: 2,
+            standard: 3,
+          } as const;
+          members = [...members].sort((left, right) => {
+            const leftRank = rank[left.derived_status];
+            const rightRank = rank[right.derived_status];
+            if (leftRank !== rightRank) {
+              return leftRank - rightRank;
+            }
+            return right.activityDeviation - left.activityDeviation;
+          });
+        }
+
+        const summary = {
+          total: members.length,
+          active: members.filter((member) => member.is_active).length,
+          absent: members.filter((member) => member.derived_status === 'absent').length,
+          overloaded: members.filter((member) => member.derived_status === 'overloaded').length,
         };
-      }).select(TEAM_MEMBER_SELECT_LEGACY)).order('name')
-    : await (((supabaseAdmin.from('team_members' as never) as never) as {
-        select: (columns: string) => {
-          order: (column: string) => {
-            eq: (innerColumn: string, innerValue: boolean) => Promise<{
-              data: TeamListRow[] | null;
-              error: { message?: string } | null;
-            }>;
-          };
-        };
-      }).select(TEAM_MEMBER_SELECT_LEGACY)).order('name').eq('is_active', true);
 
-  if (fallback.error) {
-    throw new Error(fallback.error.message || 'Kunde inte hamta teammedlemmar');
-  }
+        const totalDurationMs = nowMs() - requestStart;
 
-  return {
-    members: ((fallback.data ?? []) as unknown as TeamListRow[]).map((member) => ({
-      ...member,
-      commission_rate: defaultCommissionRate,
-    })),
-    schemaWarnings: ['Kolumnen team_members.commission_rate saknas i databasen. Standardkommission anvands som fallback.'],
-  };
-}
-
-export const GET = withAuth(async (request: NextRequest, user) => {
-  try {
-    if (!user.is_admin && user.role !== 'admin') {
-      return jsonError('Adminbehorighet kravs', 403);
-    }
-
-    const includeInactive = request.nextUrl.searchParams.get('includeInactive') === '1';
-    const supabaseAdmin = createSupabaseAdmin();
-    const settings = await getAdminSettings(supabaseAdmin);
-    const result = await fetchTeamMembers({
-      supabaseAdmin,
-      includeInactive,
-      defaultCommissionRate: settings.settings.default_commission_rate,
-    });
-
-    return jsonOk({
-      members: result.members,
-      schemaWarnings: [...settings.schemaWarnings, ...result.schemaWarnings],
-    });
-  } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : 'Kunde inte hamta teammedlemmar',
-      500,
-    );
-  }
-});
-
-export const POST = withAuth(async (request: NextRequest, user) => {
-  try {
-    if (!user.is_admin && user.role !== 'admin') {
-      return jsonError('Adminbehorighet kravs', 403);
-    }
-
-    const body = await request.json();
-    const supabaseAdmin = createSupabaseAdmin();
-    const settings = await getAdminSettings(supabaseAdmin);
-
-    if (body.resend) {
-      const {
-        team_member_id,
-        email: resendEmail,
-        name: resendName,
-        role: resendRole = 'content_manager',
-      } = body;
-
-      if (!resendEmail?.trim() || !team_member_id) {
-        return jsonError('email och team_member_id kravs', 400);
-      }
-
-      const appUrl = getAppUrl();
-      const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-        resendEmail.trim(),
-        {
-          data: {
-            isTeamMember: true,
-            invited_as: 'team_member',
-            role: resendRole,
-            name: resendName?.trim() || '',
-            team_member_id,
-          },
-          redirectTo: `${appUrl}/auth/callback?flow=team_invite`,
-        },
-      );
-
-      if (inviteError) {
-        return jsonError(inviteError.message, 500);
-      }
-
-      await (supabaseAdmin.from('team_members') as never as {
-        update: (value: Record<string, unknown>) => {
-          eq: (column: string, value: string) => Promise<unknown>;
-        };
-      })
-        .update({ invited_at: new Date().toISOString() })
-        .eq('id', team_member_id);
-
-      await recordAuditLog(supabaseAdmin, {
-        actorUserId: user.id,
-        actorEmail: user.email,
-        actorRole: user.role,
-        action: 'admin.team.invite_resent',
-        entityType: 'team_member',
-        entityId: String(team_member_id),
-        metadata: {
-          email: resendEmail.trim(),
-          role: resendRole,
-        },
-      });
-
-      return jsonOk({ resent: true });
-    }
-
-    const {
-      name,
-      email,
-      phone,
-      city,
-      bio,
-      avatar_url,
-      color: requestedColor,
-      role = 'content_manager' as TeamRole,
-      sendInvite = false,
-      commission_rate,
-    } = body;
-
-    if (!name?.trim()) {
-      return jsonError('Namn kravs', 400);
-    }
-
-    if (!email?.trim()) {
-      return jsonError('E-post ar obligatoriskt', 400);
-    }
-
-    const { data: existingMember } = await (supabaseAdmin.from('team_members') as never as {
-      select: (columns: string) => {
-        ilike: (column: string, value: string) => {
-          maybeSingle: () => Promise<{ data: TeamMemberRecord | null }>;
-        };
-      };
-    })
-      .select('id, name')
-      .ilike('email', email.trim())
-      .maybeSingle();
-
-    if (existingMember) {
-      return jsonError(`E-postadressen anvands redan av ${existingMember.name}`, 409);
-    }
-
-    const { count } = await (supabaseAdmin.from('team_members') as never as {
-      select: (
-        columns: string,
-        options: { count: 'exact'; head: true },
-      ) => {
-        eq: (column: string, value: boolean) => Promise<{ count: number | null }>;
-      };
-    })
-      .select('id', { count: 'exact', head: true })
-      .eq('is_active', true);
-
-    const color = TEAM_COLORS.includes(requestedColor)
-      ? requestedColor
-      : TEAM_COLORS[(count ?? 0) % TEAM_COLORS.length];
-    const parsedCommissionRate = Number(commission_rate);
-    const commissionRate =
-      commission_rate !== undefined && commission_rate !== null
-        ? Math.max(0, Math.min(1, Number.isFinite(parsedCommissionRate) ? parsedCommissionRate : 0))
-        : settings.settings.default_commission_rate;
-
-    const insertWithCommission = await (supabaseAdmin.from('team_members') as never as {
-      insert: (value: Record<string, unknown>) => {
-        select: (columns: string) => {
-          single: () => Promise<{
-            data: TeamMemberRecord | null;
-            error: { message?: string } | null;
-          }>;
-        };
-      };
-    })
-      .insert({
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone?.trim() || null,
-        region: city?.trim() || null,
-        bio: bio?.trim() || null,
-        avatar_url: avatar_url?.trim() || null,
-        role,
-        color,
-        is_active: true,
-        commission_rate: commissionRate,
-      })
-      .select('id, name, email, phone, role, color, is_active, commission_rate')
-      .single();
-
-    let member = insertWithCommission.data;
-    let insertError = insertWithCommission.error;
-
-    if (insertError && isMissingColumnError(insertError.message)) {
-      const legacyInsert = await (supabaseAdmin.from('team_members') as never as {
-        insert: (value: Record<string, unknown>) => {
-          select: (columns: string) => {
-            single: () => Promise<{
-              data: TeamMemberRecord | null;
-              error: { message?: string } | null;
-            }>;
-          };
-        };
-      })
-        .insert({
-          name: name.trim(),
-          email: email.trim(),
-          phone: phone?.trim() || null,
-          region: city?.trim() || null,
-          bio: bio?.trim() || null,
-          avatar_url: avatar_url?.trim() || null,
-          role,
-          color,
-          is_active: true,
-        })
-        .select('id, name, email, phone, role, color, is_active')
-        .single();
-
-      member = legacyInsert.data
-        ? ({ ...legacyInsert.data, commission_rate: commissionRate } as TeamMemberRecord)
-        : legacyInsert.data;
-      insertError = legacyInsert.error;
-    }
-
-    if (insertError || !member) {
-      return jsonError(insertError?.message || 'Kunde inte skapa teammedlem', 500);
-    }
-
-    const { data: existingProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .ilike('email', email.trim())
-      .maybeSingle();
-
-    if (existingProfile?.id) {
-      await ensureTeamMemberProfile({
-        supabaseAdmin,
-        memberId: member.id,
-        userId: existingProfile.id,
-        email: email.trim(),
-        name: name.trim(),
-        role,
-      });
-    }
-
-    if (sendInvite) {
-      const appUrl = getAppUrl();
-      const { data: inviteData, error: inviteError } =
-        await supabaseAdmin.auth.admin.inviteUserByEmail(
-          email.trim(),
+        return new Response(
+          JSON.stringify({
+            ...result,
+            members,
+            summary,
+          }),
           {
-            data: {
-              isTeamMember: true,
-              invited_as: 'team_member',
-              role,
-              name: name.trim(),
-              team_member_id: member.id,
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json',
+              'Cache-Control': 'private, max-age=30',
+              'Server-Timing': `build-team-overview;dur=${formatDuration(result.buildDurationMs)},total;dur=${formatDuration(totalDurationMs)}`,
             },
-            redirectTo: `${appUrl}/auth/callback?flow=team_invite`,
           },
         );
-
-      if (inviteError) {
-        return jsonOk({
-          member,
-          warning: `Teammedlem skapad men inbjudan misslyckades: ${inviteError.message}`,
-        });
+      } catch (error) {
+        return jsonError(
+          error instanceof Error ? error.message : SERVER_COPY.fetchTeamFailed,
+          500,
+        );
       }
-
-      await (supabaseAdmin.from('team_members') as never as {
-        update: (value: Record<string, unknown>) => {
-          eq: (column: string, value: string) => Promise<unknown>;
-        };
-      })
-        .update({ invited_at: new Date().toISOString() })
-        .eq('id', member.id);
-
-      if (inviteData.user?.id) {
-        await ensureTeamMemberProfile({
-          supabaseAdmin,
-          memberId: member.id,
-          userId: inviteData.user.id,
-          email: email.trim(),
-          name: name.trim(),
-          role,
-        });
-      }
-
-      await recordAuditLog(supabaseAdmin, {
-        actorUserId: user.id,
-        actorEmail: user.email,
-        actorRole: user.role,
-        action: 'admin.team.created',
-        entityType: 'team_member',
-        entityId: member.id,
-        afterState: {
-          ...member,
-          commission_rate: commissionRate,
-        },
-        metadata: {
-          invited: true,
-        },
-      });
-
-      return jsonOk({ member, invited: true });
-    }
-
-    await recordAuditLog(supabaseAdmin, {
-      actorUserId: user.id,
-      actorEmail: user.email,
-      actorRole: user.role,
-      action: 'admin.team.created',
-      entityType: 'team_member',
-      entityId: member.id,
-      afterState: {
-        ...member,
-        commission_rate: commissionRate,
-      },
-      metadata: {
-        invited: false,
-      },
-    });
-
-    return jsonOk({ member });
-  } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : 'Kunde inte skapa teammedlem',
-      500,
-    );
-  }
-});
+    },
+  });
+}, ['admin']);

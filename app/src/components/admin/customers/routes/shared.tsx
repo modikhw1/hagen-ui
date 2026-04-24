@@ -1,14 +1,19 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import { StatusPill } from '@/components/admin/ui/StatusPill';
 import type { LikeRateTier } from '@/lib/customer-detail/success';
+
+export { bufferLabel, onboardingLabel } from '@/lib/admin/labels';
 
 const likeRateTierClass: Record<LikeRateTier, string> = {
   poor: 'text-destructive',
-  ok: 'text-warning',
-  good: 'text-success',
-  great: 'text-success',
+  ok: 'text-status-warning-fg',
+  good: 'text-status-success-fg',
+  great: 'text-status-success-fg',
 };
 
 export function CustomerSection({
@@ -65,7 +70,7 @@ export function CustomerMetricCard({
     emphasis === 'default'
       ? 'text-foreground'
       : emphasis === 'success'
-        ? 'text-success'
+        ? 'text-status-success-fg'
         : likeRateTierClass[emphasis];
   const subClass =
     emphasis === 'poor' || emphasis === 'ok' || emphasis === 'good' || emphasis === 'great'
@@ -83,50 +88,31 @@ export function CustomerMetricCard({
   );
 }
 
-export function CustomerStatusPill({
-  label,
-  tone,
-}: {
-  label: string;
-  tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
-}) {
-  const className =
-    tone === 'success'
-      ? 'bg-success/10 text-success'
-      : tone === 'warning'
-        ? 'bg-warning/10 text-warning'
-        : tone === 'danger'
-          ? 'bg-destructive/10 text-destructive'
-          : tone === 'info'
-            ? 'bg-info/10 text-info'
-            : 'bg-secondary text-muted-foreground';
-
-  return (
-    <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${className}`}>
-      {label}
-    </span>
-  );
-}
+export { StatusPill as CustomerStatusPill } from '@/components/admin/ui/StatusPill';
 
 export function CustomerActionButton({
   children,
   onClick,
   disabled,
   href,
+  className: customClassName,
 }: {
   children: ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   href?: string;
+  className?: string;
 }) {
-  const className =
-    'block w-full rounded-md border border-border px-4 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50';
+  const className = cn(
+    'block w-full rounded-md border border-border px-4 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-50',
+    customClassName,
+  );
 
   if (href) {
     return (
-      <a href={href} className={className}>
+      <Link href={href} scroll={false} className={className}>
         {children}
-      </a>
+      </Link>
     );
   }
 
@@ -147,26 +133,13 @@ export function CustomerChecklistRow({
   return (
     <div className="flex items-center justify-between py-1">
       <span className="text-foreground">{label}</span>
-      <span className={done ? 'text-success' : 'text-warning'}>
-        {done ? 'Klar' : 'Saknas'}
-      </span>
+      <StatusPill
+        label={done ? 'Klar' : 'Saknas'}
+        tone={done ? 'success' : 'warning'}
+        size="xs"
+      />
     </div>
   );
-}
-
-export function onboardingLabel(state: 'invited' | 'cm_ready' | 'live' | 'settled') {
-  if (state === 'cm_ready') return 'CM-redo';
-  if (state === 'live') return 'Live';
-  if (state === 'settled') return 'Stabil';
-  return 'Inviterad';
-}
-
-export function bufferLabel(status: 'ok' | 'thin' | 'under' | 'paused' | 'blocked') {
-  if (status === 'ok') return 'Buffer ok';
-  if (status === 'thin') return 'Tunn buffer';
-  if (status === 'under') return 'Underfylld';
-  if (status === 'blocked') return 'Buffrad men blockerad';
-  return 'Pausad';
 }
 
 export function CustomerRouteError({ message }: { message: string }) {

@@ -12,12 +12,15 @@ import { qk } from '@/lib/admin/queryKeys';
 export function useCustomerDetail(id: string) {
   return useQuery({
     queryKey: qk.customers.detail(id),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && id !== 'new',
     queryFn: async ({ signal }): Promise<CustomerDetail> => {
       const payload = await apiClient.get(`/api/admin/customers/${id}`, { signal });
-      return (await parseDto(customerDetailPayloadSchema, payload)).customer;
+      return (await parseDto(customerDetailPayloadSchema, payload, {
+        name: 'customerDetailPayload',
+        path: `/api/admin/customers/${id}`,
+      })).customer;
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
     refetchOnWindowFocus: true,
   });
 }

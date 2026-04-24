@@ -84,7 +84,7 @@ export const POST = withAuth(async (request: NextRequest) => {
       .update({
         status: 'pending_payment',
         declined_at: new Date().toISOString(),
-      } as never)
+      })
       .eq('id', profile.id);
 
     if (updateError) {

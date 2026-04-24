@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@/admin-ui": ["./src/components/admin/ui/index.ts"]
     }
   },
   "include": [

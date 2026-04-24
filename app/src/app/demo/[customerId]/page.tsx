@@ -14,19 +14,33 @@ export default async function DemoPage({
 }: {
   params: Promise<{ customerId: string }>;
 }) {
-  const { customerId } = await params;
+  const { customerId: customerKey } = await params;
   const supabase = createSupabaseAdmin();
 
-  // Fetch customer profile
-  const { data: customer, error } = await supabase
+  const customerSelect = 'id, business_name, logo_url, brief, game_plan, status';
+  const byIdResult = await supabase
     .from('customer_profiles')
-    .select('id, business_name, logo_url, brief, game_plan, status')
-    .eq('id', customerId)
-    .single();
+    .select(customerSelect)
+    .eq('id', customerKey)
+    .maybeSingle();
+  const invalidUuidLookup =
+    byIdResult.error?.message?.toLowerCase().includes('invalid input syntax for type uuid') ??
+    false;
 
-  if (error || !customer) {
+  let customer = byIdResult.data;
+  if (!customer && (invalidUuidLookup || !byIdResult.error)) {
+    const bySlugResult = await supabase
+      .from('customer_profiles')
+      .select(customerSelect)
+      .filter('profile_data->>demo_slug', 'eq', customerKey)
+      .maybeSingle();
+    customer = bySlugResult.data;
+  }
+
+  if (!customer) {
     notFound();
   }
+  const resolvedCustomerId = customer.id;
 
   // Don't expose archived customers
   if (customer.status === 'archived') {
@@ -36,7 +50,7 @@ export default async function DemoPage({
   const { data: gamePlanRecord } = await supabase
     .from('customer_game_plans')
     .select('html, plain_text, editor_version, updated_at')
-    .eq('customer_id', customerId)
+    .eq('customer_id', resolvedCustomerId)
     .maybeSingle();
 
   const gamePlanHtml = resolveGamePlanDocument(gamePlanRecord, customer.game_plan).html;
@@ -45,7 +59,7 @@ export default async function DemoPage({
   const { data: concepts } = await supabase
     .from('customer_concepts')
     .select('id, cm_note, tags, tiktok_thumbnail_url, tiktok_views, tiktok_likes, feed_order, published_at')
-    .eq('customer_profile_id', customerId)
+    .eq('customer_profile_id', resolvedCustomerId)
     .not('feed_order', 'is', null)
     .order('feed_order', { ascending: false });
 
@@ -62,7 +76,7 @@ export default async function DemoPage({
 
   return (
     <DemoView
-      customerId={customerId}
+      customerId={resolvedCustomerId}
       businessName={customer.business_name}
       logoUrl={customer.logo_url ?? null}
       brief={normalizeCustomerBrief(customer.brief)}

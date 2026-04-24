@@ -1,4 +1,4 @@
-import CustomerBillingRoute from '@/components/admin/customers/routes/CustomerBillingRoute';
+import CustomerBillingPageContent from '@/components/admin/customers/routes/CustomerBillingPage.server';
 
 export default async function CustomerBillingPage({
   params,
@@ -6,5 +6,5 @@ export default async function CustomerBillingPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  return <CustomerBillingRoute customerId={id} />;
+  return <CustomerBillingPageContent customerId={id} />;
 }

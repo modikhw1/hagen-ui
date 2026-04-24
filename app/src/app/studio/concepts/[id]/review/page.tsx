@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import {
   BUDGET_VALUES,
@@ -80,6 +81,7 @@ interface RawConcept {
 export default function ConceptReviewPage() {
   const params = useParams();
   const router = useRouter();
+  const { session } = useAuth();
   const conceptId = params?.id as string;
 
   const [raw, setRaw] = useState<RawConcept | null>(null);
@@ -117,6 +119,7 @@ export default function ConceptReviewPage() {
     setLoadError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
       const resp = await fetch(`/api/admin/concepts/${conceptId}`, {
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
@@ -201,7 +204,7 @@ export default function ConceptReviewPage() {
     if (!raw || !headlineSv.trim()) return;
     setSaving(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
       const canStayReviewed = Boolean(headlineSv.trim())
         && Boolean(scriptSv.trim())
         && Boolean(difficulty && filmTime && peopleNeeded && businessTypes.length > 0)
@@ -261,7 +264,7 @@ export default function ConceptReviewPage() {
 
     setTogglingActive(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
       const resp = await fetch(`/api/admin/concepts/${conceptId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
@@ -297,7 +300,7 @@ export default function ConceptReviewPage() {
     }
     setTogglingActive(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
       const resp = await fetch(`/api/admin/concepts/${conceptId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },

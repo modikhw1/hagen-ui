@@ -1,257 +1,103 @@
+import { createHash } from 'node:crypto';
 import { NextRequest } from 'next/server';
-import { withAuth } from '@/lib/auth/api-auth';
-import { jsonError, jsonOk } from '@/lib/server/api-response';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
+import { parseSubscriptionListQuery } from '@/lib/admin/billing-route-query';
+import { withRequestContext } from '@/lib/admin/customer-actions/with-request-context';
+import { listAdminSubscriptions } from '@/lib/admin/billing-list.server';
+import { enforceAdminReadRateLimit } from '@/lib/admin/server/read-rate-limit';
+import { requireScope, withAuth } from '@/lib/auth/api-auth';
+import { jsonError } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { z } from 'zod';
 
-const querySchema = z
-  .object({
-    limit: z.coerce.number().int().min(1).max(500).optional(),
-    page: z.coerce.number().int().min(1).optional(),
-    status: z.string().trim().min(1).optional(),
-    q: z.string().trim().min(1).optional(),
-    from: z.string().trim().min(1).optional(),
-    to: z.string().trim().min(1).optional(),
-    environment: z.enum(['test', 'live']).optional(),
-    customer_profile_id: z.string().uuid().optional(),
-    stripe_subscription_id: z.string().trim().min(1).optional(),
-  })
-  .strict();
-
-function isMissingColumnError(message?: string | null) {
-  return (
-    typeof message === 'string' &&
-    message.toLowerCase().includes('column') &&
-    message.toLowerCase().includes('does not exist')
-  );
+function createStrongEtag(payload: unknown) {
+  const body = JSON.stringify(payload);
+  const etag = `"${createHash('sha1').update(body).digest('base64url')}"`;
+  return { body, etag };
 }
 
-function isMissingTableError(message?: string | null) {
-  return (
-    typeof message === 'string' &&
-    message.toLowerCase().includes('relation') &&
-    message.toLowerCase().includes('does not exist')
-  );
-}
-
-export const GET = withAuth(async (request: NextRequest) => {
-  const url = new URL(request.url);
-  const parsed = querySchema.safeParse({
-    limit: url.searchParams.get('limit') ?? undefined,
-    page: url.searchParams.get('page') ?? undefined,
-    status: url.searchParams.get('status') ?? undefined,
-    q: url.searchParams.get('q') ?? undefined,
-    from: url.searchParams.get('from') ?? undefined,
-    to: url.searchParams.get('to') ?? undefined,
-    environment: url.searchParams.get('environment') ?? undefined,
-    customer_profile_id: url.searchParams.get('customer_profile_id') ?? undefined,
-    stripe_subscription_id: url.searchParams.get('stripe_subscription_id') ?? undefined,
-  });
-
-  if (!parsed.success) {
-    return jsonError('Ogiltiga query-parametrar', 400);
-  }
-
-  const {
-    limit = 50,
-    page = 1,
-    status,
-    q,
-    from: fromDate,
-    to: toDate,
-    customer_profile_id,
-    stripe_subscription_id,
-  } = parsed.data;
-  const environment = parsed.data.environment;
+export const GET = withAuth(async (request: NextRequest, user) => {
   const supabaseAdmin = createSupabaseAdmin();
-  const from = (page - 1) * limit;
-  const to = from + limit - 1;
-  const schemaWarnings: string[] = [];
-  let searchedCustomerProfileIds: string[] | null = null;
-  let searchedStripeCustomerIds: string[] | null = null;
+  return withRequestContext({
+    request,
+    route: request.nextUrl.pathname,
+    action: 'billing_subscriptions_list_get',
+    actorUserId: user.id,
+    supabaseAdmin,
+    execute: async () => {
+      try {
+        requireScope(user, 'billing.subscriptions.read');
 
-  if (q) {
-    const { data: matchingCustomers, error: matchingCustomersError } = await supabaseAdmin
-      .from('customer_profiles')
-      .select('id, stripe_customer_id')
-      .ilike('business_name', `%${q}%`)
-      .limit(50);
+        const limitedResponse = await enforceAdminReadRateLimit({
+          supabaseAdmin,
+          actorUserId: user.id,
+          actorEmail: user.email,
+          actorRole: user.role,
+          route: request.nextUrl.pathname,
+          action: 'billing_subscriptions_list_get',
+        });
+        if (limitedResponse) {
+          return limitedResponse;
+        }
 
-    if (matchingCustomersError) {
-      return jsonError(matchingCustomersError.message, 500);
-    }
+        const parsed = parseSubscriptionListQuery(request);
+        if (!parsed.success) {
+          return jsonError(SERVER_COPY.invalidQuery, 400);
+        }
 
-    searchedCustomerProfileIds = (matchingCustomers ?? [])
-      .map((customer) => customer.id)
-      .filter((value): value is string => Boolean(value));
-    searchedStripeCustomerIds = (matchingCustomers ?? [])
-      .map((customer) => customer.stripe_customer_id)
-      .filter((value): value is string => Boolean(value));
+        const filters = parsed.data;
+        const result = await listAdminSubscriptions({
+          supabaseAdmin,
+          filters: {
+            limit: filters.limit ?? 50,
+            page: filters.page ?? 1,
+            status: filters.status,
+            q: filters.q,
+            fromDate: filters.from,
+            toDate: filters.to,
+            environment: filters.environment,
+            customerProfileId: filters.customer_profile_id,
+            stripeSubscriptionId: filters.stripe_subscription_id,
+          },
+        });
 
-    if (searchedCustomerProfileIds.length === 0 && searchedStripeCustomerIds.length === 0) {
-      return jsonOk({
-        subscriptions: [],
-        environment: environment ?? 'all',
-        schemaWarnings,
-        summary: {
-          activeCount: 0,
-          expiringCount: 0,
-          mrrOre: 0,
-        },
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          pageCount: 1,
-          hasNextPage: false,
-          hasPreviousPage: page > 1,
-        },
-      });
-    }
-  }
-
-  const buildSubscriptionQuery = (withEnvironmentFilter: boolean) => {
-    let query = supabaseAdmin
-      .from('subscriptions')
-      .select('*', { count: 'exact' })
-      .order('created', { ascending: false })
-      .range(from, to);
-
-    if (withEnvironmentFilter && environment) {
-      query = query.eq('environment', environment);
-    }
-
-    if (status) {
-      query = query.eq('status', status);
-    }
-
-    if (customer_profile_id) {
-      query = query.eq('customer_profile_id', customer_profile_id);
-    }
-
-    if (searchedCustomerProfileIds?.length) {
-      query = query.in('customer_profile_id', searchedCustomerProfileIds);
-    }
-
-    if (stripe_subscription_id) {
-      query = query.eq('stripe_subscription_id', stripe_subscription_id);
-    }
-
-    if (fromDate) {
-      query = query.gte('created', `${fromDate}T00:00:00.000Z`);
-    }
-
-    if (toDate) {
-      query = query.lte('created', `${toDate}T23:59:59.999Z`);
-    }
-
-    return query;
-  };
-
-  let { data: subscriptions, error, count } = await buildSubscriptionQuery(Boolean(environment));
-  if (error && isMissingColumnError(error.message)) {
-    schemaWarnings.push(
-      'Migration 040 saknas i databasen. Visar abonnemang utan miljöfiltrering och utan garanterad test/live-separation.',
-    );
-    const fallback = await buildSubscriptionQuery(false);
-    subscriptions = fallback.data;
-    error = fallback.error;
-    count = fallback.count;
-  }
-
-  if (error) {
-    return jsonError(error.message, 500);
-  }
-
-  const { data: customers } = await supabaseAdmin
-    .from('customer_profiles')
-    .select('id, business_name, stripe_customer_id');
-
-  const byProfileId = new Map<string, string>();
-  const byStripeCustomerId = new Map<string, string>();
-  for (const customer of customers || []) {
-    if (customer.id && customer.business_name) {
-      byProfileId.set(customer.id, customer.business_name);
-    }
-    if (customer.stripe_customer_id && customer.business_name) {
-      byStripeCustomerId.set(customer.stripe_customer_id, customer.business_name);
-    }
-  }
-
-  const payload = (subscriptions || [])
-    .map((subscription) => ({
-      ...subscription,
-      customer_name:
-        (subscription.customer_profile_id && byProfileId.get(subscription.customer_profile_id)) ||
-        byStripeCustomerId.get(subscription.stripe_customer_id) ||
-        subscription.stripe_customer_id?.slice(0, 18) ||
-        'Okänd',
-    }))
-    .filter((subscription) =>
-      searchedStripeCustomerIds?.length
-        ? searchedStripeCustomerIds.includes(subscription.stripe_customer_id)
-        : true,
-    );
-
-  let mrrOre = payload
-    .filter((subscription) => subscription.status === 'active' && !subscription.cancel_at_period_end)
-    .reduce((sum, subscription) => {
-      const intervalCount = subscription.interval_count ?? 1;
-      if (subscription.interval === 'year') return sum + Math.round(subscription.amount / 12);
-      if (intervalCount === 3) return sum + Math.round(subscription.amount / 3);
-      if ((subscription.interval ?? 'month') === 'month' && intervalCount > 1) {
-        return sum + Math.round(subscription.amount / intervalCount);
-      }
-      return sum + subscription.amount;
-    }, 0);
-
-  if (
-    environment &&
-    !q &&
-    !fromDate &&
-    !toDate &&
-    !status &&
-    !customer_profile_id &&
-    !stripe_subscription_id
-  ) {
-    const mrrViewResult = await (((supabaseAdmin.from('v_admin_billing_mrr' as never) as never) as {
-      select: (columns: string) => {
-        eq: (column: string, value: string) => {
-          maybeSingle: () => Promise<{
-            data: { mrr_ore: number | null } | null;
-            error: { message?: string } | null;
-          }>;
+        const payload = {
+          subscriptions: result.subscriptions,
+          environment: filters.environment ?? 'all',
+          summary: result.summary,
+          pagination: result.pagination,
         };
-      };
-    }).select('mrr_ore')).eq('environment', environment).maybeSingle();
+        const { body, etag } = createStrongEtag(payload);
+        const cacheTag = `admin:billing:subscriptions,env:${filters.environment ?? 'all'}`;
 
-    if (mrrViewResult.data?.mrr_ore !== null && mrrViewResult.data?.mrr_ore !== undefined) {
-      mrrOre = Number(mrrViewResult.data.mrr_ore);
-    } else if (mrrViewResult.error && isMissingTableError(mrrViewResult.error.message)) {
-      schemaWarnings.push(
-        'Viewen v_admin_billing_mrr saknas i databasen. MRR beräknas med fallback i API-lagret.',
-      );
-    }
-  }
+        if (request.headers.get('if-none-match') === etag) {
+          return new Response(null, {
+            status: 304,
+            headers: {
+              ETag: etag,
+              'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
+              'Cache-Tag': cacheTag,
+            },
+          });
+        }
 
-  return jsonOk({
-    subscriptions: payload,
-    environment: environment ?? 'all',
-    schemaWarnings,
-    summary: {
-      activeCount: payload.filter(
-        (subscription) => subscription.status === 'active' && !subscription.cancel_at_period_end,
-      ).length,
-      expiringCount: payload.filter((subscription) => subscription.cancel_at_period_end).length,
-      mrrOre,
-    },
-    pagination: {
-      page,
-      limit,
-      total: count || 0,
-      pageCount: Math.max(1, Math.ceil((count || 0) / limit)),
-      hasNextPage: from + (subscriptions?.length || 0) < (count || 0),
-      hasPreviousPage: page > 1,
+        return new Response(body, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
+            ETag: etag,
+            'Cache-Tag': cacheTag,
+            'X-Total-Count': String(result.pagination.total),
+            'X-Page': String(result.pagination.page),
+            'X-Page-Size': String(result.pagination.limit),
+          },
+        });
+      } catch (error) {
+        return jsonError(
+          error instanceof Error ? error.message : SERVER_COPY.serverError,
+          500,
+        );
+      }
     },
   });
 }, ['admin']);

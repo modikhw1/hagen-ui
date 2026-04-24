@@ -21,7 +21,14 @@
 import { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { getAdminRoles, type AdminRole } from '@/lib/admin/admin-roles'
+import {
+  getAdminRoles,
+  OPERATIONS_ADMIN_GRANTED_SCOPES,
+  type AdminRole,
+  type AdminScope,
+} from '@/lib/admin/admin-roles'
+
+const operationsAdminGrantedScopeSet = new Set<string>(OPERATIONS_ADMIN_GRANTED_SCOPES)
 import { isMissingRelationError } from '@/lib/admin/schema-guards'
 import { jsonError, jsonOk } from '@/lib/server/api-response'
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin'
@@ -34,6 +41,7 @@ export interface AuthenticatedUser {
   role: UserRole
   is_admin: boolean
   admin_roles: AdminRole[]
+  matching_data: Record<string, unknown> | null
 }
 
 /**
@@ -49,6 +57,8 @@ export class AuthError extends Error {
   }
 }
 
+import { getAuthenticatedUser } from './shared-auth';
+
 /**
  * Validates JWT from request and returns authenticated user with role.
  *
@@ -63,96 +73,14 @@ export async function validateApiRequest(
   _request: NextRequest,
   requiredRoles: UserRole[] = ['admin']
 ): Promise<AuthenticatedUser> {
-  const cookieStore = await cookies()
-
-  if (
-    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    !process.env.SUPABASE_SERVICE_ROLE_KEY
-  ) {
-    throw new AuthError(500, 'Servermiljon ar inte korrekt konfigurerad')
-  }
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseAnonKey,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: () => {}, // Read-only for API routes
-      },
-    }
-  )
-
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-
-  if (sessionError || !session) {
-    throw new AuthError(401, 'Du maste logga in')
-  }
-
-  const admin = createSupabaseAdmin()
-  const [{ data: profile, error: profileError }, { data: roles, error: roleError }] =
-    await Promise.all([
-      admin
-        .from('profiles')
-        .select('email, is_admin, role')
-        .eq('id', session.user.id)
-        .maybeSingle(),
-      admin
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', session.user.id),
-    ])
-
-  if (profileError) {
-    throw new AuthError(500, profileError.message)
-  }
-
-  if (roleError) {
-    throw new AuthError(500, roleError.message)
-  }
-
-  let role: UserRole = 'user'
-  let isAdmin = false
-
-  if (roles?.some((entry) => entry.role === 'admin')) {
-    role = 'admin'
-    isAdmin = true
-  } else if (roles?.some((entry) => entry.role === 'content_manager')) {
-    role = 'content_manager'
-  } else if (roles?.some((entry) => entry.role === 'customer')) {
-    role = 'customer'
-  } else {
-    role = (profile?.role as UserRole | null) ?? 'user'
-    isAdmin = Boolean(profile?.is_admin)
-  }
-
-  let adminRoles: AdminRole[] = []
-  try {
-    adminRoles = await getAdminRoles(admin, session.user.id)
-  } catch (error) {
-    if (!(error instanceof Error) || !isMissingRelationError(error.message)) {
-      throw error
-    }
-  }
-
-  const authenticatedUser: AuthenticatedUser = {
-    id: session.user.id,
-    email: session.user.email ?? profile?.email ?? null,
-    role,
-    is_admin: isAdmin,
-    admin_roles: adminRoles,
-  }
+  const authenticatedUser = await getAuthenticatedUser();
 
   if (
     requiredRoles.length > 0 &&
     !requiredRoles.includes(authenticatedUser.role) &&
     !(requiredRoles.includes('admin') && authenticatedUser.is_admin)
   ) {
-    throw new AuthError(403, 'Du saknar behorighet')
+    throw new AuthError(403, 'Du saknar behörighet')
   }
 
   return authenticatedUser
@@ -256,14 +184,21 @@ export function hasRole(user: AuthenticatedUser, roles: UserRole | UserRole[]): 
  */
 export function requireAdmin(user: AuthenticatedUser): void {
   if (!user.is_admin && user.role !== 'admin') {
-    throw new AuthError(403, 'Adminbehorighet kravs')
+    throw new AuthError(403, 'Adminbehörighet krävs')
   }
 }
 
 export function hasAdminScope(
   user: AuthenticatedUser,
-  requiredScope: AdminRole,
+  requiredScope: AdminScope,
 ): boolean {
+  if (
+    user.role === 'content_manager' &&
+    (requiredScope === 'demos.read' || requiredScope === 'demos.write')
+  ) {
+    return true
+  }
+
   if (!user.is_admin && user.role !== 'admin') {
     return false
   }
@@ -273,19 +208,35 @@ export function hasAdminScope(
     return true
   }
 
+  if (user.admin_roles.includes('super_admin')) {
+    return true
+  }
+
   if (requiredScope === 'operations_admin') {
     return (
       user.admin_roles.includes('operations_admin') ||
-      user.admin_roles.includes('super_admin')
+      OPERATIONS_ADMIN_GRANTED_SCOPES.every((scope) => user.admin_roles.includes(scope))
     )
   }
 
-  return user.admin_roles.includes('super_admin')
+  if (user.admin_roles.includes(requiredScope)) {
+    return true
+  }
+
+  if (
+    user.admin_roles.includes('operations_admin') &&
+    requiredScope !== 'super_admin' &&
+    operationsAdminGrantedScopeSet.has(requiredScope)
+  ) {
+    return true
+  }
+
+  return false
 }
 
 export function requireAdminScope(
   user: AuthenticatedUser,
-  requiredScope: AdminRole,
+  requiredScope: AdminScope,
   message?: string,
 ): void {
   if (!hasAdminScope(user, requiredScope)) {
@@ -293,10 +244,18 @@ export function requireAdminScope(
       403,
       message ??
         (requiredScope === 'super_admin'
-          ? 'Endast super-admin kan utfora den har atgarden'
-          : 'Du saknar ratt admin-behorighet'),
+          ? 'Endast super-admin kan utföra den här åtgärden'
+          : 'Du saknar rätt admin-behörighet'),
     )
   }
+}
+
+export function requireScope(
+  user: AuthenticatedUser,
+  requiredScope: AdminScope,
+  message?: string,
+): void {
+  requireAdminScope(user, requiredScope, message)
 }
 
 /**
@@ -308,6 +267,6 @@ export function requireAdminScope(
  */
 export function requireContentManager(user: AuthenticatedUser): void {
   if (!user.is_admin && !['admin', 'content_manager'].includes(user.role)) {
-    throw new AuthError(403, 'CM- eller adminbehorighet kravs')
+    throw new AuthError(403, 'CM- eller adminbehörighet krävs')
   }
 }

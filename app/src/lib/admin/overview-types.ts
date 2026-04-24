@@ -1,3 +1,6 @@
+import type { AttentionItem } from '@/lib/admin-derive/attention';
+import type { cmAggregate } from '@/lib/admin-derive/cm-pulse';
+
 export type OverviewPayload = {
   customers: Array<{
     id: string;
@@ -21,9 +24,9 @@ export type OverviewPayload = {
     id: string;
     name: string;
     email: string | null;
-    color: string | null;
     profile_id: string | null;
     avatar_url: string | null;
+    color?: string | null;
   }>;
   interactions: Array<{
     cm_id: string | null;
@@ -42,6 +45,8 @@ export type OverviewPayload = {
   invoices: Array<{
     id: string;
     stripe_invoice_id?: string | null;
+    invoice_number?: string | null;
+    hosted_invoice_url?: string | null;
     customer_name?: string;
     customer_id?: string;
     amount_due: number;
@@ -83,10 +88,11 @@ export type OverviewPayload = {
     entries: Array<{
       service: string;
       calls_30d: number;
+      // cost_30d is always expressed in ore.
       cost_30d: number;
       trend: number[];
     }>;
-    total: number;
+    totalOre: number;
   };
   demos: {
     sent: number;
@@ -157,4 +163,37 @@ export type OverviewPayload = {
     updated_at: string;
   }>;
   attentionFeedSeenAt?: string | null;
+};
+
+export type OverviewMetricCard = {
+  label: string;
+  value: string;
+  sub?: string;
+  delta?: {
+    text: string;
+    tone: 'success' | 'muted' | 'destructive';
+  };
+  trend?: number[];
+};
+
+export type OverviewDerivedPayload = {
+  metrics: {
+    revenueCard: OverviewMetricCard;
+    activeCard: OverviewMetricCard;
+    demosCard: OverviewMetricCard;
+    costsCard: OverviewMetricCard;
+  };
+  cmPulse: Array<{
+    member: OverviewPayload['team'][number];
+    aggregate: ReturnType<typeof cmAggregate>;
+  }>;
+  topAttention: AttentionItem[];
+  attentionItems: AttentionItem[];
+  snoozedAttentionItems: AttentionItem[];
+  snoozedCount: number;
+  costs: {
+    entries: OverviewPayload['serviceCosts']['entries'];
+    totalOre: number;
+  };
+  attentionFeedSeenAt: string | null;
 };

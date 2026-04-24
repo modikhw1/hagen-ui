@@ -6,7 +6,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 // GET - Check if user has a profile
-export const GET = withAuth(async (request: NextRequest, user) => {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');

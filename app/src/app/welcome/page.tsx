@@ -42,8 +42,8 @@ export default function WelcomePage() {
 
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         router.replace('/login?redirect=/welcome');
         return;
       }

@@ -1,22 +1,40 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { useMemo, useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
+import { useForm, useWatch } from 'react-hook-form';
+import { toast } from 'sonner';
+import { ModeButton } from '@/components/admin/_primitives';
+import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
+import { AdminField } from '@/components/admin/ui/form/AdminField';
+import { addAdminBreadcrumb, captureAdminError } from '@/lib/admin/admin-telemetry';
+import { apiClient } from '@/lib/admin/api-client';
+import { cmAbsenceCopy } from '@/lib/admin/copy/team';
+import { invalidateAdminScopes } from '@/lib/admin/invalidate';
+import { absenceSchema, type CmAbsenceInput } from '@/lib/admin/schemas/team';
+import { todayDateInput } from '@/lib/admin/time';
 import type { TeamMemberView } from '@/hooks/admin/useTeam';
 
-const ABSENCE_TYPES = [
-  { value: 'vacation', label: 'Semester' },
-  { value: 'sick', label: 'Sjuk' },
-  { value: 'parental_leave', label: 'Foraldraledig' },
-  { value: 'training', label: 'Utbildning' },
-  { value: 'other', label: 'Ovrigt' },
-] as const;
+type AbsenceResponse = {
+  absence?: { id: string };
+  payrollImpact?: {
+    primaryCmEarnsDuringAbsence: boolean;
+    coveringCmEarns: boolean;
+  };
+  error?: string;
+};
+
+function createDefaultValues(today: string): CmAbsenceInput {
+  return {
+    absence_type: 'vacation',
+    starts_on: today,
+    ends_on: today,
+    backup_cm_id: null,
+    compensation_mode: 'covering_cm',
+    note: null,
+  };
+}
 
 export default function CMAbsenceModal({
   open,
@@ -31,218 +49,194 @@ export default function CMAbsenceModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const [absenceType, setAbsenceType] = useState<(typeof ABSENCE_TYPES)[number]['value']>('vacation');
-  const [startsOn, setStartsOn] = useState(today);
-  const [endsOn, setEndsOn] = useState(today);
-  const [backupCmId, setBackupCmId] = useState('');
-  const [compensationMode, setCompensationMode] = useState<'covering_cm' | 'primary_cm'>('covering_cm');
-  const [note, setNote] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const today = todayDateInput();
+  const queryClient = useQueryClient();
+  const [formError, setFormError] = useState<string | null>(null);
+  
+  const form = useForm<CmAbsenceInput>({
+    resolver: zodResolver(absenceSchema),
+    defaultValues: createDefaultValues(today),
+    mode: 'onBlur',
+  });
+
+  const {
+    control,
+    formState: { errors, isSubmitting },
+    handleSubmit,
+    register,
+    setValue,
+  } = form;
+
+  const startsOn = useWatch({ control, name: 'starts_on' });
+  const backupCmId = useWatch({ control, name: 'backup_cm_id' });
+  const compensationMode = useWatch({ control, name: 'compensation_mode' });
 
   const backupOptions = useMemo(
     () => team.filter((member) => member.id !== cm.id && member.is_active),
     [cm.id, team],
   );
 
-  useEffect(() => {
-    if (!open) return;
+  const payrollPreview = useMemo(
+    () => ({
+      primaryCmEarnsDuringAbsence: compensationMode === 'primary_cm',
+      coveringCmEarns: compensationMode === 'covering_cm' && Boolean(backupCmId),
+    }),
+    [backupCmId, compensationMode],
+  );
 
-    setAbsenceType('vacation');
-    setStartsOn(today);
-    setEndsOn(today);
-    setBackupCmId('');
-    setCompensationMode('covering_cm');
-    setNote('');
-    setError(null);
-  }, [open, today]);
-
-  const handleSave = async () => {
-    setSubmitting(true);
-    setError(null);
+  const handleSave = handleSubmit(async (values) => {
+    setFormError(null);
+    const payload = {
+      cm_id: cm.id,
+      backup_cm_id: values.backup_cm_id,
+      absence_type: values.absence_type,
+      compensation_mode: values.compensation_mode,
+      starts_on: values.starts_on,
+      ends_on: values.ends_on,
+      note: values.note,
+    };
 
     try {
-      const response = await fetch('/api/admin/team/absences', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          cm_id: cm.id,
-          backup_cm_id: backupCmId || null,
-          absence_type: absenceType,
-          compensation_mode: compensationMode,
-          starts_on: startsOn,
-          ends_on: endsOn,
-          note: note || null,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      addAdminBreadcrumb('admin.team.absence_create', payload);
+      const result = await apiClient.post<AbsenceResponse>('/api/admin/team/absences', payload);
+      const description =
+        result.payrollImpact?.primaryCmEarnsDuringAbsence && result.payrollImpact?.coveringCmEarns
+          ? `${cmAbsenceCopy.payrollImpactPrimaryRetained}. ${cmAbsenceCopy.payrollImpactBackupRetained}.`
+          : result.payrollImpact?.primaryCmEarnsDuringAbsence
+            ? cmAbsenceCopy.payrollImpactPrimaryRetained
+            : result.payrollImpact?.coveringCmEarns
+              ? cmAbsenceCopy.payrollImpactBackupRetained
+              : cmAbsenceCopy.payrollImpactBackupSuppressed;
 
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte skapa franvaro');
-      }
-
+      await invalidateAdminScopes(queryClient, ['team']);
+      toast.success(cmAbsenceCopy.savedTitle, { description });
       onSaved();
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error ? submitError.message : 'Kunde inte skapa franvaro',
-      );
-    } finally {
-      setSubmitting(false);
+      onClose();
+    } catch (error) {
+      captureAdminError('admin.team.absence_create', error, payload);
+      setFormError(error instanceof Error ? error.message : cmAbsenceCopy.saveFailed);
     }
-  };
+  });
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Satt franvaro</DialogTitle>
-          <DialogDescription>
-            Registrera franvaro, datumintervall och eventuell ersattare for {cm.name}.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-3">
-          <Field label="Typ">
-            <select
-              value={absenceType}
-              onChange={(event) => setAbsenceType(event.target.value as (typeof ABSENCE_TYPES)[number]['value'])}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            >
-              {ABSENCE_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Startdatum">
-              <input
-                type="date"
-                value={startsOn}
-                min={today}
-                onChange={(event) => setStartsOn(event.target.value)}
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-              />
-            </Field>
-            <Field label="Slutdatum">
-              <input
-                type="date"
-                value={endsOn}
-                min={startsOn}
-                onChange={(event) => setEndsOn(event.target.value)}
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-              />
-            </Field>
-          </div>
-
-          <Field label="Ersattare">
-            <select
-              value={backupCmId}
-              onChange={(event) => setBackupCmId(event.target.value)}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            >
-              <option value="">Ingen ersattare</option>
-              {backupOptions.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field label="Provision under franvaro">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <ModeCard
-                active={compensationMode === 'covering_cm'}
-                onClick={() => setCompensationMode('covering_cm')}
-                title="Ersattare far payout"
-                description="Operativt ansvar och payroll ligger pa ersattaren."
-              />
-              <ModeCard
-                active={compensationMode === 'primary_cm'}
-                onClick={() => setCompensationMode('primary_cm')}
-                title="Ordinarie CM behaller payout"
-                description="Puls suppressas men payroll ligger kvar pa ordinarie CM."
-              />
-            </div>
-          </Field>
-
-          <Field label="Notering">
-            <textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            />
-          </Field>
-
-          {error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
-          <button
-            onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-sm"
-          >
+    <AdminFormDialog
+      open={open}
+      onClose={onClose}
+      title={cmAbsenceCopy.title}
+      description={cmAbsenceCopy.description(cm.name)}
+      size="md"
+      footer={
+        <>
+          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent">
             Avbryt
           </button>
           <button
-            onClick={() => void handleSave()}
-            disabled={submitting}
+            onClick={handleSave}
+            disabled={isSubmitting}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {submitting ? 'Sparar...' : 'Spara franvaro'}
+            {isSubmitting ? cmAbsenceCopy.saving : cmAbsenceCopy.save}
           </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="grid gap-1.5 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-function ModeCard({
-  active,
-  onClick,
-  title,
-  description,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  description: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-md border px-3 py-3 text-left ${
-        active ? 'border-primary bg-primary/5' : 'border-border bg-background'
-      }`}
+        </>
+      }
     >
-      <div className="text-sm font-semibold text-foreground">{title}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{description}</div>
-    </button>
+      <div className="space-y-6">
+        <AdminField label={cmAbsenceCopy.type} error={errors.absence_type?.message}>
+          <select
+            {...register('absence_type')}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+          >
+            {Object.entries(cmAbsenceCopy.typeLabels).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+        </AdminField>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <AdminField label={cmAbsenceCopy.startsOn} error={errors.starts_on?.message}>
+            <input
+              type="date"
+              min={today}
+              {...register('starts_on')}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+            />
+          </AdminField>
+          <AdminField label={cmAbsenceCopy.endsOn} error={errors.ends_on?.message}>
+            <input
+              type="date"
+              min={startsOn || today}
+              {...register('ends_on')}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+            />
+          </AdminField>
+        </div>
+
+        <AdminField label={cmAbsenceCopy.backupCm} error={errors.backup_cm_id?.message}>
+          <select
+            value={backupCmId ?? ''}
+            onChange={(e) => setValue('backup_cm_id', e.target.value || null, { shouldDirty: true, shouldValidate: true })}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+          >
+            <option value="">{cmAbsenceCopy.noBackupCm}</option>
+            {backupOptions.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+        </AdminField>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Ersättning</label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <ModeButton
+              active={compensationMode === 'covering_cm'}
+              onClick={() => setValue('compensation_mode', 'covering_cm', { shouldDirty: true, shouldValidate: true })}
+              title={cmAbsenceCopy.replacementEarns}
+              description={cmAbsenceCopy.replacementEarnsDescription}
+            />
+            <ModeButton
+              active={compensationMode === 'primary_cm'}
+              onClick={() => setValue('compensation_mode', 'primary_cm', { shouldDirty: true, shouldValidate: true })}
+              title={cmAbsenceCopy.primaryEarns}
+              description={cmAbsenceCopy.primaryEarnsDescription}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-border bg-secondary/20 p-4">
+          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+            {cmAbsenceCopy.payrollImpactTitle}
+          </div>
+          <div className="space-y-1.5 text-xs">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Ordinarie CM</span>
+              <span className="font-semibold text-foreground">
+                {payrollPreview.primaryCmEarnsDuringAbsence ? 'Behåller ersättning' : 'Ingen ersättning'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Ersättare</span>
+              <span className="font-semibold text-foreground">
+                {payrollPreview.coveringCmEarns ? 'Får ersättning' : 'Ingen ersättning'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <AdminField label={cmAbsenceCopy.note} error={errors.note?.message}>
+          <textarea
+            {...register('note')}
+            rows={2}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+            placeholder="Valfri notering..."
+          />
+        </AdminField>
+
+        {formError && (
+          <div className="rounded-md border border-status-danger-fg/30 bg-status-danger-bg px-3 py-2 text-sm text-status-danger-fg">
+            {formError}
+          </div>
+        )}
+      </div>
+    </AdminFormDialog>
   );
 }

@@ -1,7 +1,9 @@
 import { NextRequest } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
-import { deleteCmAbsence, listEnrichedCmAbsences } from '@/lib/admin/cm-absences';
+import { endCmAbsence, getCmAbsenceById } from '@/lib/admin/cm-absences';
 import { recordAuditLog } from '@/lib/admin/audit-log';
+import { revalidateAdminTeamViews } from '@/lib/admin/cache-tags';
+import { requireScope } from '@/lib/auth/api-auth';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
@@ -11,28 +13,34 @@ interface RouteParams {
 
 export const DELETE = withAuth(async (_request: NextRequest, user, { params }: RouteParams) => {
   try {
+    requireScope(user, 'team.absences.write');
+
     const { absenceId } = await params;
     const supabaseAdmin = createSupabaseAdmin();
-    const existing = await listEnrichedCmAbsences(supabaseAdmin, { limit: 200 });
-    const absence = existing.find((entry) => entry.id === absenceId) ?? null;
+    const before = await getCmAbsenceById(supabaseAdmin, absenceId);
+    if (!before) {
+      return jsonError('Frånvaro hittades inte', 404);
+    }
 
-    await deleteCmAbsence(supabaseAdmin, absenceId);
+    const ended = await endCmAbsence(supabaseAdmin, absenceId);
 
     await recordAuditLog(supabaseAdmin, {
       actorUserId: user.id,
       actorEmail: user.email,
       actorRole: user.role,
-      action: 'admin.team.absence_deleted',
+      action: 'admin.team.absence_end',
       entityType: 'cm_absence',
       entityId: absenceId,
-      beforeState: absence as unknown as Record<string, unknown> | null,
-      afterState: null,
+      beforeState: before as unknown as Record<string, unknown>,
+      afterState: ended as unknown as Record<string, unknown>,
     });
 
-    return jsonOk({ success: true });
+    revalidateAdminTeamViews();
+
+    return jsonOk({ success: true, absence: ended });
   } catch (error) {
     return jsonError(
-      error instanceof Error ? error.message : 'Kunde inte ta bort franvaro',
+      error instanceof Error ? error.message : 'Kunde inte avsluta frånvaro',
       500,
     );
   }

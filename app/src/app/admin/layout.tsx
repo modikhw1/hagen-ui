@@ -1,28 +1,18 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import AdminRealtimeBridge from '@/components/admin/AdminRealtimeBridge';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { EnvBand } from '@/components/admin/ui/EnvBand';
 import { useAuth } from '@/contexts/AuthContext';
+import { SHELL_COPY } from '@/lib/admin/copy/shell-strings';
 import { resolveAppRole } from '@/lib/auth/navigation';
 
 export default function AdminAuthShell({ children }: { children: ReactNode }) {
   const { user, profile, loading, signOut } = useAuth();
   const router = useRouter();
   const role = profile ? resolveAppRole(profile) : null;
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: {
-          queries: {
-            staleTime: 60_000,
-            refetchOnWindowFocus: false,
-          },
-        },
-      }),
-  );
-
   useEffect(() => {
     if (!loading && (!user || (!profile?.is_admin && role !== 'admin'))) {
       router.replace('/login?redirect=/admin');
@@ -35,14 +25,15 @@ export default function AdminAuthShell({ children }: { children: ReactNode }) {
   };
 
   if (loading || !user) {
-    return <div className="p-10 text-sm text-muted-foreground">Laddar admin...</div>;
+    return <div className="p-10 text-sm text-muted-foreground">{SHELL_COPY.loadingShell}</div>;
   }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
+      <AdminRealtimeBridge />
       <AdminLayout userEmail={user.email || 'admin'} onLogout={handleLogout}>
         {children}
       </AdminLayout>
-    </QueryClientProvider>
+    </>
   );
 }

@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   changeCustomerAssignment: vi.fn(),
   createCmAbsence: vi.fn(),
   syncOperationalSubscriptionState: vi.fn(),
+  persistCustomerSubscriptionPriceChange: vi.fn(),
+  recordCustomerInviteToken: vi.fn(),
   sendCustomerInvite: vi.fn(),
   ensureStripeSubscriptionForProfile: vi.fn(),
   upsertSubscriptionMirror: vi.fn(),
@@ -55,6 +57,11 @@ vi.mock('@/lib/admin/cm-absences', () => ({
 
 vi.mock('@/lib/admin/subscription-operational-sync', () => ({
   syncOperationalSubscriptionState: mocks.syncOperationalSubscriptionState,
+}));
+
+vi.mock('@/lib/admin/customer-billing-store', () => ({
+  persistCustomerSubscriptionPriceChange: mocks.persistCustomerSubscriptionPriceChange,
+  recordCustomerInviteToken: mocks.recordCustomerInviteToken,
 }));
 
 vi.mock('@/lib/customers/invite', () => ({
@@ -112,6 +119,7 @@ const {
   changeCustomerAssignment,
   archiveStripeCustomer,
   syncOperationalSubscriptionState,
+  persistCustomerSubscriptionPriceChange,
   resolveAccountManagerAssignment,
   deriveTikTokHandle,
   toCanonicalTikTokProfileUrl,
@@ -119,7 +127,7 @@ const {
 } = mocks;
 
 function createContext(overrides: Partial<AdminActionContext> = {}): AdminActionContext {
-  return {
+  const merged = {
     id: 'customer-1',
     requestId: 'req-test-1',
     user: {
@@ -129,6 +137,8 @@ function createContext(overrides: Partial<AdminActionContext> = {}): AdminAction
       is_admin: true,
       admin_roles: ['super_admin'],
     },
+    clientIp: null,
+    userAgent: null,
     supabaseAdmin: {
       from: vi.fn(),
       auth: {
@@ -161,6 +171,12 @@ function createContext(overrides: Partial<AdminActionContext> = {}): AdminAction
       user_id: 'customer-user-1',
     } as AdminActionContext['beforeProfile'],
     ...overrides,
+  } as AdminActionContext;
+
+  return {
+    ...merged,
+    clientIp: merged.clientIp ?? null,
+    userAgent: merged.userAgent ?? null,
   };
 }
 
@@ -194,7 +210,10 @@ describe('customer action handlers', () => {
     const result = await handleActivate(ctx, { action: 'activate' });
 
     expect(result).toMatchObject({
-      customer: expect.objectContaining({ status: 'active' }),
+      success: true,
+      data: {
+        customer: expect.objectContaining({ status: 'active' }),
+      },
     });
     expect(recordAuditLog).toHaveBeenCalledOnce();
   });
@@ -207,7 +226,10 @@ describe('customer action handlers', () => {
 
     const result = await handleSendReminder(ctx, { action: 'send_reminder' });
 
-    expect(result).toMatchObject({ already_registered: true });
+    expect(result).toMatchObject({
+      success: true,
+      data: { already_registered: true },
+    });
   });
 
   it('resends invite via shared invite helper', async () => {
@@ -223,7 +245,9 @@ describe('customer action handlers', () => {
 
     expect(result).toMatchObject({
       success: true,
-      message: 'Ny invite skickades.',
+      data: {
+        message: 'Ny invite skickades.',
+      },
     });
     expect(sendCustomerInvite).toHaveBeenCalledOnce();
   });
@@ -233,8 +257,10 @@ describe('customer action handlers', () => {
 
     const result = await handleReactivate(ctx, { action: 'reactivate_archive' });
 
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(404);
+    expect(result).toMatchObject({
+      success: false,
+      statusCode: 404,
+    });
   });
 
   it('returns 404 when temporary coverage is attempted without a profile snapshot', async () => {
@@ -249,8 +275,10 @@ describe('customer action handlers', () => {
       compensation_mode: 'covering_cm',
     });
 
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(404);
+    expect(result).toMatchObject({
+      success: false,
+      statusCode: 404,
+    });
   });
 
   it('cancels a subscription and records audit metadata', async () => {
@@ -320,18 +348,33 @@ describe('customer action handlers', () => {
     applySubscriptionPriceChange.mockResolvedValue({
       effectiveDate: '2026-05-01',
       subscription: { id: 'sub_123' },
+      stripeScheduleId: null,
+      stripePriceId: 'price_new',
     });
-    const profile = {
+    persistCustomerSubscriptionPriceChange.mockResolvedValue({
       id: 'customer-1',
       stripe_subscription_id: 'sub_123',
       paused_until: null,
       monthly_price: 2000,
       upcoming_monthly_price: null,
       upcoming_price_effective_date: null,
-    };
-    const chain = mockUpdateSelectSingle(profile);
+    });
+    const lockDeleteLt = vi.fn().mockResolvedValue({ error: null });
+    const lockDeleteEq = vi.fn().mockResolvedValue({ error: null });
+    const lockDelete = vi.fn(() => ({
+      eq: vi.fn(() => ({
+        lt: lockDeleteLt,
+        eq: lockDeleteEq,
+      })),
+    }));
+    const lockInsert = vi.fn().mockResolvedValue({ error: null });
     const ctx = createContext({
-      supabaseAdmin: { from: vi.fn(() => ({ update: chain.update })) } as never,
+      supabaseAdmin: {
+        from: vi.fn(() => ({
+          insert: lockInsert,
+          delete: lockDelete,
+        })),
+      } as never,
     });
 
     const result = await handleChangeSubscriptionPrice(ctx, {
@@ -342,8 +385,11 @@ describe('customer action handlers', () => {
 
     expect(result).toMatchObject({
       success: true,
-      effective_date: '2026-05-01',
+      data: {
+        effective_date: '2026-05-01',
+      },
     });
+    expect(persistCustomerSubscriptionPriceChange).toHaveBeenCalledOnce();
   });
 
   it('changes account manager and returns assignment payload', async () => {
@@ -366,7 +412,9 @@ describe('customer action handlers', () => {
 
     expect(result).toMatchObject({
       success: true,
-      assignment: expect.objectContaining({ nextCmId: 'cm-2' }),
+      data: {
+        assignment: expect.objectContaining({ nextCmId: 'cm-2' }),
+      },
     });
   });
 
@@ -400,8 +448,10 @@ describe('customer action handlers', () => {
       scope_items: [],
     });
 
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(400);
+    expect(result).toMatchObject({
+      success: false,
+      statusCode: 400,
+    });
   });
 
   it('archives a customer and returns cleanup metadata', async () => {
@@ -416,7 +466,9 @@ describe('customer action handlers', () => {
     expect(requireAdminScope).toHaveBeenCalledOnce();
     expect(result).toMatchObject({
       success: true,
-      message: 'Kunden arkiverades.',
+      data: {
+        message: 'Kunden arkiverades.',
+      },
     });
   });
 });

@@ -16,6 +16,7 @@ function StripeCheckoutStep({
   onComplete: () => void;
   onSkip?: () => void;
 }) {
+  void onComplete;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { user } = useAuth();

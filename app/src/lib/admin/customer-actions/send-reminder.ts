@@ -2,8 +2,11 @@ import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
-import { jsonError } from '@/lib/server/api-response';
-import { buildCustomerActionAuditMetadata } from './shared';
+import {
+  actionFailure,
+  actionSuccess,
+  buildCustomerActionAuditMetadata,
+} from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type SendReminderInput = Extract<CustomerAction, { action: 'send_reminder' }>;
@@ -20,7 +23,7 @@ export async function handleSendReminder(
     .single();
 
   if (error) {
-    return jsonError(error.message, 500);
+    return actionFailure({ error: error.message, statusCode: 500 });
   }
 
   await recordAuditLog(ctx.supabaseAdmin, {
@@ -34,9 +37,9 @@ export async function handleSendReminder(
     metadata: buildCustomerActionAuditMetadata(ctx),
   });
 
-  return {
+  return actionSuccess({
     message:
-      'Kunden har redan ett konto och kan logga in for att fortsatta.',
+      'Kunden har redan ett konto och kan logga in för att fortsätta.',
     already_registered: true,
-  };
+  });
 }

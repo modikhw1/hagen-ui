@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap');
-@config "../../tailwind.config.ts";
+@config "../../tailwind.config.mjs";
 @import "tailwindcss";
+@import "../styles/admin-tokens.css";
 
 @layer base {
   :root {
@@ -53,6 +54,85 @@
     --sidebar-accent-foreground: 24 53% 19%;
     --sidebar-border: 24 53% 19% / 0.08;
     --sidebar-ring: 24 53% 19%;
+
+    color-scheme: light;
+
+    /* Gameplan editor tokens */
+    --gp-surface: 0 0% 100%;
+    --gp-surface-soft: 28 16% 95%;
+    --gp-text-body: 30 14% 26%;
+    --gp-text-caption: 28 14% 46%;
+    --gp-text-muted: 27 13% 55%;
+    --gp-heading: 25 14% 9%;
+    --gp-link-chip-text: 21 47% 28%;
+    --gp-link-chip-icon: 27 19% 43%;
+    --gp-border-subtle: 24 53% 19% / 0.04;
+    --gp-border-soft: 24 53% 19% / 0.08;
+    --gp-border-strong: 24 53% 19% / 0.15;
+    --gp-resize-handle: 21 47% 28% / 0.15;
+    --gp-image-selected-outline: 21 47% 28% / 0.30;
+
+    /* Status-skikt — semantiska tillstånd för operatörsvyer */
+    --status-success-bg: 142 50% 92%;
+    --status-success-fg: 142 70% 28%;
+    --status-warning-bg: 38 95% 92%;
+    --status-warning-fg: 30 80% 32%;
+    --status-danger-bg: 0 75% 94%;
+    --status-danger-fg: 0 70% 38%;
+    --status-info-bg: 210 80% 94%;
+    --status-info-fg: 215 70% 38%;
+    --status-neutral-bg: 30 12% 92%;
+    --status-neutral-fg: 30 18% 35%;
+
+    /* Chart-skikt — gemensamt för alla diagram */
+    --chart-grid: 30 10% 88%;
+    --chart-axis: 30 10% 45%;
+    --chart-line-primary: 24 53% 35%;
+    --chart-line-muted: 30 10% 55%;
+    --chart-area-primary: 24 53% 35%;          /* med opacity i komponent */
+    --chart-point-default: 30 10% 50%;
+    --chart-point-hit: 38 80% 45%;
+    --chart-point-viral: 0 70% 50%;
+
+    /* Modal-skikt — fasta värden så att alla modaler ser likadana ut */
+    --modal-max-h: 80vh;
+    --modal-header-h: 64px;
+    --modal-footer-h: 64px;
+
+    /* Team CM-färger — fasta mättade färger för avatar-fallbacks */
+    --team-cm-1: 15 80% 60%;
+    --team-cm-2: 35 85% 55%;
+    --team-cm-3: 55 75% 50%;
+    --team-cm-4: 110 60% 55%;
+    --team-cm-5: 160 70% 45%;
+    --team-cm-6: 190 80% 50%;
+    --team-cm-7: 215 75% 55%;
+    --team-cm-8: 250 65% 65%;
+    --team-cm-9: 280 70% 60%;
+    --team-cm-10: 320 75% 60%;
+    --team-cm-11: 345 80% 55%;
+    --team-cm-12: 25 15% 45%;
+  }
+
+  .dark {
+    --status-success-bg: 142 30% 18%;
+    --status-success-fg: 142 60% 65%;
+    --status-warning-bg: 38 35% 18%;
+    --status-warning-fg: 38 80% 70%;
+    --status-danger-bg: 0 35% 18%;
+    --status-danger-fg: 0 70% 70%;
+    --status-info-bg: 210 35% 20%;
+    --status-info-fg: 210 80% 75%;
+    --status-neutral-bg: 30 12% 22%;
+    --status-neutral-fg: 30 18% 75%;
+    --chart-grid: 30 8% 25%;
+    --chart-axis: 30 8% 65%;
+    --chart-line-primary: 24 53% 65%;
+    --chart-line-muted: 30 10% 45%;
+    --chart-area-primary: 24 53% 65%;
+    --chart-point-default: 30 10% 50%;
+    --chart-point-hit: 38 80% 55%;
+    --chart-point-viral: 0 70% 60%;
   }
 
   * { @apply border-border; }
@@ -185,9 +265,9 @@
 /* ============================================ */
 
 .gameplan-editor-shell {
-  background: #FFFFFF;
+  background: hsl(var(--gp-surface));
   border-radius: 12px;
-  border: 1px solid rgba(74, 47, 24, 0.08);
+  border: 1px solid hsl(var(--gp-border-soft));
   overflow: hidden;
 }
 
@@ -204,7 +284,7 @@
 .gameplan-editor-content {
   font-family: 'Lora', Georgia, serif;
   font-size: 14px;
-  color: #4A4239;
+  color: hsl(var(--gp-text-body));
   line-height: 1.6;
 }
 
@@ -213,7 +293,7 @@
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
   font-weight: 600;
-  color: #1A1612;
+  color: hsl(var(--gp-heading));
   margin: 20px 0 6px;
 }
 
@@ -225,7 +305,7 @@
 .gp-rich-text p,
 .gameplan-editor-content p {
   margin: 0 0 10px;
-  color: #4A4239;
+  color: hsl(var(--gp-text-body));
 }
 
 .gp-rich-text ul,
@@ -254,7 +334,7 @@
 
 .gp-rich-text a:not(.gp-link-chip),
 .gameplan-editor-content a:not(.gp-link-chip) {
-  color: #6B4423;
+  color: hsl(var(--gp-link-chip-text));
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -287,7 +367,7 @@
   margin-top: 6px;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 12px;
-  color: #7D6E5D;
+  color: hsl(var(--gp-text-caption));
   font-style: italic;
   line-height: 1.5;
 }
@@ -314,7 +394,7 @@
   margin-top: 4px;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 11px;
-  color: #9D8E7D;
+  color: hsl(var(--gp-text-muted));
   text-align: center;
   line-height: 1.4;
 }
@@ -336,13 +416,13 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: #F5F2EE;
+  background: hsl(var(--gp-surface-soft));
   border-radius: 6px;
-  border: 1px solid rgba(74, 47, 24, 0.04);
+  border: 1px solid hsl(var(--gp-border-subtle));
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
   font-weight: 500;
-  color: #6B4423 !important;
+  color: hsl(var(--gp-link-chip-text)) !important;
   text-decoration: none !important;
   vertical-align: middle;
 }
@@ -352,7 +432,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #8B7355;
+  color: hsl(var(--gp-link-chip-icon));
   flex-shrink: 0;
 }
 
@@ -371,7 +451,7 @@
   float: left;
   height: 0;
   pointer-events: none;
-  color: #9D8E7D;
+  color: hsl(var(--gp-text-muted));
 }
 
 .gp-resize-handle {
@@ -387,7 +467,7 @@
 
 .gp-resize-handle:hover,
 .gp-resize-handle:active {
-  background: rgba(107, 68, 35, 0.15);
+  background: hsl(var(--gp-resize-handle));
 }
 
 .gp-resize-handle--left {
@@ -401,7 +481,7 @@
 }
 
 .gp-image--selected {
-  outline: 2px solid rgba(107, 68, 35, 0.3);
+  outline: 2px solid hsl(var(--gp-image-selected-outline));
   outline-offset: 4px;
   border-radius: 8px;
 }
@@ -409,13 +489,13 @@
 .gp-image-caption-input {
   width: 100%;
   margin-top: 6px;
-  border: 1px solid rgba(74, 47, 24, 0.15);
+  border: 1px solid hsl(var(--gp-border-strong));
   border-radius: 8px;
   font-size: 12px;
-  color: #7D6E5D;
+  color: hsl(var(--gp-text-caption));
   font-style: italic;
   outline: none;
-  background: #FFFFFF;
+  background: hsl(var(--gp-surface));
   padding: 8px 10px;
 }
 
@@ -425,19 +505,19 @@
 }
 
 .gameplan-editor-content .ProseMirror-gapcursor::after {
-  border-top: 2px solid #6B4423;
+  border-top: 2px solid hsl(var(--gp-link-chip-text));
 }
 
 .gp-gallery-caption-input {
   width: 100%;
   margin-top: 6px;
-  border: 1px solid rgba(74, 47, 24, 0.15);
+  border: 1px solid hsl(var(--gp-border-strong));
   border-radius: 8px;
-  background: #FFFFFF;
+  background: hsl(var(--gp-surface));
   padding: 6px 8px;
   font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 11px;
-  color: #7D6E5D;
+  color: hsl(var(--gp-text-caption));
   text-align: center;
 }
 

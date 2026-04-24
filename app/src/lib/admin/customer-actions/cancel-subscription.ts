@@ -7,8 +7,9 @@ import {
   cancelCustomerSubscription,
   type SubscriptionCancellationMode,
 } from '@/lib/stripe/admin-billing';
+import { getAppUrl } from '@/lib/url/public';
 import { withCustomerActionLock } from './lock';
-import { buildCustomerActionAuditMetadata } from './shared';
+import { actionSuccess, buildCustomerActionAuditMetadata } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type CancelSubscriptionInput = Extract<
@@ -59,6 +60,37 @@ export async function handleCancelSubscription(
       }),
     });
 
-    return { success: true, ...result };
+    let customerPortalUrl: string | null = null;
+    if (
+      ctx.stripeClient &&
+      typeof ctx.beforeProfile?.stripe_customer_id === 'string' &&
+      ctx.beforeProfile.stripe_customer_id
+    ) {
+      try {
+        const portalSession = await ctx.stripeClient.billingPortal.sessions.create({
+          customer: ctx.beforeProfile.stripe_customer_id,
+          return_url: `${getAppUrl()}/admin/customers/${ctx.id}/billing`,
+          ...(typeof ctx.beforeProfile?.stripe_subscription_id === 'string' &&
+          ctx.beforeProfile.stripe_subscription_id
+            ? {
+                flow_data: {
+                  type: 'subscription_cancel' as const,
+                  subscription_cancel: {
+                    subscription: ctx.beforeProfile.stripe_subscription_id,
+                  },
+                },
+              }
+            : {}),
+        });
+        customerPortalUrl = portalSession.url;
+      } catch {
+        customerPortalUrl = null;
+      }
+    }
+
+    return actionSuccess({
+      ...result,
+      customer_portal_url: customerPortalUrl,
+    });
   });
 }

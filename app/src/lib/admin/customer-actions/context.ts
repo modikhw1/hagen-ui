@@ -22,10 +22,17 @@ export async function createAdminActionContext(
     throw new Error(beforeResult.error.message);
   }
 
+  const clientIpRaw = request.headers.get('x-forwarded-for');
+  const clientIp = clientIpRaw
+    ? clientIpRaw.split(',')[0]?.trim() || null
+    : null;
+
   return {
     id,
     requestId: request.headers.get('x-request-id') || crypto.randomUUID(),
     user,
+    clientIp,
+    userAgent: request.headers.get('user-agent'),
     supabaseAdmin,
     stripeClient: stripe,
     beforeProfile: beforeResult.data,

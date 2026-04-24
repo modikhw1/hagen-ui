@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
+import { recordCustomerInviteToken } from '@/lib/admin/customer-billing-store';
 import type { CustomerInvitePayload } from '@/lib/schemas/customer';
 import { stripeEnvironment } from '@/lib/stripe/dynamic-config';
 import { upsertInvoiceMirror, upsertSubscriptionMirror } from '@/lib/stripe/mirror';
@@ -342,8 +343,9 @@ export async function sendCustomerInvite(params: {
   profileId: string;
   payload: CustomerInvitePayload;
   appUrl: string;
+  actorUserId?: string | null;
 }): Promise<SendInviteResult> {
-  const { supabaseAdmin, stripeClient, profileId, payload, appUrl } = params;
+  const { supabaseAdmin, stripeClient, profileId, payload, appUrl, actorUserId } = params;
   const pricingStatus = normalizePricingStatus(payload.pricing_status);
 
   const existingAuthUser = await findExistingUserByEmail(supabaseAdmin, payload.contact_email);
@@ -418,6 +420,18 @@ export async function sendCustomerInvite(params: {
         error: updateError.message,
       };
     }
+
+    await recordCustomerInviteToken({
+      supabaseAdmin,
+      customerId: profileId,
+      email: payload.contact_email,
+      createdBy: actorUserId ?? null,
+      metadata: {
+        provider: 'supabase_invite_by_email',
+        stripe_customer_id: stripeCustomerId,
+        stripe_subscription_id: stripeSubscriptionId,
+      },
+    });
 
     return {
       ok: true,

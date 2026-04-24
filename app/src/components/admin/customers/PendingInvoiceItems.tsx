@@ -1,75 +1,46 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { FilePlus2 } from 'lucide-react';
-import EmptyState from '@/components/admin/EmptyState';
+import { Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatSek, sekToOre } from '@/lib/admin/money';
 import { usePendingInvoiceItemsRefresh } from '@/hooks/admin/useAdminRefresh';
-
-type PendingInvoiceItem = {
-  id: string;
-  description: string;
-  amount_ore: number;
-  amount_sek: number;
-  currency: string;
-  created: string | null;
-};
+import { apiClient } from '@/lib/admin/api-client';
+import { formatSek } from '@/lib/admin/money';
+import { OPERATOR_COPY } from '@/lib/admin/copy/operator-glossary';
+import { useCustomerPendingInvoiceItems, type PendingInvoiceItem } from '@/hooks/admin/useCustomerPendingInvoiceItems';
+import { LineItemEditor, type LineItem } from '@/components/admin/ui/form/LineItemEditor';
+import { oreToSek } from '@/lib/admin/money';
 
 export default function PendingInvoiceItems({ customerId }: { customerId: string }) {
   const refreshPendingItems = usePendingInvoiceItemsRefresh(customerId);
   const [showForm, setShowForm] = useState(false);
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState(0);
+  const [newItems, setNewItems] = useState<LineItem[]>([]);
+  const [internalNote, setInternalNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ['admin', 'customer', customerId, 'pending-items'],
-    queryFn: async (): Promise<PendingInvoiceItem[]> => {
-      const response = await fetch(
-        `/api/admin/customers/${customerId}/invoice-items`,
-        {
-          credentials: 'include',
-        },
-      );
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte ladda fakturatillagg');
-      }
-      return payload.items || [];
-    },
-  });
+  const { data: items = [], isLoading } = useCustomerPendingInvoiceItems(customerId);
 
   const handleCreate = async () => {
+    if (newItems.length === 0) return;
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch(
-        `/api/admin/customers/${customerId}/invoice-items`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ description, amount, currency: 'sek' }),
-        },
-      );
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte skapa fakturatillagg');
+      for (const item of newItems) {
+        await apiClient.post(`/api/admin/customers/${customerId}/invoice-items`, {
+          description: item.description,
+          amount: oreToSek(item.amount),
+          internal_note: internalNote || null,
+          currency: 'sek',
+        });
       }
-      setDescription('');
-      setAmount(0);
+      setNewItems([]);
+      setInternalNote('');
       setShowForm(false);
       await refreshPendingItems();
     } catch (createError: unknown) {
-      setError(
-        createError instanceof Error
-          ? createError.message
-          : 'Kunde inte skapa fakturatillagg',
-      );
+      setError(createError instanceof Error ? createError.message : 'Kunde inte skapa post');
     } finally {
       setSubmitting(false);
     }
@@ -79,117 +50,95 @@ export default function PendingInvoiceItems({ customerId }: { customerId: string
     setDeletingId(itemId);
     setError(null);
     try {
-      const response = await fetch(
-        `/api/admin/customers/${customerId}/invoice-items/${itemId}`,
-        {
-          method: 'DELETE',
-          credentials: 'include',
-        },
-      );
-      if (!response.ok) {
-        const payload = await response.json();
-        throw new Error(payload.error || 'Kunde inte ta bort fakturatillagg');
-      }
+      await apiClient.del(`/api/admin/customers/${customerId}/invoice-items/${itemId}`);
       await refreshPendingItems();
     } catch (deleteError: unknown) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : 'Kunde inte ta bort fakturatillagg',
-      );
+      setError(deleteError instanceof Error ? deleteError.message : 'Kunde inte ta bort post');
     } finally {
       setDeletingId(null);
     }
   };
 
   return (
-    <div className="rounded-md border border-border bg-secondary/40 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-            Pending items
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Dessa poster läggs till på kundens nästa faktura.
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="flex justify-end">
         <button
-          onClick={() => setShowForm((current) => !current)}
-          className="rounded-md border border-border bg-background px-3 py-2 text-xs font-semibold"
+          onClick={() => setShowForm(!showForm)}
+          className="text-xs font-semibold text-primary hover:underline"
         >
-          {showForm ? 'Stang' : 'Lagg till rad'}
+          {showForm ? 'Avbryt' : `+ ${OPERATOR_COPY.pendingItems.addCta}`}
         </button>
       </div>
 
       {showForm && (
-        <div className="mb-3 grid gap-2 rounded-md border border-border bg-background p-3">
-          <input
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            placeholder="Beskrivning"
-            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+        <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+          <LineItemEditor
+            items={newItems}
+            onChange={setNewItems}
+            addLabel={OPERATOR_COPY.pendingItems.addCta}
+            showTotal={false}
           />
           <input
-            type="number"
-            min={0}
-            value={amount}
-            onChange={(event) =>
-              setAmount(Math.max(0, Number(event.target.value) || 0))
-            }
-            placeholder="Belopp (kr)"
-            className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+            value={internalNote}
+            onChange={(e) => setInternalNote(e.target.value)}
+            placeholder="Intern notering (syns bara här)"
+            className="w-full rounded-md border border-border bg-secondary/20 px-3 py-2 text-sm focus:outline-none"
           />
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
             <button
-              onClick={() => void handleCreate()}
-              disabled={submitting || !description.trim() || amount <= 0}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              onClick={() => setShowForm(false)}
+              className="rounded-md border border-border px-4 py-1.5 text-xs font-medium hover:bg-accent"
             >
-              {submitting ? 'Sparar...' : 'Spara rad'}
+              Avbryt
+            </button>
+            <button
+              onClick={handleCreate}
+              disabled={submitting || newItems.length === 0 || newItems.some(it => !it.description.trim() || it.amount <= 0)}
+              className="rounded-md bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              {submitting ? 'Sparar...' : 'Spara poster'}
             </button>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <div className="rounded-md bg-status-danger-bg px-3 py-2 text-xs text-status-danger-fg">
           {error}
         </div>
       )}
 
       {isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-14 w-full rounded-md" />
-          <Skeleton className="h-14 w-full rounded-md" />
-        </div>
+        <Skeleton className="h-20 w-full rounded-lg" />
       ) : items.length === 0 ? (
-        <EmptyState
-          icon={FilePlus2}
-          title="Inga pending items"
-          hint="Nya tillagg du lagger har foljer med pa nasta faktura."
-        />
+        <div className="rounded-lg border border-dashed border-border p-8 text-center">
+          <div className="text-sm font-medium text-foreground">{OPERATOR_COPY.pendingItems.emptyTitle}</div>
+          <div className="text-xs text-muted-foreground">{OPERATOR_COPY.pendingItems.emptyHint}</div>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <div className="divide-y divide-border rounded-lg border border-border bg-background">
           {items.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-3 rounded-md border border-border bg-background p-3"
-            >
-              <div>
-                <div className="text-sm font-semibold text-foreground">
-                  {item.description}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {formatSek(item.amount_ore || sekToOre(item.amount_sek || 0))}
-                </div>
+            <div key={item.id} className="flex items-center justify-between p-3 transition-colors hover:bg-secondary/10">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-foreground">{item.description}</div>
+                {item.metadata?.internal_note && (
+                  <div className="mt-0.5 text-xs text-muted-foreground italic">
+                    Not: {item.metadata.internal_note}
+                  </div>
+                )}
               </div>
-              <button
-                onClick={() => void handleDelete(item.id)}
-                disabled={deletingId === item.id}
-                className="rounded-md border border-destructive px-3 py-2 text-xs font-semibold text-destructive disabled:opacity-50"
-              >
-                {deletingId === item.id ? 'Tar bort...' : 'Ta bort'}
-              </button>
+              <div className="ml-4 flex items-center gap-4">
+                <div className="text-sm font-medium text-foreground text-right tabular-nums">
+                  {formatSek(item.amount_ore)}
+                </div>
+                <button
+                  onClick={() => handleDelete(item.id)}
+                  disabled={!!deletingId}
+                  className="text-muted-foreground hover:text-status-danger-fg transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

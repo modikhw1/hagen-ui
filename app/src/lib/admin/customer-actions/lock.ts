@@ -1,6 +1,7 @@
 import 'server-only';
 
-import { jsonError } from '@/lib/server/api-response';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
+import { actionFailure } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 const LOCK_TTL_MS = 2 * 60 * 1000;
@@ -44,7 +45,10 @@ export async function withCustomerActionLock(
   });
 
   if (acquire.error) {
-    return jsonError('En annan andring pagar, forsok igen om en stund.', 409);
+    return actionFailure({
+      error: SERVER_COPY.concurrentActionInProgress,
+      statusCode: 409,
+    });
   }
 
   try {

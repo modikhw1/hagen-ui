@@ -1,10 +1,6 @@
-import CustomerSubscriptionRoute from '@/components/admin/customers/routes/CustomerSubscriptionRoute';
+import { permanentRedirect } from 'next/navigation';
 
-export default async function CustomerSubscriptionPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <CustomerSubscriptionRoute customerId={id} />;
+  permanentRedirect(`/admin/customers/${id}/operations#subscription`);
 }

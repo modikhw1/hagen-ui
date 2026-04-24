@@ -4,7 +4,58 @@ import {
   isMissingRelationError,
 } from '@/lib/admin/schema-guards';
 
-export type AdminRole = 'super_admin' | 'operations_admin';
+export type LegacyAdminRole = 'super_admin' | 'operations_admin';
+
+export type AdminScope =
+  | LegacyAdminRole
+  | 'customers.read'
+  | 'customers.write'
+  | 'customers.invite'
+  | 'customers.archive'
+  | 'billing.invoices.read'
+  | 'billing.invoices.write'
+  | 'billing.subscriptions.read'
+  | 'billing.subscriptions.write'
+  | 'billing.health.read'
+  | 'billing.health.retry'
+  | 'team.read'
+  | 'team.write'
+  | 'team.invite'
+  | 'team.archive'
+  | 'team.absences.write'
+  | 'overview.read'
+  | 'demos.read'
+  | 'demos.write'
+  | 'settings.read'
+  | 'settings.write'
+  | 'payroll.read'
+  | 'audit.read';
+
+export type AdminRole = AdminScope;
+
+export const OPERATIONS_ADMIN_GRANTED_SCOPES = [
+  'customers.read',
+  'customers.write',
+  'customers.invite',
+  'customers.archive',
+  'billing.invoices.read',
+  'billing.invoices.write',
+  'billing.subscriptions.read',
+  'billing.subscriptions.write',
+  'billing.health.read',
+  'billing.health.retry',
+  'team.read',
+  'team.write',
+  'team.invite',
+  'team.absences.write',
+  'overview.read',
+  'demos.read',
+  'demos.write',
+  'settings.read',
+  'settings.write',
+  'payroll.read',
+  'audit.read',
+] as const satisfies readonly AdminScope[];
 
 export async function getAdminRoles(
   supabaseAdmin: SupabaseClient,
@@ -21,7 +72,7 @@ export async function getAdminRoles(
 
   if (result.error) {
     if (isMissingRelationError(result.error.message)) return [];
-    throw new Error(result.error.message || 'Kunde inte hamta adminroller');
+    throw new Error(result.error.message || 'Kunde inte hämta adminroller');
   }
 
   return (result.data ?? []).map((row) => row.role);

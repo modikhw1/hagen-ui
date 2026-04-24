@@ -1,4 +1,4 @@
-import CustomerBillingRoute from '@/components/admin/customers/routes/CustomerBillingRoute';
+import CustomerBillingPage from '@/components/admin/customers/routes/CustomerBillingPage.server';
 import CustomerInvoiceModalRoute from '@/components/admin/customers/routes/CustomerInvoiceModalRoute';
 
 export default async function CustomerInvoicePage({
@@ -9,9 +9,9 @@ export default async function CustomerInvoicePage({
   const { id, invoiceId } = await params;
 
   return (
-    <>
-      <CustomerBillingRoute customerId={id} />
-      <CustomerInvoiceModalRoute customerId={id} invoiceId={invoiceId} />
-    </>
+    <CustomerBillingPage
+      customerId={id}
+      modal={<CustomerInvoiceModalRoute customerId={id} invoiceId={invoiceId} />}
+    />
   );
 }

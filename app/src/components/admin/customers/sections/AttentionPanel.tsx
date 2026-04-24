@@ -3,9 +3,20 @@
 import { useState } from 'react';
 import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import type { OnboardingState, BlockingSignal } from '@/lib/admin-derive';
+import { apiClient } from '@/lib/admin/api-client';
 import { shortDateSv } from '@/lib/admin/time';
 import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
 import { CustomerActionButton } from '@/components/admin/customers/routes/shared';
+import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
+import { toast } from 'sonner';
+
+type ClearableSnooze = {
+  subject_type: 'onboarding' | 'customer_blocking';
+  subject_id: string;
+  snoozed_until: string | null;
+  released_at: string | null;
+  note: string | null;
+};
 
 export default function AttentionPanel({
   customerId,
@@ -21,244 +32,147 @@ export default function AttentionPanel({
   activeSnooze: CustomerDetail['attention_snoozes'][number] | undefined;
 }) {
   const refresh = useCustomerRouteRefresh(customerId);
-  const [updatingAttention, setUpdatingAttention] = useState(false);
-  const [attentionMessage, setAttentionMessage] = useState<string | null>(null);
-  const [attentionError, setAttentionError] = useState<string | null>(null);
+  const clearableSnooze: ClearableSnooze | null =
+    activeSnooze &&
+    (activeSnooze.subject_type === 'onboarding' || activeSnooze.subject_type === 'customer_blocking')
+      ? (activeSnooze as ClearableSnooze)
+      : null;
+  
+  const [updating, setUpdating] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{
     label: string;
     description: string;
     run: () => Promise<void>;
   } | null>(null);
 
-  const runAttentionSnooze = async (
-    subjectType: 'onboarding' | 'customer_blocking',
-    days: number | null,
-  ) => {
-    setUpdatingAttention(true);
-    setAttentionError(null);
-    setAttentionMessage(null);
-
+  const runAttentionSnooze = async (subjectType: 'onboarding' | 'customer_blocking', days: number | null) => {
+    setUpdating(true);
     try {
-      const response = await fetch(`/api/admin/attention/${subjectType}/${customer.id}/snooze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ days }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte markera som hanteras');
-      }
-
-      setAttentionMessage(
-        days == null
-          ? 'Markeringen ligger kvar tills vidare.'
-          : `Markerad som hanteras i ${days} dagar.`,
-      );
+      await apiClient.post(`/api/admin/attention/${subjectType}/${customer.id}/snooze`, { days });
+      toast.success(days ? `Markerad som hanteras i ${days} dagar` : 'Markerad tills vidare');
       await refresh();
-    } catch (snoozeError) {
-      setAttentionError(
-        snoozeError instanceof Error ? snoozeError.message : 'Kunde inte markera som hanteras',
-      );
+    } catch (e) {
+      toast.error('Kunde inte markera som hanteras');
     } finally {
-      setUpdatingAttention(false);
+      setUpdating(false);
+      setConfirmAction(null);
     }
   };
 
   const clearAttentionSnooze = async (subjectType: 'onboarding' | 'customer_blocking') => {
-    setUpdatingAttention(true);
-    setAttentionError(null);
-    setAttentionMessage(null);
-
+    setUpdating(true);
     try {
-      const response = await fetch(`/api/admin/attention/${subjectType}/${customer.id}/snooze`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte ta bort hanteras-markering');
-      }
-
-      setAttentionMessage('Hanteras-markeringen togs bort.');
+      await apiClient.del(`/api/admin/attention/${subjectType}/${customer.id}/snooze`);
+      toast.success('Hanteras-markeringen borttagen');
       await refresh();
-    } catch (clearError) {
-      setAttentionError(
-        clearError instanceof Error ? clearError.message : 'Kunde inte ta bort hanteras-markering',
-      );
+    } catch (e) {
+      toast.error('Kunde inte ta bort markering');
     } finally {
-      setUpdatingAttention(false);
+      setUpdating(false);
     }
   };
 
   const setPlannedPause = async (days: number | null) => {
-    setUpdatingAttention(true);
-    setAttentionError(null);
-    setAttentionMessage(null);
-
+    setUpdating(true);
     try {
-      const pausedUntil =
-        days == null
-          ? null
-          : new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-      const response = await fetch(`/api/admin/customers/${customer.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ paused_until: pausedUntil }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte satta planerad paus');
-      }
-
-      setAttentionMessage(
-        pausedUntil ? `Planerad paus satt till ${shortDateSv(pausedUntil)}.` : 'Planerad paus borttagen.',
-      );
+      const pausedUntil = days == null ? null : new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      await apiClient.patch(`/api/admin/customers/${customer.id}`, { paused_until: pausedUntil });
+      toast.success(pausedUntil ? `Planerad paus till ${shortDateSv(pausedUntil)}` : 'Paus borttagen');
       await refresh();
-    } catch (pauseError) {
-      setAttentionError(
-        pauseError instanceof Error ? pauseError.message : 'Kunde inte satta planerad paus',
-      );
+    } catch (e) {
+      toast.error('Kunde inte uppdatera paus');
     } finally {
-      setUpdatingAttention(false);
+      setUpdating(false);
+      setConfirmAction(null);
     }
   };
 
   return (
-    <div className="space-y-3">
-      {activeSnooze ? (
-        <div className="rounded-md border border-info/30 bg-info/5 px-3 py-3 text-xs text-info">
-          <div className="font-semibold">
-            Hanteras {activeSnooze.snoozed_until ? `till ${shortDateSv(activeSnooze.snoozed_until)}` : 'utan sluttid'}
+    <div className="space-y-4 pt-2">
+      {clearableSnooze ? (
+        <div className="rounded-lg border border-status-info-fg/20 bg-status-info-bg px-4 py-3 text-sm text-status-info-fg shadow-sm">
+          <div className="font-bold flex items-center justify-between">
+            <span>Markerad som hanteras</span>
+            <button
+              onClick={() => void clearAttentionSnooze(clearableSnooze.subject_type)}
+              disabled={updating}
+              className="text-xs underline hover:no-underline"
+            >
+              Släpp nu
+            </button>
           </div>
-          {activeSnooze.note ? <div className="mt-1">{activeSnooze.note}</div> : null}
-          <button
-            type="button"
-            onClick={() => void clearAttentionSnooze(activeSnooze.subject_type)}
-            disabled={updatingAttention}
-            className="mt-2 text-xs font-semibold text-info hover:opacity-80 disabled:opacity-50"
-          >
-            Ta bort hanteras-markering
-          </button>
+          <div className="mt-1 text-xs opacity-90">
+            {clearableSnooze.snoozed_until ? `Gäller t.o.m. ${shortDateSv(clearableSnooze.snoozed_until)}` : 'Gäller tills vidare'}
+          </div>
         </div>
       ) : null}
 
-      {attentionMessage ? (
-        <div className="rounded-md border border-success/30 bg-success/5 px-3 py-2 text-xs text-success">
-          {attentionMessage}
-        </div>
-      ) : null}
-      {attentionError ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          {attentionError}
-        </div>
-      ) : null}
-
-      <div className="space-y-2">
-        {blocking.state !== 'none' ? (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {blocking.state !== 'none' && !clearableSnooze && (
           <>
-            <CustomerActionButton
-              onClick={() =>
-                setConfirmAction({
-                  label: 'Markera blockerad kund i 3 dagar',
-                  description:
-                    'Kunden markeras som hanterad i tre dagar och lyfts bort ur attention-flodet under tiden.',
-                  run: () => runAttentionSnooze('customer_blocking', 3),
-                })
-              }
-              disabled={updatingAttention}
+            <button
+              onClick={() => setConfirmAction({
+                label: 'Markera som hanteras i 3 dagar',
+                description: 'Kunden lyfts bort ur attention-listan tillfälligt.',
+                run: () => runAttentionSnooze('customer_blocking', 3),
+              })}
+              disabled={updating}
+              className="rounded-md border border-border bg-background px-3 py-2 text-left text-xs font-semibold hover:bg-accent transition-colors"
             >
-              Markera blockerad kund som hanteras i 3 dagar
-            </CustomerActionButton>
-            <CustomerActionButton
-              onClick={() =>
-                setConfirmAction({
-                  label: 'Markera blockerad kund i 7 dagar',
-                  description:
-                    'Kunden markeras som hanterad i sju dagar och visas igen nar snoozen lopar ut.',
-                  run: () => runAttentionSnooze('customer_blocking', 7),
-                })
-              }
-              disabled={updatingAttention}
+              Hanteras (3d)
+            </button>
+            <button
+              onClick={() => setConfirmAction({
+                label: 'Planera paus i 7 dagar',
+                description: 'Kunden får en planerad paus i sju dagar.',
+                run: () => setPlannedPause(7),
+              })}
+              disabled={updating}
+              className="rounded-md border border-border bg-background px-3 py-2 text-left text-xs font-semibold hover:bg-accent transition-colors"
             >
-              Markera blockerad kund som hanteras i 7 dagar
-            </CustomerActionButton>
-            <CustomerActionButton
-              onClick={() =>
-                setConfirmAction({
-                  label: 'Satt planerad paus i 7 dagar',
-                  description:
-                    'Detta lagger en planerad paus pa kunden i sju dagar och andrar den operativa signaleringen.',
-                  run: () => setPlannedPause(7),
-                })
-              }
-              disabled={updatingAttention}
-            >
-              Satt planerad paus i 7 dagar
-            </CustomerActionButton>
-            {customer.paused_until ? (
-              <CustomerActionButton
-                onClick={() =>
-                  setConfirmAction({
-                    label: 'Ta bort planerad paus',
-                    description:
-                      'Den planerade pausen tas bort och kunden atergar till ordinarie operativ status.',
-                    run: () => setPlannedPause(null),
-                  })
-                }
-                disabled={updatingAttention}
-              >
-                Ta bort planerad paus
-              </CustomerActionButton>
-            ) : null}
+              Pausa (7d)
+            </button>
           </>
-        ) : null}
-        {onboardingState === 'cm_ready' ? (
-          <CustomerActionButton
-            onClick={() =>
-              setConfirmAction({
-                label: 'Markera onboarding i 3 dagar',
-                description:
-                  'Onboarding flaggas som hanterad i tre dagar for att minska brus i attention-vyn.',
-                run: () => runAttentionSnooze('onboarding', 3),
-              })
-            }
-            disabled={updatingAttention}
+        )}
+        
+        {onboardingState === 'cm_ready' && !clearableSnooze && (
+          <button
+            onClick={() => setConfirmAction({
+              label: 'Markera onboarding som hanteras',
+              description: 'Döljer onboarding-alert i 3 dagar.',
+              run: () => runAttentionSnooze('onboarding', 3),
+            })}
+            disabled={updating}
+            className="col-span-2 rounded-md border border-border bg-background px-3 py-2 text-left text-xs font-semibold hover:bg-accent transition-colors"
           >
-            Markera onboarding som hanteras i 3 dagar
-          </CustomerActionButton>
-        ) : null}
+            Hanteras (3d)
+          </button>
+        )}
+
+        {customer.paused_until && (
+          <button
+            onClick={() => setConfirmAction({
+              label: 'Ta bort planerad paus',
+              description: 'Kunden återgår till normal drift direkt.',
+              run: () => setPlannedPause(null),
+            })}
+            disabled={updating}
+            className="col-span-2 rounded-md border border-status-warning-fg/30 bg-status-warning-bg px-3 py-2 text-left text-xs font-semibold text-status-warning-fg hover:bg-status-warning-bg/80 transition-colors"
+          >
+            Ta bort paus ({shortDateSv(customer.paused_until)})
+          </button>
+        )}
       </div>
 
-      {confirmAction ? (
-        <div className="rounded-md border border-border bg-secondary/20 p-3">
-          <div className="text-sm font-semibold text-foreground">{confirmAction.label}</div>
-          <div className="mt-1 text-xs text-muted-foreground">{confirmAction.description}</div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void confirmAction.run().finally(() => setConfirmAction(null))}
-              disabled={updatingAttention}
-              className="rounded-md bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-            >
-              {updatingAttention ? 'Arbetar...' : 'Bekrafta'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setConfirmAction(null)}
-              disabled={updatingAttention}
-              className="rounded-md border border-border px-3 py-2 text-xs font-semibold text-foreground disabled:opacity-50"
-            >
-              Avbryt
-            </button>
-          </div>
-        </div>
-      ) : null}
+      <ConfirmActionDialog
+        open={Boolean(confirmAction)}
+        onOpenChange={(v) => !v && setConfirmAction(null)}
+        title={confirmAction?.label || ''}
+        description={confirmAction?.description || ''}
+        confirmLabel="Bekräfta"
+        onConfirm={() => confirmAction?.run() || Promise.resolve()}
+        pending={updating}
+      />
     </div>
   );
 }

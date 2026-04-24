@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import CustomerOverviewRoute from '@/components/admin/customers/routes/CustomerOverviewRoute';
+import CustomerOverviewPage from '@/components/admin/customers/routes/CustomerOverviewPage.server';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -21,19 +21,22 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
   }
 
   const focusMap: Record<string, string> = {
-    contract: `/admin/customers/${id}/contract`,
-    invoices: `/admin/customers/${id}/billing`,
-    'upcoming-invoice': `/admin/customers/${id}/billing`,
-    operations: `/admin/customers/${id}`,
-    cm: `/admin/customers/${id}/team`,
-    activity: `/admin/customers/${id}/activity`,
-    contact: `/admin/customers/${id}/contract`,
-    'tiktok-profile': `/admin/customers/${id}`,
+    contract:           `/admin/customers/${id}/operations#contract`,
+    invoices:           `/admin/customers/${id}/billing`,
+    "upcoming-invoice": `/admin/customers/${id}/billing#upcoming`,
+    pending:            `/admin/customers/${id}/billing#pending`,
+    operations:         `/admin/customers/${id}/operations`,
+    cm:                 `/admin/customers/${id}/operations#cm`,
+    activity:           `/admin/customers/${id}/activity`,
+    contact:            `/admin/customers/${id}/operations#contact`,
+    "tiktok-profile":   `/admin/customers/${id}#tiktok`,
+    studio:             `/admin/customers/${id}#studio`,
+    subscription:       `/admin/customers/${id}/operations#subscription`,
   };
 
   if (focus && focus in focusMap) {
     redirect(focusMap[focus]);
   }
 
-  return <CustomerOverviewRoute customerId={id} />;
+  return <CustomerOverviewPage customerId={id} />;
 }

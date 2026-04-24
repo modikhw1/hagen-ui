@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { shortDateSv } from '@/lib/admin/time';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { changeSubscriptionPrice, previewSubscriptionPrice } from '@/app/admin/_actions/billing';
+import { Metric, ModeButton } from '@/components/admin/_primitives';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import {
   Table,
   TableBody,
@@ -17,12 +16,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatSek } from '@/lib/admin/money';
-import { callCustomerAction } from '@/lib/admin/api-client';
+import { parseMonthlyPriceSekInput } from '@/lib/admin/billing';
+import { logAdminClientError } from '@/lib/admin/logger';
+import { formatPriceSEK, formatSek } from '@/lib/admin/money';
+import { shortDateSv } from '@/lib/admin/time';
+import { subscriptionPriceChangeSchema } from '@/lib/schemas/billing';
+import { cn } from '@/lib/utils';
 
 type PreviewPayload = {
   mode: 'now' | 'next_period';
   effective_date: string;
+  subscription_id: string;
+  current_period_end: string | null;
+  proration_behavior: 'create_prorations' | 'none';
   current_price_ore: number;
   new_price_ore: number;
   line_items: Array<{
@@ -51,307 +57,279 @@ export default function SubscriptionPriceChangeModal({
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const [monthlyPrice, setMonthlyPrice] = useState(
-    currentPriceSek ? String(currentPriceSek) : '',
-  );
+  const [monthlyPrice, setMonthlyPrice] = useState(currentPriceSek ? String(currentPriceSek) : '');
   const [mode, setMode] = useState<'now' | 'next_period'>('now');
-  const [preview, setPreview] = useState<PreviewPayload | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [previewedFor, setPreviewedFor] = useState<string | null>(null);
+  const [previewResult, setPreviewResult] = useState<{
+    preview: PreviewPayload;
+    previewKey: string;
+  } | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const previewRequestIdRef = useRef(0);
 
-  useEffect(() => {
-    if (!open) {
+  const validation = useMemo(() => {
+    const parsedAmount = parseMonthlyPriceSekInput(monthlyPrice);
+    return subscriptionPriceChangeSchema.safeParse({
+      monthly_price: parsedAmount ?? Number.NaN,
+      mode,
+    });
+  }, [mode, monthlyPrice]);
+
+  const previewKey = validation.success
+    ? `${validation.data.monthly_price}:${validation.data.mode}`
+    : null;
+  const validatedMonthlyPrice = validation.success ? validation.data.monthly_price : null;
+  const validatedMode = validation.success ? validation.data.mode : null;
+
+  const previewMutation = useMutation({
+    mutationKey: ['admin', 'customer-subscription-preview', customerId],
+    mutationFn: async (input: {
+      monthlyPriceSek: number;
+      mode: 'now' | 'next_period';
+      previewKey: string;
+      requestId: number;
+    }) => {
+      const result = await previewSubscriptionPrice({
+        customerId,
+        monthlyPriceSek: input.monthlyPriceSek,
+        mode: input.mode,
+      });
+
+      if ('error' in result) {
+        throw new Error(result.error.message);
+      }
+
+      return {
+        preview: result.data as PreviewPayload,
+        previewKey: input.previewKey,
+        requestId: input.requestId,
+      };
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationKey: ['admin', 'customer-subscription-price-change', customerId],
+    mutationFn: async () => {
+      if (!validation.success || previewedFor !== previewKey) {
+        throw new Error('Förhandsvisningen är inaktuell. Uppdatera innan du sparar.');
+      }
+
+      const result = await changeSubscriptionPrice({
+        customerId,
+        monthlyPriceSek: validation.data.monthly_price,
+        mode: validation.data.mode,
+      });
+
+      if ('error' in result) {
+        throw new Error(result.error.message);
+      }
+
+      return result.data;
+    },
+    onSuccess: () => {
+      onClose();
+      void onChanged();
+    },
+  });
+
+  const requestPreview = useCallback(async () => {
+    if (!previewKey || validatedMonthlyPrice === null || validatedMode === null) {
       return;
     }
 
-    setMonthlyPrice(currentPriceSek ? String(currentPriceSek) : '');
-    setMode('now');
-    setPreview(null);
-    setError(null);
-  }, [currentPriceSek, open]);
-
-  const loadPreview = async () => {
-    setLoadingPreview(true);
-    setError(null);
-    setPreview(null);
-
+    const requestId = ++previewRequestIdRef.current;
     try {
-      const response = await fetch(`/api/admin/customers/${customerId}/subscription-preview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          monthly_price: Number(monthlyPrice),
-          mode,
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        preview?: PreviewPayload;
-      };
-
-      if (!response.ok || !payload.preview) {
-        throw new Error(payload.error || 'Kunde inte forhandsvisa prisandringen');
-      }
-
-      setPreview(payload.preview);
-    } catch (previewError: unknown) {
-      setError(
-        previewError instanceof Error
-          ? previewError.message
-          : 'Kunde inte forhandsvisa prisandringen',
-      );
-    } finally {
-      setLoadingPreview(false);
-    }
-  };
-
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-
-    try {
-      const result = await callCustomerAction(customerId, {
-        action: 'change_subscription_price',
-        monthly_price: Number(monthlyPrice),
-        mode,
+      const result = await previewMutation.mutateAsync({
+        monthlyPriceSek: validatedMonthlyPrice,
+        mode: validatedMode,
+        previewKey,
+        requestId,
       });
 
-      if (!result.ok) {
-        throw new Error(result.error || 'Kunde inte spara prisandringen');
+      if (result.requestId !== previewRequestIdRef.current) {
+        return;
       }
 
-      onChanged();
-    } catch (saveError: unknown) {
-      setError(
-        saveError instanceof Error ? saveError.message : 'Kunde inte spara prisandringen',
-      );
-    } finally {
-      setSaving(false);
+      setPreviewResult({
+        preview: result.preview,
+        previewKey: result.previewKey,
+      });
+      setPreviewedFor(result.previewKey);
+      setPreviewError(null);
+    } catch (error) {
+      if (requestId !== previewRequestIdRef.current) {
+        return;
+      }
+      setPreviewError(error instanceof Error ? error.message : 'Kunde inte hämta förhandsvisning.');
     }
-  };
+  }, [previewKey, previewMutation, validatedMode, validatedMonthlyPrice]);
+
+  useEffect(() => {
+    if (!validation.success || !previewKey || previewMutation.isPending) return;
+    if (previewResult?.previewKey === previewKey) return;
+
+    const timeout = window.setTimeout(() => {
+      void requestPreview();
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [previewKey, previewMutation.isPending, previewResult?.previewKey, requestPreview, validation.success]);
+
+  const preview = previewResult?.preview ?? null;
+  const stalePreview = Boolean(preview && previewKey && previewResult?.previewKey !== previewKey);
+  
+  const percentChange =
+    preview && preview.current_price_ore > 0
+      ? Math.round(
+          ((preview.new_price_ore - preview.current_price_ore) / preview.current_price_ore) * 100,
+        )
+      : null;
+
+  const errorMsg = saveMutation.error instanceof Error
+    ? saveMutation.error.message
+    : previewError || (validation.success ? null : validation.error.issues[0]?.message);
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Andra abonnemangspris</DialogTitle>
-          <DialogDescription>
-            {customerName}. Valj om priset ska sla igenom nu med prorata eller vid nasta periodskifte.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-[1.2fr_1fr]">
-            <div>
-              <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                Nytt manadspris
-              </div>
-              <input
+    <AdminFormDialog
+      open={open}
+      onClose={onClose}
+      title="Ändra abonnemangspris"
+      description={customerName}
+      size="lg"
+      footer={
+        <>
+          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent">
+            Avbryt
+          </button>
+          <button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending || !validation.success || previewedFor !== previewKey}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            {saveMutation.isPending ? 'Sparar...' : mode === 'now' ? 'Byt pris nu' : 'Schemalägg prisbyte'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Nytt månadspris</label>
+            <div className="relative">
+              <Input
                 value={monthlyPrice}
-                onChange={(event) => {
-                  setMonthlyPrice(event.target.value);
-                  setPreview(null);
-                }}
-                inputMode="decimal"
-                placeholder="9900"
-                className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+                onChange={(event) => setMonthlyPrice(event.target.value)}
+                inputMode="numeric"
+                className="pr-8"
               />
-            </div>
-
-            <div>
-              <div className="mb-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                Nar ska bytet ske
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <ModeButton
-                  active={mode === 'now'}
-                  onClick={() => {
-                    setMode('now');
-                    setPreview(null);
-                  }}
-                  title="Nu"
-                  description="Stripe skapar prorata direkt"
-                />
-                <ModeButton
-                  active={mode === 'next_period'}
-                  onClick={() => {
-                    setMode('next_period');
-                    setPreview(null);
-                  }}
-                  title="Nasta period"
-                  description="Schemalaggs till periodslut"
-                />
-              </div>
+              <span className="absolute right-3 top-2 text-sm text-muted-foreground">kr</span>
             </div>
           </div>
 
-          <div className="rounded-lg border border-border bg-secondary/30 p-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-foreground">Forhandsvisning</div>
-                <div className="text-xs text-muted-foreground">
-                  Nuvarande pris {formatSek(Math.round((currentPriceSek ?? 0) * 100))}
-                </div>
-              </div>
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">När ska bytet ske</label>
+            <div className="grid grid-cols-2 gap-2">
               <button
-                type="button"
-                onClick={() => void loadPreview()}
-                disabled={loadingPreview || !Number.isFinite(Number(monthlyPrice)) || Number(monthlyPrice) <= 0}
-                className="rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:opacity-50"
+                onClick={() => setMode('now')}
+                className={cn(
+                  "rounded-md border p-2 text-left transition-colors",
+                  mode === 'now' ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+                )}
               >
-                {loadingPreview ? 'Hamta preview...' : 'Forhandsvisa'}
+                <div className="text-xs font-bold">Nu</div>
+                <div className="text-[10px] text-muted-foreground">Prorata direkt</div>
+              </button>
+              <button
+                onClick={() => setMode('next_period')}
+                className={cn(
+                  "rounded-md border p-2 text-left transition-colors",
+                  mode === 'next_period' ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+                )}
+              >
+                <div className="text-xs font-bold">Nästa period</div>
+                <div className="text-[10px] text-muted-foreground">Vid periodslut</div>
               </button>
             </div>
+          </div>
+        </div>
 
-            {preview ? (
-              <div className="space-y-3">
-                <div className="rounded-md border border-border bg-background px-4 py-3">
-                  <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                    Prisdiff
-                  </div>
-                  <div className="mt-2 flex items-baseline gap-2">
-                    <span className="text-sm text-muted-foreground line-through">
-                      {formatSek(preview.current_price_ore)}
-                    </span>
-                    <span className="text-muted-foreground">→</span>
-                    <span
-                      className={`text-lg font-semibold ${
-                        preview.new_price_ore > preview.current_price_ore
-                          ? 'text-success'
-                          : preview.new_price_ore < preview.current_price_ore
-                            ? 'text-warning'
-                            : 'text-foreground'
-                      }`}
-                    >
-                      {formatSek(preview.new_price_ore)}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {mode === 'now'
-                      ? 'Andringen slar igenom direkt med prorata.'
-                      : `Andringen planeras till ${shortDateSv(preview.effective_date)}.`}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Metric label="Nuvarande manadspris" value={formatSek(preview.current_price_ore)} />
-                  <Metric label="Nytt manadspris" value={formatSek(preview.new_price_ore)} />
-                  <Metric
-                    label={mode === 'now' ? 'Nu att fakturera' : 'Trader i kraft'}
-                    value={
-                      mode === 'now'
-                        ? formatSek(preview.invoice_total_ore)
-                        : preview.effective_date
-                    }
-                  />
-                </div>
-
-                <div className="overflow-hidden rounded-lg border border-border bg-card">
-                  {preview.line_items.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-muted-foreground">
-                      Inga Stripe-rader att visa for den har andringen.
-                    </div>
-                  ) : (
-                    <Table>
-                      <TableHeader className="bg-secondary/40">
-                        <TableRow>
-                          <TableHead>Beskrivning</TableHead>
-                          <TableHead>Period</TableHead>
-                          <TableHead className="text-right">Belopp</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {preview.line_items.map((lineItem) => (
-                          <TableRow key={lineItem.id}>
-                            <TableCell>
-                              <div className="text-sm font-medium text-foreground">
-                                {lineItem.description}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {lineItem.period_start || lineItem.period_end
-                                ? `${lineItem.period_start?.slice(0, 10) || '-'} till ${lineItem.period_end?.slice(0, 10) || '-'}`
-                                : '-'}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold text-foreground">
-                              {formatSek(lineItem.amount_ore)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </div>
+        <div className="rounded-xl border border-border bg-secondary/10 p-4">
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-border/50 pb-3">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-tight text-foreground">Förhandsvisning</div>
+              <div className="text-[11px] text-muted-foreground">
+                Nuvarande {formatPriceSEK(currentPriceSek, { fallback: 'Ej satt' })}
               </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">
-                Hamta preview innan du sparar sa ser du precis vad som skapas.
-              </div>
+            </div>
+            {(!preview || stalePreview) && (
+              <button
+                onClick={() => requestPreview()}
+                disabled={previewMutation.isPending || !validation.success}
+                className="text-[11px] font-bold text-primary hover:underline disabled:opacity-50"
+              >
+                {previewMutation.isPending ? 'Hämtar...' : 'Uppdatera'}
+              </button>
             )}
           </div>
 
-          {error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error}
+          {stalePreview && (
+            <div className="mb-4 rounded-md border border-status-warning-fg/20 bg-status-warning-bg px-3 py-2 text-[11px] text-status-warning-fg">
+              Förhandsvisningen är inaktuell. Uppdatera innan du sparar.
             </div>
-          ) : null}
+          )}
 
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="rounded-md border border-border px-4 py-2 text-sm"
-            >
-              Avbryt
-            </button>
-            <button
-              type="button"
-              onClick={() => void save()}
-              disabled={saving || !Number.isFinite(Number(monthlyPrice)) || Number(monthlyPrice) <= 0}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-            >
-              {saving ? 'Sparar...' : mode === 'now' ? 'Byt pris nu' : 'Schemalagg prisbyte'}
-            </button>
-          </div>
+          {preview ? (
+            <div className="space-y-4">
+              <div className="flex items-baseline gap-3">
+                <span className="text-2xl font-bold text-foreground tabular-nums">{formatSek(preview.new_price_ore)}</span>
+                {percentChange !== null && (
+                  <span className={cn(
+                    "text-xs font-bold",
+                    percentChange > 0 ? "text-status-danger-fg" : "text-status-success-fg"
+                  )}>
+                    {percentChange > 0 ? '+' : ''}{percentChange}%
+                  </span>
+                )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Metric label="Nu att fakturera" value={mode === 'now' ? formatSek(preview.invoice_total_ore) : '0 kr'} />
+                <Metric label="Träder i kraft" value={shortDateSv(preview.effective_date)} />
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-border bg-card">
+                <Table>
+                  <TableHeader className="bg-secondary/40">
+                    <TableRow>
+                      <TableHead className="h-8 text-[10px] font-bold uppercase">Beskrivning</TableHead>
+                      <TableHead className="h-8 text-right text-[10px] font-bold uppercase">Belopp</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {preview.line_items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="py-2 text-[11px]">{item.description}</TableCell>
+                        <TableCell className="py-2 text-right text-[11px] font-bold">{formatSek(item.amount_ore)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-xs text-muted-foreground italic">
+              Väntar på inmatning...
+            </div>
+          )}
         </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-border bg-background px-3 py-2">
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-foreground">{value}</div>
-    </div>
-  );
-}
-
-function ModeButton({
-  active,
-  onClick,
-  title,
-  description,
-}: {
-  active: boolean;
-  onClick: () => void;
-  title: string;
-  description: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-md border px-3 py-3 text-left ${
-        active ? 'border-primary bg-primary/5' : 'border-border bg-background'
-      }`}
-    >
-      <div className="text-sm font-semibold text-foreground">{title}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{description}</div>
-    </button>
+        {errorMsg && (
+          <div className="rounded-md border border-status-danger-fg/30 bg-status-danger-bg px-3 py-2 text-sm text-status-danger-fg">
+            {errorMsg}
+          </div>
+        )}
+      </div>
+    </AdminFormDialog>
   );
 }

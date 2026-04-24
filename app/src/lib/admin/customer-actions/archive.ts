@@ -46,8 +46,10 @@ export async function handleArchiveCustomer(
 
   return {
     success: true,
-    message: 'Kunden arkiverades.',
-    customer: data,
-    cleanup,
+    data: {
+      message: 'Kunden arkiverades.',
+      customer: data,
+      cleanup,
+    },
   };
 }

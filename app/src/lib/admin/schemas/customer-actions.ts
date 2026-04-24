@@ -80,7 +80,14 @@ export const resumeSubscriptionActionSchema = z
   })
   .strict();
 
+export const updateProfileActionSchema = z
+  .object({
+    action: z.literal('update_profile'),
+  })
+  .passthrough();
+
 export const customerActionSchema = z.discriminatedUnion('action', [
+  updateProfileActionSchema,
   sendInviteActionSchema,
   activateActionSchema,
   sendReminderActionSchema,
@@ -94,7 +101,30 @@ export const customerActionSchema = z.discriminatedUnion('action', [
   changeAccountManagerActionSchema,
 ]);
 
-const customerActionSuccessSchema = z
+const actionMetaSchema = z
+  .object({
+    requestId: z.string(),
+    durationMs: z.number(),
+    affectedEntities: z
+      .array(
+        z.object({
+          type: z.string(),
+          id: z.string(),
+        }),
+      )
+      .optional(),
+  })
+  .partial();
+
+const customerActionV2SuccessSchema = z
+  .object({
+    success: z.literal(true),
+    data: z.unknown(),
+    meta: actionMetaSchema.optional(),
+  })
+  .passthrough();
+
+const customerActionLegacySuccessSchema = z
   .object({
     success: z.boolean().optional(),
     message: z.string().optional(),
@@ -113,19 +143,23 @@ const customerActionSuccessSchema = z
 
 export const customerActionErrorSchema = z
   .object({
+    success: z.literal(false).optional(),
     error: z.string(),
+    statusCode: z.number().optional(),
     details: z.unknown().optional(),
+    meta: actionMetaSchema.optional(),
   })
   .passthrough();
 
 export const customerActionResultSchema = z.union([
-  customerActionSuccessSchema,
+  customerActionV2SuccessSchema,
+  customerActionLegacySuccessSchema,
   customerActionErrorSchema,
 ]);
 
 export type CustomerAction = z.infer<typeof customerActionSchema>;
 export type CustomerActionSuccessResult = z.infer<
-  typeof customerActionSuccessSchema
+  typeof customerActionV2SuccessSchema
 >;
 export type CustomerActionErrorResult = z.infer<
   typeof customerActionErrorSchema

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { syncCustomerAssignmentFromProfile } from '@/lib/admin/cm-assignments';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
 import { profileToInvitePayload } from '@/lib/admin/customer-detail/load';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
@@ -9,8 +10,11 @@ import { ensureStripeSubscriptionForProfile } from '@/lib/customers/invite';
 import { upsertSubscriptionMirror } from '@/lib/stripe/mirror';
 import { stripeEnvironment } from '@/lib/stripe/dynamic-config';
 import { resumeCustomerSubscription } from '@/lib/stripe/admin-billing';
-import { jsonError } from '@/lib/server/api-response';
-import { buildCustomerActionAuditMetadata } from './shared';
+import {
+  actionFailure,
+  actionSuccess,
+  buildCustomerActionAuditMetadata,
+} from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ReactivateInput = Extract<CustomerAction, { action: 'reactivate_archive' }>;
@@ -21,7 +25,7 @@ export async function handleReactivate(
 ): Promise<ActionResult> {
   void input;
   if (!ctx.beforeProfile) {
-    return jsonError('Kunden hittades inte', 404);
+    return actionFailure({ error: SERVER_COPY.customerNotFound, statusCode: 404 });
   }
 
   const invitePayload = profileToInvitePayload(ctx.beforeProfile);
@@ -40,10 +44,11 @@ export async function handleReactivate(
 
   if (needsPaidSubscription) {
     if (!ctx.stripeClient) {
-      return jsonError(
-        'Stripe ar inte konfigurerat pa servern och kunden kan inte ateraktiveras med debitering.',
-        503,
-      );
+      return actionFailure({
+        error:
+          'Stripe är inte konfigurerat på servern och kunden kan inte återaktiveras med debitering.',
+        statusCode: 503,
+      });
     }
 
     try {
@@ -57,12 +62,13 @@ export async function handleReactivate(
       stripeSubscriptionId = ensuredStripe.stripeSubscriptionId;
       reactivatedSubscription = ensuredStripe.subscription;
     } catch (error) {
-      return jsonError(
-        error instanceof Error
-          ? error.message
-          : 'Kunde inte ateraktivera abonnemanget i Stripe',
-        502,
-      );
+      return actionFailure({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Kunde inte återaktivera abonnemanget i Stripe',
+        statusCode: 502,
+      });
     }
   }
 
@@ -85,7 +91,7 @@ export async function handleReactivate(
     .single();
 
   if (reactivateError) {
-    return jsonError(reactivateError.message, 500);
+    return actionFailure({ error: reactivateError.message, statusCode: 500 });
   }
 
   if (
@@ -126,7 +132,7 @@ export async function handleReactivate(
     .single();
 
   if (profileError) {
-    return jsonError(profileError.message, 500);
+    return actionFailure({ error: profileError.message, statusCode: 500 });
   }
 
   await recordAuditLog(ctx.supabaseAdmin, {
@@ -144,9 +150,8 @@ export async function handleReactivate(
     }),
   });
 
-  return {
-    success: true,
+  return actionSuccess({
     profile,
-    message: 'Kunden ateraktiverades pa befintlig profil.',
-  };
+    message: 'Kunden återaktiverades på befintlig profil.',
+  });
 }

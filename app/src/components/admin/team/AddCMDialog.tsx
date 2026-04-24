@@ -1,288 +1,410 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import AdminAvatar from '@/components/admin/AdminAvatar';
+import Link from 'next/link';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm, useWatch } from 'react-hook-form';
+import { z } from 'zod';
+import { toast } from 'sonner';
+import { AvatarUpload } from '@/components/admin/ui/form/AvatarUpload';
+import { uploadCmAvatar } from '@/lib/admin/team/upload-avatar';
+import { ColorSwatchGrid } from '@/components/admin/shared/ColorSwatchGrid';
+import { AdminField } from '@/components/admin/shared/AdminField';
+import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
+import { Input } from '@/components/ui/input';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-
-const TEAM_COLORS = [
-  '#4f46e5',
-  '#10b981',
-  '#f59e0b',
-  '#ef4444',
-  '#8b5cf6',
-  '#ec4899',
-];
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { ApiError } from '@/lib/admin/api-client';
+import {
+  addAdminBreadcrumb,
+  captureAdminError,
+} from '@/lib/admin/admin-telemetry';
+import { TEAM_COLORS } from '@/lib/admin/teamPalette';
+import { useCreateTeamMember, type CreateTeamMemberPayload } from '@/hooks/admin/useCreateTeamMember';
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
+};
+
+const sharedFieldsSchema = z.object({
+  name: z.string().trim().min(1, 'Namn är obligatoriskt').max(120),
+  email: z.string().trim().email('Ange en giltig e-post'),
+  phone: z
+    .string()
+    .trim()
+    .max(40)
+    .refine((value) => value === '' || /^\+?[0-9 ()-]{6,40}$/.test(value), {
+      message: 'Ange ett giltigt telefonnummer',
+    }),
+  city: z.string().trim().max(80),
+  bio: z.string().trim().max(2000),
+  avatar_url: z.union([z.string().trim().url('Ange en giltig URL'), z.literal('')]),
+  color: z.enum(TEAM_COLORS),
+  sendInvite: z.boolean(),
+});
+
+const addTeamMemberFormSchema = z.discriminatedUnion('role', [
+  sharedFieldsSchema.extend({
+    role: z.literal('admin'),
+    commission_rate_percent: z.literal(0),
+  }),
+  sharedFieldsSchema.extend({
+    role: z.literal('content_manager'),
+    commission_rate_percent: z.number().min(0).max(50),
+  }),
+]);
+
+type AddTeamMemberFormValues = z.input<typeof addTeamMemberFormSchema>;
+
+const defaultValues: AddTeamMemberFormValues = {
+  role: 'content_manager',
+  name: '',
+  email: '',
+  phone: '',
+  city: '',
+  bio: '',
+  avatar_url: '',
+  color: TEAM_COLORS[0],
+  commission_rate_percent: 20,
+  sendInvite: true,
 };
 
 export default function AddCMDialog({ open, onClose, onSaved }: Props) {
-  const [role, setRole] = useState<'content_manager' | 'admin'>('content_manager');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [city, setCity] = useState('');
-  const [bio, setBio] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [color, setColor] = useState(TEAM_COLORS[0]);
-  const [commissionRate, setCommissionRate] = useState('20');
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  if (!open) {
+    return null;
+  }
+
+  return <AddCMDialogSession onClose={onClose} onSaved={onSaved} />;
+}
+
+function AddCMDialogSession({ onClose, onSaved }: Omit<Props, 'open'>) {
+  const router = useRouter();
+  const createTeamMember = useCreateTeamMember();
   const [warning, setWarning] = useState<string | null>(null);
-  const parsedCommissionRate = Number(commissionRate);
+  const [existingMemberId, setExistingMemberId] = useState<string | null>(null);
+  const form = useForm<AddTeamMemberFormValues>({
+    resolver: zodResolver(addTeamMemberFormSchema),
+    defaultValues,
+    mode: 'onChange',
+  });
 
-  const canSubmit = useMemo(
-    () => name.trim().length > 0 && email.trim().length > 0,
-    [email, name],
-  );
+  const {
+    formState: { errors, isSubmitting, isValid },
+    handleSubmit,
+    register,
+    reset,
+    setValue,
+    setError,
+    clearErrors,
+    control,
+    getValues,
+  } = form;
 
-  const reset = () => {
-    setRole('content_manager');
-    setName('');
-    setEmail('');
-    setPhone('');
-    setCity('');
-    setBio('');
-    setAvatarUrl('');
-    setColor(TEAM_COLORS[0]);
-    setCommissionRate('20');
-    setError(null);
+  const role = useWatch({ control, name: 'role' });
+  const name = useWatch({ control, name: 'name' });
+  const avatarUrl = useWatch({ control, name: 'avatar_url' });
+  const color = useWatch({ control, name: 'color' });
+  const sendInvite = useWatch({ control, name: 'sendInvite' });
+  const commissionRatePercent = useWatch({ control, name: 'commission_rate_percent' });
+  const bio = useWatch({ control, name: 'bio' });
+
+  const switchRole = (nextRole: 'admin' | 'content_manager') => {
+    const current = getValues();
+    const nextCommission =
+      nextRole === 'admin'
+        ? 0
+        : current.commission_rate_percent === 0
+          ? 20
+          : current.commission_rate_percent;
+    reset({
+      ...current,
+      role: nextRole,
+      commission_rate_percent: nextCommission,
+    } as AddTeamMemberFormValues);
     setWarning(null);
+    setExistingMemberId(null);
+    createTeamMember.reset();
   };
 
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    setError(null);
+  const onSubmit = handleSubmit(async (values) => {
     setWarning(null);
+    setExistingMemberId(null);
+    clearErrors('email');
+
+    const payload: CreateTeamMemberPayload = {
+      name: values.name,
+      email: values.email,
+      phone: values.phone,
+      city: values.city,
+      bio: values.bio,
+      avatar_url: values.avatar_url,
+      color: values.color,
+      role: values.role,
+      commission_rate:
+        values.role === 'content_manager' ? values.commission_rate_percent / 100 : 0,
+      sendInvite: values.sendInvite,
+    };
 
     try {
-      const response = await fetch('/api/admin/team', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name,
-          email,
-          phone,
-          city,
-          bio,
-          avatar_url: avatarUrl,
-          color,
-          role,
-          commission_rate:
-            role === 'content_manager'
-              ? (Number.isFinite(parsedCommissionRate) ? parsedCommissionRate : 20) / 100
-              : 0,
-          sendInvite: true,
-        }),
+      addAdminBreadcrumb('admin.team.create', payload);
+      const result = await createTeamMember.mutateAsync(payload);
+      addAdminBreadcrumb('admin.team.create', {
+        phase: 'success',
+        role: values.role,
+        email: values.email,
       });
 
-      const payload = (await response.json()) as {
-        error?: string;
-        warning?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(payload.error || 'Misslyckades');
+      if (result.warning) {
+        setWarning(result.warning);
+        toast.warning(result.warning);
+        return;
       }
 
-      const nextWarning = payload.warning ?? null;
-      reset();
-      setWarning(nextWarning);
-      onSaved();
+      toast.success(values.role === 'admin' ? 'Admin skapad.' : 'CM skapad.', {
+        action: {
+          label: 'Öppna profil',
+          onClick: () => router.push(`/admin/team?focus=${result.member.id}`),
+        },
+      });
+
+      await onSaved();
+      reset(defaultValues);
+      createTeamMember.reset();
+      onClose();
     } catch (submitError) {
-      setError(
-        submitError instanceof Error ? submitError.message : 'Misslyckades',
-      );
-    } finally {
-      setSubmitting(false);
+      if (submitError instanceof ApiError && submitError.status === 409) {
+        const raw =
+          submitError.raw && typeof submitError.raw === 'object'
+            ? (submitError.raw as { existingMemberId?: unknown; field?: unknown })
+            : null;
+        setError('email', { type: 'server', message: submitError.message });
+        if (typeof raw?.existingMemberId === 'string') {
+          setExistingMemberId(raw.existingMemberId);
+        }
+        return;
+      }
+
+      captureAdminError('admin.team.create', submitError, payload);
     }
+  });
+
+  const handleClose = () => {
+    reset(defaultValues);
+    createTeamMember.reset();
+    setWarning(null);
+    setExistingMemberId(null);
+    onClose();
   };
 
+  const dialogError =
+    createTeamMember.error instanceof ApiError && createTeamMember.error.status === 409
+      ? null
+      : createTeamMember.error instanceof Error
+        ? createTeamMember.error.message
+        : null;
+
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) {
-          reset();
-          onClose();
-        }
-      }}
-    >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-          <DialogTitle>{role === 'admin' ? 'Lagg till admin' : 'Lagg till CM'}</DialogTitle>
-            <DialogDescription>
-              {role === 'admin'
-                ? 'Skapa en ny adminanvandare och skicka inbjudan.'
-                : 'Skapa en ny content manager och skicka inbjudan.'}
-            </DialogDescription>
-          </DialogHeader>
-
-        <div className="grid gap-3">
-          <div className="flex items-center gap-4 rounded-lg border border-border bg-secondary/30 p-3">
-            <AdminAvatar name={name || 'Ny CM'} avatarUrl={avatarUrl || null} size="lg" />
-            <div>
-              <div className="text-sm font-semibold text-foreground">
-                {name || (role === 'admin' ? 'Ny admin' : 'Ny CM')}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                Lagg till profilbild via URL-faltet nedan.
-              </div>
-            </div>
-          </div>
-
-          <Field label="Namn">
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            />
-          </Field>
-
-          <Field label="Roll">
-            <select
-              value={role}
-              onChange={(event) =>
-                setRole(event.target.value as 'content_manager' | 'admin')
-              }
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            >
-              <option value="content_manager">Content Manager</option>
-              <option value="admin">Admin</option>
-            </select>
-          </Field>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="E-post">
-              <input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-              />
-            </Field>
-            <Field label="Telefon">
-              <input
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-              />
-            </Field>
-          </div>
-
-          <Field label="Ort">
-            <input
-              value={city}
-              onChange={(event) => setCity(event.target.value)}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            />
-          </Field>
-
-          <Field label="Bio">
-            <textarea
-              value={bio}
-              onChange={(event) => setBio(event.target.value)}
-              rows={3}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-            />
-          </Field>
-
-          <Field label="Profilbild (URL)">
-            <input
-              value={avatarUrl}
-              onChange={(event) => setAvatarUrl(event.target.value)}
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-              placeholder="https://..."
-            />
-          </Field>
-
-          {role === 'content_manager' ? (
-            <Field label="Kommission (%)">
-              <input
-                value={commissionRate}
-                onChange={(event) => setCommissionRate(event.target.value)}
-                inputMode="decimal"
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-              />
-            </Field>
-          ) : (
-            <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
-              Admin-invites skapas utan payrollfokus. Kommission anvands bara for CMs.
-            </div>
-          )}
-
-          <Field label="Farg">
-            <div className="flex flex-wrap gap-2">
-              {TEAM_COLORS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setColor(item)}
-                  className={`h-8 w-8 rounded-full border-2 ${
-                    color === item ? 'border-foreground' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: item }}
-                />
-              ))}
-            </div>
-          </Field>
-
-          {error ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          ) : null}
-          {warning ? (
-            <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning">
-              {warning}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="flex justify-end gap-2 pt-2">
+    <AdminFormDialog
+      open
+      onClose={handleClose}
+      title={role === 'admin' ? 'Lägg till admin' : 'Lägg till CM'}
+      description={
+        role === 'admin'
+          ? 'Skapa en ny adminanvändare och skicka inbjudan.'
+          : 'Skapa en ny content manager och skicka inbjudan.'
+      }
+      error={dialogError}
+      warning={warning}
+      size="md"
+      footer={
+        <>
           <button
-            onClick={onClose}
-            className="rounded-md border border-border px-4 py-2 text-sm"
+            onClick={handleClose}
+            disabled={isSubmitting || createTeamMember.isPending}
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent"
           >
             Avbryt
           </button>
           <button
-            onClick={handleSubmit}
-            disabled={!canSubmit || submitting}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            onClick={onSubmit}
+            disabled={!isValid || isSubmitting || createTeamMember.isPending}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {submitting
+            {isSubmitting || createTeamMember.isPending
               ? 'Skapar...'
               : role === 'admin'
-                ? 'Lagg till admin och bjud in'
-                : 'Lagg till CM och bjud in'}
+                ? 'Skapa admin & skicka inbjudan'
+                : 'Skapa CM & skicka inbjudan'}
           </button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
+        </>
+      }
+    >
+      <div className="space-y-6">
+        <AvatarUpload
+          initials={(name || (role === 'admin' ? 'A' : 'C')).charAt(0)}
+          currentUrl={avatarUrl || null}
+          fallbackColor={color}
+          onUploaded={(url) =>
+            setValue('avatar_url', url, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
+          uploadFn={uploadCmAvatar}
+        />
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="grid gap-1.5 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      {children}
-    </label>
+        <AdminField label="Namn" htmlFor="team_name" error={errors.name?.message}>
+          <Input id="team_name" {...register('name')} />
+        </AdminField>
+
+        <AdminField label="Roll" htmlFor="team_role">
+          <Select value={role} onValueChange={(next) => switchRole(next as 'admin' | 'content_manager')}>
+            <SelectTrigger id="team_role">
+              <SelectValue placeholder="Välj roll" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="content_manager">Content Manager</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+            </SelectContent>
+          </Select>
+        </AdminField>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <AdminField label="E-post" htmlFor="team_email" error={errors.email?.message}>
+            <Input id="team_email" type="email" autoComplete="email" {...register('email')} />
+          </AdminField>
+          <AdminField label="Telefon" htmlFor="team_phone" error={errors.phone?.message}>
+            <Input
+              id="team_phone"
+              placeholder="+46 70 123 45 67"
+              autoComplete="tel"
+              {...register('phone')}
+            />
+          </AdminField>
+        </div>
+
+        {existingMemberId ? (
+          <div className="text-xs text-status-warning-fg">
+            En teammedlem med samma e-post finns redan.{' '}
+            <Link
+              href={`/admin/team?focus=${existingMemberId}`}
+              className="font-medium underline underline-offset-4"
+            >
+              Visa befintlig CM
+            </Link>
+            .
+          </div>
+        ) : null}
+
+        <AdminField label="Ort" htmlFor="team_city" error={errors.city?.message}>
+          <Input id="team_city" {...register('city')} />
+        </AdminField>
+
+        <AdminField
+          label="Bio"
+          htmlFor="team_bio"
+          hint={`${bio.length} / 2000 tecken`}
+          error={errors.bio?.message}
+        >
+          <Textarea
+            id="team_bio"
+            {...register('bio')}
+            rows={4}
+          />
+        </AdminField>
+
+        {role === 'content_manager' ? (
+          <>
+            <AdminField
+              label="Kommission (%)"
+              htmlFor="team_commission_rate"
+              hint="Dra reglaget eller skriv exakt procent."
+              error={errors.commission_rate_percent?.message}
+            >
+              <div className="grid gap-2">
+                <Slider
+                  id="team_commission_rate"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={commissionRatePercent}
+                  onChange={(event) => {
+                    setValue('commission_rate_percent', Number(event.target.value), {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                  }}
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  max={50}
+                  step={1}
+                  value={commissionRatePercent}
+                  onChange={(event) => {
+                    const parsed = Number(event.target.value);
+                    setValue(
+                      'commission_rate_percent',
+                      Number.isFinite(parsed) ? parsed : 0,
+                      {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      },
+                    );
+                  }}
+                />
+              </div>
+            </AdminField>
+
+            <AdminField label="Färg" error={errors.color?.message}>
+              <ColorSwatchGrid
+                value={color}
+                colors={TEAM_COLORS}
+                onChange={(next) =>
+                  setValue('color', next as (typeof TEAM_COLORS)[number], {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
+            </AdminField>
+          </>
+        ) : (
+          <div className="rounded-md border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
+            Admin-invites skapas utan payrollfokus. Kommission används bara för CMs.
+          </div>
+        )}
+
+        <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-3 text-left">
+          <span className="space-y-1">
+            <span className="block text-sm font-medium text-foreground">Skicka inbjudan direkt</span>
+            <span className="block text-xs text-muted-foreground">
+              Ny teammedlem får inviteflödet direkt efter skapandet.
+            </span>
+          </span>
+          <Switch
+            checked={sendInvite}
+            onCheckedChange={(next) =>
+              setValue('sendInvite', next, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+            aria-label="Skicka inbjudan direkt"
+          />
+        </div>
+      </div>
+    </AdminFormDialog>
   );
 }

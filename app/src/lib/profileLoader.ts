@@ -62,8 +62,6 @@ export interface TranslatedProfile {
   }[];
 }
 
-type ProfileId = keyof typeof profileData.profiles;
-
 /**
  * Load a brand profile by ID
  */

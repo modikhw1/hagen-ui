@@ -4,8 +4,12 @@ import { recordAuditLog } from '@/lib/admin/audit-log';
 import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import { resumeCustomerSubscription } from '@/lib/stripe/admin-billing';
-import { jsonError } from '@/lib/server/api-response';
-import { buildCustomerActionAuditMetadata, toOperationalProfileInput } from './shared';
+import {
+  actionFailure,
+  actionSuccess,
+  buildCustomerActionAuditMetadata,
+  toOperationalProfileInput,
+} from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type ResumeSubscriptionInput = Extract<
@@ -35,7 +39,7 @@ export async function handleResumeSubscription(
     .single();
 
   if (error) {
-    return jsonError(error.message, 500);
+    return actionFailure({ error: error.message, statusCode: 500 });
   }
 
   await syncOperationalSubscriptionState({
@@ -57,5 +61,5 @@ export async function handleResumeSubscription(
     }),
   });
 
-  return { success: true, subscription, profile };
+  return actionSuccess({ subscription, profile });
 }

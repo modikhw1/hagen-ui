@@ -6,9 +6,13 @@ import {
   type CmAbsenceType,
   type CompensationMode,
 } from '@/lib/admin/cm-absences';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
-import { jsonError } from '@/lib/server/api-response';
-import { buildCustomerActionAuditMetadata } from './shared';
+import {
+  actionFailure,
+  actionSuccess,
+  buildCustomerActionAuditMetadata,
+} from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
 type TemporaryCoverageInput = Extract<
@@ -21,7 +25,7 @@ export async function handleSetTemporaryCoverage(
   input: TemporaryCoverageInput,
 ): Promise<ActionResult> {
   if (!ctx.beforeProfile) {
-    return jsonError('Kunden hittades inte', 404);
+    return actionFailure({ error: SERVER_COPY.customerNotFound, statusCode: 404 });
   }
 
   const currentAssignment = await ctx.supabaseAdmin
@@ -32,17 +36,23 @@ export async function handleSetTemporaryCoverage(
     .maybeSingle();
 
   if (currentAssignment.error) {
-    return jsonError(
-      currentAssignment.error.message || 'Kunde inte lasa CM-assignment',
-      500,
-    );
+    return actionFailure({
+      error: currentAssignment.error.message || 'Kunde inte läsa CM-assignment',
+      statusCode: 500,
+    });
   }
 
   if (!currentAssignment.data?.cm_id) {
-    return jsonError(
-      'Kunden saknar ordinarie CM och kan inte temp-tackas',
-      400,
-    );
+    return actionFailure({
+      error: 'Kunden saknar ordinarie CM och kan inte temp-täckas',
+      statusCode: 400,
+    });
+  }
+  if (currentAssignment.data.cm_id === input.covering_cm_id) {
+    return actionFailure({
+      error: 'Ersättare måste vara en annan CM än kundens ordinarie CM',
+      statusCode: 422,
+    });
   }
 
   const absence = await createCmAbsence(ctx.supabaseAdmin, {
@@ -69,8 +79,5 @@ export async function handleSetTemporaryCoverage(
     metadata: buildCustomerActionAuditMetadata(ctx),
   });
 
-  return {
-    success: true,
-    absence,
-  };
+  return actionSuccess({ absence });
 }

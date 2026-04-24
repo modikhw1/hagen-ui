@@ -2,13 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
-import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { useCustomerInvoices } from '@/hooks/admin/useCustomerInvoices';
+import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
 import { useCustomerSubscription } from '@/hooks/admin/useCustomerSubscription';
-import { formatSek } from '@/lib/admin/money';
-import { shortDateSv } from '@/lib/admin/time';
-import { archiveCustomer, callCustomerAction } from '@/lib/admin/api-client';
+import { formatPriceSEK, formatSek, sekToOre } from '@/lib/admin/money';
+import { shortDateSv, todayDateInput } from '@/lib/admin/time';
 
 export default function SubscriptionActions({
   customerId,
@@ -21,67 +20,84 @@ export default function SubscriptionActions({
   onChanged: () => void;
   variant?: 'all' | 'safe' | 'danger';
 }) {
-  const [pending, setPending] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [pauseUntil, setPauseUntil] = useState(customer.paused_until ?? '');
-  const [cancelMode, setCancelMode] = useState<'end_of_period' | 'immediate' | 'immediate_with_credit'>('end_of_period');
+  const [cancelMode, setCancelMode] = useState<
+    'end_of_period' | 'immediate' | 'immediate_with_credit'
+  >('end_of_period');
   const [creditAmountSek, setCreditAmountSek] = useState('');
   const [cancelMemo, setCancelMemo] = useState('');
   const [confirmAction, setConfirmAction] = useState<'cancel' | 'archive' | null>(null);
-  const { data: subscription } = useCustomerSubscription(
-    customerId,
-    customer.stripe_subscription_id,
-  );
+
+  const reactivateArchiveMutation = useCustomerMutation(customerId, 'reactivate_archive', {
+    onSuccess: () => onChanged(),
+  });
+  const pauseSubscriptionMutation = useCustomerMutation(customerId, 'pause_subscription', {
+    onSuccess: () => onChanged(),
+  });
+  const resumeSubscriptionMutation = useCustomerMutation(customerId, 'resume_subscription', {
+    onSuccess: () => onChanged(),
+  });
+  const cancelSubscriptionMutation = useCustomerMutation(customerId, 'cancel_subscription', {
+    onSuccess: () => {
+      setConfirmAction(null);
+      onChanged();
+    },
+  });
+  const archiveCustomerMutation = useCustomerMutation(customerId, 'archive_customer', {
+    onSuccess: () => {
+      setConfirmAction(null);
+      onChanged();
+    },
+  });
+
+  const { data: subscription } = useCustomerSubscription(customerId);
   const { data: invoices = [] } = useCustomerInvoices(customerId);
 
   const latestPaidInvoice = useMemo(
     () => invoices.find((invoice) => invoice.status === 'paid') ?? null,
     [invoices],
   );
+  const parsedCreditAmountSek = Number(creditAmountSek || 0);
+  const creditAmountOre = Number.isFinite(parsedCreditAmountSek)
+    ? sekToOre(parsedCreditAmountSek)
+    : null;
 
-  const run = async (
-    body: CustomerAction | null,
-    method: 'PATCH' | 'DELETE' = 'PATCH',
-  ) => {
-    setPending(body?.action ?? (method === 'DELETE' ? 'archive' : method));
-    setError(null);
+  const pending =
+    reactivateArchiveMutation.isPending
+      ? 'reactivate_archive'
+      : pauseSubscriptionMutation.isPending
+        ? 'pause_subscription'
+        : resumeSubscriptionMutation.isPending
+          ? 'resume_subscription'
+          : cancelSubscriptionMutation.isPending
+            ? 'cancel_subscription'
+            : archiveCustomerMutation.isPending
+              ? 'archive'
+              : null;
 
-    try {
-      let result;
-      if (method === 'DELETE') {
-        result = await archiveCustomer(customerId);
-      } else if (body) {
-        result = await callCustomerAction(customerId, body);
-      } else {
-        throw new Error('Saknar action-payload');
-      }
-
-      if (!result.ok) {
-        throw new Error(result.error || 'Misslyckades');
-      }
-
-      setConfirmAction(null);
-      onChanged();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Misslyckades');
-    } finally {
-      setPending(null);
-    }
-  };
+  const activeError = [
+    reactivateArchiveMutation.error,
+    pauseSubscriptionMutation.error,
+    resumeSubscriptionMutation.error,
+    cancelSubscriptionMutation.error,
+    archiveCustomerMutation.error,
+  ].find(Boolean);
+  const error = activeError instanceof Error ? activeError.message : null;
 
   const cancelActionDisabled =
     pending !== null ||
     (cancelMode === 'immediate_with_credit' &&
-      (!latestPaidInvoice || !Number.isFinite(Number(creditAmountSek)) || Number(creditAmountSek) <= 0));
+      (!latestPaidInvoice || creditAmountOre == null || creditAmountOre <= 0));
 
   const cancelConfirmDescription =
     cancelMode === 'end_of_period'
-      ? 'Abonnemanget fortsatter fram till periodslut och stoppas sedan. Ingen kreditnota skapas.'
+      ? 'Abonnemanget fortsätter fram till periodslut och stoppas sedan. Ingen kreditnota skapas.'
       : cancelMode === 'immediate'
         ? 'Abonnemanget stoppas omedelbart utan kreditnota eller refund.'
         : latestPaidInvoice
-          ? `Abonnemanget stoppas omedelbart och en kreditnota skapas mot senaste betalda fakturan pa ${formatSek(Math.round(Number(creditAmountSek || 0) * 100))}.`
-          : 'Det finns ingen betald faktura att kreditera mot. Den har atgarden kommer att misslyckas.';
+          ? `Abonnemanget stoppas omedelbart och en kreditnota skapas mot senaste betalda fakturan på ${formatPriceSEK(parsedCreditAmountSek, { fallback: '0 kr' })}.`
+          : 'Det finns ingen betald faktura att kreditera mot. Den här åtgärden kommer att misslyckas.';
+
   const showSafe = variant === 'all' || variant === 'safe';
   const showDanger = variant === 'all' || variant === 'danger';
 
@@ -90,12 +106,12 @@ export default function SubscriptionActions({
       <div className="space-y-3">
         {showSafe && customer.status === 'archived' ? (
           <ActionButton
-            onClick={() => void run({ action: 'reactivate_archive' })}
+            onClick={() => void reactivateArchiveMutation.mutateAsync({}).catch(() => {})}
             disabled={pending !== null}
           >
             {pending === 'reactivate_archive'
-              ? 'Ateraktiverar...'
-              : 'Ateraktivera befintlig kundprofil'}
+              ? 'Återaktiverar...'
+              : 'Återaktivera befintlig kundprofil'}
           </ActionButton>
         ) : null}
 
@@ -108,7 +124,7 @@ export default function SubscriptionActions({
               <div>Nuvarande period slutar {shortDateSv(subscription.current_period_end)}</div>
             ) : null}
             {customer.paused_until ? (
-              <div>Autoresume planerad till {shortDateSv(customer.paused_until)}</div>
+              <div>Automatisk återupptagning planerad till {shortDateSv(customer.paused_until)}</div>
             ) : null}
           </div>
         ) : null}
@@ -120,22 +136,23 @@ export default function SubscriptionActions({
           <div className="rounded-md border border-border p-3">
             <div className="mb-2 text-sm font-semibold text-foreground">Pausa abonnemang</div>
             <div className="mb-2 text-xs text-muted-foreground">
-              Satt ett slutdatum sa att abonnemanget aterupptas automatiskt.
+              Sätt ett slutdatum så att abonnemanget återupptas automatiskt.
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <input
                 type="date"
                 value={pauseUntil}
-                min={new Date().toISOString().slice(0, 10)}
+                min={todayDateInput()}
                 onChange={(event) => setPauseUntil(event.target.value)}
                 className="rounded-md border border-border bg-background px-3 py-2 text-sm"
               />
               <ActionButton
                 onClick={() =>
-                  void run({
-                    action: 'pause_subscription',
-                    pause_until: pauseUntil || null,
-                  })
+                  void pauseSubscriptionMutation
+                    .mutateAsync({
+                      pause_until: pauseUntil || null,
+                    })
+                    .catch(() => {})
                 }
                 disabled={pending !== null || !pauseUntil}
               >
@@ -149,14 +166,14 @@ export default function SubscriptionActions({
         subscription &&
         (subscription.status === 'paused' || subscription.cancel_at_period_end) ? (
           <ActionButton
-            onClick={() => void run({ action: 'resume_subscription' })}
+            onClick={() => void resumeSubscriptionMutation.mutateAsync({}).catch(() => {})}
             disabled={pending !== null}
           >
             {pending === 'resume_subscription'
-              ? 'Aterupptar...'
+              ? 'Återupptar...'
               : subscription.cancel_at_period_end
-                ? 'Angra uppsagning'
-                : 'Ateruppta abonnemang'}
+                ? 'Ångra uppsägning'
+                : 'Återuppta abonnemang'}
           </ActionButton>
         ) : null}
 
@@ -172,7 +189,7 @@ export default function SubscriptionActions({
                 active={cancelMode === 'end_of_period'}
                 onClick={() => setCancelMode('end_of_period')}
                 title="Vid periodslut"
-                description="Tjansten fortsatter perioden ut och stangs sedan."
+                description="Tjänsten fortsätter perioden ut och stängs sedan."
               />
               <ModeRow
                 active={cancelMode === 'immediate'}
@@ -192,8 +209,8 @@ export default function SubscriptionActions({
               <div className="mt-3 space-y-2 rounded-md border border-border bg-secondary/30 p-3">
                 <div className="text-xs text-muted-foreground">
                   {latestPaidInvoice
-                    ? `Senaste betalda faktura: ${formatSek(latestPaidInvoice.amount_due ?? 0)} fran ${shortDateSv(latestPaidInvoice.created_at)}`
-                    : 'Ingen betald faktura hittades. Valt lage kommer att misslyckas utan underlag for kreditering.'}
+                    ? `Senaste betalda faktura: ${formatSek(latestPaidInvoice.amount_due ?? 0)} från ${shortDateSv(latestPaidInvoice.created_at)}`
+                    : 'Ingen betald faktura hittades. Valt läge kommer att misslyckas utan underlag för kreditering.'}
                 </div>
                 <input
                   value={creditAmountSek}
@@ -221,7 +238,7 @@ export default function SubscriptionActions({
                 {pending === 'cancel_subscription'
                   ? 'Avslutar...'
                   : cancelMode === 'end_of_period'
-                    ? 'Schemalagg uppsagning'
+                    ? 'Schemalägg uppsägning'
                     : cancelMode === 'immediate'
                       ? 'Avsluta direkt'
                       : 'Avsluta direkt och kreditera'}
@@ -254,22 +271,21 @@ export default function SubscriptionActions({
         description={cancelConfirmDescription}
         confirmLabel={
           cancelMode === 'end_of_period'
-            ? 'Bekrafta uppsagning'
+            ? 'Bekräfta uppsägning'
             : cancelMode === 'immediate'
               ? 'Avsluta direkt'
               : 'Avsluta och kreditera'
         }
         onConfirm={() =>
-          void run({
-            action: 'cancel_subscription',
-            mode: cancelMode,
-            invoice_id: latestPaidInvoice?.id ?? null,
-            credit_amount_ore:
-              cancelMode === 'immediate_with_credit'
-                ? Math.round(Number(creditAmountSek || 0) * 100)
-                : null,
-            memo: cancelMemo || null,
-          })
+          void cancelSubscriptionMutation
+            .mutateAsync({
+              mode: cancelMode,
+              invoice_id: latestPaidInvoice?.id ?? null,
+              credit_amount_ore:
+                cancelMode === 'immediate_with_credit' ? creditAmountOre : null,
+              memo: cancelMemo || null,
+            })
+            .catch(() => {})
         }
         pending={pending === 'cancel_subscription'}
       />
@@ -278,9 +294,9 @@ export default function SubscriptionActions({
         open={confirmAction === 'archive'}
         onOpenChange={(open) => setConfirmAction(open ? 'archive' : null)}
         title="Arkivera kund?"
-        description="Kundprofilen markeras som arkiverad och tillhorande Stripe-resurser stadas enligt arkiveringsflodet."
+        description="Kundprofilen markeras som arkiverad och tillhörande Stripe-resurser städas enligt arkiveringsflödet."
         confirmLabel="Arkivera kund"
-        onConfirm={() => void run(null, 'DELETE')}
+        onConfirm={() => void archiveCustomerMutation.mutateAsync(undefined).catch(() => {})}
         pending={pending === 'archive'}
       />
     </>
@@ -291,10 +307,10 @@ function statusLabel(status: string, cancelAtPeriodEnd: boolean) {
   if (cancelAtPeriodEnd) return 'Avslutas vid periodens slut';
   if (status === 'paused') return 'Pausad';
   if (status === 'active') return 'Aktiv';
-  if (status === 'past_due') return 'Forfallen';
+  if (status === 'past_due') return 'Förfallen';
   if (status === 'trialing') return 'Trial';
   if (status === 'canceled' || status === 'cancelled') return 'Avslutad';
-  return status || 'Okand';
+  return status || 'Okänd';
 }
 
 function ModeRow({

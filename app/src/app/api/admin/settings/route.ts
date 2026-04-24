@@ -1,5 +1,4 @@
-import { z } from 'zod';
-import { withAuth } from '@/lib/auth/api-auth';
+import { withAuth, requireScope } from '@/lib/auth/api-auth';
 import {
   getAdminSettings,
   SettingsStorageUnavailableError,
@@ -7,23 +6,26 @@ import {
 } from '@/lib/admin/settings';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { recordAuditLog } from '@/lib/admin/audit-log';
+import { recordAdminAction } from '@/lib/admin/audit';
+import {
+  adminSettingsResponseSchema,
+  updateAdminSettingsInputSchema,
+} from '@/lib/admin/schemas/settings';
 
-const settingsSchema = z.object({
-  default_billing_interval: z.enum(['month', 'quarter', 'year']).optional(),
-  default_payment_terms_days: z.number().int().min(1).max(90).optional(),
-  default_currency: z.string().trim().min(3).max(8).optional(),
-  default_commission_rate: z.number().min(0).max(1).optional(),
-}).strict();
+export const GET = withAuth(async (_request, user) => {
+  requireScope(user, 'settings.read');
 
-export const GET = withAuth(async () => {
   const supabaseAdmin = createSupabaseAdmin();
   const result = await getAdminSettings(supabaseAdmin);
-  return jsonOk(result);
+  const response = jsonOk(adminSettingsResponseSchema.parse(result));
+  response.headers.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
+  return response;
 }, ['admin']);
 
 export const PATCH = withAuth(async (request, user) => {
-  const parsed = settingsSchema.safeParse(await request.json());
+  requireScope(user, 'settings.write');
+
+  const parsed = updateAdminSettingsInputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return jsonError('Ogiltig settings-payload', 400, {
       details: parsed.error.issues.map((issue) => ({
@@ -38,18 +40,42 @@ export const PATCH = withAuth(async (request, user) => {
 
   try {
     const after = await updateAdminSettings(supabaseAdmin, parsed.data);
-    await recordAuditLog(supabaseAdmin, {
-      actorUserId: user.id,
+    const changedFields = Object.entries(after.settings).reduce<Record<string, unknown>>(
+      (acc, [key, nextValue]) => {
+        if (key === 'updated_at') {
+          return acc;
+        }
+
+        const previousValue = before.settings[key as keyof typeof before.settings];
+        if (previousValue !== nextValue) {
+          acc[key] = {
+            from: previousValue,
+            to: nextValue,
+          };
+        }
+
+        return acc;
+      },
+      {},
+    );
+
+    await recordAdminAction(supabaseAdmin, {
+      actorId: user.id,
       actorEmail: user.email,
       actorRole: user.role,
       action: 'admin.settings.updated',
-      entityType: 'settings',
-      entityId: 'global',
-      beforeState: before.settings,
-      afterState: after.settings,
+      entityType: 'admin_settings',
+      entityId: null,
+      metadata: {
+        changed_fields: changedFields,
+      },
+      beforeState: before.settings as Record<string, unknown>,
+      afterState: after.settings as Record<string, unknown>,
     });
 
-    return jsonOk(after);
+    const response = jsonOk(adminSettingsResponseSchema.parse(after));
+    response.headers.set('Cache-Control', 'private, no-cache');
+    return response;
   } catch (error) {
     if (error instanceof SettingsStorageUnavailableError) {
       return jsonError(error.message, 409);
@@ -61,4 +87,3 @@ export const PATCH = withAuth(async (request, user) => {
     );
   }
 }, ['admin']);
-

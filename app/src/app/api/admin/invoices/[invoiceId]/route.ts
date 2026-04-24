@@ -19,11 +19,15 @@ const payVoidSchema = z
   })
   .strict();
 
+const creditModeSchema = z.enum(['full', 'partial_override']).default('full');
+
 const creditNoteSchema = z
   .object({
     action: z.literal('credit_note'),
-    stripe_line_item_id: z.string().trim().min(1),
+    stripe_line_item_id: z.string().trim().min(1).nullable(),
     amount_ore: z.number().int().min(1),
+    mode: creditModeSchema,
+    override_partial_amount_ore: z.number().int().positive().optional(),
     refund_amount_ore: z.number().int().min(0).optional().nullable(),
     memo: z.string().trim().max(1000).optional().nullable(),
   })
@@ -32,8 +36,10 @@ const creditNoteSchema = z
 const creditNoteAndReissueSchema = z
   .object({
     action: z.literal('credit_note_and_reissue'),
-    stripe_line_item_id: z.string().trim().min(1),
+    stripe_line_item_id: z.string().trim().min(1).nullable(),
     amount_ore: z.number().int().min(1),
+    mode: creditModeSchema,
+    override_partial_amount_ore: z.number().int().positive().optional(),
     refund_amount_ore: z.number().int().min(0).optional().nullable(),
     memo: z.string().trim().max(1000).optional().nullable(),
     days_until_due: z.number().int().min(1).max(90).default(14),
@@ -45,6 +51,49 @@ const creditNoteAndReissueSchema = z
     ).min(1),
   })
   .strict();
+
+function resolveCreditAmount(params: {
+  amountOre: number;
+  mode: 'full' | 'partial_override';
+  overridePartialAmountOre?: number;
+}) {
+  if (params.mode === 'full') {
+    if (
+      typeof params.overridePartialAmountOre === 'number' &&
+      params.overridePartialAmountOre !== params.amountOre
+    ) {
+      return {
+        ok: false as const,
+        error: 'Partial kreditering är blockerad som standard. Välj full kreditering.',
+      };
+    }
+    return {
+      ok: true as const,
+      amountOre: params.amountOre,
+    };
+  }
+
+  if (
+    typeof params.overridePartialAmountOre !== 'number' ||
+    params.overridePartialAmountOre <= 0
+  ) {
+    return {
+      ok: false as const,
+      error: 'Partial override kräver `override_partial_amount_ore`.',
+    };
+  }
+  if (params.overridePartialAmountOre >= params.amountOre) {
+    return {
+      ok: false as const,
+      error: 'Partial override måste vara mindre än full radsumma.',
+    };
+  }
+
+  return {
+    ok: true as const,
+    amountOre: params.overridePartialAmountOre,
+  };
+}
 
 export const GET = withAuth(
   async (
@@ -160,6 +209,14 @@ export const PATCH = withAuth(
 
     if (parsedCreditNoteAndReissue.success) {
       const reissueData = parsedCreditNoteAndReissue.data;
+      const creditAmount = resolveCreditAmount({
+        amountOre: reissueData.amount_ore,
+        mode: reissueData.mode,
+        overridePartialAmountOre: reissueData.override_partial_amount_ore,
+      });
+      if (!creditAmount.ok) {
+        return jsonError(creditAmount.error, 400);
+      }
       const invoiceRecord = await supabaseAdmin
         .from('invoices')
         .select('customer_profile_id')
@@ -175,7 +232,7 @@ export const PATCH = withAuth(
         stripeClient: stripe,
         invoiceId,
         stripeLineItemId: reissueData.stripe_line_item_id,
-        amountOre: reissueData.amount_ore,
+        amountOre: creditAmount.amountOre,
         refundAmountOre: reissueData.refund_amount_ore ?? null,
         memo: reissueData.memo ?? null,
       });
@@ -204,7 +261,7 @@ export const PATCH = withAuth(
           metadata: {
             stripe_invoice_id: result.invoice.id,
             stripe_credit_note_id: result.creditNote.id,
-            amount_ore: reissueData.amount_ore,
+            amount_ore: creditAmount.amountOre,
             refund_amount_ore: reissueData.refund_amount_ore ?? null,
             replacement_items: reissueData.reissue_items.length,
             error:
@@ -233,7 +290,7 @@ export const PATCH = withAuth(
           stripe_invoice_id: result.invoice.id,
           stripe_credit_note_id: result.creditNote.id,
           replacement_invoice_id: replacementInvoice.id,
-          amount_ore: reissueData.amount_ore,
+          amount_ore: creditAmount.amountOre,
           refund_amount_ore: reissueData.refund_amount_ore ?? null,
           replacement_items: reissueData.reissue_items.length,
         },
@@ -250,12 +307,20 @@ export const PATCH = withAuth(
     }
 
     const creditNoteData = parsedCreditNote.data;
+    const creditAmount = resolveCreditAmount({
+      amountOre: creditNoteData.amount_ore,
+      mode: creditNoteData.mode,
+      overridePartialAmountOre: creditNoteData.override_partial_amount_ore,
+    });
+    if (!creditAmount.ok) {
+      return jsonError(creditAmount.error, 400);
+    }
     const result = await createInvoiceLineCreditNote({
       supabaseAdmin,
       stripeClient: stripe,
       invoiceId,
       stripeLineItemId: creditNoteData.stripe_line_item_id,
-      amountOre: creditNoteData.amount_ore,
+      amountOre: creditAmount.amountOre,
       refundAmountOre: creditNoteData.refund_amount_ore ?? null,
       memo: creditNoteData.memo ?? null,
     });
@@ -270,8 +335,9 @@ export const PATCH = withAuth(
       metadata: {
         stripe_invoice_id: result.invoice.id,
         stripe_credit_note_id: result.creditNote.id,
-        amount_ore: creditNoteData.amount_ore,
+        amount_ore: creditAmount.amountOre,
         refund_amount_ore: creditNoteData.refund_amount_ore ?? null,
+        mode: creditNoteData.mode,
       },
     });
 

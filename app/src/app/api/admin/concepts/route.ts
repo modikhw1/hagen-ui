@@ -9,7 +9,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
  * GET /api/admin/concepts
  * List all concepts
  */
-export const GET = withAuth(async (request: NextRequest, _user) => {
+export const GET = withAuth(async (request: NextRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const source = searchParams.get('source'); // Filter by source (hagen, cm_created)

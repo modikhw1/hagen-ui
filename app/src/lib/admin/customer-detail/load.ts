@@ -1,10 +1,16 @@
 import 'server-only';
 
+import { unstable_cache } from 'next/cache';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { adminCustomerTag } from '@/lib/admin/cache-tags';
+import { listEnrichedCmAbsences } from '@/lib/admin/cm-absences';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import {
-  listEnrichedCmAbsences,
-} from '@/lib/admin/cm-absences';
+  deriveCustomerStatus,
+  type DerivedCustomerStatus,
+} from '@/lib/admin/customer-status';
 import type { CustomerInvitePayload } from '@/lib/schemas/customer';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import type { Database, Tables } from '@/types/database';
 
 type CustomerProfileRow = Tables<'customer_profiles'>;
@@ -15,6 +21,15 @@ type CustomerDetailRpcPayload = {
   buffer_row?: Record<string, unknown> | null;
   attention_snoozes?: Array<Record<string, unknown>>;
   coverage_absences?: Array<Record<string, unknown>>;
+  derived_status?: string | null;
+};
+
+type LoadedDetailPayload = {
+  profile: Record<string, unknown>;
+  bufferRow: Record<string, unknown> | null;
+  attentionSnoozes: Array<Record<string, unknown>>;
+  coverageAbsences: Array<Record<string, unknown>>;
+  derivedStatus: DerivedCustomerStatus | string | null;
 };
 
 export function isMissingRelationError(message?: string | null) {
@@ -33,17 +48,85 @@ function isMissingFunctionError(message?: string | null) {
   );
 }
 
+function normalizeUpcomingPriceChange(profile: Record<string, unknown>) {
+  const raw = profile.upcoming_price_change;
+  if (raw && typeof raw === 'object') {
+    const asRecord = raw as Record<string, unknown>;
+    if (
+      typeof asRecord.effective_date === 'string' &&
+      (typeof asRecord.price_ore === 'number' || typeof asRecord.price === 'number')
+    ) {
+      return asRecord;
+    }
+  }
+
+  const effectiveDate =
+    typeof profile.upcoming_price_effective_date === 'string'
+      ? profile.upcoming_price_effective_date
+      : null;
+  const upcomingMonthlyPrice =
+    typeof profile.upcoming_monthly_price === 'number'
+      ? profile.upcoming_monthly_price
+      : typeof profile.upcoming_monthly_price === 'string'
+        ? Number(profile.upcoming_monthly_price)
+        : null;
+
+  if (
+    effectiveDate &&
+    upcomingMonthlyPrice !== null &&
+    Number.isFinite(upcomingMonthlyPrice) &&
+    upcomingMonthlyPrice > 0
+  ) {
+    return {
+      effective_date: effectiveDate,
+      price: upcomingMonthlyPrice,
+    };
+  }
+
+  return null;
+}
+
 export function buildCustomerPayload(
   profile: Record<string, unknown>,
   options?: {
     bufferRow?: Record<string, unknown> | null;
     attentionSnoozes?: Array<Record<string, unknown>>;
     coverageAbsences?: Array<Record<string, unknown>>;
+    derivedStatus?: string | null;
   },
 ) {
+  const upcomingPriceChange = normalizeUpcomingPriceChange(profile);
+  const derivedStatus =
+    (typeof options?.derivedStatus === 'string' ? options.derivedStatus : null) ??
+    deriveCustomerStatus({
+      status: typeof profile.status === 'string' ? profile.status : null,
+      archived_at:
+        typeof profile.archived_at === 'string' ? profile.archived_at : null,
+      paused_until:
+        typeof profile.paused_until === 'string' ? profile.paused_until : null,
+      invited_at:
+        typeof profile.invited_at === 'string' ? profile.invited_at : null,
+      concepts_per_week:
+        typeof profile.concepts_per_week === 'number'
+          ? profile.concepts_per_week
+          : typeof profile.concepts_per_week === 'string'
+            ? Number(profile.concepts_per_week)
+            : null,
+      latest_planned_publish_date:
+        typeof options?.bufferRow?.latest_planned_publish_date === 'string'
+          ? options.bufferRow.latest_planned_publish_date
+          : null,
+      escalation_flag:
+        typeof profile.escalation_flag === 'boolean'
+          ? profile.escalation_flag
+          : null,
+    });
+
   return {
     customer: {
       ...profile,
+      ...(derivedStatus ? { derived_status: derivedStatus } : {}),
+      upcoming_price_change: upcomingPriceChange,
       latest_planned_publish_date:
         options?.bufferRow?.latest_planned_publish_date ?? null,
       last_published_at: options?.bufferRow?.last_published_at ?? null,
@@ -131,10 +214,23 @@ export async function loadCustomerDetail(params: {
 }) {
   const { supabaseAdmin, id, user } = params;
   const rpcPayload = await loadCustomerDetailFromRpc(supabaseAdmin, id);
-  const fallbackPayload =
-    rpcPayload ?? (await loadCustomerDetailFromRelations(supabaseAdmin, id));
-  const profile = fallbackPayload.profile;
+  const fallbackEnabled = process.env.ADMIN_DETAIL_FALLBACK === '1';
+  const payload =
+    rpcPayload ??
+    (fallbackEnabled ? await loadCustomerDetailFromRelations(supabaseAdmin, id) : null);
 
+  if (!payload) {
+    throw new Error(SERVER_COPY.fetchCustomerFailed);
+  }
+
+  if (!rpcPayload) {
+    console.warn(
+      '[admin.customer-detail] RPC fallback activated; verify admin_get_customer_detail migration.',
+      { customerId: id },
+    );
+  }
+
+  const profile = payload.profile;
   if (!user.is_admin && user.role !== 'admin') {
     const isAssignedContentManager =
       user.role === 'content_manager' &&
@@ -144,23 +240,60 @@ export async function loadCustomerDetail(params: {
       (profile?.user_id === user.id || profile?.id === user.id);
 
     if (!isAssignedContentManager && !isCustomerOwner) {
-      const accessError = new Error('Du saknar behorighet');
+      const accessError = new Error(SERVER_COPY.forbidden);
       Object.assign(accessError, { statusCode: 403 });
       throw accessError;
     }
   }
 
   return buildCustomerPayload(profile as Record<string, unknown>, {
-    bufferRow: (fallbackPayload.bufferRow ?? null) as CustomerBufferRow | null,
-    attentionSnoozes: (fallbackPayload.attentionSnoozes ?? []) as AttentionSnoozeRow[],
-    coverageAbsences: fallbackPayload.coverageAbsences,
+    bufferRow: (payload.bufferRow ?? null) as CustomerBufferRow | null,
+    attentionSnoozes: (payload.attentionSnoozes ?? []) as AttentionSnoozeRow[],
+    coverageAbsences: payload.coverageAbsences,
+    derivedStatus:
+      typeof payload.derivedStatus === 'string' ? payload.derivedStatus : null,
   });
+}
+
+export async function loadAdminCustomerHeader(id: string) {
+  return unstable_cache(
+    async () => {
+      const supabaseAdmin = createSupabaseAdmin();
+      const { data, error } = await supabaseAdmin
+        .from('customer_profiles')
+        .select('id, business_name, contact_email, customer_contact_name, tiktok_handle, status, monthly_price, account_manager, next_invoice_date, created_at')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        throw new Error(error.message || SERVER_COPY.fetchCustomerHeaderFailed);
+      }
+
+      return {
+        id: data.id,
+        business_name: data.business_name ?? '',
+        contact_email: data.contact_email ?? '',
+        customer_contact_name: data.customer_contact_name ?? null,
+        tiktok_handle: data.tiktok_handle ?? null,
+        status: data.status ?? 'pending',
+        monthly_price: data.monthly_price ?? null,
+        account_manager_name: data.account_manager ?? null,
+        next_invoice_date: data.next_invoice_date ?? null,
+        created_at: data.created_at ?? '',
+      };
+    },
+    ['admin-customer-header-by-id', id],
+    {
+      revalidate: 60,
+      tags: [adminCustomerTag(id)],
+    },
+  )();
 }
 
 async function loadCustomerDetailFromRpc(
   supabaseAdmin: SupabaseClient<Database>,
   id: string,
-) {
+): Promise<LoadedDetailPayload | null> {
   const { data, error } = await (supabaseAdmin.rpc(
     'admin_get_customer_detail' as never,
     { p_id: id } as never,
@@ -173,12 +306,11 @@ async function loadCustomerDetailFromRpc(
     if (isMissingFunctionError(error.message)) {
       return null;
     }
-
-    throw new Error(error.message || 'Kunde inte hamta kunddetaljer');
+    throw new Error(error.message || SERVER_COPY.fetchCustomerFailed);
   }
 
   if (!data?.profile) {
-    throw new Error('Kunden hittades inte');
+    throw new Error(SERVER_COPY.customerNotFound);
   }
 
   return {
@@ -186,13 +318,15 @@ async function loadCustomerDetailFromRpc(
     bufferRow: data.buffer_row ?? null,
     attentionSnoozes: data.attention_snoozes ?? [],
     coverageAbsences: data.coverage_absences ?? [],
+    derivedStatus:
+      typeof data.derived_status === 'string' ? data.derived_status : null,
   };
 }
 
 async function loadCustomerDetailFromRelations(
   supabaseAdmin: SupabaseClient<Database>,
   id: string,
-) {
+): Promise<LoadedDetailPayload> {
   const [{ data: profile, error }, bufferResult, snoozesResult, coverageAbsences] =
     await Promise.all([
       supabaseAdmin
@@ -224,17 +358,46 @@ async function loadCustomerDetailFromRelations(
   }
 
   if (bufferResult.error && !isMissingRelationError(bufferResult.error.message)) {
-    throw new Error(bufferResult.error.message || 'Kunde inte hamta bufferdata');
+    throw new Error(bufferResult.error.message || SERVER_COPY.fetchBufferFailed);
   }
 
   if (snoozesResult.error && !isMissingRelationError(snoozesResult.error.message)) {
     throw new Error(
-      snoozesResult.error.message || 'Kunde inte hamta hanteras-markeringar',
+      snoozesResult.error.message || SERVER_COPY.fetchSnoozesFailed,
     );
   }
 
+  const profileRecord = profile as Record<string, unknown>;
+  const derivedStatus = deriveCustomerStatus({
+    status: typeof profileRecord.status === 'string' ? profileRecord.status : null,
+    archived_at:
+      typeof profileRecord.archived_at === 'string'
+        ? profileRecord.archived_at
+        : null,
+    paused_until:
+      typeof profileRecord.paused_until === 'string'
+        ? profileRecord.paused_until
+        : null,
+    invited_at:
+      typeof profileRecord.invited_at === 'string'
+        ? profileRecord.invited_at
+        : null,
+    concepts_per_week:
+      typeof profileRecord.concepts_per_week === 'number'
+        ? profileRecord.concepts_per_week
+        : null,
+    latest_planned_publish_date:
+      typeof bufferResult.data?.latest_planned_publish_date === 'string'
+        ? bufferResult.data.latest_planned_publish_date
+        : null,
+    escalation_flag:
+      typeof profileRecord.escalation_flag === 'boolean'
+        ? profileRecord.escalation_flag
+        : null,
+  });
+
   return {
-    profile: profile as Record<string, unknown>,
+    profile: profileRecord,
     bufferRow: (bufferResult.data ?? null) as CustomerBufferRow | null,
     attentionSnoozes: (snoozesResult.data ?? []) as AttentionSnoozeRow[],
     coverageAbsences: coverageAbsences.map((absence) => ({
@@ -251,6 +414,7 @@ async function loadCustomerDetailFromRelations(
       is_active: absence.is_active,
       is_upcoming: absence.is_upcoming,
     })),
+    derivedStatus,
   };
 }
 

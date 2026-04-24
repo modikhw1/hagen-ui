@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { loadConceptById, type TranslatedConcept } from '@/lib/conceptLoader';
 
 interface ConceptFormData {
@@ -19,7 +19,6 @@ interface ConceptFormData {
 
 export default function StudioConceptEditPage() {
   const params = useParams();
-  const router = useRouter();
   const conceptId = params?.id as string;
   
   const [concept, setConcept] = useState<TranslatedConcept | null>(null);

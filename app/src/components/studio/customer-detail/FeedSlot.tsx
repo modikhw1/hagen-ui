@@ -48,21 +48,13 @@ function FeedSlot({
   const [noClipFound, setNoClipFound] = React.useState(false);
   const [editingNote, setEditingNote] = React.useState(false);
   const [editingTikTok, setEditingTikTok] = React.useState(false);
-  const [editingMetadata, setEditingMetadata] = React.useState(false);
   const [editingPlannedDate, setEditingPlannedDate] = React.useState(false);
-  const [editingPublishedDate, setEditingPublishedDate] = React.useState(false);
   const [showReconciliationPicker, setShowReconciliationPicker] = React.useState(false);
   const [selectedReconciliationTargetId, setSelectedReconciliationTargetId] = React.useState('');
   const [savingReconciliation, setSavingReconciliation] = React.useState(false);
   const [localNote, setLocalNote] = React.useState('');
   const [localTikTokUrl, setLocalTikTokUrl] = React.useState('');
   const [localPlannedDate, setLocalPlannedDate] = React.useState('');
-  const [localPublishedDate, setLocalPublishedDate] = React.useState('');
-  const [localThumbnailUrl, setLocalThumbnailUrl] = React.useState('');
-  const [localViews, setLocalViews] = React.useState('');
-  const [localLikes, setLocalLikes] = React.useState('');
-  const [localComments, setLocalComments] = React.useState('');
-  const [localWatchTime, setLocalWatchTime] = React.useState('');
   const [refThumbnailUrl, setRefThumbnailUrl] = React.useState<string | null>(null);
 
   const { concept, type } = slot;
@@ -219,18 +211,10 @@ function FeedSlot({
   React.useEffect(() => {
     setLocalNote(markers?.assignment_note ?? '');
     setLocalTikTokUrl(result?.tiktok_url ?? '');
-    setLocalThumbnailUrl(result?.tiktok_thumbnail_url ?? '');
-    setLocalViews(result?.tiktok_views != null ? String(result.tiktok_views) : '');
-    setLocalLikes(result?.tiktok_likes != null ? String(result.tiktok_likes) : '');
-    setLocalComments(result?.tiktok_comments != null ? String(result.tiktok_comments) : '');
-    setLocalWatchTime(result?.tiktok_watch_time_seconds != null ? String(result.tiktok_watch_time_seconds) : '');
     setLocalPlannedDate(result?.planned_publish_at ? result.planned_publish_at.slice(0, 10) : '');
-    setLocalPublishedDate(result?.published_at ? result.published_at.slice(0, 10) : '');
     setEditingNote(false);
     setEditingTikTok(false);
-    setEditingMetadata(false);
     setEditingPlannedDate(false);
-    setEditingPublishedDate(false);
     setShowReconciliationPicker(false);
     setSelectedReconciliationTargetId(concept?.reconciliation.linked_customer_concept_id ?? '');
     setShowTagPicker(false);
@@ -238,29 +222,13 @@ function FeedSlot({
     concept?.id,
     markers?.assignment_note,
     result?.tiktok_url,
-    result?.tiktok_thumbnail_url,
-    result?.tiktok_views,
-    result?.tiktok_likes,
-    result?.tiktok_comments,
-    result?.tiktok_watch_time_seconds,
     result?.planned_publish_at,
-    result?.published_at,
     concept?.reconciliation.linked_customer_concept_id
   ]);
 
   const formatMetric = (value: number | null) => {
     if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
     return new Intl.NumberFormat('sv-SE', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
-  };
-
-  const parseInputNumber = (value: string): number | null => {
-    const trimmed = value.trim();
-    if (!trimmed) return null;
-    const parsed = Number(trimmed);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      throw new Error('Ange ett icke-negativt tal');
-    }
-    return Math.round(parsed);
   };
 
   const handleSavePlannedDate = async () => {
@@ -274,19 +242,6 @@ function FeedSlot({
       alert('Kunde inte spara planerat datum');
     }
   };
-
-  const handleSavePublishedDate = async () => {
-    if (!concept) return;
-    try {
-      const value = localPublishedDate ? new Date(localPublishedDate).toISOString() : null;
-      await onPatchConcept(concept.id, { published_at: value });
-      setEditingPublishedDate(false);
-      setShowContextMenu(false);
-    } catch {
-      alert('Kunde inte spara publicerat datum');
-    }
-  };
-
 
   const handleToggleTag = async (tagName: string) => {
     if (!concept) return;
@@ -322,48 +277,6 @@ function FeedSlot({
     } catch (error) {
       console.error('Error updating TikTok URL:', error);
       alert('Kunde inte spara TikTok-länk');
-    }
-  };
-
-  const handleSaveTikTokMetadata = async () => {
-    if (!concept) return;
-    try {
-      await onPatchConcept(concept.id, {
-        tiktok_thumbnail_url: localThumbnailUrl.trim() || null,
-        tiktok_views: parseInputNumber(localViews),
-        tiktok_likes: parseInputNumber(localLikes),
-        tiktok_comments: parseInputNumber(localComments),
-        tiktok_watch_time_seconds: parseInputNumber(localWatchTime),
-        tiktok_last_synced_at: new Date().toISOString()
-      });
-      setEditingMetadata(false);
-    } catch (error) {
-      console.error('Error updating TikTok metadata:', error);
-      alert(error instanceof Error ? error.message : 'Kunde inte spara TikTok-metadata');
-    }
-  };
-
-  const handleMarkContentLoadedNow = async () => {
-    if (!concept) return;
-    try {
-      await onPatchConcept(concept.id, {
-        content_loaded_at: new Date().toISOString(),
-        content_loaded_seen_at: null
-      });
-      setShowContextMenu(false);
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Kunde inte markera uppladdning');
-    }
-  };
-
-  const handleAcknowledgeUpload = async () => {
-    if (!concept || !hasUnreadUpload) return;
-    try {
-      await onPatchConcept(concept.id, {
-        content_loaded_seen_at: new Date().toISOString()
-      });
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Kunde inte markera uppladdning som sedd');
     }
   };
 

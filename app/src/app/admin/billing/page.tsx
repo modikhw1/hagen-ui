@@ -1,5 +1,5 @@
-import BillingHub from '@/components/admin/billing/BillingHub';
+import BillingPageRoute from '@/components/admin/billing/BillingPageRoute';
 
 export default function BillingPage() {
-  return <BillingHub initialTab="invoices" />;
+  return <BillingPageRoute />;
 }

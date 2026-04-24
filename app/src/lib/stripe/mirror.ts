@@ -35,6 +35,22 @@ function getInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
     : directSubscription?.id ?? null;
 }
 
+function getInvoicePaymentIntentId(invoice: Stripe.Invoice): string | null {
+  const paymentIntent = (
+    invoice as Stripe.Invoice & {
+      payment_intent?: string | { id?: string | null } | null;
+    }
+  ).payment_intent;
+
+  if (!paymentIntent) {
+    return null;
+  }
+
+  return typeof paymentIntent === 'string'
+    ? paymentIntent
+    : paymentIntent.id ?? null;
+}
+
 function mapSubStatusToCustomerStatus(status: string): string {
   if (status === 'active') return 'active';
   if (status === 'trialing') return 'agreed';
@@ -176,6 +192,16 @@ export async function upsertInvoiceMirror(params: {
         : new Date().toISOString()
       : null;
 
+  const subtotalOre =
+    typeof invoice.subtotal === 'number' && Number.isFinite(invoice.subtotal)
+      ? invoice.subtotal
+      : invoice.amount_due;
+  const totalOre =
+    typeof invoice.total === 'number' && Number.isFinite(invoice.total)
+      ? invoice.total
+      : invoice.amount_due;
+  const taxOre = Math.max(0, totalOre - subtotalOre);
+
   await upsertWithMissingColumnFallback({
     supabaseAdmin,
     table: 'invoices',
@@ -186,7 +212,13 @@ export async function upsertInvoiceMirror(params: {
       customer_profile_id: customerProfileId,
       amount_due: invoice.amount_due,
       amount_paid: invoice.amount_paid,
+      subtotal_ore: subtotalOre,
+      tax_ore: taxOre,
+      total_ore: totalOre,
       currency: invoice.currency || 'sek',
+      invoice_number: invoice.number ?? null,
+      payment_intent_id: getInvoicePaymentIntentId(invoice),
+      dispute_status: invoice.status === 'uncollectible' ? 'uncollectible' : null,
       status: invoice.status,
       hosted_invoice_url: invoice.hosted_invoice_url,
       invoice_pdf: invoice.invoice_pdf,

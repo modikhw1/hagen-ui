@@ -88,14 +88,14 @@ function CheckoutCompleteContent() {
 
     const resolveDashboardPath = async () => {
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user) return '/login';
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return '/login';
 
       const { data: profile } = await supabase
         .from('profiles')
         .select('is_admin, role')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .maybeSingle();
 
       return getPrimaryRouteForRole(profile, { fallback: '/welcome' });
@@ -103,9 +103,9 @@ function CheckoutCompleteContent() {
 
     const ensureCustomerProfileSetup = async (resolvedName: string) => {
       const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session?.user) return;
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
 
       const onboardingSession = loadOnboardingSession();
       const storedProfileId = getOnboardingProfileId() || undefined;
@@ -114,8 +114,8 @@ function CheckoutCompleteContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: session.user.id,
-          userEmail: session.user.email || '',
+          userId: user.id,
+          userEmail: user.email || '',
           businessName:
             resolvedName || onboardingSession?.businessName || 'Mitt företag',
           customerProfileId: storedProfileId,

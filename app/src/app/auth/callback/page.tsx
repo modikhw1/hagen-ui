@@ -199,25 +199,29 @@ function AuthCallbackContent() {
         }
 
         // Fallback: check if we already have a session
-        console.log('Checking existing session...');
-        const { data: { session }, error: getSessionError } = await supabase.auth.getSession();
+        console.log('Checking existing user...');
+        const { data: { user }, error: getUserError } = await supabase.auth.getUser();
 
-        if (getSessionError) {
-          console.error('Get session error:', getSessionError);
+        if (getUserError) {
+          console.error('Get user error:', getUserError);
           
           // Check for network errors
-          if (getSessionError.message?.includes('network') || getSessionError.message?.includes('fetch')) {
+          if (getUserError.message?.includes('network') || getUserError.message?.includes('fetch')) {
             updateState({ status: 'error', error: 'Nätverksfel. Kontrollera din internetanslutning.' });
           } else {
-            updateState({ status: 'error', error: 'Kunde inte hämta session' });
+            updateState({ status: 'error', error: 'Kunde inte hämta användare' });
           }
           return;
         }
 
-        if (session) {
-          const flowParam = searchParams?.get('flow');
-          await handleSessionEstablished(session, flowParam === 'invite' || !!session.user.invited_at);
-          return;
+        if (user) {
+          // Get session for handleSessionEstablished compatibility
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            const flowParam = searchParams?.get('flow');
+            await handleSessionEstablished(session, flowParam === 'invite' || !!session.user.invited_at);
+            return;
+          }
         }
 
         // No session found - could be an error scenario
@@ -319,19 +323,19 @@ function AuthCallbackContent() {
     }
 
     try {
-      // Always fetch a fresh session — the cached ref may hold an expired token
+      // Always fetch fresh user — the cached ref may hold an expired token
       // if the user took several minutes to fill in the password form.
-      const { data: { session: freshSession } } = await supabase.auth.getSession();
-      const session = freshSession ?? sessionRef.current;
-      console.log('[PASSWORD] Checking session...');
+      const { data: { user: freshUser } } = await supabase.auth.getUser();
+      const user = freshUser ?? sessionRef.current?.user;
+      console.log('[PASSWORD] Checking user...');
 
-      if (!session) {
-        console.log('[PASSWORD] No session available!');
+      if (!user) {
+        console.log('[PASSWORD] No user available!');
         updateState({ error: 'Sessionen har gått ut. Klicka på inbjudningslänken igen.', isSubmitting: false });
         return;
       }
 
-      console.log('[PASSWORD] Using session for:', session.user?.email);
+      console.log('[PASSWORD] Using user:', user.email);
 
       // Update password via the Supabase client (handles token refresh automatically)
       const { error: updateError } = await supabase.auth.updateUser({ password: pwd });
@@ -355,6 +359,13 @@ function AuthCallbackContent() {
       }
 
       console.log('Password set successfully!');
+
+      // Get fresh session after password update
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        updateState({ error: 'Kunde inte hämta session efter lösenordsuppdatering.', isSubmitting: false });
+        return;
+      }
 
       // Clear invited_at from user metadata to prevent re-triggering password set flow
       try {

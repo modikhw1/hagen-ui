@@ -6,7 +6,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 // POST - Run database migration for Stripe fields
-export const POST = withAuth(async (request: NextRequest, user) => {
+export const POST = withAuth(async (request: NextRequest) => {
   try {
     // Simple secret check to prevent unauthorized runs
     const body = await request.json();
@@ -34,7 +34,7 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       try {
         // Try to insert a row to trigger the column addition - this won't work directly
         // Instead, we'll use a workaround: try to select the column
-        const { error } = await supabaseAdmin
+        await supabaseAdmin
           .from('customer_profiles')
           .select(migration.name)
           .limit(0);

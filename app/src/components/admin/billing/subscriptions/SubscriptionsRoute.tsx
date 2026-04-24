@@ -3,213 +3,203 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import AdminTable, { type AdminTableColumn } from '@/components/admin/_shared/AdminTable';
-import StatusPill from '@/components/admin/_shared/StatusPill';
-import SummaryCard from '@/components/admin/_shared/SummaryCard';
+import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
 import SubscriptionPriceChangeModal from '@/components/admin/billing/SubscriptionPriceChangeModal';
 import { useBillingSubscriptionsRefresh } from '@/hooks/admin/useAdminRefresh';
-import { type EnvFilter, subscriptionPricePerInterval } from '@/lib/admin/billing';
+import { apiClient } from '@/lib/admin/api-client';
+import {
+  subscriptionMonthlyPriceSek,
+  type BillingSubscriptionStatusFilter,
+  type EnvFilter,
+} from '@/lib/admin/billing';
 import { useStripeSyncSubscriptions } from '@/lib/admin/billing-ops';
-import { intervalLabel, subscriptionStatusConfig } from '@/lib/admin/labels';
+import {
+  billingSubscriptionsResponseSchema,
+  type BillingSubscriptionsResponse,
+} from '@/lib/admin/dtos/billing';
+import { parseDto } from '@/lib/admin/dtos/parse';
+import { subscriptionStatusRich } from '@/lib/admin/labels';
 import { formatSek } from '@/lib/admin/money';
 import { qk } from '@/lib/admin/queryKeys';
-import { shortDateSv } from '@/lib/admin/time';
+import { EnvTag } from '../shared/EnvTag';
+import { AdminActionMenu } from '@/components/admin/ui/AdminActionMenu';
+import { toast } from 'sonner';
+import { Settings2, User, ExternalLink } from 'lucide-react';
 
-type SubscriptionRow = {
-  id: string;
-  customer_name: string;
-  customer_profile_id: string | null;
-  amount: number;
-  status: string;
-  interval: string | null;
-  interval_count: number;
-  current_period_end: string | null;
-  cancel_at_period_end: boolean;
-};
+const PAGE_SIZE = 50;
 
-type SubscriptionResponse = {
-  subscriptions: SubscriptionRow[];
-  summary?: {
-    activeCount: number;
-    expiringCount: number;
-    mrrOre: number;
-  };
-};
-
-const columns: Array<AdminTableColumn<SubscriptionRow>> = [
-  {
-    key: 'customer',
-    header: 'Kund',
-    width: '2fr',
-    render: (subscription) => (
-      <div className="truncate text-sm font-medium text-foreground">
-        {subscription.customer_name}
-      </div>
-    ),
-  },
-  {
-    key: 'price',
-    header: 'Pris',
-    width: '1fr',
-    render: (subscription) => (
-      <div className="text-sm font-semibold text-foreground">
-        {formatSek(subscription.amount)}
-      </div>
-    ),
-  },
-  {
-    key: 'period_end',
-    header: 'Nästa period',
-    width: '1fr',
-    render: (subscription) => (
-      <div className="text-xs text-muted-foreground">
-        {shortDateSv(subscription.current_period_end)}
-      </div>
-    ),
-  },
-  {
-    key: 'interval',
-    header: 'Intervall',
-    width: '1fr',
-    render: (subscription) => (
-      <div className="text-xs text-muted-foreground">
-        {subscription.interval_count === 3
-          ? '/kvartal'
-          : intervalLabel(subscription.interval ?? 'month')}
-      </div>
-    ),
-  },
-  {
-    key: 'status',
-    header: 'Status',
-    width: '120px',
-    render: (subscription) => {
-      const status = subscription.cancel_at_period_end
-        ? { label: 'Avslutas', className: 'bg-warning/10 text-warning' }
-        : subscriptionStatusConfig(subscription.status);
-
-      return <StatusPill config={status} />;
-    },
-  },
-  {
-    key: 'actions',
-    header: '',
-    width: '120px',
-    align: 'right',
-    linkable: false,
-    render: () => null,
-  },
-];
-
-export default function SubscriptionsRoute({ env }: { env: EnvFilter }) {
-  const refreshSubscriptions = useBillingSubscriptionsRefresh(env);
-  const [selectedSubscription, setSelectedSubscription] = useState<SubscriptionRow | null>(null);
-  const { run: syncSubscriptions, isPending, error } = useStripeSyncSubscriptions(env);
+export default function SubscriptionsRoute({
+  env,
+  status,
+  page,
+}: {
+  env: EnvFilter;
+  status: BillingSubscriptionStatusFilter;
+  page: number;
+}) {
+  const refreshSubscriptions = useBillingSubscriptionsRefresh();
+  const [selectedSubscription, setSelectedSubscription] = useState<
+    BillingSubscriptionsResponse['subscriptions'][number] | null
+  >(null);
+  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
+  
+  const {
+    run: syncSubscriptions,
+    isPending,
+    rateLimitRemainingSeconds,
+  } = useStripeSyncSubscriptions(env);
 
   const { data, isLoading } = useQuery({
-    queryKey: qk.billing.subscriptions(env),
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        limit: '200',
-        page: '1',
+    queryKey: qk.billing.subscriptionList(env, status, page, PAGE_SIZE),
+    queryFn: async ({ signal }) => {
+      const payload = await apiClient.get<BillingSubscriptionsResponse>('/api/admin/subscriptions', {
+        signal,
+        query: {
+          limit: PAGE_SIZE,
+          page,
+          environment: env === 'all' ? undefined : env,
+          status: status === 'all' ? undefined : status,
+        },
       });
-
-      if (env !== 'all') {
-        params.set('environment', env);
-      }
-
-      const response = await fetch(`/api/admin/subscriptions?${params.toString()}`, {
-        credentials: 'include',
+      return parseDto(billingSubscriptionsResponseSchema, payload, {
+        name: 'billingSubscriptionsResponse',
+        path: '/api/admin/subscriptions',
       });
-
-      if (!response.ok) {
-        throw new Error('Kunde inte ladda abonnemang');
-      }
-
-      return (await response.json()) as SubscriptionResponse;
     },
   });
 
   const subscriptions = data?.subscriptions ?? [];
-  const summary = data?.summary ?? {
-    activeCount: subscriptions.filter(
-      (subscription) => subscription.status === 'active' && !subscription.cancel_at_period_end,
-    ).length,
-    expiringCount: subscriptions.filter((subscription) => subscription.cancel_at_period_end).length,
-    mrrOre: subscriptions
-      .filter((subscription) => subscription.status === 'active' && !subscription.cancel_at_period_end)
-      .reduce((sum, subscription) => {
-        if (subscription.interval === 'year') return sum + Math.round(subscription.amount / 12);
-        if (subscription.interval_count === 3) return sum + Math.round(subscription.amount / 3);
-        return sum + subscription.amount;
-      }, 0),
-  };
+  const pagination = data?.pagination;
+
+  const columns: Array<AdminTableColumn<BillingSubscriptionsResponse['subscriptions'][number]>> = [
+    {
+      key: 'customer',
+      header: 'Kund',
+      width: '2fr',
+      render: (sub) => (
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-medium text-foreground">{sub.customer_name}</span>
+          <EnvTag env={sub.environment} />
+        </div>
+      ),
+    },
+    {
+      key: 'price',
+      header: 'Belopp',
+      width: '1fr',
+      align: 'right',
+      render: (sub) => (
+        <div className="text-sm font-semibold text-foreground">{formatSek(sub.amount)}</div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '1.5fr',
+      render: (sub) => (
+        <div className="text-xs text-muted-foreground">
+          {subscriptionStatusRich({
+            status: sub.status,
+            cancel_at_period_end: sub.cancel_at_period_end,
+            current_period_end: sub.current_period_end,
+            created: sub.created
+          })}
+        </div>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      width: '40px',
+      align: 'right',
+      render: (sub) => (
+        <AdminActionMenu
+          items={[
+            {
+              label: 'Hantera abonnemang',
+              icon: <Settings2 className="h-3.5 w-3.5" />,
+              onClick: () => setSelectedSubscription(sub),
+            },
+            {
+              label: 'Visa kund',
+              icon: <User className="h-3.5 w-3.5" />,
+              onClick: () => {
+                if (sub.customer_profile_id) {
+                  window.location.href = `/admin/customers/${sub.customer_profile_id}`;
+                }
+              },
+            },
+            {
+              label: 'Öppna i Stripe',
+              icon: <ExternalLink className="h-3.5 w-3.5" />,
+              onClick: () => {
+                const url = `https://dashboard.stripe.com/${sub.environment === 'test' ? 'test/' : ''}subscriptions/${sub.stripe_subscription_id}`;
+                window.open(url, '_blank');
+              },
+            },
+          ]}
+        />
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row">
-        <SummaryCard label="Aktiva" value={String(summary.activeCount)} />
-        <SummaryCard label="MRR" value={formatSek(summary.mrrOre)} tone="success" />
-        <SummaryCard label="Avslutas" value={String(summary.expiringCount)} tone="warning" />
+      <div className="flex justify-between items-center px-1">
+        <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
+          {data?.summary?.activeCount ?? 0} Aktiva abonnemang
+        </div>
         <button
-          type="button"
-          onClick={() => void syncSubscriptions()}
-          disabled={isPending}
-          className="self-start rounded-md border border-border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50 lg:ml-auto"
+          onClick={() => setConfirmSyncOpen(true)}
+          disabled={isPending || rateLimitRemainingSeconds > 0}
+          className="text-[10px] font-bold uppercase text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
-          {isPending ? 'Synkar...' : 'Synka från Stripe'}
+          {isPending ? 'Synkar...' : 'Kör Stripe-synk'}
         </button>
       </div>
 
-      {error ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {error.message}
-        </div>
-      ) : null}
-
       <AdminTable
-        columns={[
-          ...columns.slice(0, 5),
-          {
-            ...columns[5],
-            render: (subscription) => (
-              <div className="flex justify-end">
-                {subscription.customer_profile_id ? (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSubscription(subscription)}
-                    className="rounded-md border border-border px-3 py-2 text-xs font-medium text-foreground hover:bg-accent"
-                  >
-                    Ändra pris
-                  </button>
-                ) : null}
-              </div>
-            ),
-          },
-        ]}
+        columns={columns}
         rows={subscriptions}
-        getRowKey={(subscription) => subscription.id}
-        rowHrefBuilder={(subscription) =>
-          subscription.customer_profile_id
-            ? `/admin/customers/${subscription.customer_profile_id}`
-            : null
-        }
+        getRowKey={(sub) => sub.id}
+        rowHrefBuilder={(sub) => sub.customer_profile_id ? `/admin/customers/${sub.customer_profile_id}` : null}
         loadingRows={isLoading ? 6 : 0}
         emptyLabel="Inga abonnemang hittades."
-        gridTemplateColumns="2fr 1fr 1fr 1fr 120px 120px"
+        gridTemplateColumns="2fr 1fr 1.5fr 40px"
+        density="comfortable"
       />
+
+      {pagination && pagination.pageCount > 1 && (
+        <div className="flex items-center justify-center gap-4 text-xs font-medium text-muted-foreground pt-2">
+          <button disabled={!pagination.hasPreviousPage} className="hover:text-foreground disabled:opacity-30">Föregående</button>
+          <span>{pagination.page} / {pagination.pageCount}</span>
+          <button disabled={!pagination.hasNextPage} className="hover:text-foreground disabled:opacity-30">Nästa</button>
+        </div>
+      )}
 
       <SubscriptionPriceChangeModal
         open={Boolean(selectedSubscription)}
         customerId={selectedSubscription?.customer_profile_id ?? ''}
         customerName={selectedSubscription?.customer_name ?? ''}
-        currentPriceSek={
-          selectedSubscription ? subscriptionPricePerInterval(selectedSubscription).sek : null
-        }
+        currentPriceSek={selectedSubscription ? subscriptionMonthlyPriceSek(selectedSubscription) : null}
         onClose={() => setSelectedSubscription(null)}
         onChanged={async () => {
           setSelectedSubscription(null);
           await refreshSubscriptions();
         }}
+      />
+
+      <ConfirmActionDialog
+        open={confirmSyncOpen}
+        onOpenChange={setConfirmSyncOpen}
+        title="Kör manuell synk?"
+        description="Hämtar in abonnemangsdata från Stripe."
+        confirmLabel="Kör synk"
+        onConfirm={() => {
+          setConfirmSyncOpen(false);
+          void syncSubscriptions();
+        }}
+        pending={isPending}
       />
     </div>
   );

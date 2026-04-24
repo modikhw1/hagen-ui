@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
+import { apiClient } from '@/lib/admin/api-client';
 
 export default function ContactEditForm({
   customer,
@@ -24,22 +25,12 @@ export default function ContactEditForm({
     setError(null);
 
     try {
-      const res = await fetch(`/api/admin/customers/${customer.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          business_name: businessName.trim(),
-          contact_email: contactEmail.trim(),
-          customer_contact_name: contactName.trim() || null,
-          phone: phone.trim() || null,
-        }),
+      await apiClient.patch(`/api/admin/customers/${customer.id}`, {
+        business_name: businessName.trim(),
+        contact_email: contactEmail.trim(),
+        customer_contact_name: contactName.trim() || null,
+        phone: phone.trim() || null,
       });
-      const payload = await res.json();
-
-      if (!res.ok) {
-        throw new Error(payload.error || 'Kunde inte spara kontaktuppgifter');
-      }
 
       onSaved();
     } catch (e: unknown) {
@@ -56,7 +47,7 @@ export default function ContactEditForm({
       <input
         value={businessName}
         onChange={(event) => setBusinessName(event.target.value)}
-        placeholder="Foretagsnamn"
+        placeholder="Företagsnamn"
         className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
       />
       <input

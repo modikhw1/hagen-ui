@@ -5,6 +5,7 @@ export type MetricCard = {
   value: string;
   delta?: { text: string; tone: 'success' | 'muted' | 'destructive' };
   sub?: string;
+  trend?: number[];
 };
 
 export type OverviewInput = {

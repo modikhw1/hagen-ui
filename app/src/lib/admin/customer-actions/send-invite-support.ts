@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type Stripe from 'stripe';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { recurringUnitAmountFromMonthlySek } from '@/lib/stripe/price-amounts';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import type { AdminActionContext } from './types';
@@ -68,7 +69,7 @@ export async function createStripeArtifacts(
   }
 
   if (!ctx.stripeClient) {
-    throw new Error('Stripe ar inte konfigurerat pa servern');
+    throw new Error(SERVER_COPY.stripeNotConfigured);
   }
 
   const baseKey = `invite:${ctx.id}:${attemptNonce}`;
@@ -85,7 +86,7 @@ export async function createStripeArtifacts(
       ? 'manadsvis'
       : subscriptionInterval === 'quarter'
         ? 'kvartalsvis'
-        : 'arligen';
+        : 'årligen';
 
   const customer = await ctx.stripeClient.customers.create(
     {

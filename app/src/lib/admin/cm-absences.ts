@@ -116,7 +116,7 @@ export async function listCmAbsences(
       return [];
     }
 
-    throw new Error(result.error.message || 'Kunde inte lasa CM-franvaro');
+    throw new Error(result.error.message || 'Kunde inte läsa CM-frånvaro');
   }
 
   return result.data ?? [];
@@ -152,10 +152,10 @@ export async function listEnrichedCmAbsences(
   ]);
 
   if (teamResult.error) {
-    throw new Error(teamResult.error.message || 'Kunde inte lasa teamnamn');
+    throw new Error(teamResult.error.message || 'Kunde inte läsa teamnamn');
   }
   if (customerResult.error) {
-    throw new Error(customerResult.error.message || 'Kunde inte lasa kundnamn');
+    throw new Error(customerResult.error.message || 'Kunde inte läsa kundnamn');
   }
 
   const teamById = new Map((teamResult.data ?? []).map((row) => [row.id, row.name]));
@@ -181,7 +181,7 @@ export async function createCmAbsence(
   const normalizedStartsOn = input.startsOn;
   const normalizedEndsOn = input.endsOn;
   if (normalizedEndsOn < normalizedStartsOn) {
-    throw new Error('Slutdatum maste vara samma dag eller senare an startdatum');
+    throw new Error('Slutdatum måste vara samma dag eller senare än startdatum');
   }
 
   const overlapping = await findOverlappingAbsences(supabaseAdmin, {
@@ -192,7 +192,7 @@ export async function createCmAbsence(
   });
 
   if (overlapping.length > 0) {
-    throw new Error('Det finns redan en aktiv eller schemalagd coverage/franvaro i valt intervall');
+    throw new Error('Det finns redan en aktiv eller schemalagd coverage/frånvaro i valt intervall');
   }
 
   const result = await (((supabaseAdmin.from('cm_absences' as never) as never) as {
@@ -218,10 +218,79 @@ export async function createCmAbsence(
 
   if (result.error || !result.data) {
     if (isMissingRelationError(result.error?.message)) {
-      throw new Error('Tabellen cm_absences saknas i databasen. Kor migrationen for §6.');
+      throw new Error('Tabellen cm_absences saknas i databasen. Kör migrationen för §6.');
     }
 
-    throw new Error(result.error?.message || 'Kunde inte skapa CM-franvaro');
+    throw new Error(result.error?.message || 'Kunde inte skapa CM-frånvaro');
+  }
+
+  return result.data;
+}
+
+export async function getCmAbsenceById(
+  supabaseAdmin: SupabaseClient,
+  absenceId: string,
+) {
+  const result = await (((supabaseAdmin.from('cm_absences' as never) as never) as {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        maybeSingle: () => Promise<{
+          data: CmAbsenceRecord | null;
+          error: { message?: string } | null;
+        }>;
+      };
+    };
+  }).select(CM_ABSENCE_COLUMNS)).eq('id', absenceId).maybeSingle();
+
+  if (result.error) {
+    if (isMissingRelationError(result.error.message)) {
+      return null;
+    }
+
+    throw new Error(result.error.message || 'Kunde inte läsa CM-frånvaro');
+  }
+
+  return result.data ?? null;
+}
+
+export async function endCmAbsence(
+  supabaseAdmin: SupabaseClient,
+  absenceId: string,
+  asOfDate = formatDateOnly(new Date()),
+) {
+  const existing = await getCmAbsenceById(supabaseAdmin, absenceId);
+  if (!existing) {
+    throw new Error('Frånvaro hittades inte');
+  }
+
+  const nextEndsOn =
+    existing.ends_on <= asOfDate
+      ? existing.ends_on
+      : existing.starts_on > asOfDate
+        ? existing.starts_on
+        : asOfDate;
+
+  const result = await (((supabaseAdmin.from('cm_absences' as never) as never) as {
+    update: (value: Record<string, unknown>) => {
+      eq: (column: string, value: string) => {
+        select: (columns: string) => {
+          single: () => Promise<{
+            data: CmAbsenceRecord | null;
+            error: { message?: string } | null;
+          }>;
+        };
+      };
+    };
+  }).update({
+    ends_on: nextEndsOn,
+  })).eq('id', absenceId).select(CM_ABSENCE_COLUMNS).single();
+
+  if (result.error || !result.data) {
+    if (isMissingRelationError(result.error?.message)) {
+      throw new Error('Tabellen cm_absences saknas i databasen. Kör migrationen för §6.');
+    }
+
+    throw new Error(result.error?.message || 'Kunde inte avsluta CM-frånvaro');
   }
 
   return result.data;
@@ -239,10 +308,10 @@ export async function deleteCmAbsence(
 
   if (result.error) {
     if (isMissingRelationError(result.error.message)) {
-      throw new Error('Tabellen cm_absences saknas i databasen. Kor migrationen for §6.');
+      throw new Error('Tabellen cm_absences saknas i databasen. Kör migrationen för §6.');
     }
 
-    throw new Error(result.error.message || 'Kunde inte ta bort CM-franvaro');
+    throw new Error(result.error.message || 'Kunde inte ta bort CM-frånvaro');
   }
 }
 
@@ -302,11 +371,15 @@ export function resolveAbsenceCoverage(params: {
     boundaries.add(minDate(params.endExclusive, absenceEndExclusive));
   });
 
-  return Array.from(boundaries)
-    .sort()
+  const sortedBoundaries = Array.from(boundaries).sort();
+
+  return sortedBoundaries
     .slice(0, -1)
-    .map((boundary, index, sorted) => {
-      const segmentEndExclusive = sorted[index + 1];
+    .map((boundary, index) => {
+      const segmentEndExclusive = sortedBoundaries[index + 1];
+      if (!segmentEndExclusive) {
+        return null;
+      }
       const days = overlapDays(boundary, segmentEndExclusive, boundary, segmentEndExclusive);
       if (days <= 0) {
         return null;
@@ -402,7 +475,7 @@ async function findOverlappingAbsences(
       return [];
     }
 
-    throw new Error(result.error.message || 'Kunde inte validera overlaggande franvaro');
+    throw new Error(result.error.message || 'Kunde inte validera överlappande frånvaro');
   }
 
   return (result.data ?? []).filter((absence: CmAbsenceRecord) => {

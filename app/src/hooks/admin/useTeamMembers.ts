@@ -3,20 +3,34 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/admin/api-client';
 import { parseDto } from '@/lib/admin/dtos/parse';
-import {
-  teamMembersPayloadSchema,
-  type TeamMemberRow,
-} from '@/lib/admin/dtos/team';
+import { teamMembersLitePayloadSchema, type TeamMemberLite } from '@/lib/admin/dtos/team';
 import { qk } from '@/lib/admin/queryKeys';
 
-export function useTeamMembers() {
+type TeamMembersQuery = {
+  role?: 'admin' | 'content_manager';
+  includeInactive?: boolean;
+};
+
+export function useTeamMembers(query: TeamMembersQuery = {}) {
   return useQuery({
-    queryKey: qk.team.list(),
-    queryFn: async ({ signal }): Promise<TeamMemberRow[]> => {
-      const payload = await apiClient.get('/api/admin/team', { signal });
-      return (await parseDto(teamMembersPayloadSchema, payload)).members;
+    queryKey: qk.team.lite(query),
+    queryFn: async ({ signal }): Promise<TeamMemberLite[]> => {
+      const payload = await apiClient.get('/api/admin/team/lite', {
+        signal,
+        query: {
+          ...(query.role ? { role: query.role } : {}),
+          ...(query.includeInactive ? { includeInactive: 1 } : {}),
+        },
+      });
+      return (await parseDto(teamMembersLitePayloadSchema, payload, {
+        name: 'teamMembersLitePayload',
+        path: '/api/admin/team/lite',
+      })).members;
     },
+    staleTime: 60_000,
+    gcTime: 300_000,
+    refetchOnWindowFocus: false,
   });
 }
 
-export type { TeamMemberRow } from '@/lib/admin/dtos/team';
+export type TeamMemberRow = TeamMemberLite;

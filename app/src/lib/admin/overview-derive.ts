@@ -36,6 +36,9 @@ export function deriveOverview(
   const teamByProfileId = new Map(
     payload.team.map((member) => [member.profile_id, member]),
   );
+  const customerById = new Map(
+    payload.customers.map((customer) => [customer.id, customer]),
+  );
   const snoozed = new Set(
     payload.attentionSnoozes
       .filter(
@@ -137,7 +140,7 @@ export function deriveOverview(
         cm: { id: member.id, name: member.name, avatarUrl: member.avatar_url },
         activeAbsence: (() => {
           const activeAbsence = findActiveCmAbsence(
-            payload.absences,
+            payload.absences as Parameters<typeof findActiveCmAbsence>[0],
             member.id,
             today.toISOString().slice(0, 10),
           );
@@ -185,6 +188,17 @@ export function deriveOverview(
     )
     .filter((row): row is NonNullable<typeof row> => Boolean(row));
 
+  const getCmNameForCustomer = (customerId: string | null) => {
+    if (!customerId) return undefined;
+    const customer = customerById.get(customerId);
+    if (!customer) return undefined;
+    
+    if (customer.account_manager_profile_id) {
+      return teamByProfileId.get(customer.account_manager_profile_id)?.name;
+    }
+    return customer.account_manager ?? undefined;
+  };
+
   const allAttentionItems = sortAttention([
     ...payload.cmNotifications.map((notification) => ({
       kind: 'cm_notification' as const,
@@ -196,6 +210,7 @@ export function deriveOverview(
       from: teamByProfileId.get(notification.from_cm_id)?.name || 'CM-notis',
       message: notification.message,
       customerId: notification.customer_id,
+      cmName: getCmNameForCustomer(notification.customer_id),
       })),
     ...payload.scheduledAssignmentChanges
       .filter((change) => change.effective_date === todayKey)
@@ -209,6 +224,7 @@ export function deriveOverview(
         currentCmName: change.current_cm_name,
         nextCmName: change.next_cm_name,
         effectiveDate: new Date(`${change.effective_date}T00:00:00`),
+        cmName: getCmNameForCustomer(change.customer_id),
       })),
     ...customers
       .filter((customer) => customer.paused_until === todayKey)
@@ -220,6 +236,7 @@ export function deriveOverview(
         customerId: customer.id,
         customerName: customer.business_name,
         resumeDate: new Date(`${customer.paused_until}T00:00:00`),
+        cmName: getCmNameForCustomer(customer.id),
       })),
     ...cmRows
       .filter((row) => {
@@ -251,6 +268,11 @@ export function deriveOverview(
         subjectType: 'invoice' as const,
         subjectId: invoice.stripe_invoice_id ?? invoice.id,
         customerId: invoice.customer_id as string,
+        customerName:
+          invoice.customer_name ??
+          customerById.get(invoice.customer_id as string)?.business_name ??
+          'Okänd kund',
+        invoiceNumber: invoice.invoice_number ?? null,
         daysPastDue: Math.max(
           0,
           Math.floor(
@@ -258,6 +280,8 @@ export function deriveOverview(
           ),
         ),
         amount_ore: invoice.amount_due,
+        hostedInvoiceUrl: invoice.hosted_invoice_url ?? null,
+        cmName: getCmNameForCustomer(invoice.customer_id as string),
       }))
       .filter((invoice) => invoice.daysPastDue > 0),
     ...customers
@@ -272,11 +296,13 @@ export function deriveOverview(
         subjectType: 'onboarding' as const,
         subjectId: customer.id,
         customerId: customer.id,
+        customerName: customer.business_name,
         daysSinceCmReady: Math.floor(
           (+today -
             +(new Date(customer.onboarding_state_changed_at as string))) /
             86_400_000,
         ),
+        cmName: getCmNameForCustomer(customer.id),
       }))
       .filter((customer) => customer.daysSinceCmReady >= 7),
     ...payload.demos.demos
@@ -288,6 +314,7 @@ export function deriveOverview(
         subjectId: demo.id,
         respondedAt: new Date(demo.responded_at as string),
         companyName: demo.company_name,
+        cmName: undefined, // Demos typically don't have a CM yet
       })),
     ...customers
       .filter((customer) => customer.blocking.state === 'escalated')
@@ -297,7 +324,9 @@ export function deriveOverview(
         subjectType: 'customer_blocking' as const,
         subjectId: customer.id,
         customerId: customer.id,
+        customerName: customer.business_name,
         daysBlocked: customer.blockingDisplayDays,
+        cmName: getCmNameForCustomer(customer.id),
       })),
   ]);
 
@@ -349,7 +378,7 @@ export function deriveOverview(
       status_changed_at: new Date(demo.status_changed_at),
       resolved_at: demo.resolved_at ? new Date(demo.resolved_at) : null,
     })),
-    costs30d_ore: Math.round((payload.serviceCosts.total || 0) * 100),
+    costs30d_ore: payload.serviceCosts.totalOre || 0,
     now: today,
   };
 
@@ -364,13 +393,28 @@ export function deriveOverview(
         }));
 
   return {
-    revenueCard: monthlyRevenueCard(cardInput),
-    activeCard: activeCustomersCard(cardInput),
-    demosCard: demosCard(cardInput),
-    costsCard: costsCard(cardInput),
-    sortedCmRows,
+    metrics: {
+      revenueCard: monthlyRevenueCard(cardInput),
+      activeCard: activeCustomersCard(cardInput),
+      demosCard: demosCard(cardInput),
+      costsCard: costsCard(cardInput),
+    },
+    cmPulse: sortedCmRows as any,
+    topAttention: attentionItems.slice(0, 5),
     attentionItems,
     snoozedAttentionItems,
-    costEntries,
+    snoozedCount: snoozedAttentionItems.length,
+    costs: {
+      entries: costEntries as any,
+      totalOre: payload.serviceCosts.totalOre || 0,
+    },
+    attentionFeedSeenAt: payload.attentionFeedSeenAt || null,
   };
 }
+
+export {
+  activeCustomersCard,
+  costsCard,
+  demosCard,
+  monthlyRevenueCard,
+};

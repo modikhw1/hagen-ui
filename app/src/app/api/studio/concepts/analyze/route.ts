@@ -55,8 +55,6 @@ export const POST = withAuth(
 
     const body = await request.json().catch(() => ({}));
     const videoUrl = typeof body?.videoUrl === 'string' ? body.videoUrl.trim() : '';
-    const platform = typeof body?.platform === 'string' ? body.platform.trim() : '';
-
     if (!videoUrl) {
       return NextResponse.json({ error: 'videoUrl is required' }, { status: 400 });
     }

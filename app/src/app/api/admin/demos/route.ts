@@ -1,29 +1,26 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { withAuth } from '@/lib/auth/api-auth';
+import { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { recordAdminAction } from '@/lib/admin/audit';
+import { buildDemosBoard, mapDemoRowToDto } from '@/lib/admin/demos';
+import {
+  createDemoInputSchema,
+  demosBoardDtoSchema,
+} from '@/lib/admin/schemas/demos';
+import { requireScope, withAuth } from '@/lib/auth/api-auth';
+import { resolveTeamMemberIdForProfile } from '@/lib/interactions';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { resolveTeamMemberIdForProfile } from '@/lib/interactions';
 import type { TablesInsert } from '@/types/database';
-import { z } from 'zod';
 
-const querySchema = z.object({
-  days: z.coerce.number().int().min(1).max(365).optional(),
-}).strict();
+const querySchema = z
+  .object({
+    days: z.coerce.number().int().min(1).max(365).optional(),
+  })
+  .strict();
 
-const createDemoSchema = z.object({
-  company_name: z.string().trim().min(1).max(200),
-  contact_name: z.string().trim().max(200).optional().nullable(),
-  contact_email: z.string().trim().email().max(255).optional().nullable(),
-  tiktok_handle: z.string().trim().max(120).optional().nullable(),
-  tiktok_profile_pic_url: z.string().trim().url().max(2000).optional().nullable(),
-  proposed_concepts_per_week: z.number().int().min(1).max(5).optional().nullable(),
-  proposed_price_ore: z.number().int().min(0).optional().nullable(),
-  preliminary_feedplan: z.record(z.string(), z.unknown()).optional().nullable(),
-  status: z.enum(['draft', 'sent', 'opened', 'responded', 'won', 'lost', 'expired']).optional(),
-  lost_reason: z.string().trim().max(1000).optional().nullable(),
-}).strict();
+export const GET = withAuth(async (request: NextRequest, user) => {
+  requireScope(user, 'demos.read');
 
-export const GET = withAuth(async (request: NextRequest) => {
   const parsed = querySchema.safeParse({
     days: new URL(request.url).searchParams.get('days') ?? undefined,
   });
@@ -32,46 +29,21 @@ export const GET = withAuth(async (request: NextRequest) => {
     return jsonError('Ogiltiga query-parametrar', 400);
   }
 
-  const days = parsed.data.days ?? 30;
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
-  const supabase = createSupabaseAdmin();
-  const [{ data: demos, error: demosError }, { count: sentCount, error: sentError }, { count: convertedCount, error: convertedError }] = await Promise.all([
-    supabase
-      .from('demos')
-      .select('*')
-      .order('status_changed_at', { ascending: false }),
-    supabase
-      .from('demos')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['sent', 'opened', 'responded', 'won', 'lost'])
-      .gte('status_changed_at', since),
-    supabase
-      .from('demos')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'won')
-      .gte('resolved_at', since),
-  ]);
-
-  if (demosError || sentError || convertedError) {
-    return jsonError(
-      demosError?.message ||
-        sentError?.message ||
-        convertedError?.message ||
-        'Kunde inte hamta demos',
-      500,
-    );
+  try {
+    const payload = await buildDemosBoard(createSupabaseAdmin(), parsed.data.days ?? 30);
+    const response = jsonOk(demosBoardDtoSchema.parse(payload));
+    response.headers.set('Cache-Control', 'private, max-age=10, stale-while-revalidate=30');
+    return response;
+  } catch (error) {
+    return jsonError(error instanceof Error ? error.message : 'Kunde inte h\u00e4mta demos', 500);
   }
-
-  return jsonOk({
-    sent: sentCount ?? 0,
-    converted: convertedCount ?? 0,
-    demos: demos ?? [],
-  });
-}, ['admin']);
+}, ['admin', 'content_manager']);
 
 export const POST = withAuth(async (request: NextRequest, user) => {
+  requireScope(user, 'demos.write');
+
   const body = await request.json().catch(() => null);
-  const parsed = createDemoSchema.safeParse(body);
+  const parsed = createDemoInputSchema.safeParse(body);
 
   if (!parsed.success) {
     return jsonError(parsed.error.issues[0]?.message || 'Ogiltig payload', 400);
@@ -84,9 +56,15 @@ export const POST = withAuth(async (request: NextRequest, user) => {
   const { data, error } = await supabase
     .from('demos')
     .insert({
-      ...payload,
+      company_name: payload.company_name,
+      contact_name: payload.contact_name,
+      contact_email: payload.contact_email,
+      tiktok_handle: payload.tiktok_handle,
+      proposed_concepts_per_week: payload.proposed_concepts_per_week ?? null,
+      proposed_price_ore: payload.proposed_price_ore ?? null,
+      status: payload.status,
+      lost_reason: payload.lost_reason ?? null,
       owner_admin_id: ownerAdminId,
-      preliminary_feedplan: payload.preliminary_feedplan ?? null,
     } as TablesInsert<'demos'>)
     .select()
     .single();
@@ -95,5 +73,30 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     return jsonError(error.message, 500);
   }
 
-  return jsonOk({ demo: data }, 201);
-}, ['admin']);
+  const ownerNameById = new Map<string, string>();
+  if (ownerAdminId) {
+    const { data: owner } = await supabase
+      .from('team_members')
+      .select('id, name')
+      .eq('id', ownerAdminId)
+      .maybeSingle();
+
+    if (owner?.id) {
+      ownerNameById.set(owner.id, owner.name || 'Ok\u00e4nd \u00e4gare');
+    }
+  }
+
+  await recordAdminAction(supabase, {
+    actorId: user.id,
+    actorEmail: user.email,
+    actorRole: user.role,
+    action: 'demo.create',
+    entityType: 'demo',
+    entityId: data.id,
+    afterState: data as Record<string, unknown>,
+  });
+
+  const response = jsonOk({ demo: mapDemoRowToDto(data, ownerNameById) }, 201);
+  response.headers.set('Cache-Control', 'private, no-cache');
+  return response;
+}, ['admin', 'content_manager']);

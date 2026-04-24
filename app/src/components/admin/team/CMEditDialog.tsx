@@ -1,17 +1,21 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Check, Users } from 'lucide-react';
-import AdminAvatar from '@/components/admin/AdminAvatar';
+import { useForm, useWatch } from 'react-hook-form';
+import { z } from 'zod';
+import Link from 'next/link';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { AdminField } from '@/components/admin/shared/AdminField';
+import { ApiError, apiClient } from '@/lib/admin/api-client';
+import { cmEditCopy } from '@/lib/admin/copy/team';
+import { cmEditSchema, type CmEditInput } from '@/lib/admin/schemas/team';
 import type { TeamMemberView } from '@/hooks/admin/useTeam';
+import { AvatarUpload } from '@/components/admin/ui/form/AvatarUpload';
+import { uploadCmAvatar } from '@/lib/admin/team/upload-avatar';
+import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
+import { TEAM_COLORS } from '@/lib/admin/teamPalette';
 
 type CMOption = {
   id: string;
@@ -24,8 +28,26 @@ type Props = {
   cm: TeamMemberView;
   allCMs: CMOption[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: () => void | Promise<void>;
 };
+
+type ReassignResponse = {
+  reassignedCount: number;
+};
+
+type CmEditFormValues = z.input<typeof cmEditSchema>;
+
+function defaultValues(cm: TeamMemberView): CmEditInput {
+  return {
+    name: cm.name,
+    email: cm.email,
+    phone: cm.phone ?? '',
+    city: cm.city ?? '',
+    bio: cm.bio ?? '',
+    avatar_url: cm.avatar_url ?? '',
+    commission_rate_pct: Math.round(cm.commission_rate * 100),
+  };
+}
 
 export default function CMEditDialog({
   open,
@@ -34,228 +56,246 @@ export default function CMEditDialog({
   onClose,
   onSaved,
 }: Props) {
-  const [name, setName] = useState(cm.name);
-  const [email, setEmail] = useState(cm.email);
-  const [phone, setPhone] = useState(cm.phone || '');
-  const [city, setCity] = useState(cm.city || '');
-  const [bio, setBio] = useState(cm.bio || '');
-  const [avatarUrl, setAvatarUrl] = useState(cm.avatar_url || '');
-  const [commissionRate, setCommissionRate] = useState(
-    String(Math.round(cm.commission_rate * 100)),
-  );
+  const reassignSectionRef = useRef<HTMLDivElement>(null);
   const [reassignTo, setReassignTo] = useState('');
   const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const avatarInputRef = useRef<HTMLInputElement>(null);
-  const parsedCommissionRate = Number(commissionRate);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [archiveBlocked, setArchiveBlocked] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const form = useForm<CmEditFormValues, unknown, CmEditInput>({
+    resolver: zodResolver(cmEditSchema),
+    defaultValues: defaultValues(cm),
+    mode: 'onChange',
+  });
 
-  useEffect(() => {
-    setName(cm.name);
-    setEmail(cm.email);
-    setPhone(cm.phone || '');
-    setCity(cm.city || '');
-    setBio(cm.bio || '');
-    setAvatarUrl(cm.avatar_url || '');
-    setCommissionRate(String(Math.round(cm.commission_rate * 100)));
-    setReassignTo('');
-    setConfirmArchiveOpen(false);
-    setError(null);
-  }, [cm]);
+  const {
+    control,
+    formState: { errors, isValid },
+    handleSubmit,
+    register,
+    reset,
+    setValue,
+  } = form;
 
+  const watchedName = useWatch({ control, name: 'name' });
+  const watchedAvatarUrl = useWatch({ control, name: 'avatar_url' });
   const otherCMs = allCMs.filter((item) => item.id !== cm.id && item.is_active);
 
-  const reassignCustomers = async () => {
+  useEffect(() => {
+    reset(defaultValues(cm));
+    setReassignTo('');
+    setConfirmArchiveOpen(false);
+    setArchiveBlocked(false);
+    setFormError(null);
+  }, [cm, reset]);
+
+  const handleReassign = async () => {
     if (!reassignTo || cm.customers.length === 0) return;
 
-    await Promise.all(
-      cm.customers.map(async (customer) => {
-        const target = allCMs.find((candidate) => candidate.id === reassignTo);
-        const result = await fetch(`/api/admin/customers/${customer.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({
-            account_manager: target ? target.name : null,
-          }),
-        });
-
-        if (!result.ok) {
-          const payload = (await result.json()) as { error?: string };
-          throw new Error(payload.error || 'Misslyckades att omfordela kunder');
-        }
-      }),
-    );
-  };
-
-  const handleSave = async () => {
-    setSubmitting(true);
-    setError(null);
+    setIsReassigning(true);
+    setFormError(null);
+    setArchiveBlocked(false);
 
     try {
-      const response = await fetch(`/api/admin/team/${cm.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          name,
-          email,
-          phone,
-          city,
-          bio,
-          avatar_url: avatarUrl,
-          commission_rate:
-            (Number.isFinite(parsedCommissionRate) ? parsedCommissionRate : 20) / 100,
-        }),
+      await apiClient.post<ReassignResponse>(`/api/admin/team/${cm.id}/reassign-customers`, {
+        targetCmId: reassignTo,
+        customerIds: 'all',
       });
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string };
-        throw new Error(payload.error || 'Misslyckades');
-      }
-
-      await reassignCustomers();
-      onSaved();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Misslyckades');
+      await onSaved();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : cmEditCopy.reassignFailed);
     } finally {
-      setSubmitting(false);
+      setIsReassigning(false);
     }
   };
 
-  const handleArchive = async () => {
-    setSubmitting(true);
-    setError(null);
+  const handleSave = handleSubmit(async (values) => {
+    setIsSaving(true);
+    setFormError(null);
+    setArchiveBlocked(false);
 
     try {
-      await reassignCustomers();
-
-      const response = await fetch(`/api/admin/team/${cm.id}`, {
-        method: 'DELETE',
-        credentials: 'include',
+      await apiClient.patch(`/api/admin/team/${cm.id}`, {
+        name: values.name,
+        email: values.email,
+        phone: values.phone || null,
+        city: values.city || null,
+        bio: values.bio || null,
+        avatar_url: values.avatar_url || '',
+        commission_rate: values.commission_rate_pct / 100,
       });
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string };
-        throw new Error(payload.error || 'Misslyckades');
-      }
-
-      onSaved();
-    } catch (archiveError) {
-      setError(archiveError instanceof Error ? archiveError.message : 'Misslyckades');
+      await onSaved();
+      onClose();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : cmEditCopy.saveFailed);
     } finally {
-      setSubmitting(false);
+      setIsSaving(false);
+    }
+  });
+
+  const handleArchive = async () => {
+    setIsSaving(true);
+    setFormError(null);
+    setArchiveBlocked(false);
+
+    try {
+      await apiClient.del(`/api/admin/team/${cm.id}`);
+      await onSaved();
+      onClose();
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setArchiveBlocked(true);
+        setFormError(error.message || cmEditCopy.archiveBlocked);
+        setConfirmArchiveOpen(false);
+        reassignSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
+      } else {
+        setFormError(error instanceof Error ? error.message : cmEditCopy.saveFailed);
+      }
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Redigera CM</DialogTitle>
-            <DialogDescription>Uppdatera profil, kommission och kundansvar.</DialogDescription>
-          </DialogHeader>
-
-          <div className="mb-4 flex items-center gap-4">
+    <>
+      <AdminFormDialog
+        open={open}
+        onClose={onClose}
+        title={cmEditCopy.title}
+        description={cmEditCopy.description}
+        size="md"
+        footer={
+          <div className="flex w-full items-center gap-2">
             <button
-              type="button"
-              onClick={() => avatarInputRef.current?.focus()}
-              className="group relative rounded-full"
-              aria-label="Byt profilbild"
+              onClick={onClose}
+              className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent"
             >
-              <AdminAvatar name={name || cm.name} avatarUrl={avatarUrl || null} size="lg" />
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-foreground/25 opacity-0 transition-opacity group-hover:opacity-100">
-                <span className="rounded-full bg-card/90 px-2 py-1 text-[10px] font-semibold text-foreground">
-                  Byt
-                </span>
-              </div>
+              Avbryt
             </button>
-            <div className="flex-1">
-              <div className="text-sm font-semibold text-foreground">{name || cm.name}</div>
-              <div className="text-xs text-muted-foreground">
-                {cm.role === 'content_manager' ? 'Content Manager' : cm.role}
-              </div>
-              <div className="mt-1 text-[11px] text-muted-foreground">
-                Klicka pa bilden for att byta profilbild.
-              </div>
-            </div>
+            <div className="flex-1" />
+            <button
+              onClick={() => setConfirmArchiveOpen(true)}
+              disabled={isSaving || isReassigning}
+              className="rounded-md border border-status-danger-fg/20 px-4 py-2 text-sm font-medium text-status-danger-fg hover:bg-status-danger-bg/10 disabled:opacity-50"
+            >
+              Arkivera
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving || isReassigning || !isValid}
+              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              <Check className="h-3.5 w-3.5" />
+              {isSaving ? cmEditCopy.saving : cmEditCopy.save}
+            </button>
           </div>
+        }
+      >
+        <div className="space-y-6">
+          <AvatarUpload
+            initials={(watchedName || cm.name).charAt(0)}
+            currentUrl={watchedAvatarUrl || null}
+            fallbackColor={TEAM_COLORS[0]}
+            onUploaded={(url) =>
+              setValue('avatar_url', url, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+            uploadFn={uploadCmAvatar}
+          />
 
-          <div className="grid gap-3">
-            <Field label="Namn">
+          <div className="grid gap-4">
+            <AdminField
+              label={cmEditCopy.name}
+              htmlFor="cm-edit-name"
+              hint={cmEditCopy.nameHint}
+              error={errors.name?.message}
+            >
               <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                id="cm-edit-name"
+                {...register('name')}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
               />
-            </Field>
+            </AdminField>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="E-post">
+              <AdminField
+                label={cmEditCopy.email}
+                htmlFor="cm-edit-email"
+                error={errors.email?.message}
+              >
                 <input
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                  id="cm-edit-email"
+                  {...register('email')}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
-              </Field>
-              <Field label="Telefon">
+              </AdminField>
+              <AdminField
+                label={cmEditCopy.phone}
+                htmlFor="cm-edit-phone"
+                error={errors.phone?.message}
+              >
                 <input
-                  value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                  id="cm-edit-phone"
+                  {...register('phone')}
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
-              </Field>
+              </AdminField>
             </div>
 
-            <Field label="Ort">
+            <AdminField
+              label={cmEditCopy.city}
+              htmlFor="cm-edit-city"
+              error={errors.city?.message}
+            >
               <input
-                value={city}
-                onChange={(event) => setCity(event.target.value)}
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                id="cm-edit-city"
+                {...register('city')}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
               />
-            </Field>
+            </AdminField>
 
-            <Field label="Bio">
+            <AdminField
+              label={cmEditCopy.bio}
+              htmlFor="cm-edit-bio"
+              hint={cmEditCopy.bioHint}
+              error={errors.bio?.message}
+            >
               <textarea
-                value={bio}
-                onChange={(event) => setBio(event.target.value)}
+                id="cm-edit-bio"
+                {...register('bio')}
                 rows={3}
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
               />
-            </Field>
+            </AdminField>
 
-            <Field label="Profilbild (URL)">
+            <AdminField
+              label={cmEditCopy.commissionRate}
+              htmlFor="cm-edit-commission-rate"
+              error={errors.commission_rate_pct?.message}
+            >
               <input
-                ref={avatarInputRef}
-                value={avatarUrl}
-                onChange={(event) => setAvatarUrl(event.target.value)}
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-                placeholder="https://..."
-              />
-            </Field>
-
-            <Field label="Kommission (%)">
-              <input
-                value={commissionRate}
-                onChange={(event) => setCommissionRate(event.target.value)}
+                id="cm-edit-commission-rate"
+                {...register('commission_rate_pct')}
                 inputMode="decimal"
-                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
               />
-            </Field>
+            </AdminField>
 
             {cm.customers.length > 0 ? (
-              <div className="border-t border-border pt-3">
-                <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">
-                  Omfordela alla kunder
+              <div ref={reassignSectionRef} className="rounded-lg bg-secondary/20 p-4 border border-border">
+                <div className="mb-2 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  {cmEditCopy.reassignAll}
                 </div>
                 <div className="flex gap-2">
                   <select
                     value={reassignTo}
                     onChange={(event) => setReassignTo(event.target.value)}
-                    className="flex-1 rounded-md border border-border bg-card px-3 py-2 text-sm"
+                    className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none"
                   >
-                    <option value="">Valj CM...</option>
+                    <option value="">{cmEditCopy.selectCm}</option>
                     {otherCMs.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
@@ -264,75 +304,39 @@ export default function CMEditDialog({
                   </select>
                   <button
                     type="button"
-                    disabled={!reassignTo}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
+                    onClick={() => void handleReassign()}
+                    disabled={!reassignTo || isReassigning}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-accent disabled:opacity-40"
                   >
                     <Users className="h-3.5 w-3.5" />
-                    Flytta {cm.customers.length} kunder
+                    {isReassigning ? 'Flyttar...' : 'Flytta'}
                   </button>
                 </div>
               </div>
             ) : null}
 
-            {error ? (
-              <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-                {error}
+            {formError ? (
+              <div className="rounded-md border border-status-danger-fg/30 bg-status-danger-bg px-3 py-2 text-sm text-status-danger-fg">
+                {formError}
               </div>
             ) : null}
           </div>
+        </div>
+      </AdminFormDialog>
 
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={handleSave}
-              disabled={submitting}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              <Check className="h-3.5 w-3.5" />
-              Spara
-            </button>
-            <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm">
-              Avbryt
-            </button>
-            <div className="flex-1" />
-            <button
-              onClick={() => setConfirmArchiveOpen(true)}
-              disabled={submitting || (cm.customers.length > 0 && !reassignTo)}
-              className="rounded-md border border-destructive/30 px-4 py-2 text-sm text-destructive hover:bg-destructive/5 disabled:opacity-50"
-            >
-              Arkivera CM
-            </button>
-          </div>
-        </DialogContent>
-
-        <ConfirmActionDialog
-          open={confirmArchiveOpen}
-          onOpenChange={setConfirmArchiveOpen}
-          title="Arkivera CM?"
-          description={
-            cm.customers.length > 0
-              ? `CM:n markeras som inaktiv och ${cm.customers.length} kunder flyttas innan arkivering.`
-              : 'CM:n markeras som inaktiv och tas bort fran aktiv planering.'
-          }
-          confirmLabel="Arkivera CM"
-          onConfirm={() => void handleArchive()}
-          pending={submitting}
-        />
-      </>
-    </Dialog>
-  );
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="grid gap-1.5 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      {children}
-    </label>
+      <ConfirmActionDialog
+        open={confirmArchiveOpen}
+        onOpenChange={setConfirmArchiveOpen}
+        title={cmEditCopy.archiveTitle}
+        description={
+          cm.customers.length > 0
+            ? cmEditCopy.archiveDescriptionWithCustomers(cm.customers.length)
+            : cmEditCopy.archiveDescriptionWithoutCustomers
+        }
+        confirmLabel={cmEditCopy.archive}
+        onConfirm={() => void handleArchive()}
+        pending={isSaving}
+      />
+    </>
   );
 }

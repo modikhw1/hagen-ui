@@ -2,8 +2,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { loadConcepts, type TranslatedConcept } from '@/lib/conceptLoader';
+import { useParams } from 'next/navigation';
+import { loadConcepts } from '@/lib/conceptLoader';
 
 // Full concept data from JSON
 interface ConceptData {
@@ -76,7 +76,6 @@ interface ConceptData {
 
 export default function StudioConceptEditPage() {
   const params = useParams();
-  const router = useRouter();
   const conceptId = params?.id as string;
   
   const [concept, setConcept] = useState<ConceptData | null>(null);

@@ -55,11 +55,11 @@ export async function POST(request: NextRequest) {
     );
 
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user: authUser },
+      error: authError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError || !session) {
+    if (authError || !authUser) {
       return jsonError('Du maste logga in', 401);
     }
 
@@ -69,12 +69,12 @@ export async function POST(request: NextRequest) {
       return jsonError('userId kravs', 400);
     }
 
-    if (userId !== session.user.id) {
+    if (userId !== authUser.id) {
       return jsonError('Du kan bara skapa eller koppla din egen profil', 403);
     }
 
     const supabaseAdmin = createSupabaseAdmin();
-    const normalizedAuthEmail = (userEmail || session.user.email || '').trim().toLowerCase();
+    const normalizedAuthEmail = (userEmail || authUser.email || '').trim().toLowerCase();
     let isTeamMember = false;
     let role: string | null = null;
 
@@ -131,8 +131,8 @@ export async function POST(request: NextRequest) {
     }
 
     const sessionStripeCustomerId =
-      typeof session.user.user_metadata?.stripe_customer_id === 'string'
-        ? session.user.user_metadata.stripe_customer_id.trim()
+      typeof authUser.user_metadata?.stripe_customer_id === 'string'
+        ? authUser.user_metadata.stripe_customer_id.trim()
         : '';
 
     if (!resolvedCustomerProfileId && !isTeamMember && sessionStripeCustomerId) {

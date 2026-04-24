@@ -2,15 +2,16 @@ import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import type { AdminScope } from '@/lib/admin/admin-roles';
 
 export const adminActionPolicy: Record<CustomerAction['action'], AdminScope> = {
-  send_invite: 'operations_admin',
-  resend_invite: 'operations_admin',
-  activate: 'operations_admin',
-  reactivate_archive: 'operations_admin',
-  change_account_manager: 'operations_admin',
-  set_temporary_coverage: 'operations_admin',
-  pause_subscription: 'operations_admin',
-  resume_subscription: 'operations_admin',
-  send_reminder: 'operations_admin',
+  send_invite: 'customers.invite',
+  resend_invite: 'customers.invite',
+  activate: 'customers.write',
+  reactivate_archive: 'customers.write',
+  change_account_manager: 'customers.write',
+  set_temporary_coverage: 'customers.write',
+  pause_subscription: 'customers.write',
+  resume_subscription: 'customers.write',
+  send_reminder: 'customers.write',
   change_subscription_price: 'super_admin',
   cancel_subscription: 'super_admin',
+  update_profile: 'customers.write',
 };

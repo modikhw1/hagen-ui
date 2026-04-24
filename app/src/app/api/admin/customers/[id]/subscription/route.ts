@@ -7,7 +7,7 @@ interface RouteParams {
 }
 
 export const GET = withAuth(async (_request, user, { params }: RouteParams) => {
-  requireScope(user, 'operations_admin');
+  requireScope(user, 'customers.read');
 
   const { id } = await params;
   if (!id) {

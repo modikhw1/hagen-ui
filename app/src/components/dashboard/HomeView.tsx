@@ -382,6 +382,8 @@ export function HomeView({
   };
   isMobile?: boolean;
 }) {
+  void plan;
+  void conceptsUsed;
   const [gamePlanExpanded, setGamePlanExpanded] = useState(false);
 
   const activeProfile = demoProfile ? {

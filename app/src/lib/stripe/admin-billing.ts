@@ -15,6 +15,14 @@ import {
   upsertRefundMirror,
 } from './billing-adjustments';
 import {
+  clearCustomerDiscount,
+  persistCustomerDiscount,
+} from '@/lib/admin/customer-billing-store';
+import {
+  deriveBillingDiscountDurationMonths,
+  hasBillingDiscountSpecificPeriod,
+} from '@/lib/schemas/billing';
+import {
   monthlyAmountOreFromRecurringUnit,
   recurringUnitAmountFromMonthlySek,
 } from './price-amounts';
@@ -31,12 +39,16 @@ export interface BillingDiscountInput {
   value: number;
   durationMonths: number | null;
   ongoing: boolean;
+  startDate?: string | null;
+  endDate?: string | null;
+  idempotencyToken?: string | null;
 }
 
 export interface PendingInvoiceItemInput {
   description: string;
   amountSek: number;
   currency?: string;
+  metadata?: Record<string, string>;
 }
 
 export interface ManualInvoiceItemInput {
@@ -53,6 +65,9 @@ export type SubscriptionCancellationMode =
 export interface SubscriptionPricePreview {
   mode: SubscriptionPriceChangeMode;
   effective_date: string;
+  subscription_id: string;
+  current_period_end: string | null;
+  proration_behavior: 'create_prorations' | 'none';
   current_price_ore: number;
   new_price_ore: number;
   line_items: Array<{
@@ -68,7 +83,7 @@ export interface SubscriptionPricePreview {
 
 export interface InvoiceCreditNoteInput {
   invoiceId: string;
-  stripeLineItemId: string;
+  stripeLineItemId: string | null;
   amountOre: number;
   memo?: string | null;
   refundAmountOre?: number | null;
@@ -158,6 +173,86 @@ async function getSubscriptionContext(args: Ctx & { profileId: string }) {
     item,
     productId,
   };
+}
+
+async function getPersistedUpcomingScheduleId(
+  supabaseAdmin: SupabaseClient,
+  profileId: string,
+) {
+  const result = await (((supabaseAdmin.from(
+    'customer_upcoming_price_changes' as never,
+  ) as never) as {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        maybeSingle: () => Promise<{
+          data: { stripe_schedule_id?: string | null } | null;
+          error: { message?: string } | null;
+        }>;
+      };
+    };
+  }).select('stripe_schedule_id')).eq('customer_id', profileId).maybeSingle();
+
+  if (result.error) {
+    const message = result.error.message?.toLowerCase() ?? '';
+    if (message.includes('relation') && message.includes('does not exist')) {
+      return null;
+    }
+
+    throw new Error(result.error.message || 'Kunde inte läsa kommande prisändring');
+  }
+
+  return result.data?.stripe_schedule_id ?? null;
+}
+
+async function releasePersistedScheduleIfPresent(args: Ctx & { profileId: string }) {
+  const stripe = ensureStripe(args);
+  const scheduleId = await getPersistedUpcomingScheduleId(args.supabaseAdmin, args.profileId);
+  if (!scheduleId) {
+    return null;
+  }
+
+  try {
+    const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
+    if (schedule.status === 'active' || schedule.status === 'not_started') {
+      await stripe.subscriptionSchedules.release(scheduleId, {
+        preserve_cancel_date: true,
+      });
+    }
+  } catch (error) {
+    console.warn('[billing] failed to release persisted subscription schedule', error);
+  }
+
+  return scheduleId;
+}
+
+async function createRecurringPriceForSubscription(params: {
+  stripe: Stripe;
+  productId: string;
+  currency: string;
+  interval: Stripe.Price.Recurring.Interval;
+  intervalCount: number;
+  monthlyPriceSek: number;
+  requestId?: string | null;
+  subscriptionId: string;
+}) {
+  return params.stripe.prices.create(
+    {
+      unit_amount: recurringUnitAmountFromMonthlySek({
+        monthlyPriceSek: params.monthlyPriceSek,
+        interval: params.interval,
+        intervalCount: params.intervalCount,
+      }),
+      currency: params.currency,
+      recurring: {
+        interval: params.interval,
+        interval_count: params.intervalCount,
+      },
+      product: params.productId,
+    },
+    params.requestId
+      ? { idempotencyKey: `sub-${params.subscriptionId}:schedule-price:${params.requestId}` }
+      : undefined,
+  );
 }
 
 function formatDateOnly(value?: number | null) {
@@ -268,6 +363,9 @@ export async function previewSubscriptionPriceChange(
     return {
       mode: args.mode,
       effective_date: formatDateOnly(currentPeriodEnd) ?? new Date().toISOString().slice(0, 10),
+      subscription_id: subscription.id,
+      current_period_end: formatDateOnly(currentPeriodEnd),
+      proration_behavior: 'none',
       current_price_ore: currentPriceOre,
       new_price_ore: nextPriceOre,
       line_items: [
@@ -310,7 +408,7 @@ export async function previewSubscriptionPriceChange(
         : profile.stripe_customer_id) ?? undefined,
     subscription: subscription.id,
     subscription_details: {
-      proration_behavior: 'always_invoice',
+      proration_behavior: 'create_prorations',
       proration_date: prorationDate,
       items: [
         {
@@ -333,6 +431,9 @@ export async function previewSubscriptionPriceChange(
   return {
     mode: args.mode,
     effective_date: new Date(prorationDate * 1000).toISOString().slice(0, 10),
+    subscription_id: subscription.id,
+    current_period_end: formatDateOnly(currentPeriodEnd),
+    proration_behavior: 'create_prorations',
     current_price_ore: currentPriceOre,
     new_price_ore: nextPriceOre,
     line_items: toPreviewLineItems(preview),
@@ -349,115 +450,185 @@ export async function applyCustomerDiscount(
   const stripe = ensureStripe(args);
   const profile = await getProfileWithStripe(args, args.profileId);
   if (!profile.stripe_customer_id) throw new Error('Kunden saknar Stripe customer');
+  const appliedAt = new Date().toISOString();
+  const usesSpecificPeriod =
+    args.input.type !== 'free_months' &&
+    hasBillingDiscountSpecificPeriod({
+      ongoing: args.input.ongoing,
+      startDate: args.input.startDate ?? null,
+      endDate: args.input.endDate ?? null,
+    });
+  const durationMonths =
+    args.input.type === 'free_months'
+      ? Math.max(1, args.input.durationMonths ?? args.input.value)
+      : args.input.ongoing
+        ? null
+        : deriveBillingDiscountDurationMonths({
+            type: args.input.type,
+            value: args.input.value,
+            ongoing: false,
+            duration_months: args.input.durationMonths,
+            start_date: args.input.startDate ?? null,
+            end_date: args.input.endDate ?? null,
+            idempotency_token: args.input.idempotencyToken ?? undefined,
+          });
+  const persistedDurationMonths =
+    args.input.type === 'free_months'
+      ? durationMonths
+      : usesSpecificPeriod
+        ? null
+        : durationMonths;
+  const discountIdempotencyKey = args.input.idempotencyToken
+    ? `discount:${args.profileId}:${args.input.idempotencyToken}`
+    : `discount:${args.profileId}:${args.input.type}:${args.input.value}:${durationMonths ?? 'none'}:${args.input.ongoing ? 'ongoing' : 'limited'}:${args.input.startDate ?? 'none'}:${args.input.endDate ?? 'none'}`;
 
   let coupon: Stripe.Coupon;
   if (args.input.type === 'percent') {
-    coupon = await stripe.coupons.create({
-      percent_off: args.input.value,
-      duration: args.input.ongoing
-        ? 'forever'
-        : args.input.durationMonths
-          ? 'repeating'
-          : 'once',
-      duration_in_months: !args.input.ongoing
-        ? args.input.durationMonths ?? 1
-        : undefined,
-    });
+    coupon = await stripe.coupons.create(
+      {
+        percent_off: args.input.value,
+        duration: args.input.ongoing || usesSpecificPeriod
+          ? 'forever'
+          : durationMonths
+            ? 'repeating'
+            : 'once',
+        duration_in_months: !args.input.ongoing && !usesSpecificPeriod
+          ? durationMonths ?? 1
+          : undefined,
+      },
+      {
+        idempotencyKey: `${discountIdempotencyKey}:coupon`,
+      },
+    );
   } else if (args.input.type === 'amount') {
-    coupon = await stripe.coupons.create({
-      amount_off: Math.round(args.input.value * 100),
-      currency: DEFAULT_CURRENCY,
-      duration: args.input.ongoing
-        ? 'forever'
-        : args.input.durationMonths
-          ? 'repeating'
-          : 'once',
-      duration_in_months: !args.input.ongoing
-        ? args.input.durationMonths ?? 1
-        : undefined,
-    });
+    coupon = await stripe.coupons.create(
+      {
+        amount_off: Math.round(args.input.value * 100),
+        currency: DEFAULT_CURRENCY,
+        duration: args.input.ongoing || usesSpecificPeriod
+          ? 'forever'
+          : durationMonths
+            ? 'repeating'
+            : 'once',
+        duration_in_months: !args.input.ongoing && !usesSpecificPeriod
+          ? durationMonths ?? 1
+          : undefined,
+      },
+      {
+        idempotencyKey: `${discountIdempotencyKey}:coupon`,
+      },
+    );
   } else {
-    coupon = await stripe.coupons.create({
-      percent_off: 100,
-      duration: 'repeating',
-      duration_in_months: Math.max(1, args.input.durationMonths ?? args.input.value),
-    });
+    coupon = await stripe.coupons.create(
+      {
+        percent_off: 100,
+        duration: 'repeating',
+        duration_in_months: Math.max(1, durationMonths ?? args.input.value),
+      },
+      {
+        idempotencyKey: `${discountIdempotencyKey}:coupon`,
+      },
+    );
   }
+
+  const promotionCode = await stripe.promotionCodes.create(
+    {
+      promotion: {
+        type: 'coupon',
+        coupon: coupon.id,
+      },
+      active: true,
+      metadata: {
+        customer_profile_id: args.profileId,
+        discount_type: args.input.type,
+        created_at: appliedAt,
+      },
+    },
+    {
+      idempotencyKey: `${discountIdempotencyKey}:promotion-code`,
+    },
+  );
 
   if (profile.stripe_subscription_id) {
-    await stripe.subscriptions.update(profile.stripe_subscription_id, {
-      discounts: [{ coupon: coupon.id }],
-    });
+    await stripe.subscriptions.update(
+      profile.stripe_subscription_id,
+      {
+        discounts: [{ promotion_code: promotionCode.id }],
+      },
+      {
+        idempotencyKey: `${discountIdempotencyKey}:subscription`,
+      },
+    );
   } else {
-    await stripe.customers.update(profile.stripe_customer_id, {
-      coupon: coupon.id,
-    } as never);
+    await stripe.customers.update(
+      profile.stripe_customer_id,
+      {
+        coupon: coupon.id,
+      } as never,
+      {
+        idempotencyKey: `${discountIdempotencyKey}:customer`,
+      },
+    );
   }
-
-  const update = {
-    discount_type: args.input.type,
-    discount_value:
-      args.input.type === 'free_months'
-        ? Math.max(1, args.input.durationMonths ?? args.input.value)
-        : args.input.value,
-    discount_duration_months: args.input.ongoing ? null : args.input.durationMonths,
-  };
-
-  const { data, error } = await args.supabaseAdmin
-    .from('customer_profiles')
-    .update(update)
-    .eq('id', profile.id)
-    .select('*')
-    .single();
-
-  if (error) throw new Error(error.message);
+  const data = await persistCustomerDiscount({
+    supabaseAdmin: args.supabaseAdmin,
+    customerId: profile.id,
+    discountType: args.input.type,
+    value: args.input.value,
+    durationMonths: persistedDurationMonths,
+    ongoing: args.input.ongoing,
+    startDate: args.input.startDate ?? null,
+    endDate: args.input.endDate ?? null,
+    stripeCouponId: coupon.id,
+    stripePromotionCodeId: promotionCode.id,
+    metadata: {
+      applied_at: appliedAt,
+      idempotency_token: args.input.idempotencyToken ?? null,
+    },
+  });
 
   await logStripeAdminAction(args.supabaseAdmin, {
     eventType: 'admin.discount.applied',
     objectType: 'customer',
     objectId: profile.stripe_customer_id,
     status: 'success',
-    summary: { coupon: coupon.id, ...args.input },
+    summary: {
+      coupon: coupon.id,
+      promotion_code_id: promotionCode.id,
+      idempotency_token: args.input.idempotencyToken ?? null,
+      ...args.input,
+    },
   });
 
-  return { profile: data, couponId: coupon.id };
+  return { profile: data, couponId: coupon.id, promotionCodeId: promotionCode.id };
 }
 
 export async function removeCustomerDiscount(args: Ctx & { profileId: string }) {
-  const stripe = ensureStripe(args);
   const profile = await getProfileWithStripe(args, args.profileId);
-  if (!profile.stripe_customer_id) throw new Error('Kunden saknar Stripe customer');
 
   if (profile.stripe_subscription_id) {
+    const stripe = ensureStripe(args);
     await stripe.subscriptions.update(profile.stripe_subscription_id, {
       discounts: [],
     });
-  } else {
+  } else if (profile.stripe_customer_id) {
+    const stripe = ensureStripe(args);
     await stripe.customers.deleteDiscount(profile.stripe_customer_id);
   }
 
-  const { data, error } = await args.supabaseAdmin
-    .from('customer_profiles')
-    .update({
-      discount_type: 'none',
-      discount_value: 0,
-      discount_duration_months: null,
-      discount_start_date: null,
-      discount_end_date: null,
-      discount_ends_at: null,
-    } as never)
-    .eq('id', profile.id)
-    .select('*')
-    .single();
-
-  if (error) throw new Error(error.message);
-
-  await logStripeAdminAction(args.supabaseAdmin, {
-    eventType: 'admin.discount.removed',
-    objectType: 'customer',
-    objectId: profile.stripe_customer_id,
-    status: 'success',
+  const data = await clearCustomerDiscount({
+    supabaseAdmin: args.supabaseAdmin,
+    customerId: profile.id,
   });
+
+  if (profile.stripe_subscription_id || profile.stripe_customer_id) {
+    await logStripeAdminAction(args.supabaseAdmin, {
+      eventType: 'admin.discount.removed',
+      objectType: 'customer',
+      objectId: profile.stripe_customer_id,
+      status: 'success',
+    });
+  }
 
   return { profile: data };
 }
@@ -480,6 +651,7 @@ export async function listPendingInvoiceItems(args: Ctx & { profileId: string })
     amount_sek: item.amount / 100,
     currency: item.currency,
     created: item.date ? new Date(item.date * 1000).toISOString() : null,
+    metadata: item.metadata,
   }));
 }
 
@@ -498,6 +670,7 @@ export async function createPendingInvoiceItem(
     amount: Math.round(args.input.amountSek * 100),
     currency: (args.input.currency || DEFAULT_CURRENCY).toLowerCase(),
     description: args.input.description,
+    metadata: args.input.metadata,
   });
 
   await logStripeAdminAction(args.supabaseAdmin, {
@@ -514,6 +687,7 @@ export async function createPendingInvoiceItem(
     amount_sek: item.amount / 100,
     currency: item.currency,
     created: item.date ? new Date(item.date * 1000).toISOString() : null,
+    metadata: item.metadata,
   };
 }
 
@@ -645,38 +819,47 @@ export async function createInvoiceLineCreditNote(
 ) {
   const stripe = ensureStripe(args);
   const invoiceRow = await resolveInvoiceRecord(args.supabaseAdmin, args.invoiceId);
-  const lineItemResult = await args.supabaseAdmin
-    .from('invoice_line_items')
-    .select('stripe_line_item_id, amount')
-    .eq('stripe_invoice_id', invoiceRow.stripe_invoice_id)
-    .eq('stripe_line_item_id', args.stripeLineItemId)
-    .maybeSingle();
 
-  if (lineItemResult.error || !lineItemResult.data?.stripe_line_item_id) {
-    throw new Error(lineItemResult.error?.message || 'Fakturaraden kunde inte hittas');
-  }
-
-  const lineAmount = Math.abs(Number(lineItemResult.data.amount) || 0);
-  if (args.amountOre <= 0 || args.amountOre > lineAmount) {
-    throw new Error('Kreditbeloppet maste vara mellan 1 och radens belopp');
-  }
-
-  const creditNote = await stripe.creditNotes.create({
+  let creditNoteParams: Stripe.CreditNoteCreateParams = {
     invoice: invoiceRow.stripe_invoice_id,
     memo: args.memo ?? undefined,
     reason: args.reason ?? 'order_change',
-    lines: [
+    refund_amount:
+      invoiceRow.status === 'paid' && (args.refundAmountOre ?? 0) > 0
+        ? Math.min(args.refundAmountOre ?? 0, args.amountOre)
+        : undefined,
+  };
+
+  if (args.stripeLineItemId) {
+    const lineItemResult = await args.supabaseAdmin
+      .from('invoice_line_items')
+      .select('stripe_line_item_id, amount')
+      .eq('stripe_invoice_id', invoiceRow.stripe_invoice_id)
+      .eq('stripe_line_item_id', args.stripeLineItemId)
+      .maybeSingle();
+
+    if (lineItemResult.error || !lineItemResult.data?.stripe_line_item_id) {
+      throw new Error(lineItemResult.error?.message || 'Fakturaraden kunde inte hittas');
+    }
+
+    const lineAmount = Math.abs(Number(lineItemResult.data.amount) || 0);
+    if (args.amountOre <= 0 || args.amountOre > lineAmount) {
+      throw new Error('Kreditbeloppet maste vara mellan 1 och radens belopp');
+    }
+
+    creditNoteParams.lines = [
       {
         type: 'invoice_line_item',
         invoice_line_item: args.stripeLineItemId,
         amount: args.amountOre,
       },
-    ],
-    refund_amount:
-      invoiceRow.status === 'paid' && (args.refundAmountOre ?? 0) > 0
-        ? Math.min(args.refundAmountOre ?? 0, args.amountOre)
-        : undefined,
-  });
+    ];
+  } else {
+    // Full invoice credit
+    creditNoteParams.amount = args.amountOre;
+  }
+
+  const creditNote = await stripe.creditNotes.create(creditNoteParams);
 
   await upsertCreditNoteMirror({
     supabaseAdmin: args.supabaseAdmin,
@@ -864,31 +1047,145 @@ export async function applySubscriptionPriceChange(
     mode: SubscriptionPriceChangeMode;
   }
 ) {
-  const { profile, item } = await getSubscriptionContext(args);
+  const { stripe, profile, subscription, item, productId } = await getSubscriptionContext(args);
+  const recurringInterval = item.price.recurring?.interval ?? 'month';
+  const recurringIntervalCount = item.price.recurring?.interval_count ?? 1;
+  const currency = item.price.currency || DEFAULT_CURRENCY;
+  const quantity = item.quantity ?? 1;
 
   if (args.mode === 'next_period') {
+    const currentPeriodStart = item.current_period_start ?? null;
+    const currentPeriodEnd = item.current_period_end ?? null;
+    if (!currentPeriodEnd) {
+      throw new Error('Subscription saknar periodslut for schemalaggning');
+    }
+
+    const newPrice = await createRecurringPriceForSubscription({
+      stripe,
+      productId,
+      currency,
+      interval: recurringInterval,
+      intervalCount: recurringIntervalCount,
+      monthlyPriceSek: args.monthlyPriceSek,
+      requestId: args.requestId ?? null,
+      subscriptionId: subscription.id,
+    });
+
+    let scheduleId = await getPersistedUpcomingScheduleId(args.supabaseAdmin, args.profileId);
+    let schedule: Stripe.SubscriptionSchedule | null = null;
+
+    if (scheduleId) {
+      try {
+        schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
+        if (
+          schedule.status === 'released' ||
+          schedule.status === 'completed' ||
+          schedule.status === 'canceled'
+        ) {
+          schedule = null;
+          scheduleId = null;
+        }
+      } catch {
+        schedule = null;
+        scheduleId = null;
+      }
+    }
+
+    if (!schedule) {
+      schedule = await stripe.subscriptionSchedules.create(
+        {
+          from_subscription: subscription.id,
+          end_behavior: 'release',
+        },
+        args.requestId
+          ? { idempotencyKey: `sub-${subscription.id}:schedule-create:${args.requestId}` }
+          : undefined,
+      );
+      scheduleId = schedule.id;
+    }
+
+    schedule = await stripe.subscriptionSchedules.update(
+      scheduleId!,
+      {
+        end_behavior: 'release',
+        proration_behavior: 'none',
+        metadata: {
+          customer_profile_id: args.profileId,
+          next_price_ore: String(Math.round(args.monthlyPriceSek * 100)),
+          effective_date:
+            formatDateOnly(currentPeriodEnd) ?? new Date().toISOString().slice(0, 10),
+        },
+        phases: [
+          {
+            start_date: currentPeriodStart ?? schedule.current_phase?.start_date ?? undefined,
+            end_date: currentPeriodEnd,
+            items: [
+              {
+                price: item.price.id,
+                quantity,
+              },
+            ],
+          },
+          {
+            start_date: currentPeriodEnd,
+            items: [
+              {
+                price: newPrice.id,
+                quantity,
+              },
+            ],
+            proration_behavior: 'none',
+          },
+        ],
+      },
+      args.requestId
+        ? { idempotencyKey: `sub-${subscription.id}:schedule-update:${args.requestId}` }
+        : undefined,
+    );
+
+    await logStripeAdminAction(args.supabaseAdmin, {
+      eventType: 'admin.subscription.price_scheduled',
+      objectType: 'subscription',
+      objectId: subscription.id,
+      status: 'success',
+      summary: {
+        schedule_id: schedule.id,
+        stripe_price_id: newPrice.id,
+        effective_date: formatDateOnly(currentPeriodEnd),
+      },
+    });
+
     return {
       mode: args.mode,
-      subscription: null,
-      effectiveDate: formatDateOnly(item.current_period_end) ?? new Date().toISOString().slice(0, 10),
+      subscription,
+      stripeScheduleId: schedule.id,
+      stripePriceId: newPrice.id,
+      effectiveDate:
+        formatDateOnly(currentPeriodEnd) ?? new Date().toISOString().slice(0, 10),
       appliedPriceOre: Math.round(args.monthlyPriceSek * 100),
     };
   }
 
-  const subscription = await applyPriceToSubscription({
+  await releasePersistedScheduleIfPresent({
+    ...args,
+  });
+
+  const updatedSubscription = await applyPriceToSubscription({
     stripeClient: ensureStripe(args),
     subscriptionId: profile.stripe_subscription_id!,
     monthlyPriceSek: args.monthlyPriceSek,
     source: 'admin_manual',
     supabaseAdmin: args.supabaseAdmin,
-    prorationBehavior: 'always_invoice',
+    prorationBehavior: 'create_prorations',
     prorationDate: Math.floor(Date.now() / 1000),
     requestId: args.requestId ?? null,
   });
 
   return {
     mode: args.mode,
-    subscription,
+    subscription: updatedSubscription,
+    stripeScheduleId: null,
+    stripePriceId: updatedSubscription.items.data[0]?.price?.id ?? null,
     effectiveDate: new Date().toISOString().slice(0, 10),
     appliedPriceOre: Math.round(args.monthlyPriceSek * 100),
   };

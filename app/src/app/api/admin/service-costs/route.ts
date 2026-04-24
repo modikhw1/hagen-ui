@@ -38,10 +38,6 @@ function normalizeServiceLabel(rawService: string) {
   return rawService.trim();
 }
 
-function isMissingTableError(message?: string | null) {
-  return typeof message === 'string' && message.toLowerCase().includes('relation') && message.toLowerCase().includes('does not exist');
-}
-
 export const GET = withAuth(async (req: NextRequest) => {
   const days = Number(new URL(req.url).searchParams.get('days') || 30);
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
@@ -53,10 +49,6 @@ export const GET = withAuth(async (req: NextRequest) => {
     .gte('date', cutoff);
 
   if (error) {
-    if (isMissingTableError(error.message)) {
-      return jsonOk({ entries: [], total: 0 });
-    }
-
     return jsonError(error.message, 500);
   }
 

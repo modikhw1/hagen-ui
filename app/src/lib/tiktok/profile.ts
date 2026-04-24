@@ -4,6 +4,7 @@ export interface TikTokProfilePreview {
   author_name: string | null;
   author_url: string | null;
   title: string | null;
+  cover_image_url: string | null;
 }
 
 function normalizeHandle(value: string): string | null {
@@ -64,6 +65,7 @@ export async function fetchTikTokProfilePreview(
     author_name?: unknown;
     author_url?: unknown;
     title?: unknown;
+    thumbnail_url?: unknown;
   };
 
   const authorUrl =
@@ -87,6 +89,10 @@ export async function fetchTikTokProfilePreview(
     title:
       typeof payload.title === 'string' && payload.title.trim()
         ? payload.title.trim()
+        : null,
+    cover_image_url:
+      typeof payload.thumbnail_url === 'string' && payload.thumbnail_url.trim()
+        ? payload.thumbnail_url.trim()
         : null,
   };
 }

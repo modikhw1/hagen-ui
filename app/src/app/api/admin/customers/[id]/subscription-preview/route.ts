@@ -1,18 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import { withAuth } from '@/lib/auth/api-auth';
+import { subscriptionPriceChangeSchema } from '@/lib/schemas/billing';
 import { previewSubscriptionPriceChange } from '@/lib/stripe/admin-billing';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { jsonError } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
-const requestSchema = z
-  .object({
-    monthly_price: z.number().min(0).max(1_000_000),
-    mode: z.enum(['now', 'next_period']),
-  })
-  .strict();
-
+/** @deprecated Prefer app/admin/_actions/billing.previewSubscriptionPrice for new callers. */
 export const POST = withAuth(
   async (
     request: NextRequest,
@@ -20,7 +14,7 @@ export const POST = withAuth(
     { params }: { params: Promise<{ id: string }> },
   ) => {
     const { id } = await params;
-    const parsed = requestSchema.safeParse(await request.json());
+    const parsed = subscriptionPriceChangeSchema.safeParse(await request.json());
 
     if (!parsed.success) {
       return jsonError('Ogiltig payload', 400, {

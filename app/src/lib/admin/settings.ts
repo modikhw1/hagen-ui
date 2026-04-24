@@ -1,3 +1,5 @@
+import 'server-only';
+
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isMissingColumnError, isMissingRelationError } from '@/lib/admin/schema-guards';
 
@@ -62,7 +64,7 @@ export async function getAdminSettings(
       };
     }
 
-    throw new Error(result.error.message || 'Kunde inte hamta admin settings');
+    throw new Error(result.error.message || 'Kunde inte hämta admin settings');
   }
 
   return {
@@ -81,7 +83,7 @@ export async function updateAdminSettings(
       ? { default_billing_interval: input.default_billing_interval }
       : {}),
     ...(input.default_payment_terms_days !== undefined
-      ? { default_payment_terms_days: Math.max(1, Math.min(90, Math.round(input.default_payment_terms_days))) }
+      ? { default_payment_terms_days: Math.max(1, Math.min(120, Math.round(input.default_payment_terms_days))) }
       : {}),
     ...(input.default_currency
       ? { default_currency: input.default_currency.trim().toUpperCase() || DEFAULT_ADMIN_SETTINGS.default_currency }

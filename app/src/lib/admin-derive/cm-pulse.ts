@@ -22,7 +22,7 @@ export type CmPulseInput = {
   now: Date;
 };
 
-export type CmStatus = 'away' | 'in_phase' | 'watch' | 'needs_action';
+export type CmStatus = 'away' | 'ok' | 'watch' | 'needs_action';
 export type SortMode = 'standard' | 'lowest_activity';
 
 export function cmAggregate(input: CmPulseInput) {
@@ -44,7 +44,7 @@ export function cmAggregate(input: CmPulseInput) {
   if (input.activeAbsence) status = 'away';
   else if (last_interaction_days >= 5 || n_under >= 2) status = 'needs_action';
   else if (n_under === 1 || n_thin >= 2 || last_interaction_days >= 3) status = 'watch';
-  else status = 'in_phase';
+  else status = 'ok';
 
   const fillPct = expected_concepts_7d === 0
     ? 100
@@ -55,6 +55,7 @@ export function cmAggregate(input: CmPulseInput) {
     status,
     activeAbsence: input.activeAbsence ?? null,
     counts: { n_under, n_thin, n_blocked, n_ok, n_paused },
+    lastInteractionAt: input.lastInteractionAt,
     last_interaction_days,
     interaction_count_7d,
     expected_concepts_7d,
@@ -70,7 +71,7 @@ export function cmAggregate(input: CmPulseInput) {
 }
 
 export function sortCmRows(rows: ReturnType<typeof cmAggregate>[], mode: SortMode) {
-  const order = { needs_action: 0, watch: 1, away: 2, in_phase: 3 } as const;
+  const order = { needs_action: 0, watch: 1, away: 2, ok: 3 } as const;
 
   if (mode === 'standard') {
     return [...rows].sort((a, b) =>

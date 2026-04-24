@@ -20,10 +20,9 @@ export default function CustomerChangeCMRoute({ customerId }: { customerId: stri
     <ChangeCMModal
       open
       customerId={customerId}
-      currentCM={customer.account_manager}
+      currentCmId={customer.account_manager_profile_id}
       currentMonthlyPrice={customer.monthly_price}
-      team={team}
-      onClose={() => router.push(`/admin/customers/${customerId}/team`, { scroll: false })}
+      onOpenChange={() => router.push(`/admin/customers/${customerId}/team`, { scroll: false })}
       onChanged={() => {
         void refresh();
       }}

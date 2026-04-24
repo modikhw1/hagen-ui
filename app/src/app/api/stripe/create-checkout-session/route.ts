@@ -9,6 +9,7 @@ import {
   recurringUnitAmountFromMonthlyOre,
   recurringUnitAmountFromMonthlySek,
 } from '@/lib/stripe/price-amounts';
+import { hasBillingDiscountSpecificPeriod } from '@/lib/schemas/billing';
 
 const checkoutRequestSchema = z.object({
   profileId: z.string().trim().min(1).max(128),
@@ -154,13 +155,25 @@ async function createContractCoupon(
   const type = profile.discount_type || 'none';
   const rawValue = Number(profile.discount_value) || 0;
   const durationMonths = Math.max(1, Number(profile.discount_duration_months) || 1);
+  const usesSpecificPeriod =
+    type !== 'free_months' &&
+    hasBillingDiscountSpecificPeriod({
+      ongoing: false,
+      startDate: profile.discount_start_date,
+      endDate: profile.discount_end_date,
+    });
 
   if (type === 'none') return null;
 
-  const duration: Stripe.CouponCreateParams.Duration = durationMonths === 1 ? 'once' : 'repeating';
-  const durationInMonths = duration === 'repeating' ? durationMonths : undefined;
+  const duration: Stripe.CouponCreateParams.Duration = usesSpecificPeriod
+    ? 'forever'
+    : durationMonths === 1
+      ? 'once'
+      : 'repeating';
+  const durationInMonths =
+    !usesSpecificPeriod && duration === 'repeating' ? durationMonths : undefined;
   // Deterministic coupon ID based on profile discount parameters — prevents orphan coupons
-  const couponIdBase = `lt_${profile.id}_${type}_${rawValue}_${durationMonths}`;
+  const couponIdBase = `lt_${profile.id}_${type}_${rawValue}_${usesSpecificPeriod ? 'period' : durationMonths}`;
 
   if (type === 'percent' && rawValue > 0) {
     const percentOff = Math.max(0, Math.min(100, rawValue));

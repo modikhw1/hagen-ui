@@ -3,7 +3,7 @@ import { jsonError } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 export const GET = withAuth(async (_request, user) => {
-  requireScope(user, 'operations_admin');
+  requireScope(user, 'customers.read');
 
   try {
     const supabaseAdmin = createSupabaseAdmin();

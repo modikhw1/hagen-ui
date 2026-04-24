@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { requireAdminScope } from '@/lib/auth/api-auth';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { adminActionPolicy } from '@/lib/auth/admin-scopes';
 import {
   customerActionSchema,
@@ -17,6 +18,7 @@ import { handleResumeSubscription } from './resume-subscription';
 import { handleSendInvite } from './send-invite';
 import { handleSendReminder } from './send-reminder';
 import { handleSetTemporaryCoverage } from './set-temporary-coverage';
+import { updateCustomerProfile } from './update-profile';
 import { buildValidationErrorResponse } from './shared';
 import type { ActionResult, AdminActionContext } from './types';
 
@@ -28,9 +30,7 @@ async function dispatchParsedCustomerAction(
   requireAdminScope(
     ctx.user,
     requiredScope,
-    requiredScope === 'super_admin'
-      ? 'Endast super-admin kan utfora den har billing-atgarden'
-      : undefined,
+    requiredScope === 'super_admin' ? SERVER_COPY.superAdminOnly : undefined,
   );
 
   switch (action.action) {
@@ -56,6 +56,8 @@ async function dispatchParsedCustomerAction(
       return handleChangeSubscriptionPrice(ctx, action);
     case 'change_account_manager':
       return handleChangeAccountManager(ctx, action);
+    case 'update_profile':
+      return updateCustomerProfile(ctx, action);
   }
 }
 

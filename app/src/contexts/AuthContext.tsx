@@ -155,26 +155,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const initAuth = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (!isMounted) return;
 
-        if (sessionError) {
-          console.error('Session error:', sessionError);
+        if (userError) {
+          console.error('Auth error:', userError);
           setState(prev => ({
             ...prev,
             authLoading: false,
             profileLoading: false,
             status: 'error',
-            error: sessionError,
+            error: userError as any,
           }));
           return;
         }
 
-        if (session?.user) {
+        if (user) {
+          // Get the session too for backward compatibility if needed, 
+          // but we prioritize the user object for security.
+          const { data: { session } } = await supabase.auth.getSession();
+          
           // Show authenticated immediately, then load profile
           setState(prev => ({
             ...prev,
-            user: session.user,
+            user: user,
             session,
             authLoading: false,
             profileLoading: true,
@@ -182,11 +186,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             error: null,
           }));
 
-          const profileData = await fetchProfile(session.user.id);
+          const profileData = await fetchProfile(user.id);
           if (!isMounted) return;
 
           setState({
-            user: session.user,
+            user: user,
             profile: profileData,
             session,
             authLoading: false,

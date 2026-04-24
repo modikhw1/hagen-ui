@@ -19,9 +19,9 @@ export async function GET() {
       }
     );
 
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    return NextResponse.json({ session });
+    return NextResponse.json({ user });
   } catch (error) {
     console.error('Session error:', error);
     return NextResponse.json({ session: null });

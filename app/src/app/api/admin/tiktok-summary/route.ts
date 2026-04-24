@@ -2,14 +2,6 @@ import { withAuth } from '@/lib/auth/api-auth';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
-function isMissingTableError(message?: string | null) {
-  return (
-    typeof message === 'string' &&
-    message.toLowerCase().includes('relation') &&
-    message.toLowerCase().includes('does not exist')
-  );
-}
-
 export const GET = withAuth(async () => {
   const supabaseAdmin = createSupabaseAdmin();
   const cutoff = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
@@ -20,7 +12,7 @@ export const GET = withAuth(async () => {
     .gte('snapshot_date', cutoff)
     .order('snapshot_date', { ascending: false });
 
-  if (error && !isMissingTableError(error.message)) {
+  if (error) {
     return jsonError(error.message, 500);
   }
 

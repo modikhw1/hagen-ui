@@ -1,18 +1,20 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
+import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
+import { apiClient } from '@/lib/admin/api-client';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+  createManualInvoiceSchema,
+  type DraftInvoiceItem,
+} from '@/lib/admin/schemas/invoice-create';
 
-interface DraftInvoiceItem {
-  description: string;
-  amount: number;
-}
+type CreateInvoiceResponse = {
+  invoice: {
+    id: string;
+  };
+};
 
 export default function ManualInvoiceModal({
   open,
@@ -27,192 +29,185 @@ export default function ManualInvoiceModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [items, setItems] = useState<DraftInvoiceItem[]>([
-    { description: '', amount: 0 },
-  ]);
+  const [items, setItems] = useState<DraftInvoiceItem[]>([{ description: '', amount: 0 }]);
   const [daysUntilDue, setDaysUntilDue] = useState(14);
   const [autoFinalize, setAutoFinalize] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  
+  const filteredItems = items.filter((item) => item.description.trim() && item.amount > 0);
+  const totalAmountSek = filteredItems.reduce((sum, item) => sum + item.amount, 0);
+  
+  const payload = {
+    customer_profile_id: customerId,
+    items: filteredItems,
+    days_until_due: daysUntilDue,
+    auto_finalize: autoFinalize,
+  };
+  
+  const validation = createManualInvoiceSchema.safeParse(payload);
+  const createMutation = useMutation({
+    mutationKey: ['admin', 'manual-invoice-create', customerId],
+    mutationFn: async () =>
+      apiClient.post<CreateInvoiceResponse>('/api/admin/invoices/create', payload),
+    onSuccess: () => {
+      onCreated();
+    },
+  });
 
-  useEffect(() => {
-    if (!open) {
+  const errorMessage =
+    createMutation.error instanceof Error ? createMutation.error.message : null;
+  const validationMessage = validation.success
+    ? null
+    : validation.error.issues[0]?.message || 'Fyll i minst en giltig rad.';
+
+  const submit = () => {
+    if (!validation.success) {
       return;
     }
 
-    setItems([{ description: '', amount: 0 }]);
-    setDaysUntilDue(14);
-    setAutoFinalize(true);
-    setError(null);
-  }, [open]);
-
-  const handleCreate = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/admin/invoices/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          customer_profile_id: customerId,
-          items: items.filter((item) => item.description.trim() && item.amount > 0),
-          days_until_due: daysUntilDue,
-          auto_finalize: autoFinalize,
-        }),
-      });
-
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || 'Kunde inte skapa faktura');
-      }
-
-      onCreated();
-    } catch (createError: unknown) {
-      setError(
-        createError instanceof Error
-          ? createError.message
-          : 'Kunde inte skapa faktura',
-      );
-    } finally {
-      setLoading(false);
+    if (autoFinalize && totalAmountSek >= 5000) {
+      setConfirmOpen(true);
+      return;
     }
+
+    void createMutation.mutateAsync();
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) {
-          onClose();
-        }
-      }}
-    >
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Skapa manuell faktura</DialogTitle>
-          <DialogDescription>För {customerName}</DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4">
-          {items.map((item, index) => (
-            <div
-              key={`${index}-${item.description}`}
-              className="grid grid-cols-[1fr_160px_auto] gap-2"
+    <>
+      <AdminFormDialog
+        open={open}
+        onClose={onClose}
+        title="Skapa manuell faktura"
+        description={`För ${customerName}`}
+        size="lg"
+        error={errorMessage}
+        warning={validationMessage}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={createMutation.isPending}
+              className="rounded-md border border-border px-4 py-2 text-sm"
             >
-              <input
-                value={item.description}
-                onChange={(event) =>
-                  setItems((current) =>
-                    current.map((row, rowIndex) =>
-                      rowIndex === index
-                        ? { ...row, description: event.target.value }
-                        : row,
-                    ),
-                  )
-                }
-                placeholder="Beskrivning"
-                className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
-              />
-              <input
-                type="number"
-                min={0}
-                value={item.amount}
-                onChange={(event) =>
-                  setItems((current) =>
-                    current.map((row, rowIndex) =>
-                      rowIndex === index
-                        ? {
-                            ...row,
-                            amount: Math.max(
-                              0,
-                              Number(event.target.value) || 0,
-                            ),
-                          }
-                        : row,
-                    ),
-                  )
-                }
-                placeholder="Belopp (kr)"
-                className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
-              />
-              <button
-                onClick={() =>
-                  setItems((current) =>
-                    current.length === 1
-                      ? current
-                      : current.filter((_, rowIndex) => rowIndex !== index),
-                  )
-                }
-                className="rounded-md border border-border px-3 py-2 text-sm"
-              >
-                Ta bort
-              </button>
-            </div>
-          ))}
-
-          <button
-            onClick={() =>
-              setItems((current) => [...current, { description: '', amount: 0 }])
-            }
-            className="w-fit rounded-md border border-border px-3 py-2 text-sm"
-          >
-            Lägg till rad
-          </button>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground">
-                Förfaller om (dagar)
-              </label>
-              <input
-                type="number"
-                min={1}
-                max={90}
-                value={daysUntilDue}
-                onChange={(event) =>
-                  setDaysUntilDue(
-                    Math.max(1, Math.min(90, Number(event.target.value) || 14)),
-                  )
-                }
-                className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
-              />
-            </div>
-            <label className="flex items-center gap-2 pt-6 text-sm text-foreground">
-              <input
-                type="checkbox"
-                checked={autoFinalize}
-                onChange={(event) => setAutoFinalize(event.target.checked)}
-              />
-              Finalisera direkt
-            </label>
+              Avbryt
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={createMutation.isPending || !validation.success}
+              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            >
+              {createMutation.isPending ? 'Skapar...' : 'Skapa faktura'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-6">
+          <div className="rounded-md bg-status-info-bg px-3 py-2 text-xs text-status-info-fg">
+            Använd manuell faktura för engångsärenden som inte hör till abonnemanget.
+            Behöver du lägga till en post som ska följa med nästa månadsfaktura, använd
+            <strong> Väntande poster</strong> istället.
           </div>
 
-          {error && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-        </div>
+          <div className="grid gap-4">
+            {items.map((item, index) => (
+              <div
+                key={`${index}-${item.description}`}
+                className="grid grid-cols-[1fr_160px_auto] gap-2"
+              >
+                <input
+                  value={item.description}
+                  onChange={(event) =>
+                    setItems((current) =>
+                      current.map((row, rowIndex) =>
+                        rowIndex === index ? { ...row, description: event.target.value } : row,
+                      ),
+                    )
+                  }
+                  placeholder="Beskrivning"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+                <input
+                  type="number"
+                  min={0}
+                  value={item.amount}
+                  onChange={(event) =>
+                    setItems((current) =>
+                      current.map((row, rowIndex) =>
+                        rowIndex === index
+                          ? { ...row, amount: Math.max(0, Number(event.target.value) || 0) }
+                          : row,
+                      ),
+                    )
+                  }
+                  placeholder="Belopp (kr)"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setItems((current) =>
+                      current.length === 1
+                        ? current
+                        : current.filter((_, rowIndex) => rowIndex !== index),
+                    )
+                  }
+                  className="rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"
+                >
+                  Ta bort
+                </button>
+              </div>
+            ))}
 
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="rounded-md border border-border px-4 py-2 text-sm"
-          >
-            Avbryt
-          </button>
-          <button
-            onClick={() => void handleCreate()}
-            disabled={loading}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-          >
-            {loading ? 'Skapar...' : 'Skapa faktura'}
-          </button>
+            <button
+              type="button"
+              onClick={() => setItems((current) => [...current, { description: '', amount: 0 }])}
+              className="w-fit rounded-md border border-border px-3 py-2 text-sm hover:bg-accent"
+            >
+              Lägg till rad
+            </button>
+
+            <div className="grid grid-cols-2 gap-6 pt-4">
+              <div>
+                <label className="mb-1 block text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                  Förfaller om (dagar)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={daysUntilDue}
+                  onChange={(event) =>
+                    setDaysUntilDue(Math.max(1, Math.min(90, Number(event.target.value) || 14)))
+                  }
+                  className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+                />
+              </div>
+              <label className="flex items-center gap-2 pt-6 text-sm text-foreground cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={autoFinalize}
+                  onChange={(event) => setAutoFinalize(event.target.checked)}
+                  className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                />
+                <span className="group-hover:text-primary transition-colors">Finalisera direkt</span>
+              </label>
+            </div>
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </AdminFormDialog>
+
+      <ConfirmActionDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Finalisera stor faktura direkt?"
+        description={`Detta finaliseras direkt och skickas till kund. Total: ${totalAmountSek.toLocaleString('sv-SE')} kr.`}
+        confirmLabel="Skapa och finalisera"
+        onConfirm={() => void createMutation.mutateAsync()}
+        pending={createMutation.isPending}
+      />
+    </>
   );
 }

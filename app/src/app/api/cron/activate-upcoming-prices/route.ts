@@ -1,9 +1,11 @@
 /**
  * GET /api/cron/activate-upcoming-prices
  *
- * Cron job to activate scheduled price changes on their effective date.
- * Runs daily to promote upcoming_monthly_price to monthly_price
- * when upcoming_price_effective_date is reached.
+ * Cron job for billing maintenance.
+ * Runs daily to:
+ * - promote upcoming_monthly_price to monthly_price
+ * - resume paused subscriptions when pause date has passed
+ * - remove discounts that have passed their inclusive end date
  *
  * Authorization:
  * - Cron secret header (x-cron-secret or Bearer token)
@@ -12,9 +14,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { recordAuditLog } from '@/lib/admin/audit-log';
+import { revalidateAdminCustomerViews } from '@/lib/admin/cache-tags';
 import { applyScheduledAssignmentChanges } from '@/lib/admin/cm-assignments';
 import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
-import { resumeCustomerSubscription } from '@/lib/stripe/admin-billing';
+import {
+  removeCustomerDiscount,
+  resumeCustomerSubscription,
+} from '@/lib/stripe/admin-billing';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
 import { applyPriceToSubscription } from '@/lib/stripe/subscription-pricing';
@@ -51,6 +58,21 @@ interface ApplyPriceResult {
 interface ResumePauseResult {
   scanned: number;
   resumed: number;
+  failed: Array<{ customer_profile_id: string; error: string }>;
+}
+
+interface ExpiredDiscountProfile {
+  id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  discount_type: 'none' | 'percent' | 'amount' | 'free_months' | null;
+  discount_end_date: string | null;
+}
+
+interface DiscountExpiryResult {
+  scanned: number;
+  expired: number;
+  cleared_without_stripe_link: number;
   failed: Array<{ customer_profile_id: string; error: string }>;
 }
 
@@ -213,6 +235,71 @@ async function runResumePausedSubscriptionsJob(): Promise<ResumePauseResult> {
   return result;
 }
 
+async function runDiscountExpiryJob(): Promise<DiscountExpiryResult> {
+  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+  const today = new Date().toISOString().slice(0, 10);
+  const result: DiscountExpiryResult = {
+    scanned: 0,
+    expired: 0,
+    cleared_without_stripe_link: 0,
+    failed: [],
+  };
+
+  const dueDiscounts = await supabaseAdmin
+    .from('customer_profiles')
+    .select('id, stripe_customer_id, stripe_subscription_id, discount_type, discount_end_date')
+    .not('discount_end_date', 'is', null)
+    .neq('discount_type', 'none')
+    .lt('discount_end_date', today)
+    .limit(200);
+
+  if (dueDiscounts.error) {
+    throw new Error(dueDiscounts.error.message);
+  }
+
+  const profiles = (dueDiscounts.data ?? []) as ExpiredDiscountProfile[];
+  result.scanned = profiles.length;
+
+  for (const profile of profiles) {
+    try {
+      await removeCustomerDiscount({
+        supabaseAdmin,
+        stripeClient: stripe,
+        profileId: profile.id,
+      });
+
+      await recordAuditLog(supabaseAdmin, {
+        actorUserId: null,
+        actorRole: 'system',
+        action: 'system.customer.discount_expired',
+        entityType: 'customer_profile',
+        entityId: profile.id,
+        metadata: {
+          customer_profile_id: profile.id,
+          discount_type: profile.discount_type,
+          discount_end_date: profile.discount_end_date,
+          source: 'cron',
+        },
+      });
+
+      revalidateAdminCustomerViews(profile.id);
+
+      if (!profile.stripe_customer_id && !profile.stripe_subscription_id) {
+        result.cleared_without_stripe_link += 1;
+      }
+
+      result.expired += 1;
+    } catch (error: unknown) {
+      result.failed.push({
+        customer_profile_id: profile.id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  return result;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const hasCronSecret = isAuthorized(request);
@@ -220,9 +307,10 @@ export async function GET(request: NextRequest) {
       await validateApiRequest(request, ['admin']);
     }
 
-    const [priceActivation, pauseResumes, scheduledAssignments] = await Promise.all([
+    const [priceActivation, pauseResumes, discountExpiry, scheduledAssignments] = await Promise.all([
       runPriceActivationJob(),
       runResumePausedSubscriptionsJob(),
+      runDiscountExpiryJob(),
       (async () => {
         const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
         return applyScheduledAssignmentChanges({ supabaseAdmin });
@@ -232,6 +320,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       price_activation: priceActivation,
       pause_resumes: pauseResumes,
+      discount_expiry: discountExpiry,
       scheduled_assignments: scheduledAssignments,
     });
   } catch (error: unknown) {

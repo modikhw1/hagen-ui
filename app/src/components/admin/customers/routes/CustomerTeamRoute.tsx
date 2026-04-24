@@ -48,13 +48,13 @@ export default function CustomerTeamRoute({ customerId }: { customerId: string }
         )}
       </CustomerSection>
 
-      <CustomerSection title="CM-atgarder">
+      <CustomerSection title="CM-åtgärder">
         <Link
           href={`/admin/customers/${customerId}/team/change`}
           scroll={false}
           className="block rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
         >
-          Andra Content Manager
+          Ändra Content Manager
         </Link>
       </CustomerSection>
 
@@ -74,14 +74,19 @@ export default function CustomerTeamRoute({ customerId }: { customerId: string }
                   {absence.backup_cm_name ? ` · ${absence.backup_cm_name}` : ''}
                 </div>
                 <div>
-                  Payroll: {absence.compensation_mode === 'primary_cm' ? 'ordinarie CM' : 'covering CM'}
+                  Payroll:{' '}
+                  {absence.compensation_mode === 'primary_cm'
+                    ? 'ordinarie CM'
+                    : 'covering CM'}
                 </div>
                 {absence.note ? <div className="mt-1">{absence.note}</div> : null}
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Ingen tillfallig coverage registrerad.</p>
+          <p className="text-sm text-muted-foreground">
+            Ingen tillfällig coverage registrerad.
+          </p>
         )}
       </CustomerSection>
     </div>

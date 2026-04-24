@@ -1,10 +1,16 @@
 import { NextRequest } from 'next/server';
-import { dispatchCustomerAction } from '@/lib/admin/customer-actions/dispatcher';
-import { handleArchiveCustomer } from '@/lib/admin/customer-actions/archive';
-import { createAdminActionContext } from '@/lib/admin/customer-actions/context';
-import { buildRouteErrorResponse } from '@/lib/admin/customer-actions/shared';
+import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
+import {
+  buildRouteErrorResponse,
+} from '@/lib/admin/customer-actions/shared';
+import {
+  runCustomerActionRoute,
+  type CustomerActionRouteParams,
+} from '@/lib/admin/customer-actions/route-helpers';
 import { updateCustomerProfile } from '@/lib/admin/customer-actions/update-profile';
+import { withRequestContext } from '@/lib/admin/customer-actions/with-request-context';
 import { loadCustomerDetail } from '@/lib/admin/customer-detail/load';
+import { enforceAdminReadRateLimit } from '@/lib/admin/server/read-rate-limit';
 import { validateApiRequest } from '@/lib/auth/api-auth';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
@@ -14,41 +20,53 @@ interface RouteParams {
 }
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
-    const user = await validateApiRequest(request, ['admin', 'customer', 'content_manager']);
-    const { id } = await params;
-    if (!id) return jsonError('Kund-ID kravs', 400);
-    return jsonOk(await loadCustomerDetail({ supabaseAdmin: createSupabaseAdmin(), id, user }));
-  } catch (error) {
-    return buildRouteErrorResponse(error);
-  }
+  const logContext: {
+    actorUserId?: string | null;
+    entityId?: string | null;
+    supabaseAdmin?: ReturnType<typeof createSupabaseAdmin>;
+  } = {};
+
+  return withRequestContext({
+    request,
+    route: request.nextUrl.pathname,
+    action: 'customer_detail_get',
+    getLogContext: () => logContext,
+    execute: async () => {
+      try {
+        const user = await validateApiRequest(request, ['admin', 'customer', 'content_manager']);
+        const { id } = await params;
+        if (!id) {
+          return jsonError(SERVER_COPY.customerIdRequired, 400);
+        }
+
+        const supabaseAdmin = createSupabaseAdmin();
+        logContext.actorUserId = user.id;
+        logContext.entityId = id;
+        logContext.supabaseAdmin = supabaseAdmin;
+
+        const limitedResponse = await enforceAdminReadRateLimit({
+          supabaseAdmin,
+          actorUserId: user.id,
+          actorEmail: user.email,
+          actorRole: user.role,
+          route: request.nextUrl.pathname,
+          action: 'customer_detail_get',
+        });
+        if (limitedResponse) {
+          return limitedResponse;
+        }
+
+        return jsonOk(await loadCustomerDetail({ supabaseAdmin, id, user }));
+      } catch (error) {
+        return buildRouteErrorResponse(error);
+      }
+    },
+  });
 }
 
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  try {
-    const { id } = await params;
-    if (!id) return jsonError('Kund-ID kravs', 400);
-    const body = await request.json();
-    const ctx = await createAdminActionContext(request, id);
-    const result =
-      typeof body?.action === 'string'
-        ? await dispatchCustomerAction(ctx, body)
-        : await updateCustomerProfile(ctx, body);
-    return result instanceof Response ? result : jsonOk(result);
-  } catch (error) {
-    return buildRouteErrorResponse(error);
-  }
-}
-
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
-    const { id } = await params;
-    if (!id) return jsonError('Kund-ID kravs', 400);
-    const result = await handleArchiveCustomer(
-      await createAdminActionContext(request, id),
-    );
-    return result instanceof Response ? result : jsonOk(result);
-  } catch (error) {
-    return buildRouteErrorResponse(error);
-  }
+export function PATCH(request: NextRequest, context: CustomerActionRouteParams) {
+  return runCustomerActionRoute(request, context, updateCustomerProfile, {
+    requiredScope: 'customers.write',
+    actionName: 'update_profile',
+  });
 }
