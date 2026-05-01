@@ -1,8 +1,8 @@
+// app/src/lib/admin/customers/list.server.ts
 import 'server-only';
 
 import { unstable_cache } from 'next/cache';
-import type { Tables } from '@/types/database';
-import { ADMIN_CUSTOMERS_LIST_TAG } from '@/lib/admin/cache-tags';
+import { ADMIN_CUSTOMERS_LIST_TAG, ADMIN_TEAM_TAG } from '@/lib/admin/cache-tags';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { deriveCustomerStatus } from '@/lib/admin/customer-status';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
@@ -16,11 +16,32 @@ import type {
   CustomerListSort,
 } from '@/lib/admin/customers/list.types';
 
-export function parseCustomerListParams(searchParams: Record<string, string | string[] | undefined>) {
+export function parseCustomerListParams(
+  searchParams: Record<string, string | string[] | undefined>,
+) {
   const parsed = customerListParamsInputSchema.safeParse(searchParams);
-  return parsed.success
-    ? parsed.data
-    : customerListParamsInputSchema.parse({});
+  return parsed.success ? parsed.data : customerListParamsInputSchema.parse({});
+}
+
+function cacheKey(p: { search: string; filter: string; sort: string; page: number; pageSize: number }) {
+  return [p.search, p.filter, p.sort, String(p.page), String(p.pageSize)];
+}
+
+async function loadActiveTeam(): Promise<AdminTeamOption[]> {
+  return unstable_cache(
+    async () => {
+      const supabaseAdmin = createSupabaseAdmin();
+      const { data, error } = await supabaseAdmin
+        .from('team_members')
+        .select('id, name, email, avatar_url')
+        .eq('is_active', true)
+        .order('name');
+      if (error) throw new Error(error.message);
+      return (data ?? []) as AdminTeamOption[];
+    },
+    ['admin-team-members-active-v2'],
+    { revalidate: 600, tags: [ADMIN_TEAM_TAG] },
+  )();
 }
 
 export async function loadAdminCustomers(params: {
@@ -30,14 +51,19 @@ export async function loadAdminCustomers(params: {
   page: number;
   pageSize?: number;
 }) {
-  const cacheKey = JSON.stringify(params);
+  const pageSize = params.pageSize ?? CUSTOMERS_PAGE_SIZE;
+  const cacheParams = {
+    search: params.search,
+    filter: params.filter,
+    sort: params.sort,
+    page: params.page,
+    pageSize,
+  };
+
   return unstable_cache(
-    async () => loadAdminCustomersSnapshot(params),
-    ['admin-customers-list', cacheKey],
-    {
-      revalidate: 60,
-      tags: [ADMIN_CUSTOMERS_LIST_TAG],
-    },
+    async () => loadAdminCustomersSnapshot(cacheParams),
+    ['admin-customers-list-v2', ...cacheKey(cacheParams)],
+    { revalidate: 30, tags: [ADMIN_CUSTOMERS_LIST_TAG] },
   )();
 }
 
@@ -46,86 +72,53 @@ async function loadAdminCustomersSnapshot(params: {
   filter: CustomerListFilter;
   sort: CustomerListSort;
   page: number;
-  pageSize?: number;
+  pageSize: number;
 }) {
   const supabaseAdmin = createSupabaseAdmin();
-  const pageSize = params.pageSize ?? CUSTOMERS_PAGE_SIZE;
-  const ascending = params.sort === 'oldest';
-  const requestedPage = params.page;
-  const startIndex = (requestedPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize - 1;
-  const q = params.search.trim();
-
-  // Use the new unified view that combines profiles and buffer data
-  let customerQuery = supabaseAdmin
-    .from('v_admin_customer_list' as any)
-    .select('*', { count: 'exact' });
-
-  if (q) {
-    const pattern = `%${q}%`;
-    customerQuery = customerQuery.or(
-      `business_name.ilike.${pattern},contact_email.ilike.${pattern}`,
-    );
-  }
-
-  if (params.filter === 'active') {
-    customerQuery = customerQuery.in('status', ['active', 'agreed', 'paused', 'past_due']);
-  } else if (params.filter === 'pipeline') {
-    customerQuery = customerQuery.in('status', [
-      'invited',
-      'pending',
-      'pending_payment',
-      'pending_invoice',
-    ]);
-  } else if (params.filter === 'archived') {
-    customerQuery = customerQuery.eq('status', 'archived');
-  }
-
-  // Handle sorting
-  if (params.sort === 'newest') {
-    customerQuery = customerQuery.order('created_at', { ascending: false });
-  } else if (params.sort === 'oldest') {
-    customerQuery = customerQuery.order('created_at', { ascending: true });
-  } else if (params.sort === 'alphabetical') {
-    customerQuery = customerQuery.order('business_name', { ascending: true });
-  }
-
-  // If sorting by needs_action, we might need to fetch all and sort in memory
-  // because the signals are derived in code.
-  // For other sorts, we can use server-side pagination.
+  const offset = (params.page - 1) * params.pageSize;
   const useInMemorySort = params.sort === 'needs_action';
-  
-  if (!useInMemorySort) {
-    customerQuery = customerQuery.range(startIndex, endIndex);
+  const team = await loadActiveTeam();
+
+  const rpcResult = await supabaseAdmin.rpc('admin_get_customer_list' as any, {
+    p_search: params.search.trim(),
+    p_filter: params.filter,
+    p_sort: useInMemorySort ? 'newest' : params.sort,
+    p_offset: useInMemorySort ? 0 : offset,
+    p_limit: useInMemorySort ? 500 : params.pageSize,
+  });
+
+  if (rpcResult.error) {
+    return loadAdminCustomersFallback({
+      supabaseAdmin,
+      team,
+      params,
+      reason: rpcResult.error.message || SERVER_COPY.fetchCustomersFailed,
+    });
   }
 
-  // Fetch unified customer data and team members in parallel
-  const [customerResult, teamResult] = await Promise.all([
-    customerQuery,
-    unstable_cache(
-      async () => {
-        const { data, error } = await supabaseAdmin
-          .from('team_members')
-          .select('id, name, email')
-          .eq('is_active', true)
-          .order('name');
-        if (error) throw error;
-        return data;
-      },
-      ['admin-team-members-active'],
-      { revalidate: 300, tags: ['admin-team'] }
-    )()
-  ]);
+  const payload = rpcResult.data as { rows: any[]; total: number } | null;
+  const rawRows = payload?.rows ?? [];
+  const allMappedRows = mapAdminCustomers(rawRows, team);
 
-  if (customerResult.error) throw new Error(customerResult.error.message);
+  let pagedRows = allMappedRows;
+  if (useInMemorySort) {
+    pagedRows = sortAdminCustomers(allMappedRows, params.sort).slice(offset, offset + params.pageSize);
+  }
 
-  const unifiedRows = (customerResult.data ?? []) as any[];
-  const total = customerResult.count ?? unifiedRows.length;
-  
-  const today = new Date();
-  const teamRows = teamResult ?? [];
+  const total = payload?.total ?? allMappedRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / params.pageSize));
 
-  const allMappedRows = unifiedRows.map((customer) => {
+  return {
+    rows: pagedRows,
+    total,
+    page: params.page,
+    totalPages,
+    team,
+  };
+}
+
+function mapAdminCustomers(rawRows: any[], team: AdminTeamOption[]): AdminCustomerListItem[] {
+  return rawRows.map((customer: any) => {
     const signals = deriveCustomerOperationalSignals({
       status: customer.status ?? 'pending',
       created_at: customer.created_at ?? new Date(0).toISOString(),
@@ -143,87 +136,137 @@ async function loadAdminCustomersSnapshot(params: {
       last_published_at: customer.last_published_at ?? null,
       paused_until: customer.paused_until ?? null,
       tiktok_handle: customer.tiktok_handle ?? null,
-      attention_snoozes: [],
-    }, today);
-
-    const onboardingAttentionDays =
-      signals.onboardingState === 'cm_ready' && customer.onboarding_state_changed_at
-        ? Math.max(
-            0,
-            Math.floor(
-              (today.getTime() - new Date(customer.onboarding_state_changed_at).getTime()) /
-                86_400_000,
-            ),
-          )
-        : 0;
-
-    const item: AdminCustomerListItem = {
-      id: customer.id,
-      business_name: customer.business_name ?? '',
-      contact_email: customer.contact_email ?? '',
-      customer_contact_name: customer.customer_contact_name ?? null,
-      account_manager: customer.account_manager ?? null,
-      account_manager_profile_id: customer.account_manager_profile_id ?? null,
-      monthly_price: customer.monthly_price ?? null,
-      pricing_status: customer.pricing_status === 'unknown' ? 'unknown' : 'fixed',
-      created_at: customer.created_at ?? new Date(0).toISOString(),
-      status: customer.status ?? 'pending',
-      onboardingState: signals.onboardingState,
-      onboardingNeedsAttention:
-        signals.onboardingState === 'cm_ready' && onboardingAttentionDays >= 7,
-      onboardingAttentionDays,
-      bufferStatus: signals.bufferStatus,
-      blocking: { state: signals.blocking.state },
-      blockingDisplayDays: signals.visibleBlockingDays,
-      isNew: signals.onboardingState !== 'settled',
-      derived_status: deriveCustomerStatus({
-        status: customer.status ?? 'pending',
-        archived_at: null,
-        paused_until: customer.paused_until ?? null,
-        invited_at: customer.invited_at ?? null,
-        concepts_per_week: customer.concepts_per_week ?? null,
-        latest_planned_publish_date: customer.latest_planned_publish_date ?? null,
-        escalation_flag: signals.blocking.state === 'escalated',
-      }),
-      last_upload_at: customer.last_upload_at ?? null,
-      concepts_per_week: customer.concepts_per_week ?? null,
+      attention_snoozes: Array.isArray(customer.attention_snoozes) ? customer.attention_snoozes : [],
       planned_concepts_count: customer.planned_concepts_count ?? 0,
-      scheduled_cm_change: customer.scheduled_cm_change
-        ? {
-            effective_date: customer.scheduled_cm_change.effective_date,
-            next_cm_name: customer.scheduled_cm_change.next_cm_name || 'Okänd',
-          }
-        : null,
-      paused_until: customer.paused_until ?? null,
-    };
-    return item;
-  });
-
-  let finalRows = allMappedRows;
-  if (useInMemorySort) {
-    finalRows.sort((a, b) => {
-      const score = (item: AdminCustomerListItem) => {
-        if (item.blocking.state === 'escalated') return 4;
-        if (item.onboardingNeedsAttention) return 3;
-        if (item.bufferStatus === 'under' || item.bufferStatus === 'thin') return 2;
-        if (item.status === 'past_due') return 1;
-        return 0;
-      };
-      return score(b) - score(a);
     });
-    // Paginate manually
-    finalRows = finalRows.slice(startIndex, startIndex + pageSize);
+
+    const derived = deriveCustomerStatus({
+      status: customer.status ?? null,
+      paused_until: customer.paused_until ?? null,
+      invited_at: customer.invited_at ?? null,
+      expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
+      concepts_per_week: customer.concepts_per_week ?? null,
+      latest_planned_publish_date: customer.latest_planned_publish_date ?? null,
+      stripe_customer_id: customer.stripe_customer_id ?? null,
+    });
+
+    const cmInTeam = team.find((member) => member.id === customer.account_manager_profile_id);
+    const cm_full_name = cmInTeam?.name || customer.cm_full_name || customer.account_manager || 'Ej tilldelad';
+    const cm_avatar_url = cmInTeam?.avatar_url || customer.cm_avatar_url || null;
+
+    return {
+      ...customer,
+      cm_full_name,
+      cm_avatar_url,
+      derived_status: derived ?? customer.status,
+      operational_signals: signals,
+    } as AdminCustomerListItem;
+  });
+}
+
+function sortAdminCustomers(rows: AdminCustomerListItem[], sort: CustomerListSort) {
+  return [...rows].sort((a, b) => {
+    switch (sort) {
+      case 'name_asc':
+      case 'alphabetical':
+        return a.business_name.localeCompare(b.business_name, 'sv');
+      case 'name_desc':
+        return b.business_name.localeCompare(a.business_name, 'sv');
+      case 'cm_asc':
+        return (a.cm_full_name ?? a.account_manager ?? '').localeCompare(
+          b.cm_full_name ?? b.account_manager ?? '',
+          'sv',
+        );
+      case 'cm_desc':
+        return (b.cm_full_name ?? b.account_manager ?? '').localeCompare(
+          a.cm_full_name ?? a.account_manager ?? '',
+          'sv',
+        );
+      case 'price_asc':
+        return (a.monthly_price ?? Number.POSITIVE_INFINITY) - (b.monthly_price ?? Number.POSITIVE_INFINITY);
+      case 'price_desc':
+        return (b.monthly_price ?? Number.NEGATIVE_INFINITY) - (a.monthly_price ?? Number.NEGATIVE_INFINITY);
+      case 'status_asc':
+        return (a.status ?? '').localeCompare(b.status ?? '', 'sv');
+      case 'status_desc':
+        return (b.status ?? '').localeCompare(a.status ?? '', 'sv');
+      case 'needs_action': {
+        const aScore = a.operational_signals?.attention_score ?? 0;
+        const bScore = b.operational_signals?.attention_score ?? 0;
+        return bScore - aScore;
+      }
+      case 'recent':
+      default:
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+  });
+}
+
+async function loadAdminCustomersFallback(input: {
+  supabaseAdmin: ReturnType<typeof createSupabaseAdmin>;
+  team: AdminTeamOption[];
+  reason: string;
+  params: {
+    search: string;
+    filter: CustomerListFilter;
+    sort: CustomerListSort;
+    page: number;
+    pageSize: number;
+  };
+}) {
+  const { supabaseAdmin, team, reason, params } = input;
+  const offset = (params.page - 1) * params.pageSize;
+  const { data, error } = await (supabaseAdmin as any).from('v_admin_customer_list').select('*');
+
+  if (error) {
+    throw new Error(reason);
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const page = Math.min(requestedPage, totalPages);
+  const searchTerm = params.search.trim().toLocaleLowerCase('sv-SE');
+  const mappedRows = mapAdminCustomers((data ?? []) as any[], team);
+  const filteredRows = mappedRows.filter((customer) => {
+    const statusMatch =
+      params.filter === 'all'
+        ? customer.status !== 'prospect'
+        : params.filter === 'active'
+          ? ['active', 'agreed'].includes(customer.status)
+          : params.filter === 'pending'
+            ? ['invited', 'pending', 'pending_payment', 'pending_invoice', 'past_due'].includes(customer.status)
+            : params.filter === 'paused'
+              ? customer.status === 'paused'
+              : params.filter === 'archived'
+                ? customer.status === 'archived'
+                : params.filter === 'prospect'
+                  ? customer.status === 'prospect'
+                  : true;
+
+    if (!statusMatch) return false;
+    if (!searchTerm) return true;
+
+    const haystack = [
+      customer.business_name,
+      customer.contact_email,
+      customer.customer_contact_name,
+      customer.cm_full_name,
+      customer.account_manager,
+    ]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0)
+      .join(' ')
+      .toLocaleLowerCase('sv-SE');
+
+    return haystack.includes(searchTerm);
+  });
+
+  const sortedRows = sortAdminCustomers(filteredRows, params.sort);
+  const pagedRows = sortedRows.slice(offset, offset + params.pageSize);
+  const total = filteredRows.length;
+  const totalPages = Math.max(1, Math.ceil(total / params.pageSize));
 
   return {
-    rows: finalRows,
+    rows: pagedRows,
     total,
-    page,
-    pageSize,
+    page: params.page,
     totalPages,
-    team: (teamRows ?? []) as AdminTeamOption[],
+    team,
   };
 }
