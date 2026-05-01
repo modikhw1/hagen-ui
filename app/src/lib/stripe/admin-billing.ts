@@ -82,6 +82,23 @@ export interface SubscriptionPricePreview {
   invoice_total_ore: number;
 }
 
+export interface SubscriptionCancellationPreview {
+  mode: SubscriptionCancellationMode;
+  subscription_id: string;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  effective_date: string;
+  days_remaining: number;
+  unused_amount_ore: number;
+  currency: string;
+  /**
+   * Föreslagen kreditering till kunden för perioden som inte används.
+   * Negativt belopp i Stripe-konvention (kreditnota), men exponerat som
+   * positivt här för enkelhet i UI.
+   */
+  proposed_credit_ore: number;
+}
+
 export interface InvoiceCreditNoteInput {
   invoiceId: string;
   stripeLineItemId: string | null;
@@ -447,6 +464,78 @@ export async function previewSubscriptionPriceChange(
     line_items: toPreviewLineItems(preview),
     invoice_total_ore: preview.total ?? 0,
   };
+}
+
+/**
+ * Förhandsgranskar effekten av att avsluta ett abonnemang. Räknar fram
+ * oanvända dagar i nuvarande period och föreslår en prorata-kredit.
+ * Gör inga ändringar i Stripe.
+ */
+export async function previewSubscriptionCancellation(
+  args: Ctx & {
+    profileId: string;
+    mode: SubscriptionCancellationMode;
+  },
+): Promise<SubscriptionCancellationPreview> {
+  const { subscription, item } = await getSubscriptionContext(args);
+
+  const currentPeriodStart = item.current_period_start ?? null;
+  const currentPeriodEnd = item.current_period_end ?? null;
+  const unitAmountOre = item.price.unit_amount ?? 0;
+  const quantity = item.quantity ?? 1;
+  const periodAmountOre = unitAmountOre * quantity;
+  const currency = item.price.currency || DEFAULT_CURRENCY;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // Vid end_of_period sker inget nu; krediten är 0
+  if (args.mode === 'end_of_period') {
+    return {
+      mode: args.mode,
+      subscription_id: subscription.id,
+      current_period_start: currentPeriodStart
+        ? new Date(currentPeriodStart * 1000).toISOString()
+        : null,
+      current_period_end: currentPeriodEnd
+        ? new Date(currentPeriodEnd * 1000).toISOString()
+        : null,
+      effective_date: currentPeriodEnd
+        ? new Date(currentPeriodEnd * 1000).toISOString().slice(0, 10)
+        : new Date().toISOString().slice(0, 10),
+      days_remaining: currentPeriodEnd
+        ? Math.max(0, Math.ceil((currentPeriodEnd - nowSec) / 86400))
+        : 0,
+      unused_amount_ore: 0,
+      currency,
+      proposed_credit_ore: 0,
+    };
+  }
+
+  // immediate / immediate_with_credit: räkna prorata
+  let unusedOre = 0;
+  let daysRemaining = 0;
+  if (currentPeriodStart && currentPeriodEnd && currentPeriodEnd > nowSec) {
+    const totalSec = Math.max(currentPeriodEnd - currentPeriodStart, 1);
+    const remainingSec = currentPeriodEnd - nowSec;
+    daysRemaining = Math.ceil(remainingSec / 86400);
+    unusedOre = Math.round((periodAmountOre * remainingSec) / totalSec);
+  }
+
+  return {
+    mode: args.mode,
+    subscription_id: subscription.id,
+    current_period_start: currentPeriodStart
+      ? new Date(currentPeriodStart * 1000).toISOString()
+      : null,
+    current_period_end: currentPeriodEnd
+      ? new Date(currentPeriodEnd * 1000).toISOString()
+      : null,
+    effective_date: new Date(nowSec * 1000).toISOString().slice(0, 10),
+    days_remaining: daysRemaining,
+    unused_amount_ore: unusedOre,
+    currency,
+    proposed_credit_ore: args.mode === 'immediate_with_credit' ? unusedOre : 0,
+  } satisfies SubscriptionCancellationPreview;
 }
 
 export async function applyCustomerDiscount(

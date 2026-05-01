@@ -54,6 +54,8 @@ export const qk = {
     activity: (id: string) => ['admin', 'customers', id, 'activity'] as const,
     pendingItems: (id: string) => ['admin', 'customers', id, 'pending-items'] as const,
     buffer: () => ['admin', 'customers', 'buffer'] as const,
+    syncEvents: (id: string, limit = 50) =>
+      ['admin', 'customers', id, 'sync-events', limit] as const,
   },
   team: {
     all: () => ['admin', 'team'] as const,

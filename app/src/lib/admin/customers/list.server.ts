@@ -63,7 +63,7 @@ export async function loadAdminCustomers(params: {
   return unstable_cache(
     async () => loadAdminCustomersSnapshot(cacheParams),
     ['admin-customers-list-v2', ...cacheKey(cacheParams)],
-    { revalidate: 30, tags: [ADMIN_CUSTOMERS_LIST_TAG] },
+    { revalidate: 30, tags: [ADMIN_CUSTOMERS_LIST_TAG, ADMIN_TEAM_TAG] },
   )();
 }
 
@@ -118,6 +118,7 @@ async function loadAdminCustomersSnapshot(params: {
 }
 
 function mapAdminCustomers(rawRows: any[], team: AdminTeamOption[]): AdminCustomerListItem[] {
+  const nowTs = Date.now();
   return rawRows.map((customer: any) => {
     const signals = deriveCustomerOperationalSignals({
       status: customer.status ?? 'pending',
@@ -151,8 +152,48 @@ function mapAdminCustomers(rawRows: any[], team: AdminTeamOption[]): AdminCustom
     });
 
     const cmInTeam = team.find((member) => member.id === customer.account_manager_profile_id);
-    const cm_full_name = cmInTeam?.name || customer.cm_full_name || customer.account_manager || 'Ej tilldelad';
+    // `customer.account_manager` is a legacy column that often holds the CM's
+    // email address rather than a real name. Never surface it as a display name
+    // — fall back to "Ej tilldelad" instead so the table stays clean.
+    const legacyAccountManager =
+      typeof customer.account_manager === 'string' && !customer.account_manager.includes('@')
+        ? customer.account_manager
+        : null;
+    const cm_full_name =
+      cmInTeam?.name || customer.cm_full_name || legacyAccountManager || 'Ej tilldelad';
     const cm_avatar_url = cmInTeam?.avatar_url || customer.cm_avatar_url || null;
+
+    // Compute the operational pulse server-side so SSR and client agree.
+    const expected = customer.expected_concepts_per_week ?? 2;
+    const planned = customer.planned_concepts_count ?? 0;
+    const lastCmActionMs = customer.last_cm_action_at
+      ? new Date(customer.last_cm_action_at).getTime()
+      : null;
+    const lastPublishedMs = customer.last_published_at
+      ? new Date(customer.last_published_at).getTime()
+      : null;
+    const daysSinceCM = lastCmActionMs ? (nowTs - lastCmActionMs) / 86_400_000 : 999;
+    const daysSinceUpload = lastPublishedMs ? (nowTs - lastPublishedMs) / 86_400_000 : 999;
+
+    let pulse_status: 'ok' | 'stagnant' | 'needs_action' | 'resting' = 'ok';
+    let pulse_reason = 'Allt rullar pa som det ska';
+
+    if (planned < expected * 1.5) {
+      pulse_status = 'needs_action';
+      pulse_reason = `Koncept behovs (bara ${planned} kvar)`;
+    } else if (daysSinceCM > 7 || daysSinceUpload > 7) {
+      pulse_status = 'stagnant';
+      if (daysSinceCM > 7 && daysSinceUpload > 7) {
+        pulse_reason = 'Star still (ingen CM-aktivitet eller uppladdning)';
+      } else if (daysSinceCM > 7) {
+        pulse_reason = `Star still (${Math.floor(daysSinceCM)}d sedan CM-atgard)`;
+      } else {
+        pulse_reason = `Star still (${Math.floor(daysSinceUpload)}d sedan uppladdning)`;
+      }
+    } else if (customer.status === 'paused' || customer.paused_until) {
+      pulse_status = 'resting';
+      pulse_reason = 'Vilande / Pausad';
+    }
 
     return {
       ...customer,
@@ -160,6 +201,8 @@ function mapAdminCustomers(rawRows: any[], team: AdminTeamOption[]): AdminCustom
       cm_avatar_url,
       derived_status: derived ?? customer.status,
       operational_signals: signals,
+      pulse_status,
+      pulse_reason,
     } as AdminCustomerListItem;
   });
 }

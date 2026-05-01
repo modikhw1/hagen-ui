@@ -5,6 +5,7 @@ export const demoStatusSchema = z.enum([
   'sent',
   'opened',
   'responded',
+  'quoted',
   'won',
   'lost',
   'expired',
@@ -23,6 +24,9 @@ export const demoCardDtoSchema = z.object({
   lostReason: z.string().nullable(),
   nextStatus: demoStatusSchema.nullable(),
   convertedCustomerId: z.string().uuid().nullable(),
+  shareToken: z.string().nullable(),
+  hasFeedplan: z.boolean(),
+  createdAt: z.string().datetime({ offset: true }),
 });
 
 export const demosBoardDtoSchema = z.object({

@@ -18,7 +18,6 @@ type FormState = {
   contact_email: string;
   tiktok_handle: string;
   proposed_concepts_per_week: string;
-  proposed_price_sek: string;
 };
 
 function initialState(): FormState {
@@ -28,7 +27,6 @@ function initialState(): FormState {
     contact_email: '',
     tiktok_handle: '',
     proposed_concepts_per_week: '2',
-    proposed_price_sek: '',
   };
 }
 
@@ -61,7 +59,7 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
       contact_email: form.contact_email.trim() || null,
       tiktok_handle: normalizeHandle(form.tiktok_handle),
       proposed_concepts_per_week: parseOptionalInt(form.proposed_concepts_per_week),
-      proposed_price_ore: parseOptionalSekToOre(form.proposed_price_sek),
+      proposed_price_ore: null,
       status: 'draft',
       lost_reason: null,
     });
@@ -165,22 +163,10 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
               placeholder="2"
             />
           </AdminField>
-          <AdminField label={demosCopy.createPriceMonthlySek} htmlFor="proposed_price_sek">
-            <input
-              id="proposed_price_sek"
-              value={form.proposed_price_sek}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, proposed_price_sek: event.target.value }))
-              }
-              className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm"
-              inputMode="numeric"
-              placeholder="12000"
-            />
-          </AdminField>
         </div>
 
         <p className="rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
-          {demosCopy.createInfo}
+          Efter att demot skapats kan du öppna det i Studio för att fylla feedplan, och sedan kopiera den publika demo-länken från listan.
         </p>
       </div>
     </AdminFormDialog>
@@ -198,12 +184,4 @@ function parseOptionalInt(value: string) {
   if (!trimmed) return null;
   const parsed = Number.parseInt(trimmed, 10);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function parseOptionalSekToOre(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const parsed = Number(trimmed.replace(',', '.'));
-  if (!Number.isFinite(parsed)) return null;
-  return Math.round(parsed * 100);
 }

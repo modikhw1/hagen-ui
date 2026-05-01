@@ -364,6 +364,13 @@ export async function POST(req: NextRequest) {
       customerId = newCustomer.id;
     }
 
+    // Skriv tillbaka stripe_customer_id direkt så admin-actions (cancel, change_price m.fl.)
+    // har korrekt referens även innan webhook hinner aktivera prenumerationen.
+    await supabaseAdmin
+      .from('customer_profiles')
+      .update({ stripe_customer_id: customerId } as never)
+      .eq('id', profileId);
+
     const { interval, intervalCount } = toIntervalParts(selectedInterval);
     const recurringPriceOre = recurringUnitAmountFromMonthlyOre({
       monthlyPriceOre,

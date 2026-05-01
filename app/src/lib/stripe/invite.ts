@@ -344,8 +344,15 @@ export async function sendCustomerInvite(params: {
   payload: CustomerInvitePayload;
   appUrl: string;
   actorUserId?: string | null;
+  /**
+   * När true skapas ingen Stripe-prenumeration vid invite.
+   * Stripe-objekt skapas istället när kunden går igenom checkout.
+   * Default: true (nytt beteende efter lifecycle_state-konsolidering).
+   */
+  skipStripe?: boolean;
 }): Promise<SendInviteResult> {
-  const { supabaseAdmin, stripeClient, profileId, payload, appUrl, actorUserId } = params;
+  const { supabaseAdmin, profileId, payload, appUrl, actorUserId } = params;
+  const stripeClient = params.skipStripe === false ? params.stripeClient : null;
   const pricingStatus = normalizePricingStatus(payload.pricing_status);
 
   const existingAuthUser = await findExistingUserByEmail(supabaseAdmin, payload.contact_email);
@@ -392,9 +399,8 @@ export async function sendCustomerInvite(params: {
 
     const updateData: Record<string, unknown> = {
       status: 'invited',
+      lifecycle_state: 'invited',
       invited_at: new Date().toISOString(),
-      stripe_customer_id: stripeCustomerId,
-      stripe_subscription_id: stripeSubscriptionId,
       invoice_text: payload.invoice_text || null,
       scope_items: payload.scope_items || [],
       subscription_interval: payload.subscription_interval || 'month',
@@ -405,6 +411,15 @@ export async function sendCustomerInvite(params: {
       upcoming_monthly_price: Number(payload.upcoming_monthly_price) || null,
       upcoming_price_effective_date: payload.upcoming_price_effective_date || null,
     };
+
+    // Behåll stripe_customer_id/subscription_id endast om de faktiskt skapades
+    // (legacy-stöd när skipStripe=false används).
+    if (stripeCustomerId) {
+      updateData.stripe_customer_id = stripeCustomerId;
+    }
+    if (stripeSubscriptionId) {
+      updateData.stripe_subscription_id = stripeSubscriptionId;
+    }
 
     const { data: profile, error: updateError } = await supabaseAdmin
       .from('customer_profiles')

@@ -435,6 +435,13 @@ export async function createAdminCustomer(params: {
       customer.business_name,
     );
 
+    // Sätt lifecycle_state utifrån om invite skickas direkt eller ej.
+    const initialLifecycle = send_invite_now ? 'invited' : 'draft';
+    await params.supabaseAdmin
+      .from('customer_profiles')
+      .update({ lifecycle_state: initialLifecycle } as never)
+      .eq('id', customer.id);
+
     if (send_invite_now) {
       const inviteResult = await sendCustomerInvite({
         supabaseAdmin: params.supabaseAdmin,

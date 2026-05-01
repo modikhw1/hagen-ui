@@ -2,9 +2,41 @@
 
 import { format, formatDistanceToNow } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { IconActivity, IconCalendar, IconExternalLink } from '@tabler/icons-react';
-import { Badge, Box, Button, Card, Divider, Group, Paper, Progress, SimpleGrid, Stack, Text } from '@mantine/core';
+import {
+  IconActivity,
+  IconAlertTriangle,
+  IconArrowDownRight,
+  IconArrowUpRight,
+  IconCalendar,
+  IconCash,
+  IconCircleCheckFilled,
+  IconExternalLink,
+  IconHeartFilled,
+  IconPlayerPause,
+  IconPlus,
+  IconReceipt,
+  IconUserCircle,
+  IconUsers,
+} from '@tabler/icons-react';
+import {
+  ActionIcon,
+  Avatar,
+  Badge,
+  Box,
+  Button,
+  Card,
+  Divider,
+  Group,
+  Paper,
+  Progress,
+  SimpleGrid,
+  Stack,
+  Text,
+  Tooltip,
+} from '@mantine/core';
+import Link from 'next/link';
 import { PerformanceChart } from '@/components/admin/shared/PerformanceCharts';
+import type { CustomerOverviewInitialData } from './CustomerOverviewRoute';
 
 type TikTokPulseHistoryPoint = {
   snapshot_date: string;
@@ -143,9 +175,53 @@ function buildViewsWindow(videos: TikTokPulseVideo[], days = 30): ViewsWindowSum
 export interface CustomerPulseRouteProps {
   customerId: string;
   initialData: CustomerPulseInitialData;
+  overview?: CustomerOverviewInitialData;
 }
 
-export function CustomerPulseRoute({ customerId, initialData }: CustomerPulseRouteProps) {
+function formatOre(ore: number | null | undefined): string {
+  if (typeof ore !== 'number' || Number.isNaN(ore)) return '–';
+  return `${Math.round(ore / 100).toLocaleString('sv-SE')} kr`;
+}
+
+function computeHealth(args: {
+  isOnTrack: boolean;
+  followerDelta30d: number;
+  scheduledChange: boolean;
+  noActivityDays: number | null;
+}): { label: string; color: 'green' | 'orange' | 'red'; reason: string } {
+  const reasons: string[] = [];
+  let level: 'green' | 'orange' | 'red' = 'green';
+
+  if (args.noActivityDays !== null && args.noActivityDays >= 14) {
+    level = 'red';
+    reasons.push(`Ingen CM-aktivitet på ${args.noActivityDays}d`);
+  } else if (args.noActivityDays !== null && args.noActivityDays >= 7) {
+    if (level === 'green') level = 'orange';
+    reasons.push(`Lugnt senaste ${args.noActivityDays}d`);
+  }
+
+  if (!args.isOnTrack) {
+    if (level === 'green') level = 'orange';
+    reasons.push('Planeringen ligger efter');
+  }
+
+  if (args.followerDelta30d < 0) {
+    if (level === 'green') level = 'orange';
+    reasons.push('Föjlartappet senaste 30d');
+  }
+
+  if (args.scheduledChange) {
+    reasons.push('CM-byte planerat');
+  }
+
+  return {
+    label: level === 'green' ? 'Frisk' : level === 'orange' ? 'Bevaka' : 'Risk',
+    color: level,
+    reason: reasons.length === 0 ? 'Allt rullar enligt plan.' : reasons.join(' · '),
+  };
+}
+
+export function CustomerPulseRoute({ customerId, initialData, overview }: CustomerPulseRouteProps) {
   const data = initialData;
 
   const deliveryRate =
@@ -162,35 +238,232 @@ export function CustomerPulseRoute({ customerId, initialData }: CustomerPulseRou
     .map((day) => DAY_NAMES[day] || day)
     .join(', ');
 
+  const noActivityDays = data.last_cm_action_at
+    ? Math.floor(
+        (Date.now() - new Date(data.last_cm_action_at).getTime()) / (1000 * 60 * 60 * 24),
+      )
+    : null;
+
+  const followerDelta30d = tStats?.follower_delta_30d ?? 0;
+  const followerDelta7d = tStats?.follower_delta_7d ?? 0;
+  const totalViews = viewsWindow?.totalViews ?? 0;
+  const likeRate = viewsWindow?.aggregateLikeRate ?? 0;
+
+  const health = computeHealth({
+    isOnTrack,
+    followerDelta30d,
+    scheduledChange: !!overview?.scheduled_cm_change,
+    noActivityDays,
+  });
+
   return (
     <Stack gap="lg">
-      <Group justify="space-between">
-        <Text size="lg" fw={700}>
-          Operativ Puls & Resultat
-        </Text>
-        <Button
-          variant="subtle"
-          size="xs"
-          component="a"
-          href={`/studio/customers/${customerId}`}
-          target="_blank"
-          leftSection={<IconExternalLink size={14} />}
-        >
-          Oppna i Studio
-        </Button>
-      </Group>
+      {/* HEALTH HERO */}
+      <Card
+        withBorder
+        padding="lg"
+        style={{
+          background:
+            health.color === 'green'
+              ? 'linear-gradient(135deg, var(--mantine-color-green-0), var(--mantine-color-teal-0))'
+              : health.color === 'orange'
+                ? 'linear-gradient(135deg, var(--mantine-color-yellow-0), var(--mantine-color-orange-0))'
+                : 'linear-gradient(135deg, var(--mantine-color-red-0), var(--mantine-color-pink-0))',
+        }}
+      >
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
+          <Group gap="md" align="center" wrap="nowrap">
+            {health.color === 'green' ? (
+              <IconCircleCheckFilled size={36} color="var(--mantine-color-green-6)" />
+            ) : (
+              <IconAlertTriangle
+                size={36}
+                color={health.color === 'orange' ? 'var(--mantine-color-orange-6)' : 'var(--mantine-color-red-6)'}
+              />
+            )}
+            <div>
+              <Group gap="xs" align="center">
+                <Text size="lg" fw={700}>
+                  Status: {health.label}
+                </Text>
+                <Badge color={health.color} variant="light" size="sm">
+                  {isOnTrack ? 'I fas' : 'Efter plan'}
+                </Badge>
+              </Group>
+              <Text size="sm" c="dimmed" mt={2}>
+                {health.reason}
+              </Text>
+            </div>
+          </Group>
+          <Button
+            variant="default"
+            size="xs"
+            component="a"
+            href={`/studio/customers/${customerId}`}
+            target="_blank"
+            leftSection={<IconExternalLink size={14} />}
+          >
+            Öppna i Studio
+          </Button>
+        </Group>
+      </Card>
+
+      {/* KPI ROW */}
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
+        <Paper withBorder p="md" radius="md">
+          <Group justify="space-between" mb={4}>
+            <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+              Visningar 30d
+            </Text>
+            <IconActivity size={16} color="var(--mantine-color-teal-6)" />
+          </Group>
+          <Text size="xl" fw={700}>
+            {totalViews.toLocaleString('sv-SE')}
+          </Text>
+          <Text size="xs" c="dimmed" mt={2}>
+            {viewsWindow?.videoCount ?? 0} klipp publicerade
+          </Text>
+        </Paper>
+
+        <Paper withBorder p="md" radius="md">
+          <Group justify="space-between" mb={4}>
+            <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+              Likes / view
+            </Text>
+            <IconHeartFilled size={14} color="var(--mantine-color-pink-6)" />
+          </Group>
+          <Text size="xl" fw={700}>
+            {likeRate.toFixed(1)}%
+          </Text>
+          <Text size="xs" c="dimmed" mt={2}>
+            Engagement-takt
+          </Text>
+        </Paper>
+
+        <Paper withBorder p="md" radius="md">
+          <Group justify="space-between" mb={4}>
+            <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+              Föjlare
+            </Text>
+            {followerDelta30d >= 0 ? (
+              <IconArrowUpRight size={16} color="var(--mantine-color-green-6)" />
+            ) : (
+              <IconArrowDownRight size={16} color="var(--mantine-color-red-6)" />
+            )}
+          </Group>
+          <Text size="xl" fw={700}>
+            {(tStats?.current_followers ?? 0).toLocaleString('sv-SE')}
+          </Text>
+          <Group gap={6} mt={2}>
+            <Text size="xs" c={followerDelta30d >= 0 ? 'green' : 'red'} fw={600}>
+              {followerDelta30d >= 0 ? '+' : ''}
+              {followerDelta30d} (30d)
+            </Text>
+            <Text size="xs" c="dimmed">
+              · {followerDelta7d >= 0 ? '+' : ''}
+              {followerDelta7d} (7d)
+            </Text>
+          </Group>
+        </Paper>
+
+        <Paper withBorder p="md" radius="md">
+          <Group justify="space-between" mb={4}>
+            <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+              Planeringstakt
+            </Text>
+            <IconCalendar size={16} color="var(--mantine-color-blue-6)" />
+          </Group>
+          <Text size="xl" fw={700}>
+            {data.planned_concepts_this_week} / {data.expected_concepts_per_week}
+          </Text>
+          <Progress
+            value={deliveryRate}
+            color={isOnTrack ? 'green' : 'orange'}
+            size="xs"
+            radius="xl"
+            mt={6}
+          />
+          {scheduleLabels && (
+            <Text size="xs" c="dimmed" mt={4}>
+              {scheduleLabels}
+            </Text>
+          )}
+        </Paper>
+      </SimpleGrid>
+
+      {/* QUICK ACTIONS */}
+      <Paper withBorder p="sm" radius="md">
+        <Group justify="space-between" wrap="wrap" gap="xs">
+          <Text size="xs" c="dimmed" fw={600} tt="uppercase" pl={6}>
+            Snabbåtgärder
+          </Text>
+          <Group gap="xs" wrap="wrap">
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<IconCash size={14} />}
+              component={Link}
+              href={`/admin/customers/${customerId}/subscription/price`}
+              scroll={false}
+            >
+              Ändra abb-pris
+            </Button>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<IconPlus size={14} />}
+              component={Link}
+              href={`/admin/customers/${customerId}/billing/manual-invoice`}
+              scroll={false}
+            >
+              Lägg fakturarad
+            </Button>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<IconUsers size={14} />}
+              component={Link}
+              href={`/admin/customers/${customerId}/team/change`}
+              scroll={false}
+            >
+              Byt CM
+            </Button>
+            <Button
+              size="xs"
+              variant="subtle"
+              color="gray"
+              leftSection={<IconReceipt size={14} />}
+              component={Link}
+              href={`/admin/customers/${customerId}/billing`}
+            >
+              Fakturor
+            </Button>
+            <Tooltip label="Pausa kunden">
+              <ActionIcon
+                size="lg"
+                variant="subtle"
+                color="gray"
+                component={Link}
+                href={`/admin/customers/${customerId}/operations`}
+              >
+                <IconPlayerPause size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        </Group>
+      </Paper>
 
       {tStats && tStats.history.length > 0 && (
         <Card withBorder padding="md">
           <Text size="sm" fw={600} mb="md" c="dimmed" tt="uppercase">
-            TikTok-resultat (30d)
+            Resultat-trend (30d)
           </Text>
           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
             <Paper withBorder p="md" bg="gray.0">
               <Group justify="space-between" mb="sm">
                 <div>
                   <Text size="xs" c="dimmed" fw={700} tt="uppercase">
-                    Foljartillvaxt
+                    Föjlartillväxt
                   </Text>
                   <Text size="xl" fw={700}>
                     {tStats.current_followers.toLocaleString('sv-SE')}
@@ -225,7 +498,7 @@ export function CustomerPulseRoute({ customerId, initialData }: CustomerPulseRou
                 </div>
                 <div className="text-right">
                   <Text size="xs" c="dimmed" fw={700} tt="uppercase">
-                    Engagement (30d)
+                    Likes/view
                   </Text>
                   <Text size="sm" fw={700}>
                     {(viewsWindow?.aggregateLikeRate || 0).toFixed(1)}%
@@ -249,71 +522,154 @@ export function CustomerPulseRoute({ customerId, initialData }: CustomerPulseRou
         </Card>
       )}
 
-      <Group grow align="stretch">
-        <Card withBorder padding="md">
-          <Group justify="space-between" mb="xs">
-            <Group gap="sm">
-              <IconCalendar className="h-4 w-4 text-muted-foreground" />
-              <Text size="sm" fw={500} c="dimmed">
-                Planeringstakt
+      {/* CM + ABB-PRIS BREDVID HÄNDELSELOGG */}
+      <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
+        {overview && (
+          <Card withBorder padding="md" radius="md">
+            <Group gap="xs" mb="sm">
+              <IconUserCircle size={16} color="var(--mantine-color-gray-6)" />
+              <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+                Content Manager
               </Text>
             </Group>
-            {scheduleLabels && (
-              <Badge variant="light" color="blue" size="sm">
-                {scheduleLabels}
-              </Badge>
-            )}
-          </Group>
-          <Stack gap={4}>
-            <Group justify="space-between" align="baseline">
-              <Text size="xl" fw={700}>
-                {data.planned_concepts_this_week} / {data.expected_concepts_per_week}
-              </Text>
-              <Text size="xs" c="dimmed">
-                koncept planerade
-              </Text>
+            <Group gap="sm" wrap="nowrap" align="center">
+              <Avatar
+                src={overview.account_manager_avatar_url}
+                size={44}
+                radius="xl"
+                color="blue"
+              >
+                {overview.account_manager_name?.[0] ?? '?'}
+              </Avatar>
+              <div style={{ minWidth: 0 }}>
+                <Text size="sm" fw={600} truncate>
+                  {overview.account_manager_name ?? 'Ingen tilldelad'}
+                </Text>
+                {overview.account_manager_email && (
+                  <Text size="xs" c="dimmed" truncate>
+                    {overview.account_manager_email}
+                  </Text>
+                )}
+              </div>
             </Group>
-            <Progress value={deliveryRate} color={isOnTrack ? 'green' : 'orange'} size="sm" radius="xl" />
-            <Text size="xs" c={isOnTrack ? 'green' : 'orange'} fw={500} mt={4}>
-              {isOnTrack ? 'Bufferten ar godkand' : 'Behov av fler koncept i planeringen'}
-            </Text>
-          </Stack>
-        </Card>
-
-        <Card withBorder padding="md">
-          <Group gap="sm" mb="xs">
-            <IconActivity className="h-4 w-4 text-muted-foreground" />
-            <Text size="sm" fw={500} c="dimmed">
-              Historisk leverans
-            </Text>
-          </Group>
-          <Stack gap={4}>
-            <Text size="xl" fw={700}>
-              {data.delivered_concepts_this_week}
-            </Text>
-            <Text size="xs" c="dimmed">
-              publicerade klipp (senaste 7d)
-            </Text>
-            <Group gap={4} mt={4}>
-              {data.last_cm_action_at ? (
+            {overview.scheduled_cm_change && (
+              <Paper withBorder p="xs" mt="sm" bg="yellow.0">
+                <Text size="xs" fw={600} c="orange.8">
+                  Byte planerat
+                </Text>
                 <Text size="xs" c="dimmed">
-                  Senaste feed-uppdatering:{' '}
+                  Till {overview.scheduled_cm_change.next_cm_name ?? '?'} den{' '}
+                  {format(new Date(overview.scheduled_cm_change.effective_date), 'd MMM', {
+                    locale: sv,
+                  })}
+                </Text>
+              </Paper>
+            )}
+            <Button
+              size="xs"
+              variant="subtle"
+              mt="sm"
+              fullWidth
+              component={Link}
+              href={`/admin/customers/${customerId}/team/change`}
+              scroll={false}
+            >
+              Byt eller schemalägg
+            </Button>
+          </Card>
+        )}
+
+        {overview && (
+          <Card withBorder padding="md" radius="md">
+            <Group gap="xs" mb="sm">
+              <IconCash size={16} color="var(--mantine-color-gray-6)" />
+              <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+                Abonnemang
+              </Text>
+            </Group>
+            <Text size="xl" fw={700}>
+              {formatOre(overview.monthly_price_ore)}
+              <Text component="span" size="xs" c="dimmed" fw={500}>
+                {' '}
+                / mån
+              </Text>
+            </Text>
+            <Stack gap={2} mt="xs">
+              <Text size="xs" c="dimmed">
+                Nästa faktura:{' '}
+                <Text component="span" size="xs" c="dark" fw={600}>
+                  {formatOre(overview.next_invoice_estimate_ore)}
+                </Text>
+                {overview.next_invoice_date && (
+                  <>
+                    {' '}
+                    ·{' '}
+                    {format(new Date(overview.next_invoice_date), 'd MMM', {
+                      locale: sv,
+                    })}
+                  </>
+                )}
+              </Text>
+            </Stack>
+            <Group gap="xs" mt="sm">
+              <Button
+                size="xs"
+                variant="light"
+                component={Link}
+                href={`/admin/customers/${customerId}/subscription/price`}
+                scroll={false}
+                style={{ flex: 1 }}
+              >
+                Ändra pris
+              </Button>
+              <Button
+                size="xs"
+                variant="subtle"
+                component={Link}
+                href={`/admin/customers/${customerId}/billing/manual-invoice`}
+                scroll={false}
+                style={{ flex: 1 }}
+              >
+                + Rad
+              </Button>
+            </Group>
+          </Card>
+        )}
+
+        <Card withBorder padding="md" radius="md">
+          <Group gap="xs" mb="sm">
+            <IconActivity size={16} color="var(--mantine-color-gray-6)" />
+            <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+              CM-aktivitet
+            </Text>
+          </Group>
+          <Text size="xl" fw={700}>
+            {data.delivered_concepts_this_week}
+          </Text>
+          <Text size="xs" c="dimmed">
+            klipp publicerade (7d)
+          </Text>
+          <Divider my="sm" />
+          <Text size="xs" c="dimmed">
+            {data.last_cm_action_at ? (
+              <>
+                Senast aktiv{' '}
+                <Text component="span" fw={600} c="dark">
                   {formatDistanceToNow(new Date(data.last_cm_action_at), {
                     addSuffix: true,
                     locale: sv,
                   })}
                 </Text>
-              ) : (
-                <Text size="xs" c="dimmed">
-                  Ingen aktivitet registrerad
-                </Text>
-              )}
-            </Group>
-          </Stack>
+                {data.last_cm_action_type && <> · {data.last_cm_action_type}</>}
+              </>
+            ) : (
+              <>Ingen aktivitet registrerad</>
+            )}
+          </Text>
         </Card>
-      </Group>
+      </SimpleGrid>
 
-      <Divider label="Handelselogg" labelPosition="center" />
+      <Divider label="Senaste publikationer" labelPosition="center" />
 
       <Card withBorder padding={0}>
         {data.recent_publications.length === 0 ? (
@@ -338,7 +694,7 @@ export function CustomerPulseRoute({ customerId, initialData }: CustomerPulseRou
                 <Group justify="space-between">
                   <Stack gap={2}>
                     <Text size="sm" fw={600}>
-                      {truncateText(publication.title, 56) || 'Namnlost klipp'}
+                      {truncateText(publication.title, 56) || 'Namnlöst klipp'}
                     </Text>
                     {publication.description && publication.description !== publication.title && (
                       <Text size="xs" c="dimmed" lineClamp={2}>
@@ -366,7 +722,7 @@ export function CustomerPulseRoute({ customerId, initialData }: CustomerPulseRou
                         target="_blank"
                         style={{ cursor: 'pointer', textDecoration: 'none' }}
                       >
-                        Oppna klipp
+                        Öppna klipp
                       </Text>
                     )}
                   </Group>

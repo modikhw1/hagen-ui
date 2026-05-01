@@ -15,11 +15,12 @@ import {
   Badge,
   Alert,
   Divider,
-  Table,
 } from '@mantine/core';
 
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
-import { CreditInvoiceForm } from './CreditInvoiceForm';
+import { InvoicePreview } from './InvoicePreview';
+import { CreditReissueWizard } from './CreditReissueWizard';
+import { InvoiceLineEditor } from './InvoiceLineEditor';
 
 interface InvoiceDetail {
   stripe_invoice_id: string;
@@ -256,6 +257,20 @@ export function InvoiceDetailModal({
             />
           </section>
 
+          {/* Visuell faktura-preview (ser ut som ett fakturadokument) */}
+          <InvoicePreview
+            number={data.number}
+            status={data.status}
+            createdAt={data.created_at}
+            dueDate={data.due_date}
+            currency={data.currency}
+            amountDue={data.amount_due}
+            amountPaid={data.amount_paid}
+            customerName={data.customer_name}
+            environment={data.environment}
+            lines={invoiceLines}
+          />
+
           <div className="flex gap-2">
             {data.hosted_invoice_url && (
               <Button
@@ -327,59 +342,49 @@ export function InvoiceDetailModal({
 
           <Divider />
 
-          <section>
-            <h3 className="mb-2 text-sm font-medium">Rader</h3>
-            <Table>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Beskrivning</Table.Th>
-                  <Table.Th className="w-20 text-right">Antal</Table.Th>
-                  <Table.Th className="w-32 text-right">Belopp</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {invoiceLines.map((line) => (
-                  <Table.Tr key={line.id}>
-                    <Table.Td>{line.description}</Table.Td>
-                    <Table.Td className="text-right tabular-nums">
-                      {line.quantity}
-                    </Table.Td>
-                    <Table.Td className="text-right tabular-nums">
-                      {formatAmount(line.amount, data.currency)}
-                    </Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </section>
-
           {canManageAdjustments &&
             (data.status === 'paid' || data.status === 'open') && (
               <Accordion>
                 <Accordion.Item value="adjust">
                   <Accordion.Control>Justera / Kreditera</Accordion.Control>
                   <Accordion.Panel>
-                    <CreditInvoiceForm
-                      invoiceId={invoiceId}
-                      customerId={data.customer_profile_id}
-                      invoiceStatus={data.status}
-                      defaultAmountOre={Math.max(
-                        data.amount_due ?? 0,
-                        data.amount_paid ?? 0,
-                      )}
-                      lines={invoiceLines}
-                      hasActiveSubscription={
-                        data.billing_context?.has_active_subscription === true
-                      }
-                      canRefundPaymentMethod={
-                        data.billing_context?.can_refund_payment_method === true
-                      }
-                      onCompleted={handleRefresh}
-                    />
+                     <CreditReissueWizard
+                       invoiceId={invoiceId}
+                       customerId={data.customer_profile_id}
+                       invoiceStatus={data.status}
+                       defaultAmountOre={Math.max(
+                         data.amount_due ?? 0,
+                         data.amount_paid ?? 0,
+                       )}
+                       currency={data.currency}
+                       lines={invoiceLines}
+                       hasActiveSubscription={
+                         data.billing_context?.has_active_subscription === true
+                       }
+                       canRefundPaymentMethod={
+                         data.billing_context?.can_refund_payment_method === true
+                       }
+                       onCompleted={handleRefresh}
+                     />
                   </Accordion.Panel>
                 </Accordion.Item>
               </Accordion>
             )}
+
+          {canManageAdjustments && data.status !== 'void' && (
+            <Accordion>
+              <Accordion.Item value="edit-lines">
+                <Accordion.Control>Redigera fakturarader</Accordion.Control>
+                <Accordion.Panel>
+                  <InvoiceLineEditor
+                    invoiceId={invoiceId}
+                    invoiceStatus={data.status}
+                    onChanged={handleRefresh}
+                  />
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
+          )}
 
           {operations.length > 0 && (
             <Accordion>

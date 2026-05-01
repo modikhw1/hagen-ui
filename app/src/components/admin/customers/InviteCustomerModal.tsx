@@ -2,7 +2,7 @@
 
 import { useEffect, useReducer, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Check, Copy, UserPlus, ShieldAlert } from 'lucide-react';
+import { Check, Copy, UserPlus, ShieldAlert, FileText, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { inviteCustomer } from '@/app/admin/_actions/billing';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
@@ -92,7 +92,7 @@ export default function InviteCustomerModal({
       return result.data;
     },
     onSuccess: (payload: any) => {
-      toast.success('Kunden inbjuden');
+      toast.success(state.send_invite_now ? 'Kunden inbjuden' : 'Utkast skapat');
       onCreated(payload.customerId, payload);
       onClose();
       setState(initial());
@@ -111,8 +111,8 @@ export default function InviteCustomerModal({
     <AdminFormDialog
       open={open}
       onClose={onClose}
-      title="Bjud in ny kund"
-      description="Skapa kundprofil och skicka inbjudan."
+      title={state.send_invite_now ? 'Bjud in ny kund' : 'Skapa kundutkast'}
+      description="Skapa kundprofil. Stripe-prenumerationen aktiveras först när kunden går igenom checkout."
       size="lg"
       footer={
         <>
@@ -124,13 +124,50 @@ export default function InviteCustomerModal({
             disabled={!canSubmit || createMutation.isPending}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            <UserPlus className="h-3.5 w-3.5" />
-            {createMutation.isPending ? 'Skapar...' : 'Skapa & skicka inbjudan'}
+            {state.send_invite_now ? <Send className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+            {createMutation.isPending
+              ? 'Skapar...'
+              : state.send_invite_now
+                ? 'Skapa & skicka inbjudan'
+                : 'Skapa utkast (ingen e-post)'}
           </button>
         </>
       }
     >
       <div className="space-y-8">
+        {/* Lifecycle val överst */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Hur vill du skapa kunden?</label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setField('send_invite_now', false)}
+              className={cn(
+                "rounded-lg border p-4 text-left transition-colors",
+                !state.send_invite_now ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+              )}
+            >
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <FileText className="h-3.5 w-3.5" /> Utkast
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">Skapa profil utan inbjudan. Bjud in senare när avtalet är klart.</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setField('send_invite_now', true)}
+              className={cn(
+                "rounded-lg border p-4 text-left transition-colors",
+                state.send_invite_now ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
+              )}
+            >
+              <div className="flex items-center gap-2 font-bold text-sm">
+                <Send className="h-3.5 w-3.5" /> Skicka inbjudan nu
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">Kunden får e-post och kan logga in. Stripe aktiveras vid checkout.</div>
+            </button>
+          </div>
+        </div>
+
         <div className="grid gap-6 sm:grid-cols-2">
           <AdminField label="Företagsnamn" required error={validation.success ? undefined : (validation.error.format() as any).business_name?._errors[0]}>
             <input
@@ -292,16 +329,6 @@ export default function InviteCustomerModal({
             {team.map(m => <option key={m.id} value={m.email || m.name}>{m.name}</option>)}
           </select>
         </AdminField>
-
-        <label className="flex items-center gap-3 rounded-lg border border-border bg-secondary/20 p-4 cursor-pointer hover:bg-secondary/30 transition-colors">
-          <input
-            type="checkbox"
-            checked={state.send_invite_now}
-            onChange={e => setField('send_invite_now', e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-primary"
-          />
-          <div className="text-sm font-medium">Skicka inbjudan via e-post direkt</div>
-        </label>
 
         {createMutation.isError && (
           <div className="rounded-md border border-status-danger-fg/30 bg-status-danger-bg px-3 py-2 text-sm text-status-danger-fg">
