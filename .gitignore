@@ -14,6 +14,11 @@ Thumbs.db
 # Misc
 nul
 *.log
+.gemini/
+.lovable-worktrees/
+docs/maestro/
+app/supabase/.temp/
+supabase/.temp/
 
 # Secrets
 Credentials.json
