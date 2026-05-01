@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import {
@@ -223,6 +224,7 @@ function computeHealth(args: {
 
 export function CustomerPulseRoute({ customerId, initialData, overview }: CustomerPulseRouteProps) {
   const data = initialData;
+  const [renderedAt] = useState(() => Date.now());
 
   const deliveryRate =
     data.expected_concepts_per_week > 0
@@ -240,7 +242,7 @@ export function CustomerPulseRoute({ customerId, initialData, overview }: Custom
 
   const noActivityDays = data.last_cm_action_at
     ? Math.floor(
-        (Date.now() - new Date(data.last_cm_action_at).getTime()) / (1000 * 60 * 60 * 24),
+        (renderedAt - new Date(data.last_cm_action_at).getTime()) / (1000 * 60 * 60 * 24),
       )
     : null;
 

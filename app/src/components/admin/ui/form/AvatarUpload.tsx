@@ -62,8 +62,8 @@ export function AvatarUpload({
           <img src={preview} alt="" className="h-16 w-16 rounded-full object-cover shadow-sm" />
         ) : (
           <div
-            className="flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold text-white shadow-inner"
-            style={{ backgroundColor: fallbackColor }}
+            className="flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold shadow-inner"
+            style={{ backgroundColor: fallbackColor, color: '#fff' }}
           >
             {initials}
           </div>
