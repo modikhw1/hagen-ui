@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { withAuth } from '@/lib/auth/api-auth';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import { STRIPE_API_VERSION } from '@/lib/stripe/config';
 import { getStripeConfigEnvNames, getStripeEnvironment } from '@/lib/stripe/environment';
 
 function isMissingColumnError(message?: string | null) {
@@ -17,7 +18,7 @@ const stripeEnvironment = getStripeEnvironment();
 const stripeConfigNames = getStripeConfigEnvNames(stripeEnvironment);
 const stripeSecretKey = process.env[stripeConfigNames.secretKey];
 const stripe = stripeSecretKey
-  ? new Stripe(stripeSecretKey, { apiVersion: '2025-12-15.clover' })
+  ? new Stripe(stripeSecretKey, { apiVersion: STRIPE_API_VERSION })
   : null;
 
 export const POST = withAuth(async (request: NextRequest) => {

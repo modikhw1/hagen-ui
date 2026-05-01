@@ -49,6 +49,7 @@ export function useUrlState(
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const currentPathname = pathname ?? '/';
   const key = typeof keyOrOptions === 'string' ? keyOrOptions : null;
   const { replace = true, scroll = false, defaultValue } = maybeOptions;
 
@@ -73,10 +74,10 @@ export function useUrlState(
       }
 
       const query = params.toString();
-      const url = query ? `${pathname}?${query}` : pathname;
+      const url = query ? `${currentPathname}?${query}` : currentPathname;
       router.replace(url, { scroll: false });
     },
-    [pathname, router, searchParams],
+    [currentPathname, router, searchParams],
   );
 
   const setValue = useCallback(
@@ -94,7 +95,7 @@ export function useUrlState(
       }
 
       const query = params.toString();
-      const url = query ? `${pathname}?${query}` : pathname;
+      const url = query ? `${currentPathname}?${query}` : currentPathname;
 
       if (replace) {
         router.replace(url, { scroll });
@@ -102,7 +103,7 @@ export function useUrlState(
         router.push(url, { scroll });
       }
     },
-    [key, pathname, replace, router, scroll, searchParams],
+    [currentPathname, key, replace, router, scroll, searchParams],
   );
 
   if (!key) {

@@ -1276,6 +1276,7 @@ export type Database = {
           contract_start_date: string | null
           created_at: string | null
           customer_contact_name: string | null
+          declined_at: string | null
           discount_duration_months: number | null
           discount_end_date: string | null
           discount_ends_at: string | null
@@ -1338,6 +1339,7 @@ export type Database = {
           contract_start_date?: string | null
           created_at?: string | null
           customer_contact_name?: string | null
+          declined_at?: string | null
           discount_duration_months?: number | null
           discount_end_date?: string | null
           discount_ends_at?: string | null
@@ -1400,6 +1402,7 @@ export type Database = {
           contract_start_date?: string | null
           created_at?: string | null
           customer_contact_name?: string | null
+          declined_at?: string | null
           discount_duration_months?: number | null
           discount_end_date?: string | null
           discount_ends_at?: string | null
@@ -1499,6 +1502,7 @@ export type Database = {
           resolved_at: string | null
           responded_at: string | null
           sent_at: string | null
+          share_token: string | null
           status: Database["public"]["Enums"]["demo_status"]
           status_changed_at: string
           tiktok_handle: string | null
@@ -1519,6 +1523,7 @@ export type Database = {
           resolved_at?: string | null
           responded_at?: string | null
           sent_at?: string | null
+          share_token?: string | null
           status?: Database["public"]["Enums"]["demo_status"]
           status_changed_at?: string
           tiktok_handle?: string | null
@@ -1539,6 +1544,7 @@ export type Database = {
           resolved_at?: string | null
           responded_at?: string | null
           sent_at?: string | null
+          share_token?: string | null
           status?: Database["public"]["Enums"]["demo_status"]
           status_changed_at?: string
           tiktok_handle?: string | null

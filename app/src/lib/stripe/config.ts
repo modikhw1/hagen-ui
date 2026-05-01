@@ -1,4 +1,4 @@
-export const STRIPE_API_VERSION = '2025-12-15.clover' as const;
+export const STRIPE_API_VERSION = '2026-02-25.clover' as const;
 export const DEFAULT_CURRENCY = 'sek';
 export const DEFAULT_TAX_CODE = 'txcd_10000000';
 export const DEFAULT_DAYS_UNTIL_DUE = 14;
