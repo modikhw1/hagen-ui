@@ -1,0 +1,6 @@
+{
+  "sourceRepo": "modikhw1/your-daily-hello",
+  "sourceBranch": "main",
+  "lastImportedCommit": "2cbcbc3db2ab96455be226fe72793b8630db59a9",
+  "notes": "Merge feat/lovable-paritet-merged into main before using this baseline. After that, update lastImportedCommit only through scripts/import-lovable.ps1 on branches that will merge to main."
+}
