@@ -6,19 +6,21 @@ export type AttentionItem =
   | { kind: 'customer_blocked'; id: string; subjectType: 'customer_blocking'; subjectId: string; customerId: string; customerName: string; daysBlocked: number; cmName?: string }
   | { kind: 'cm_change_due_today'; id: string; subjectType: 'cm_assignment'; subjectId: string; customerId: string; customerName: string; currentCmName: string | null; nextCmName: string | null; effectiveDate: Date; cmName?: string }
   | { kind: 'pause_resume_due_today'; id: string; subjectType: 'subscription_pause_resume'; subjectId: string; customerId: string; customerName: string; resumeDate: Date; cmName?: string }
-  | { kind: 'cm_low_activity'; id: string; subjectType: 'cm_activity'; subjectId: string; customerId: null; cmName: string; interactionCount7d: number; expectedConcepts7d: number; lastInteractionDays: number };
+  | { kind: 'cm_low_activity'; id: string; subjectType: 'cm_activity'; subjectId: string; customerId: null; cmName: string; interactionCount7d: number; expectedConcepts7d: number; lastInteractionDays: number }
+  | { kind: 'credit_note_failed'; id: string; subjectType: 'credit_note_operation'; subjectId: string; customerId: string; customerName: string; operationType: string; amount_ore: number; createdAt: Date; errorMessage: string | null; attentionReason: string | null; cmName?: string };
 
 export type AttentionSeverity = 'critical' | 'high' | 'medium' | 'info';
 
 const KIND_RANK: Record<AttentionItem['kind'], number> = {
   cm_notification: 0,
-  cm_change_due_today: 1,
-  pause_resume_due_today: 2,
-  cm_low_activity: 3,
-  invoice_unpaid: 4,
-  onboarding_stuck: 5,
-  demo_responded: 6,
-  customer_blocked: 7,
+  credit_note_failed: 1,
+  cm_change_due_today: 2,
+  pause_resume_due_today: 3,
+  cm_low_activity: 4,
+  invoice_unpaid: 5,
+  onboarding_stuck: 6,
+  demo_responded: 7,
+  customer_blocked: 8,
 };
 
 const SEVERITY_RANK: Record<AttentionSeverity, number> = {
@@ -31,6 +33,8 @@ const SEVERITY_RANK: Record<AttentionSeverity, number> = {
 export function attentionSeverity(item: AttentionItem): AttentionSeverity {
   switch (item.kind) {
     case 'customer_blocked':
+      return 'critical';
+    case 'credit_note_failed':
       return 'critical';
     case 'invoice_unpaid':
       return item.daysPastDue >= 14 ? 'critical' : 'high';
@@ -55,6 +59,8 @@ export function attentionTimestamp(
 ): Date | null {
   switch (item.kind) {
     case 'cm_notification':
+      return item.createdAt;
+    case 'credit_note_failed':
       return item.createdAt;
     case 'invoice_unpaid':
       return new Date(now.getTime() - item.daysPastDue * 86_400_000);

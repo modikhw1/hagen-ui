@@ -17,6 +17,7 @@ export type CmPulseInput = {
     onboardingState: 'invited' | 'cm_ready' | 'live' | 'settled';
     lastPublishedAt?: Date | null;
     plannedConceptsCount?: number;
+    overdue7dConceptsCount?: number;
   }[];
   interactions7d: { type: string; created_at: Date }[];
   lastInteractionAt: Date | null;
@@ -28,18 +29,18 @@ export type SortMode = 'standard' | 'lowest_activity';
 
 export function cmAggregate(input: CmPulseInput) {
   const active = input.customers.filter((customer) => customer.bufferStatus !== 'paused');
-  const n_under = active.filter((customer) => customer.bufferStatus === 'under').length;
-  const n_thin = active.filter((customer) => customer.bufferStatus === 'thin').length;
-  const n_blocked = active.filter((customer) => customer.bufferStatus === 'blocked').length;
-  const n_ok = active.filter((customer) => customer.bufferStatus === 'ok').length;
+  const n_blocked = active.filter((c) => (c.overdue7dConceptsCount || 0) > 0 || c.bufferStatus === 'blocked').length;
+  const n_under = active.filter((c) => (c.plannedConceptsCount || 0) < c.pace && !((c.overdue7dConceptsCount || 0) > 0 || c.bufferStatus === 'blocked')).length;
+  const n_ok = active.length - n_under - n_blocked;
+  const n_thin = active.filter((c) => (c.plannedConceptsCount || 0) >= c.pace && c.bufferStatus !== 'ok' && !((c.overdue7dConceptsCount || 0) > 0 || c.bufferStatus === 'blocked')).length;
   const n_paused = input.customers.length - active.length;
 
   const last_interaction_days = input.lastInteractionAt
     ? differenceInCalendarDays(input.now, input.lastInteractionAt)
     : 999;
 
-  // x = total concepts currently planned across all active customers
-  const planned_concepts_total = active.reduce((sum, customer) => sum + (customer.plannedConceptsCount || 0), 0);
+  // x = total concepts currently planned across all active customers (capped at pace per customer)
+  const planned_concepts_total = active.reduce((sum, customer) => sum + Math.min(customer.plannedConceptsCount || 0, customer.pace), 0);
   
   // y = total expected concepts per week across all active customers
   const expected_concepts_7d = active.reduce((sum, customer) => sum + customer.pace, 0);
@@ -67,6 +68,7 @@ export function cmAggregate(input: CmPulseInput) {
     fillPct,
     overflow: fillPct > 100,
     barLabel: `${planned_concepts_total}/${expected_concepts_7d} koncept`,
+    interaction_count_7d: input.interactions7d?.length ?? 0,
     newCustomers: input.customers.filter((customer) => customer.onboardingState === 'invited' || customer.onboardingState === 'cm_ready'),
     recentPublications: [...input.customers]
       .filter((customer) => customer.lastPublishedAt)
@@ -75,15 +77,37 @@ export function cmAggregate(input: CmPulseInput) {
   };
 }
 
-export function sortCmRows(rows: ReturnType<typeof cmAggregate>[], mode: SortMode) {
+export function sortCmRows(rows: any[], mode: SortMode) {
   const order = { needs_action: 0, watch: 1, away: 2, ok: 3 } as const;
 
-  if (mode === 'standard') {
-    return [...rows].sort((a, b) =>
-      order[a.status] - order[b.status] ||
-      b.last_interaction_days - a.last_interaction_days,
-    );
-  }
+  return [...rows].sort((a, b) => {
+    const aggA = a.aggregate || a;
+    const aggB = b.aggregate || b;
+    
+    // 1. If "Operativ status", status is the absolute first priority (Red groups together)
+    if (mode === 'standard') {
+      const sA = order[aggA.status as keyof typeof order] ?? 99;
+      const sB = order[aggB.status as keyof typeof order] ?? 99;
+      if (sA !== sB) return sA - sB;
+    }
 
-  return [...rows].sort((a, b) => a.interaction_count_7d - b.interaction_count_7d);
+    // 2. RATIO FIRST (This is what the user sees and expects)
+    // Lowest percentage (e.g. 0%, 29%, 33%) always comes first
+    const fA = aggA.fillPct ?? 0;
+    const fB = aggB.fillPct ?? 0;
+    if (fA !== fB) return fA - fB;
+
+    // 3. INACTIVITY (Idle time)
+    // If ratios are equal, the one who has been away longest comes first
+    const idleA = aggA.last_interaction_days ?? 0;
+    const idleB = aggB.last_interaction_days ?? 0;
+    if (idleA !== idleB) return idleB - idleA;
+
+    // 4. Fallback: Newest CM first
+    const memA = a.member || {};
+    const memB = b.member || {};
+    const tA = memA.created_at ? new Date(memA.created_at).getTime() : 0;
+    const tB = memB.created_at ? new Date(memB.created_at).getTime() : 0;
+    return tB - tA;
+  });
 }

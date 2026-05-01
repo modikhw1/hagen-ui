@@ -35,6 +35,7 @@ export function mapDemoRowToDto(
     ownerName: row.owner_admin_id ? ownerNameById.get(row.owner_admin_id) ?? null : null,
     lostReason: row.lost_reason,
     nextStatus: getNextDemoStatus(row.status),
+    convertedCustomerId: row.converted_customer_id,
   };
 }
 

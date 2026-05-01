@@ -3,16 +3,8 @@
 import { useRef } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Wallet } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
+import { Table, Button, Text, Group } from '@mantine/core';
 import EmptyState from '@/components/admin/EmptyState';
-import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { formatSek } from '@/lib/admin/money';
 import type { PayrollResponse } from '@/lib/admin/schemas/payroll';
 
@@ -30,14 +22,14 @@ const VIRTUALIZE_THRESHOLD = 50;
 
 function sortIcon(column: SortKey, sort: SortState) {
   if (sort.key !== column) {
-    return <ArrowUpDown className="h-3.5 w-3.5" />;
+    return <ArrowUpDown size={14} />;
   }
 
   if (sort.direction === 'asc') {
-    return <ArrowUp className="h-3.5 w-3.5" />;
+    return <ArrowDown size={14} />;
   }
 
-  return <ArrowDown className="h-3.5 w-3.5" />;
+  return <ArrowUp size={14} />;
 }
 
 export function PayrollCustomerRows({ customers, sort, onSortChange, isLoading = false }: Props) {
@@ -54,7 +46,7 @@ export function PayrollCustomerRows({ customers, sort, onSortChange, isLoading =
   });
 
   if (isLoading) {
-    return <div className="px-1 py-4 text-sm text-muted-foreground">Laddar kundunderlag...</div>;
+    return <Text size="sm" c="dimmed" px="xs" py="md">Laddar kundunderlag...</Text>;
   }
 
   if (customers.length === 0) {
@@ -71,15 +63,28 @@ export function PayrollCustomerRows({ customers, sort, onSortChange, isLoading =
 
   return (
     <div className="mt-3 overflow-hidden rounded-lg border border-border">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-secondary/40">
-            <TableHead className="w-[45%]">Kund</TableHead>
-            <TableHead>
+      <Table verticalSpacing="sm">
+        <Table.Thead>
+          <Table.Tr className="bg-secondary/40">
+            <Table.Th w="45%">Kund</Table.Th>
+            <Table.Th>
               <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto px-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-transparent"
+                variant="subtle"
+                size="compact-xs"
+                color="gray"
+                styles={{
+                  root: {
+                    height: 'auto',
+                    padding: 0,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  },
+                  inner: {
+                    justifyContent: 'flex-start',
+                  }
+                }}
                 onClick={() =>
                   onSortChange({
                     key: 'billed_ore',
@@ -87,16 +92,29 @@ export function PayrollCustomerRows({ customers, sort, onSortChange, isLoading =
                       sort.key === 'billed_ore' && sort.direction === 'desc' ? 'asc' : 'desc',
                   })
                 }
+                rightSection={sortIcon('billed_ore', sort)}
               >
                 Billat
-                {sortIcon('billed_ore', sort)}
               </Button>
-            </TableHead>
-            <TableHead>
+            </Table.Th>
+            <Table.Th>
               <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto px-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-transparent"
+                variant="subtle"
+                size="compact-xs"
+                color="gray"
+                styles={{
+                  root: {
+                    height: 'auto',
+                    padding: 0,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  },
+                  inner: {
+                    justifyContent: 'flex-start',
+                  }
+                }}
                 onClick={() =>
                   onSortChange({
                     key: 'payout_ore',
@@ -104,16 +122,29 @@ export function PayrollCustomerRows({ customers, sort, onSortChange, isLoading =
                       sort.key === 'payout_ore' && sort.direction === 'desc' ? 'asc' : 'desc',
                   })
                 }
+                rightSection={sortIcon('payout_ore', sort)}
               >
                 Payout
-                {sortIcon('payout_ore', sort)}
               </Button>
-            </TableHead>
-            <TableHead>
+            </Table.Th>
+            <Table.Th>
               <Button
-                variant="ghost"
-                size="sm"
-                className="h-auto px-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-transparent"
+                variant="subtle"
+                size="compact-xs"
+                color="gray"
+                styles={{
+                  root: {
+                    height: 'auto',
+                    padding: 0,
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  },
+                  inner: {
+                    justifyContent: 'flex-start',
+                  }
+                }}
                 onClick={() =>
                   onSortChange({
                     key: 'billable_days',
@@ -121,31 +152,33 @@ export function PayrollCustomerRows({ customers, sort, onSortChange, isLoading =
                       sort.key === 'billable_days' && sort.direction === 'desc' ? 'asc' : 'desc',
                   })
                 }
+                rightSection={sortIcon('billable_days', sort)}
               >
                 Dagar
-                {sortIcon('billable_days', sort)}
               </Button>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
+            </Table.Th>
+          </Table.Tr>
+        </Table.Thead>
         {shouldVirtualize ? null : (
-          <TableBody>
+          <Table.Tbody>
             {customers.map((customer) => (
-              <TableRow key={customer.customer_id}>
-                <TableCell className="font-medium text-foreground">
-                  {customer.customer_name}
-                  {customer.pro_rata_label && (
-                    <span className="ml-2 inline-flex items-center rounded-full bg-status-info-bg px-1.5 py-0.5 text-[9px] font-bold text-status-info-fg uppercase tracking-tight">
-                      {customer.pro_rata_label}
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell>{formatSek(customer.billed_ore)}</TableCell>
-                <TableCell>{formatSek(customer.payout_ore)}</TableCell>
-                <TableCell className="text-muted-foreground">{customer.billable_days}</TableCell>
-              </TableRow>
+              <Table.Tr key={customer.customer_id}>
+                <Table.Td className="font-medium text-foreground">
+                  <Group gap="xs">
+                    {customer.customer_name}
+                    {customer.pro_rata_label && (
+                      <span className="inline-flex items-center rounded-full bg-status-info-bg px-1.5 py-0.5 text-[9px] font-bold text-status-info-fg uppercase tracking-tight">
+                        {customer.pro_rata_label}
+                      </span>
+                    )}
+                  </Group>
+                </Table.Td>
+                <Table.Td>{formatSek(customer.billed_ore)}</Table.Td>
+                <Table.Td>{formatSek(customer.payout_ore)}</Table.Td>
+                <Table.Td className="text-muted-foreground">{customer.billable_days}</Table.Td>
+              </Table.Tr>
             ))}
-          </TableBody>
+          </Table.Tbody>
         )}
       </Table>
 

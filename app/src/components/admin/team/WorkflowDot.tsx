@@ -1,6 +1,6 @@
 'use client';
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, Box } from '@mantine/core';
 import { cn } from '@/lib/utils';
 
 export default function WorkflowDot({ 
@@ -11,18 +11,14 @@ export default function WorkflowDot({
   label: string;
 }) {
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className={cn(
-            "h-2 w-2 rounded-full transition-colors",
-            active ? "bg-status-success-fg" : "bg-muted hover:bg-muted-foreground/30"
-          )} />
-        </TooltipTrigger>
-        <TooltipContent side="top">
-          <p className="text-[10px]">{label}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip label={label} position="top" withArrow>
+      <Box
+        component="span"
+        className={cn(
+          "h-2 w-2 rounded-full transition-colors inline-block",
+          active ? "bg-status-success-fg" : "bg-muted hover:bg-muted-foreground/30"
+        )}
+      />
+    </Tooltip>
   );
 }

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { extractGamePlanEmailData, resolveGamePlanDocument } from '@/lib/game-plan';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 const querySchema = z.object({
   profileId: z.string().trim().min(1).max(128),
@@ -11,7 +11,7 @@ const querySchema = z.object({
 
 const PROCESS_STEPS = [
   { number: '01', title: 'Kickoff och målbild', description: 'Vi lär känna er verksamhet, era mål och er tonalitet.' },
-  { number: '02', title: 'En anpassad plan för er', description: 'Vi identifierar relevanta trender, teman och idéer — anpassat för er.' },
+  { number: '02', title: 'En anpassad plan för er', description: 'Vi identifierar relevanta trender, teman och idéer, anpassat för er.' },
   { number: '03', title: 'Inspelning med stöd', description: 'Ni filmar, vi styr riktningen. Koncept, instruktioner och manus finns redo.' },
   { number: '04', title: 'Publicera och iterera', description: 'Vi mäter era resultat, ger feedback och justerar riktningen.' },
   { number: '05', title: 'Skala det som fungerar', description: 'Mer av det som ger resultat. Iterativ förbättring med ögon mot data.' },
@@ -23,9 +23,12 @@ export async function GET(req: NextRequest) {
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+      { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } },
     );
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -38,12 +41,8 @@ export async function GET(req: NextRequest) {
     }
     const { profileId } = parsed.data;
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabaseAdmin = createSupabaseAdmin();
 
-    // Ownership check
     const { data: profileLink } = await supabaseAdmin
       .from('profiles')
       .select('matching_data')
@@ -51,8 +50,10 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     const matchingData = profileLink?.matching_data as Record<string, unknown> | null;
-    const linkedId = typeof matchingData?.customer_profile_id === 'string'
-      ? matchingData.customer_profile_id : null;
+    const linkedId =
+      typeof matchingData?.customer_profile_id === 'string'
+        ? matchingData.customer_profile_id
+        : null;
 
     const { data: cp, error: cpError } = await supabaseAdmin
       .from('customer_profiles')
@@ -71,14 +72,14 @@ export async function GET(req: NextRequest) {
 
     const normalizedUserEmail = (user.email || '').trim().toLowerCase();
     const normalizedCpEmail = (cp.contact_email || '').trim().toLowerCase();
-    const ownsProfile = linkedId === profileId ||
+    const ownsProfile =
+      linkedId === profileId ||
       (normalizedUserEmail.length > 0 && normalizedUserEmail === normalizedCpEmail);
 
     if (!ownsProfile) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Resolve content manager
     let contentManager = null;
     if (cp.account_manager_profile_id) {
       const { data: tm } = await supabaseAdmin

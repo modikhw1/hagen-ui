@@ -8,6 +8,7 @@ import {
 } from '@/lib/studio/motor-signal';
 import {
   fetchProviderVideos,
+  fetchProviderUser,
   normalizeVideo,
   type NormalizedHistoryClip,
 } from '@/lib/studio/tiktok-provider';
@@ -22,6 +23,7 @@ export interface SyncOptions {
   cursor?: number;
   count?: number;
   mode: 'cron' | 'manual' | 'mark_produced';
+  suppressAutoReconcile?: boolean;
 }
 
 export interface SyncResult {
@@ -66,17 +68,30 @@ function buildNormalizedClips(
   videos: Array<Parameters<typeof normalizeVideo>[0]>,
   handle: string
 ): NormalizedHistoryClip[] {
-  return videos
-    .map((video) => normalizeVideo(video, handle))
-    .filter((clip): clip is NormalizedHistoryClip => clip !== null);
+  const observedAt = new Date().toISOString();
+  const clips: NormalizedHistoryClip[] = [];
+
+  for (const video of videos) {
+    const clip = normalizeVideo(video, handle);
+    if (!clip) continue;
+
+    clips.push({
+      ...clip,
+      first_observed_at: clip.first_observed_at ?? observedAt,
+      last_observed_at: observedAt,
+    });
+  }
+
+  return clips;
 }
 
 async function persistTikTokAdminData(
   supabase: SupabaseAdmin,
   customerId: string,
   clips: NormalizedHistoryClip[],
+  currentFollowers: number
 ): Promise<void> {
-  if (clips.length === 0) {
+  if (clips.length === 0 && currentFollowers === 0) {
     return;
   }
 
@@ -134,23 +149,6 @@ async function persistTikTokAdminData(
     }
   }
 
-  const latestSnapshot = await supabase
-    .from('tiktok_stats')
-    .select('followers')
-    .eq('customer_profile_id', customerId)
-    .order('snapshot_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const latestNonZeroSnapshot = await supabase
-    .from('tiktok_stats')
-    .select('followers')
-    .eq('customer_profile_id', customerId)
-    .gt('followers', 0)
-    .order('snapshot_date', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
   const cutoff24h = Date.now() - 86_400_000;
   const last24h = clips.filter((clip) => {
     if (!clip.published_at) return false;
@@ -161,10 +159,6 @@ async function persistTikTokAdminData(
   const totalViews24h = last24h.reduce((sum, clip) => sum + (clip.tiktok_views ?? 0), 0);
   const engagementRate =
     clips.length > 0 ? Number(((totalLikes / Math.max(1, totalViews)) * 100).toFixed(2)) : 0;
-  const preservedFollowers =
-    latestNonZeroSnapshot.data?.followers ??
-    latestSnapshot.data?.followers ??
-    0;
 
   const { error: statsError } = await supabase
     .from('tiktok_stats')
@@ -172,7 +166,7 @@ async function persistTikTokAdminData(
       {
         customer_profile_id: customerId,
         snapshot_date: new Date().toISOString().slice(0, 10),
-        followers: preservedFollowers,
+        followers: currentFollowers,
         total_videos: clips.length,
         videos_last_24h: last24h.length,
         total_views_24h: totalViews24h,
@@ -222,6 +216,7 @@ export async function syncCustomerHistory(
   let fetched = 0;
   let hasMore = false;
   let nextCursor: number | null = opts.cursor ?? null;
+  let isInitialHistorySync = false;
 
   try {
     const { data: lockRows, error: lockError } = await supabase
@@ -229,11 +224,22 @@ export async function syncCustomerHistory(
       .update({ operation_lock_until: lockUntil })
       .eq('id', customerId)
       .or(`operation_lock_until.is.null,operation_lock_until.lt.${startedAt}`)
-      .select('id');
+      .select('id, last_history_sync_at');
 
     if (lockError) {
       if (isMissingOperationLockColumn(lockError.message)) {
         console.warn('[syncCustomerHistory] operation_lock_until unavailable, continuing without lock');
+        const { data: currentProfile, error: currentProfileError } = await supabase
+          .from('customer_profiles')
+          .select('last_history_sync_at')
+          .eq('id', customerId)
+          .maybeSingle();
+
+        if (currentProfileError) {
+          throw new Error(currentProfileError.message);
+        }
+
+        isInitialHistorySync = !currentProfile?.last_history_sync_at;
       } else {
         throw new Error(lockError.message);
       }
@@ -251,6 +257,7 @@ export async function syncCustomerHistory(
       }
 
       lockAcquired = true;
+      isInitialHistorySync = !lockRows[0]?.last_history_sync_at;
     }
 
     const { data: syncRun, error: syncRunError } = await supabase
@@ -270,11 +277,18 @@ export async function syncCustomerHistory(
 
     syncRunId = syncRun.id as string;
 
-    const providerResult = await fetchProviderVideos(handle, rapidApiKey, count, opts.cursor);
+    // Hämta både videos och profil-info (för att få followerCount)
+    const [providerResult, userResult] = await Promise.all([
+      fetchProviderVideos(handle, rapidApiKey, count, opts.cursor),
+      fetchProviderUser(handle, rapidApiKey)
+    ]);
 
     if (providerResult.error) {
       throw new Error(providerResult.error);
     }
+
+    const followers = userResult.stats?.followerCount ?? 0;
+    const profilePic = userResult.user?.avatarMedium;
 
     hasMore = providerResult.has_more;
     nextCursor = providerResult.cursor;
@@ -288,13 +302,26 @@ export async function syncCustomerHistory(
       );
     }
 
-    await persistTikTokAdminData(supabase, customerId, clips);
+    await persistTikTokAdminData(supabase, customerId, clips, followers);
     statsUpdated = await updateClipStats(supabase, customerId, clips);
+    
+    // Uppdatera profilbild om vi fick en ny
+    if (profilePic) {
+      await supabase
+        .from('customer_profiles')
+        .update({ tiktok_profile_pic_url: profilePic })
+        .eq('id', customerId);
+    }
 
     const importResult = await importNewClips(supabase, customerId, clips);
     imported = importResult.imported;
 
-    if (imported > 0 && opts.cursor === undefined) {
+    if (
+      imported > 0 &&
+      opts.cursor === undefined &&
+      !isInitialHistorySync &&
+      !opts.suppressAutoReconcile
+    ) {
       const reconcileResult = await autoReconcileAndAdvance(supabase, customerId);
       reconciled = reconcileResult.advanced;
     }

@@ -115,7 +115,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     initialFilters.priceRanges,
   );
 
-  const focusedColumn = get<ColumnKey>('focus');
+  const focusedColumn = get('focus') as ColumnKey | null;
   const createOpen = get('action') === 'create';
   const convertId = get('convert');
   const daysParam = Number.parseInt(get('days') ?? '', 10);
@@ -357,7 +357,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
             <button
               key={option}
               type="button"
-              onClick={() => set({ days: option })}
+              onClick={() => set({ days: String(option) })}
               className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
                 activeDays === option
                   ? 'bg-primary text-primary-foreground'

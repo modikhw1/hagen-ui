@@ -30,7 +30,7 @@ export function Sparkline({
   if (!points) return null;
 
   return (
-    <div className={cn("w-full", className)} style={{ height }}>
+    <div className={cn("w-full opacity-60", className)} style={{ height }}>
       <svg
         viewBox="0 0 100 100"
         preserveAspectRatio="none"
@@ -39,11 +39,10 @@ export function Sparkline({
         <polyline
           points={points}
           fill="none"
-          stroke="currentColor"
+          stroke="hsl(var(--chart-line-primary))"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
-          className="text-primary/60"
         />
       </svg>
     </div>

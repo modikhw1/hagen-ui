@@ -93,7 +93,9 @@ export const POST = withAuth(async (request: NextRequest, user) => {
     action: 'demo.create',
     entityType: 'demo',
     entityId: data.id,
-    afterState: data as Record<string, unknown>,
+    metadata: {
+      afterState: data as Record<string, unknown>,
+    },
   });
 
   const response = jsonOk({ demo: mapDemoRowToDto(data, ownerNameById) }, 201);

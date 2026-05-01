@@ -5,7 +5,7 @@ import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog'
 import { AdminField } from '@/components/admin/ui/form/AdminField';
 import { PriceInput } from '@/components/admin/ui/form/PriceInput';
 import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
-import { sekToOre } from '@/lib/admin/money';
+import { oreToSek } from '@/lib/admin/money';
 import { todayDateInput } from '@/lib/admin/time';
 import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import type { CustomerSubscription } from '@/lib/admin/dtos/billing';
@@ -45,8 +45,8 @@ export default function SubscriptionModal({
       // 1. Check price change
       if (priceOre !== customer.monthly_price) {
         await updatePrice.mutateAsync({
-          monthly_price: priceOre,
-          mode: 'now',
+          monthly_price: oreToSek(priceOre),
+          mode: 'next_period',
         });
       }
 
@@ -63,7 +63,7 @@ export default function SubscriptionModal({
 
       toast.success('Abonnemanget har uppdaterats');
       onClose();
-    } catch (e) {
+    } catch {
       // Error handled by mutation or toast
     }
   };
@@ -201,7 +201,7 @@ function ActionOption({
           : "border-border hover:bg-accent"
       )}
     >
-      <input type="radio" name="sub-action" checked={checked} onChange={onChange} className="mt-1 h-4 w-4 text-primary" />
+      <input id={id} type="radio" name="sub-action" checked={checked} onChange={onChange} className="mt-1 h-4 w-4 text-primary" />
       <div className="min-w-0 flex-1">
         <div className={cn("text-sm font-semibold", danger && checked ? "text-status-danger-fg" : "text-foreground")}>{label}</div>
         <div className="text-[11px] text-muted-foreground leading-tight mt-0.5">{description}</div>

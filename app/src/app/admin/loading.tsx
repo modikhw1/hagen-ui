@@ -1,22 +1,22 @@
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@mantine/core';
 
 export default function AdminOverviewLoading() {
   return (
     <div className="space-y-8">
       <div className="space-y-2">
-        <Skeleton className="h-8 w-36" />
-        <Skeleton className="h-4 w-40" />
+        <Skeleton h={32} w={144} />
+        <Skeleton h={16} w={160} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} className="h-24 w-full rounded-lg" />
+          <Skeleton key={index} h={96} w="100%" radius="lg" />
         ))}
       </div>
 
-      <Skeleton className="h-64 w-full rounded-lg" />
-      <Skeleton className="h-48 w-full rounded-lg" />
-      <Skeleton className="h-48 w-full rounded-lg" />
+      <Skeleton h={256} w="100%" radius="lg" />
+      <Skeleton h={192} w="100%" radius="lg" />
+      <Skeleton h={192} w="100%" radius="lg" />
     </div>
   );
 }

@@ -7,13 +7,7 @@ import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { isMissingRelationError } from '@/lib/admin/schema-guards';
 import type { AdminScope } from '@/lib/admin/admin-roles';
 import type { AuthenticatedUser, UserRole } from './api-auth';
-
-export class AuthError extends Error {
-  constructor(public statusCode: number, message: string) {
-    super(message);
-    this.name = 'AuthError';
-  }
-}
+import { AuthError } from './auth-error';
 
 /**
  * Shared authentication logic memoized for a single request.
@@ -62,8 +56,19 @@ export const getAuthenticatedUser = cache(async (): Promise<AuthenticatedUser> =
       .eq('user_id', authUser.id),
   ]);
 
-  if (profileError) throw new AuthError(500, profileError.message);
-  if (roleError) throw new AuthError(500, roleError.message);
+  if (profileError) {
+    console.error('[AUTH] Profile fetch failed:', profileError);
+    throw new AuthError(500, `Profile: ${profileError.message}`);
+  }
+  if (roleError) {
+    console.error('[AUTH] User roles fetch failed:', roleError);
+    throw new AuthError(500, `UserRoles: ${roleError.message}`);
+  }
+
+  if (adminRolesResult.error && !isMissingRelationError(adminRolesResult.error.message)) {
+    console.error('[AUTH] Admin roles fetch failed:', adminRolesResult.error);
+    throw new AuthError(500, `AdminRoles: ${adminRolesResult.error.message}`);
+  }
 
   let role: UserRole = 'user';
   let isAdmin = false;
@@ -82,9 +87,7 @@ export const getAuthenticatedUser = cache(async (): Promise<AuthenticatedUser> =
 
   let adminRoles: AdminScope[] = [];
   if (adminRolesResult.data) {
-    adminRoles = adminRolesResult.data.map((row: any) => row.role as AdminScope);
-  } else if (adminRolesResult.error && !isMissingRelationError(adminRolesResult.error.message)) {
-    throw new AuthError(500, adminRolesResult.error.message);
+    adminRoles = adminRolesResult.data.map((row) => row.role as AdminScope);
   }
 
   return {

@@ -45,6 +45,11 @@ type CustomerRow = {
   account_manager_profile_id: string | null;
   account_manager: string | null;
   last_upload_at: string | null;
+  last_published_at?: string | null;
+  last_publication_source?: 'letrend' | 'tiktok' | null;
+  planned_concepts_count?: number | null;
+  expected_concepts_per_week?: number | null;
+  overdue_7d_concepts_count?: number | null;
 };
 
 type ActivityRow = {
@@ -266,6 +271,11 @@ export function buildMemberPortfolio(params: {
           customerStats?.engagement_rate ?? 0,
         ),
         last_upload_at: customer.last_upload_at,
+        last_published_at: customer.last_published_at ?? null,
+        last_publication_source: customer.last_publication_source ?? null,
+        planned_concepts_count: customer.planned_concepts_count ?? 0,
+        expected_concepts_per_week: customer.expected_concepts_per_week ?? 0,
+        overdue_7d_concepts_count: customer.overdue_7d_concepts_count ?? 0,
         covered_by_absence: customer.covered_by_absence,
         payout_cm_id: customer.payout_cm_id,
       };
@@ -447,6 +457,22 @@ function buildMemberOverview(params: BuildMemberParams): TeamMemberView {
       : 0.2,
     active_absence: findActiveCmAbsence(params.absences, params.member.id, params.today),
     isCovering,
+    pulse: {
+      status: 'ok',
+      fillPct: 0,
+      barLabel: '0/0 koncept',
+      plannedConceptsTotal: 0,
+      expectedConcepts7d: 0,
+      interactionCount7d: 0,
+      lastInteractionDays: 999,
+      counts: {
+        n_under: 0,
+        n_thin: 0,
+        n_blocked: 0,
+        n_ok: 0,
+        n_paused: 0,
+      },
+    },
     customers: portfolio.memberCustomers,
     assignmentHistory,
     customerCount: params.member.customer_count ?? portfolio.memberCustomers.length,

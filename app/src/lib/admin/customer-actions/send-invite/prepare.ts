@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
-import { deriveTikTokHandle, toCanonicalTikTokProfileUrl } from '@/lib/tiktok/profile';
+import { normalizeTikTokProfileIdentityInput } from '@/lib/tiktok/customer-profile-link';
 import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';
 import type { AdminActionContext } from '../types';
 import type { PreparedInvite, SendInviteInput, SendInviteStepResult } from './types';
@@ -15,13 +15,8 @@ export async function prepareSendInvite(
     input.account_manager,
   );
 
-  const canonicalTikTokProfileUrl = input.tiktok_profile_url
-    ? toCanonicalTikTokProfileUrl(input.tiktok_profile_url)
-    : null;
-  const tiktokHandle = input.tiktok_profile_url
-    ? deriveTikTokHandle(input.tiktok_profile_url)
-    : null;
-  if (input.tiktok_profile_url && (!canonicalTikTokProfileUrl || !tiktokHandle)) {
+  const tiktokIdentity = normalizeTikTokProfileIdentityInput(input.tiktok_profile_url ?? null);
+  if (!tiktokIdentity.ok) {
     return {
       ok: false,
       error: SERVER_COPY.invalidTikTok,
@@ -46,8 +41,8 @@ export async function prepareSendInvite(
     ok: true,
     value: {
       attemptNonce,
-      canonicalTikTokProfileUrl,
-      tiktokHandle,
+      canonicalTikTokProfileUrl: tiktokIdentity.value.tiktok_profile_url,
+      tiktokHandle: tiktokIdentity.value.tiktok_handle,
       assignment: {
         accountManager: assignment.accountManager,
         accountManagerProfileId: assignment.accountManagerProfileId,

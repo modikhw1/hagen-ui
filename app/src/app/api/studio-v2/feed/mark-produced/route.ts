@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
+import { logInteraction } from '@/lib/interactions';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import {
   normalizeStudioCustomerConcept,
@@ -59,6 +60,14 @@ export const POST = withAuth(async (request, user) => {
   if (!data) {
     return NextResponse.json({ error: 'Concept assignment not found' }, { status: 404 });
   }
+
+  await logInteraction({
+    type: 'customer_updated' as any,
+    cmProfileId: user.id,
+    customerId,
+    metadata: { concept_id: conceptId, action: 'mark_produced' },
+    client: supabase,
+  });
 
   return NextResponse.json({
     success: true,

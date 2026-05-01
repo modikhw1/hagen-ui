@@ -11,6 +11,7 @@ import {
   CustomerSection,
   CustomerSectionSkeleton,
   CustomerStatusPill,
+  CustomerActionButton,
   onboardingLabel,
 } from '@/components/admin/customers/routes/shared';
 import AttentionPanel from './AttentionPanel';
@@ -31,7 +32,14 @@ export default function OperationalStatusSection({ customerId }: { customerId: s
   }
 
   return (
-    <CustomerSection title="Operativ status">
+    <CustomerSection
+      title="Operativ status"
+      action={
+        <CustomerActionButton href={`/studio/customers/${customerId}`} className="bg-background">
+          Öppna Studio
+        </CustomerActionButton>
+      }
+    >
       <div className="space-y-4">
         <div className="rounded-md border border-border bg-secondary/30 p-3">
           <div className="mb-2 text-[11px] uppercase tracking-wider text-muted-foreground">

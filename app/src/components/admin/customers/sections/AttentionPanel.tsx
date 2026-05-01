@@ -5,7 +5,7 @@ import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import type { OnboardingState, BlockingSignal } from '@/lib/admin-derive';
 import { apiClient } from '@/lib/admin/api-client';
 import { shortDateSv } from '@/lib/admin/time';
-import { useCustomerRouteRefresh } from '@/hooks/admin/useAdminRefresh';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { CustomerActionButton } from '@/components/admin/customers/routes/shared';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
 import { toast } from 'sonner';
@@ -31,7 +31,8 @@ export default function AttentionPanel({
   onboardingState: OnboardingState;
   activeSnooze: CustomerDetail['attention_snoozes'][number] | undefined;
 }) {
-  const refresh = useCustomerRouteRefresh(customerId);
+  const refreshFn = useAdminRefresh();
+  const refresh = () => refreshFn([{ type: 'customer', customerId }]);
   const clearableSnooze: ClearableSnooze | null =
     activeSnooze &&
     (activeSnooze.subject_type === 'onboarding' || activeSnooze.subject_type === 'customer_blocking')

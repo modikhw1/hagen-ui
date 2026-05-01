@@ -1,7 +1,7 @@
+// app/src/lib/admin/server/customer-billing.ts
 import 'server-only';
 
 import { unstable_cache } from 'next/cache';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   adminCustomerBillingTag,
   adminCustomerTag,
@@ -9,73 +9,28 @@ import {
 import {
   customerInvoicesPayloadSchema,
   type CustomerInvoice,
+  type CreditNoteOperation,
 } from '@/lib/admin/dtos/billing';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import type { Database } from '@/types/database';
-
-type InvoiceRow = {
-  id: string;
-  stripe_invoice_id: string | null;
-  amount_due: number | null;
-  status: string | null;
-  created_at: string | null;
-  due_date: string | null;
-  hosted_invoice_url: string | null;
-};
-
-type InvoiceLineItemRow = {
-  stripe_invoice_id: string | null;
-  description: string | null;
-  amount: number | null;
-};
 
 export async function loadCustomerInvoicesSnapshot(params: {
-  supabaseAdmin: SupabaseClient<Database>;
   customerId: string;
-}): Promise<CustomerInvoice[]> {
-  const { supabaseAdmin, customerId } = params;
+}): Promise<{ invoices: CustomerInvoice[]; operations: CreditNoteOperation[] }> {
+  const supabaseAdmin = createSupabaseAdmin();
 
-  const { data: invoices, error } = await supabaseAdmin
-    .from('invoices')
-    .select(
-      'id, stripe_invoice_id, amount_due, status, created_at, due_date, hosted_invoice_url',
-    )
-    .eq('customer_profile_id', customerId)
-    .order('created_at', { ascending: false })
-    .limit(50);
+  const [rpcResult, opsResult] = await Promise.all([
+    supabaseAdmin.rpc('admin_get_customer_invoices_with_lines' as any, {
+      p_customer_id: params.customerId,
+      p_limit: 50,
+    }),
+    supabaseAdmin.from('credit_note_operations').select('id, operation_type, status, requires_attention, attention_reason, error_message, source_invoice_id, amount_ore, created_at').eq('customer_profile_id', params.customerId).order('created_at', { ascending: false }).limit(20)
+  ]);
 
-  if (error) {
-    throw new Error(error.message || 'Kunde inte ladda fakturor');
-  }
+  if (rpcResult.error) throw new Error(rpcResult.error.message || 'Kunde inte ladda fakturor');
 
-  const stripeInvoiceIds = (invoices ?? [])
-    .map((invoice) => invoice.stripe_invoice_id)
-    .filter((value): value is string => Boolean(value));
-
-  const lineItemsByInvoiceId = new Map<string, InvoiceLineItemRow[]>();
-  if (stripeInvoiceIds.length > 0) {
-    const { data: lineItems, error: lineItemsError } = await supabaseAdmin
-      .from('invoice_line_items')
-      .select('stripe_invoice_id, description, amount')
-      .in('stripe_invoice_id', stripeInvoiceIds);
-
-    if (lineItemsError) {
-      throw new Error(lineItemsError.message || 'Kunde inte ladda fakturarader');
-    }
-
-    for (const item of (lineItems ?? []) as InvoiceLineItemRow[]) {
-      if (!item.stripe_invoice_id) {
-        continue;
-      }
-
-      const group = lineItemsByInvoiceId.get(item.stripe_invoice_id) ?? [];
-      group.push(item);
-      lineItemsByInvoiceId.set(item.stripe_invoice_id, group);
-    }
-  }
-
+  const rows = (rpcResult.data ?? []) as Array<any>;
   return customerInvoicesPayloadSchema.parse({
-    invoices: ((invoices ?? []) as InvoiceRow[]).map((invoice) => ({
+    invoices: rows.map((invoice) => ({
       id: invoice.id,
       stripe_invoice_id: invoice.stripe_invoice_id,
       amount_due: invoice.amount_due ?? 0,
@@ -83,30 +38,21 @@ export async function loadCustomerInvoicesSnapshot(params: {
       created_at: invoice.created_at ?? new Date(0).toISOString(),
       due_date: invoice.due_date,
       hosted_invoice_url: invoice.hosted_invoice_url,
-      line_items: (
-        invoice.stripe_invoice_id
-          ? lineItemsByInvoiceId.get(invoice.stripe_invoice_id) ?? []
-          : []
-      ).map((item) => ({
-        description: item.description ?? 'Rad',
-        amount: item.amount ?? 0,
-      })),
+      invoice_pdf: invoice.invoice_pdf,
+      line_items: Array.isArray(invoice.line_items) ? invoice.line_items : [],
     })),
-  }).invoices;
+    operations: opsResult.data ?? [],
+  }) as { invoices: CustomerInvoice[]; operations: CreditNoteOperation[] };
 }
 
 export async function fetchCustomerInvoicesServer(
   customerId: string,
-): Promise<CustomerInvoice[]> {
+): Promise<{ invoices: CustomerInvoice[]; operations: CreditNoteOperation[] }> {
   return unstable_cache(
-    async () =>
-      loadCustomerInvoicesSnapshot({
-        supabaseAdmin: createSupabaseAdmin(),
-        customerId,
-      }),
-    ['admin-customer-invoices-rsc', customerId],
+    async () => loadCustomerInvoicesSnapshot({ customerId }),
+    ['admin-customer-invoices-rsc-v2', customerId],
     {
-      revalidate: 60,
+      revalidate: 30,
       tags: [adminCustomerTag(customerId), adminCustomerBillingTag(customerId)],
     },
   )();

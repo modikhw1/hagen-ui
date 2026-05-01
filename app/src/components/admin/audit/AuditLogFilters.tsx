@@ -2,15 +2,7 @@
 
 import { AlertTriangle, Clock3, Database, FilterX, User } from 'lucide-react';
 import { AdminField } from '@/components/admin/shared/AdminField';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Button, TextInput, Select } from '@mantine/core';
 import { useTeamLite } from '@/hooks/admin/useTeamLite';
 
 type Props = {
@@ -77,8 +69,8 @@ export function AuditLogFilters({
           variant="outline"
           size="sm"
           onClick={() => onChange({ from: latest24hIso(), to: nowIso() })}
+          leftSection={<Clock3 size={16} />}
         >
-          <Clock3 className="h-4 w-4" />
           Senaste 24 h
         </Button>
         <Button
@@ -87,8 +79,8 @@ export function AuditLogFilters({
           size="sm"
           disabled={!viewerEmail}
           onClick={() => onChange({ actor: viewerEmail ?? null })}
+          leftSection={<User size={16} />}
         >
-          <User className="h-4 w-4" />
           Mina mutationer
         </Button>
         <Button
@@ -96,8 +88,8 @@ export function AuditLogFilters({
           variant={onlyErrors ? 'secondary' : 'outline'}
           size="sm"
           onClick={() => onChange({ onlyErrors: onlyErrors ? null : '1' })}
+          leftSection={<AlertTriangle size={16} />}
         >
-          <AlertTriangle className="h-4 w-4" />
           Endast errors
         </Button>
         <Button
@@ -110,15 +102,16 @@ export function AuditLogFilters({
               entity: billingOnly ? entity ?? null : null,
             })
           }
+          leftSection={<Database size={16} />}
         >
-          <Database className="h-4 w-4" />
           Bara billing
         </Button>
         {hasActiveFilters ? (
           <Button
             type="button"
-            variant="ghost"
+            variant="subtle"
             size="sm"
+            color="gray"
             onClick={() =>
               onChange({
                 actor: null,
@@ -130,8 +123,8 @@ export function AuditLogFilters({
                 billingOnly: null,
               })
             }
+            leftSection={<FilterX size={16} />}
           >
-            <FilterX className="h-4 w-4" />
             Rensa filter
           </Button>
         ) : null}
@@ -140,11 +133,11 @@ export function AuditLogFilters({
       <div className="grid gap-3 md:grid-cols-5">
         <AdminField label="Aktör" htmlFor="audit-filter-actor">
           <div>
-            <Input
+            <TextInput
               id="audit-filter-actor"
               value={actor ?? ''}
               list="audit-filter-actors"
-              onChange={(event) => onChange({ actor: event.target.value || null })}
+              onChange={(event) => onChange({ actor: event.currentTarget.value || null })}
               placeholder="Filtrera aktör"
             />
             <datalist id="audit-filter-actors">
@@ -157,57 +150,45 @@ export function AuditLogFilters({
 
         <AdminField label="Action" htmlFor="audit-filter-action">
           <Select
+            id="audit-filter-action"
             value={action ?? '__all__'}
-            onValueChange={(next) => onChange({ action: next === '__all__' ? null : next })}
-          >
-            <SelectTrigger id="audit-filter-action">
-              <SelectValue placeholder="Alla actions" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Alla actions</SelectItem>
-              {actions.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(next) => onChange({ action: next === '__all__' ? null : next })}
+            placeholder="Alla actions"
+            data={[
+              { value: '__all__', label: 'Alla actions' },
+              ...actions.map(item => ({ value: item, label: item }))
+            ]}
+          />
         </AdminField>
 
         <AdminField label="Entitet" htmlFor="audit-filter-entity">
           <Select
+            id="audit-filter-entity"
             value={entity ?? '__all__'}
-            onValueChange={(next) => onChange({ entity: next === '__all__' ? null : next })}
-          >
-            <SelectTrigger id="audit-filter-entity">
-              <SelectValue placeholder="Alla entiteter" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Alla entiteter</SelectItem>
-              {entities.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onChange={(next) => onChange({ entity: next === '__all__' ? null : next })}
+            placeholder="Alla entiteter"
+            data={[
+              { value: '__all__', label: 'Alla entiteter' },
+              ...entities.map(item => ({ value: item, label: item }))
+            ]}
+          />
         </AdminField>
 
         <AdminField label="Från" htmlFor="audit-filter-from">
-          <Input
+          <TextInput
             id="audit-filter-from"
             type="date"
             value={dateInputValue(from)}
-            onChange={(event) => onChange({ from: event.target.value || null })}
+            onChange={(event) => onChange({ from: event.currentTarget.value || null })}
           />
         </AdminField>
 
         <AdminField label="Till" htmlFor="audit-filter-to">
-          <Input
+          <TextInput
             id="audit-filter-to"
             type="date"
             value={dateInputValue(to)}
-            onChange={(event) => onChange({ to: event.target.value || null })}
+            onChange={(event) => onChange({ to: event.currentTarget.value || null })}
           />
         </AdminField>
       </div>

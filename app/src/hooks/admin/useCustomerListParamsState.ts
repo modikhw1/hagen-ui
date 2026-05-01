@@ -1,117 +1,223 @@
+// app/src/hooks/admin/useCustomerListParamsState.ts
+
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
-import { useUrlState } from '@/hooks/useUrlState';
-import type {
-  CustomerListFilter,
-  CustomerListParams,
-  CustomerListSort,
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import type { 
+  CustomerListParams, 
+  CustomerListFilter, 
+  CustomerListSort 
 } from '@/lib/admin/customers/list.types';
 
-export const LIST_SEARCH_DEBOUNCE_MS = 300;
+export type { CustomerListParams } from '@/lib/admin/customers/list.types';
 
-export type CustomerListParamsAction =
-  | { type: 'search'; value: string }
-  | { type: 'filter'; value: CustomerListFilter }
-  | { type: 'sort'; value: CustomerListSort }
-  | { type: 'page'; value: number };
+// ──────────────────────────────────────────────────────────────────────────────
+// State shape
+// ──────────────────────────────────────────────────────────────────────────────
+
+const DEFAULT_PARAMS: CustomerListParams = {
+  search: '',
+  filter: 'all',
+  sort: 'recent',
+  page: 1,
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Reducer
+// ──────────────────────────────────────────────────────────────────────────────
+
+export type CustomerListAction =
+  | { type: 'SET_SEARCH'; value: string }
+  | { type: 'SET_FILTER'; value: CustomerListFilter }
+  | { type: 'SET_SORT'; value: CustomerListSort }
+  | { type: 'SET_PAGE'; value: number }
+  | { type: 'RESET' }
+  | { type: 'HYDRATE'; value: CustomerListParams };
 
 export function reduceCustomerListParams(
   state: CustomerListParams,
-  action: CustomerListParamsAction,
+  action: CustomerListAction,
 ): CustomerListParams {
   switch (action.type) {
-    case 'search':
+    case 'SET_SEARCH':
       return { ...state, search: action.value, page: 1 };
-    case 'filter':
+    case 'SET_FILTER':
       return { ...state, filter: action.value, page: 1 };
-    case 'sort':
+    case 'SET_SORT':
       return { ...state, sort: action.value, page: 1 };
-    case 'page':
-      return { ...state, page: action.value };
+    case 'SET_PAGE':
+      return { ...state, page: Math.max(1, action.value) };
+    case 'RESET':
+      return { ...DEFAULT_PARAMS };
+    case 'HYDRATE':
+      return action.value;
     default:
       return state;
   }
 }
 
-export function buildCustomerListUrl(pathname: string, state: CustomerListParams) {
-  const params = new URLSearchParams();
-  if (state.search) params.set('q', state.search);
-  if (state.filter !== 'all') params.set('filter', state.filter);
-  if (state.sort !== 'newest') params.set('sort', state.sort);
-  if (state.page > 1) params.set('page', String(state.page));
-  const query = params.toString();
-  return query ? `${pathname}?${query}` : pathname;
+// ──────────────────────────────────────────────────────────────────────────────
+// URL-serialisering
+// ──────────────────────────────────────────────────────────────────────────────
+
+export function buildCustomerListUrl(params: CustomerListParams, pathname: string): string {
+  const sp = paramsToUrlSearchParams(params).toString();
+  return sp ? `${pathname}?${sp}` : pathname;
 }
 
-function customerListStateToUrlUpdates(state: CustomerListParams) {
+function paramsToUrlSearchParams(p: CustomerListParams): URLSearchParams {
+  const url = new URLSearchParams();
+  if (p.search) url.set('q', p.search);
+  if (p.filter !== 'all') url.set('filter', p.filter);
+  if (p.sort !== 'recent') url.set('sort', p.sort);
+  if (p.page !== 1) url.set('page', String(p.page));
+  return url;
+}
+
+function urlSearchParamsToParams(sp: URLSearchParams): CustomerListParams {
+  const filter = sp.get('filter') as CustomerListFilter | null;
+  const sort = sp.get('sort') as CustomerListSort | null;
+  const pageRaw = Number(sp.get('page') ?? '1');
+
+  const validFilters: CustomerListFilter[] = ['all', 'active', 'pending', 'paused', 'archived', 'prospect'];
+  const validSorts: CustomerListSort[] = [
+    'recent', 'name_asc', 'name_desc', 'cm_asc', 'cm_desc', 
+    'price_asc', 'price_desc', 'status_asc', 'status_desc', 
+    'needs_action', 'alphabetical'
+  ];
+
   return {
-    q: state.search || null,
-    filter: state.filter !== 'all' ? state.filter : null,
-    sort: state.sort !== 'newest' ? state.sort : null,
-    page: state.page > 1 ? state.page : null,
+    search: sp.get('q') ?? '',
+    filter:
+      filter && validFilters.includes(filter)
+        ? filter
+        : 'all',
+    sort:
+      sort && validSorts.includes(sort)
+        ? sort
+        : 'recent',
+    page: Number.isFinite(pageRaw) && pageRaw > 0 ? pageRaw : 1,
   };
 }
 
-export function useCustomerListParamsState(initial: CustomerListParams) {
-  const { set } = useUrlState();
-  const [params, setParams] = useState(initial);
-  const [searchInput, setSearchInput] = useState(initial.search);
+// ──────────────────────────────────────────────────────────────────────────────
+// Hook
+// ──────────────────────────────────────────────────────────────────────────────
+
+export const LIST_SEARCH_DEBOUNCE_MS = 300;
+
+export interface UseCustomerListParamsStateResult {
+  params: CustomerListParams;
+  searchInput: string;
+  setSearchInput: (value: string) => void;
+  /** Flushar searchInput till params/URL omedelbart. */
+  submitSearch: () => void;
+  dispatch: (action: CustomerListAction) => void;
+  isPending: boolean;
+}
+
+export function useCustomerListParamsState(): UseCustomerListParamsStateResult {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Initial state hydreras från URL.
+  const initialParams = useMemo(
+    () => urlSearchParamsToParams(new URLSearchParams(searchParams?.toString() ?? '')),
+    // OBS: vi kör endast vid mount. Senare URL-ändringar hanteras av effect nedan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const [params, dispatch] = useReducer(reduceCustomerListParams, initialParams);
+
+  // Lokal state för sökrutan — gör typing smooth.
+  const [searchInput, setSearchInput] = useState(initialParams.search);
   const [isPending, startTransition] = useTransition();
-  const paramsRef = useRef(initial);
 
-  const commit = useCallback(
-    (next: CustomerListParams) => {
-      paramsRef.current = next;
-      setParams(next);
-      startTransition(() => {
-        set(customerListStateToUrlUpdates(next));
-      });
-    },
-    [set],
-  );
-
-  const dispatch = useCallback(
-    (action: CustomerListParamsAction) => {
-      commit(reduceCustomerListParams(paramsRef.current, action));
-    },
-    [commit],
-  );
-
-  const submitSearch = useCallback(() => {
-    if (searchInput === paramsRef.current.search) return;
-    commit(reduceCustomerListParams(paramsRef.current, { type: 'search', value: searchInput }));
-  }, [commit, searchInput]);
-
+  // Debounce: när searchInput ändras, sätt timer som dispatchar SET_SEARCH.
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (searchInput === paramsRef.current.search) {
-      return;
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
     }
-
-    const timeout = window.setTimeout(() => {
-      if (searchInput === paramsRef.current.search) {
-        return;
+    debounceTimer.current = setTimeout(() => {
+      if (searchInput !== params.search) {
+        startTransition(() => {
+          dispatch({ type: 'SET_SEARCH', value: searchInput });
+        });
       }
-
-      commit(
-        reduceCustomerListParams(paramsRef.current, {
-          type: 'search',
-          value: searchInput,
-        }),
-      );
     }, LIST_SEARCH_DEBOUNCE_MS);
 
     return () => {
-      window.clearTimeout(timeout);
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
     };
-  }, [commit, searchInput]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput]);
+
+  // Flusha searchInput direkt vid Enter eller submit.
+  const submitSearch = useCallback(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+      debounceTimer.current = null;
+    }
+    if (searchInput !== params.search) {
+      startTransition(() => {
+        dispatch({ type: 'SET_SEARCH', value: searchInput });
+      });
+    }
+  }, [searchInput, params.search]);
+
+  // Sync params → URL (replace, inte push).
+  // Vi använder en ref för att jämföra serialiserade strängar — detta undviker
+  // race conditions där effekten kör innan reducer-staten flushats.
+  const lastUrlRef = useRef<string>('');
+  useEffect(() => {
+    const newUrlSearch = paramsToUrlSearchParams(params).toString();
+    if (newUrlSearch === lastUrlRef.current) return;
+    lastUrlRef.current = newUrlSearch;
+    const newUrl = buildCustomerListUrl(params, pathname || '/admin/customers');
+    router.replace(newUrl, { scroll: false });
+  }, [params, router, pathname]);
+
+  // Sync URL → params (för back/forward-navigation).
+  useEffect(() => {
+    const fromUrl = urlSearchParamsToParams(
+      new URLSearchParams(searchParams?.toString() ?? ''),
+    );
+    const fromUrlSerialized = paramsToUrlSearchParams(fromUrl).toString();
+    const currentSerialized = paramsToUrlSearchParams(params).toString();
+    if (fromUrlSerialized !== currentSerialized) {
+      dispatch({ type: 'HYDRATE', value: fromUrl });
+      setSearchInput(fromUrl.search);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const dispatchPublic = useCallback(
+    (action: CustomerListAction) => {
+      startTransition(() => {
+        dispatch(action);
+      });
+    },
+    [startTransition],
+  );
 
   return {
     params,
     searchInput,
     setSearchInput,
-    isPending,
-    dispatch,
     submitSearch,
+    dispatch: dispatchPublic,
+    isPending,
   };
 }

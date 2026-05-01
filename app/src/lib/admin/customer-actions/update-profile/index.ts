@@ -5,6 +5,7 @@ import { syncCustomerAssignmentFromProfile } from '@/lib/admin/cm-assignments';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { buildCustomerPayload } from '@/lib/admin/customer-detail/load';
 import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
+import { hasAdminScope } from '@/lib/auth/api-auth';
 import {
   actionFailure,
   actionSuccess,
@@ -55,6 +56,17 @@ export async function updateCustomerProfile(
       error: validated.error,
       statusCode: validated.statusCode,
       details: validated.details,
+    });
+  }
+
+  if (
+    validated.value.hasActiveStripeSubscription &&
+    validated.value.priceIntent.kind !== 'unchanged' &&
+    !hasAdminScope(ctx.user, 'super_admin')
+  ) {
+    return actionFailure({
+      error: SERVER_COPY.superAdminOnly,
+      statusCode: 403,
     });
   }
 

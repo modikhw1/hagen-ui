@@ -155,6 +155,28 @@ export async function changeCustomerAssignment(params: {
   }
 
   if (effectiveDate <= today) {
+    if (activeAssignment?.valid_from === effectiveDate) {
+      await updateAssignment(params.supabaseAdmin, activeAssignment.id, {
+        cm_id: nextMember?.id ?? null,
+        valid_to: null,
+        scheduled_change: null,
+        handover_note: params.handoverNote ?? activeAssignment.handover_note,
+      });
+
+      const profile = await updateCustomerProfileAssignment(
+        params.supabaseAdmin,
+        params.customerProfileId,
+        nextMember,
+      );
+
+      return {
+        profile,
+        status: 'applied' as const,
+        effectiveDate,
+        nextCmId: nextMember?.id ?? null,
+      };
+    }
+
     if (activeAssignment) {
       await updateAssignment(params.supabaseAdmin, activeAssignment.id, {
         valid_to: formatDateOnly(addDays(parseDateOnly(effectiveDate), -1)),

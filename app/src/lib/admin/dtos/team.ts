@@ -50,6 +50,11 @@ export const teamCustomerSchema = z.object({
   videos_last_7d: z.number(),
   engagement_rate: z.number(),
   last_upload_at: z.string().nullable(),
+  last_published_at: z.string().nullable().optional(),
+  last_publication_source: z.enum(['letrend', 'tiktok']).nullable().optional(),
+  planned_concepts_count: z.number().optional(),
+  expected_concepts_per_week: z.number().optional(),
+  overdue_7d_concepts_count: z.number().optional(),
   covered_by_absence: z.boolean(),
   payout_cm_id: z.string().nullable(),
 });
@@ -90,6 +95,22 @@ export const teamMemberViewSchema = z.object({
       is_upcoming: z.boolean(),
     })
     .nullable(),
+  pulse: z.object({
+    status: z.string(),
+    fillPct: z.number(),
+    barLabel: z.string(),
+    plannedConceptsTotal: z.number(),
+    expectedConcepts7d: z.number(),
+    interactionCount7d: z.number(),
+    lastInteractionDays: z.number(),
+    counts: z.object({
+      n_under: z.number(),
+      n_thin: z.number(),
+      n_blocked: z.number(),
+      n_ok: z.number(),
+      n_paused: z.number(),
+    }),
+  }),
   customers: z.array(teamCustomerSchema),
   assignmentHistory: z.array(
     z.object({
@@ -120,6 +141,7 @@ export const teamMemberViewSchema = z.object({
   activityBaseline: z.number(),
   activityAverage7d: z.number(),
   activityDeviation: z.number(),
+  capacity: z.number().optional(),
   customerLoadLevel: z.enum(['ok', 'warn', 'overload']),
   customerLoadClass: z.enum(['ok', 'warn', 'overload']).optional(),
   customerLoadLabel: z.string(),

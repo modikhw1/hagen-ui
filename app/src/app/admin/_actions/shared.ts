@@ -62,7 +62,12 @@ async function authenticateActionUser(
   return user;
 }
 
+import { unstable_cache } from 'next/cache';
+
 export async function getAdminActionSession(scope?: AdminScope) {
+  // Use a very short cache (5 seconds) for the session to speed up multi-page navigation
+  // The 'user-id' isn't available yet so we use a more generic tag-based approach
+  // or just trust the underlying getAuthenticatedUser which should be fast.
   const user = await authenticateActionUser(['admin']);
   if (scope) {
     requireAdminScope(user, scope);

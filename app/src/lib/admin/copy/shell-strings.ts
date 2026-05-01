@@ -14,6 +14,8 @@ export const SHELL_COPY = {
   loadingShell: 'Laddar admin...',
   openMenu: '\u00d6ppna meny',
   closeMenu: 'St\u00e4ng meny',
+  collapseMenu: 'Minimera meny',
+  expandMenu: 'Expandera meny',
   skipToContent: 'Hoppa till inneh\u00e5ll',
   adminNavigationAria: 'Admin-navigering',
   defaultEyebrow: 'LeTrend Admin',

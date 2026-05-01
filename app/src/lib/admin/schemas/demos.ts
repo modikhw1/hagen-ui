@@ -22,6 +22,7 @@ export const demoCardDtoSchema = z.object({
   ownerName: z.string().nullable(),
   lostReason: z.string().nullable(),
   nextStatus: demoStatusSchema.nullable(),
+  convertedCustomerId: z.string().uuid().nullable(),
 });
 
 export const demosBoardDtoSchema = z.object({

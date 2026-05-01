@@ -2,6 +2,8 @@ import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { recordCustomerInviteToken } from '@/lib/admin/customer-billing-store';
+import { buildTikTokProfileLinkPatch } from '@/lib/tiktok/customer-profile-link';
+import { triggerInitialTikTokSync } from '@/lib/tiktok/trigger-initial-sync';
 import type { TablesUpdate } from '@/types/database';
 import {
   persistPendingStripeAttachments,
@@ -23,7 +25,13 @@ function buildProfileUpdateData(
   input: SendInviteInput,
   prepared: PreparedInvite,
   artifacts: CreatedStripeArtifacts,
+  previousTikTokProfileUrl: string | null,
 ): TablesUpdate<'customer_profiles'> {
+  const tiktokLinkPatch = buildTikTokProfileLinkPatch({
+    input: prepared.canonicalTikTokProfileUrl,
+    previousProfileUrl: previousTikTokProfileUrl,
+  });
+
   return {
     status: 'invited',
     invited_at: new Date().toISOString(),
@@ -41,8 +49,7 @@ function buildProfileUpdateData(
     customer_contact_name: input.customer_contact_name || null,
     account_manager: prepared.assignment.accountManager,
     account_manager_profile_id: prepared.assignment.accountManagerProfileId,
-    tiktok_profile_url: prepared.canonicalTikTokProfileUrl,
-    tiktok_handle: prepared.tiktokHandle,
+    ...(tiktokLinkPatch.ok ? tiktokLinkPatch.patch : {}),
   };
 }
 
@@ -52,7 +59,14 @@ export async function persistInviteProfile(
   prepared: PreparedInvite,
   artifacts: CreatedStripeArtifacts,
 ): Promise<SendInviteStepResult<PersistedInvite>> {
-  const updateData = buildProfileUpdateData(input, prepared, artifacts);
+  const updateData = buildProfileUpdateData(
+    input,
+    prepared,
+    artifacts,
+    typeof ctx.beforeProfile?.tiktok_profile_url === 'string'
+      ? ctx.beforeProfile.tiktok_profile_url
+      : null,
+  );
   const { data: profile, error: updateError } = await ctx.supabaseAdmin
     .from('customer_profiles')
     .update(updateData)
@@ -101,6 +115,15 @@ export async function persistInviteProfile(
       stripe_subscription_id: artifacts.subscriptionId,
       invite_attempt_nonce: prepared.attemptNonce,
     },
+  });
+
+  await triggerInitialTikTokSync({
+    supabaseAdmin: ctx.supabaseAdmin,
+    customerId: ctx.id,
+    tiktokHandle: typeof profile.tiktok_handle === 'string' ? profile.tiktok_handle : null,
+    lastHistorySyncAt:
+      typeof profile.last_history_sync_at === 'string' ? profile.last_history_sync_at : null,
+    source: 'invite',
   });
 
   return {

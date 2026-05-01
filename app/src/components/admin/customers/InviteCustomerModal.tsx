@@ -1,4 +1,4 @@
-'use reducer';
+'use client';
 
 import { useEffect, useReducer, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';

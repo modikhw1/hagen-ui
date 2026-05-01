@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { InvoiceDetailModal } from '@/components/admin/billing/invoices/InvoiceDetailModal';
-import { useCustomerBillingRefresh } from '@/hooks/admin/useAdminRefresh';
 
 export default function CustomerInvoiceModalRoute({
   customerId,
@@ -12,15 +11,17 @@ export default function CustomerInvoiceModalRoute({
   invoiceId: string;
 }) {
   const router = useRouter();
-  const refresh = useCustomerBillingRefresh(customerId);
+  const onClose = () => router.push(`/admin/customers/${customerId}/billing`, { scroll: false });
 
   return (
     <InvoiceDetailModal
       invoiceId={invoiceId}
+      customerId={customerId}
       open
-      onClose={() => router.push(`/admin/customers/${customerId}/billing`, { scroll: false })}
-      onUpdated={() => {
-        void refresh();
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
       }}
     />
   );

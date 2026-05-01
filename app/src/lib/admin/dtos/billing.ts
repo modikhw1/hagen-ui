@@ -27,11 +27,27 @@ export const customerInvoiceSchema = z.object({
   display_status: z.string().optional(),
   due_date: z.string().nullable().optional(),
   hosted_invoice_url: z.string().nullable().optional(),
+  invoice_pdf: z.string().nullable().optional(),
   line_items: z.array(customerInvoiceLineItemSchema).optional(),
 });
 
+export const creditNoteOperationSchema = z.object({
+  id: z.string(),
+  operation_type: z.string(),
+  status: z.string(),
+  requires_attention: z.boolean(),
+  attention_reason: z.string().nullable(),
+  error_message: z.string().nullable(),
+  source_invoice_id: z.string(),
+  amount_ore: z.number(),
+  created_at: z.string(),
+});
+
+export type CreditNoteOperation = z.infer<typeof creditNoteOperationSchema>;
+
 export const customerInvoicesPayloadSchema = z.object({
   invoices: z.array(customerInvoiceSchema).default([]),
+  operations: z.array(creditNoteOperationSchema).default([]).optional(),
 });
 
 export const customerSubscriptionSchema = z.object({
@@ -70,6 +86,7 @@ export const billingInvoiceListItemSchema = z.object({
   created_at: z.string(),
   due_date: z.string().nullable(),
   hosted_invoice_url: z.string().nullable(),
+  invoice_pdf: z.string().nullable().optional(),
   invoice_number: z.string().nullable().optional(),
   payment_intent_id: z.string().nullable().optional(),
   dispute_status: z.string().nullable().optional(),
@@ -137,6 +154,7 @@ export const billingSubscriptionsResponseSchema = z.object({
   summary: z.object({
     activeCount: z.number().int().min(0),
     expiringCount: z.number().int().min(0),
+    pastDueCount: z.number().int().min(0).optional(),
     mrrOre: z.number(),
   }),
 });

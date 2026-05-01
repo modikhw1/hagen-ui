@@ -8,12 +8,12 @@
  */
 
 export const OPERATOR_COPY = {
-  // CM-pulse statusar — ersätter 'needs_action' / 'watch' / 'away' / 'ok'
+  // CM-pulse statusar — motsvarar 'needs_action' / 'watch' / 'away' / 'ok' i logiken
   cmStatus: {
-    needs_action: { label: 'Åtgärd krävs',     tone: 'danger'  as const },
-    watch:        { label: 'Observation krävs', tone: 'warning' as const },
-    away:         { label: 'Frånvarande',       tone: 'neutral' as const },
-    ok:           { label: 'I fas',             tone: 'success' as const },
+    needs_action: { label: 'Ligger efter', tone: 'danger'  as const },
+    watch:        { label: 'Släpar',       tone: 'warning' as const },
+    away:         { label: 'Frånvarande',  tone: 'neutral' as const },
+    ok:           { label: 'I fas',        tone: 'success' as const },
   },
 
   // Innehållskö (tidigare "buffer") — kundens planerade content-flöde
@@ -35,6 +35,7 @@ export const OPERATOR_COPY = {
 
   // Attention-rubriker per typ
   attention: {
+    credit_note_failed:    'Misslyckad kreditering',
     invoice_unpaid:        'Obetald faktura',
     onboarding_stuck:      'Onboarding fastnat',
     customer_blocked:      'Väntar på kunden',

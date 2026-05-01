@@ -1,17 +1,21 @@
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton, Stack, Grid } from '@mantine/core';
 
 export default function DialogSkeleton() {
   return (
     <div className="rounded-lg border border-border bg-card p-6">
-      <div className="space-y-4">
-        <Skeleton className="h-6 w-56" />
-        <Skeleton className="h-4 w-80 max-w-full" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Skeleton className="h-12 w-full rounded-md" />
-          <Skeleton className="h-12 w-full rounded-md" />
-        </div>
-        <Skeleton className="h-48 w-full rounded-lg" />
-      </div>
+      <Stack gap="md">
+        <Skeleton h={24} w={224} />
+        <Skeleton h={16} w={320} maw="100%" />
+        <Grid>
+          <Grid.Col span={6}>
+            <Skeleton h={48} radius="md" />
+          </Grid.Col>
+          <Grid.Col span={6}>
+            <Skeleton h={48} radius="md" />
+          </Grid.Col>
+        </Grid>
+        <Skeleton h={192} radius="lg" />
+      </Stack>
     </div>
   );
 }

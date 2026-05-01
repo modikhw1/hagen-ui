@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@mantine/core';
 import { cn } from '@/lib/utils';
 import { StatusPill } from '@/components/admin/ui/StatusPill';
 import type { LikeRateTier } from '@/lib/customer-detail/success';
@@ -157,12 +157,12 @@ export function CustomerRouteLoading({ label = 'Laddar kund...' }: { label?: str
     <div className="rounded-lg border border-border bg-card p-5">
       <span className="sr-only">{label}</span>
       <div className="space-y-4">
-        <Skeleton className="h-4 w-32" />
+        <Skeleton h={16} w={128} />
         <div className="grid gap-3 sm:grid-cols-2">
-          <Skeleton className="h-24 w-full rounded-lg" />
-          <Skeleton className="h-24 w-full rounded-lg" />
+          <Skeleton h={96} w="100%" radius="lg" />
+          <Skeleton h={96} w="100%" radius="lg" />
         </div>
-        <Skeleton className="h-32 w-full rounded-lg" />
+        <Skeleton h={128} w="100%" radius="lg" />
       </div>
     </div>
   );
@@ -176,12 +176,12 @@ export function CustomerSectionSkeleton({
   return (
     <div className="rounded-lg border border-border bg-card p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <Skeleton className="h-4 w-36" />
-        <Skeleton className="h-8 w-24 rounded-full" />
+        <Skeleton h={16} w={144} />
+        <Skeleton h={32} w={96} radius="xl" />
       </div>
       <div className="space-y-3">
         {Array.from({ length: blocks }, (_, index) => (
-          <Skeleton key={index} className="h-16 w-full rounded-lg" />
+          <Skeleton key={index} h={64} w="100%" radius="lg" />
         ))}
       </div>
     </div>

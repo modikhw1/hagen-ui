@@ -1,29 +1,17 @@
-﻿import 'server-only';
+import 'server-only';
 
 import { unstable_cache } from 'next/cache';
-import { formatDateOnly } from '@/lib/admin/billing-periods';
 import { ADMIN_TEAM_TAG } from '@/lib/admin/cache-tags';
+import { formatDateOnly } from '@/lib/admin/billing-periods';
 import { listEnrichedCmAbsences } from '@/lib/admin/cm-absences';
 import type { TeamMemberView } from '@/lib/admin/dtos/team';
-import { isMissingRelationError } from '@/lib/admin/schema-guards';
 import {
-  parseRowsWithWarnings,
-  teamOverviewActivityInputSchema,
-  teamOverviewAssignmentInputSchema,
-  teamOverviewCustomerInputSchema,
-  teamOverviewMemberInputSchema,
-  type TeamOverviewActivityInput,
-  type TeamOverviewAssignmentInput,
-  type TeamOverviewMemberInput,
-} from '@/lib/admin/schemas/team-overview-input';
+  loadCmPulseBase,
+  loadOverviewCmPulseSection,
+  type BaseOverviewData,
+} from '@/lib/admin/server/overview';
 import { buildTeamOverview } from '@/lib/admin/server/team-overview';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-
-type NormalizedActivityRow = TeamOverviewActivityInput;
-
-type AssignmentHistoryRow = TeamOverviewAssignmentInput;
-
-type TeamOverviewMemberRow = TeamOverviewMemberInput;
 
 type TeamOverviewLoadResult = {
   members: TeamMemberView[];
@@ -32,115 +20,46 @@ type TeamOverviewLoadResult = {
   buildDurationMs: number;
 };
 
-async function fetchActivities(activityCutoff: string) {
-  const supabase = createSupabaseAdmin();
-  const result = await supabase
-    .from('cm_activities')
-    .select('cm_id, cm_user_id, cm_email, type, activity_type, created_at')
-    .gte('created_at', activityCutoff)
-    .order('created_at', { ascending: false })
-    .limit(2000);
+type TeamMemberDetailRow = {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  role: string | null;
+  color: string | null;
+  is_active: boolean | null;
+  commission_rate: number | null;
+  created_at: string | null;
+  profile_id: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  region: string | null;
+};
 
-  return {
-    data: (result.data ?? [])
-      .filter(
-        (row): row is typeof row & { created_at: string } => typeof row.created_at === 'string',
-      )
-      .map((row) => ({
-        cm_id: row.cm_id ?? row.cm_user_id ?? null,
-        cm_email: row.cm_email ?? null,
-        type: row.type ?? row.activity_type ?? null,
-        created_at: row.created_at,
-      })) satisfies NormalizedActivityRow[],
-    error: result.error,
-  };
-}
+type AssignmentRow = {
+  id: string;
+  customer_id: string;
+  cm_id: string | null;
+  valid_from: string;
+  valid_to: string | null;
+  handover_note: string | null;
+  scheduled_change: Record<string, unknown> | null;
+};
 
-async function fetchAssignments() {
-  const supabase = createSupabaseAdmin();
-  const result = await supabase
-    .from('cm_assignments')
-    .select('id, customer_id, cm_id, valid_from, valid_to, handover_note, scheduled_change')
-    .order('valid_from', { ascending: false });
+type TikTokStatRow = {
+  customer_profile_id: string | null;
+  followers: number | null;
+  videos_last_24h: number | null;
+  engagement_rate: number | null;
+  snapshot_date: string | null;
+};
 
-  if (result.error) {
-    return {
-      data: [] as AssignmentHistoryRow[],
-      error: result.error,
-    };
-  }
-
-  return {
-    data: (result.data ?? []) as AssignmentHistoryRow[],
-    error: null,
-  };
-}
-
-async function fetchTeamMembersOverview() {
-  const supabase = createSupabaseAdmin();
-  const viewResult = await (((supabase.from('admin_team_overview' as never) as never) as {
-    select: (columns: string) => {
-      order: (
-        column: string,
-        options: { ascending: boolean },
-      ) => Promise<{
-        data: TeamOverviewMemberRow[] | null;
-        error: { message?: string } | null;
-      }>;
-    };
-  }).select(
-    'id, name, email, phone, role, is_active, profile_id, bio, city, avatar_url, commission_rate, customer_count, mrr_ore, customer_load_level, customer_load_label, overloaded',
-  )).order('name', { ascending: true });
-
-  if (!viewResult.error) {
-    return {
-      data: (viewResult.data ?? []) as TeamOverviewMemberRow[],
-      error: null,
-    };
-  }
-
-  if (!isMissingRelationError(viewResult.error.message)) {
-    return {
-      data: [] as TeamOverviewMemberRow[],
-      error: viewResult.error,
-    };
-  }
-
-  const fallbackResult = await supabase
-    .from('team_members')
-    .select('id, name, email, phone, role, is_active, profile_id, bio, region, avatar_url, commission_rate')
-    .eq('is_active', true)
-    .order('name');
-
-  if (fallbackResult.error) {
-    return {
-      data: [] as TeamOverviewMemberRow[],
-      error: fallbackResult.error,
-    };
-  }
-
-  return {
-    data: (fallbackResult.data ?? []).map((member) => ({
-      id: member.id,
-      name: member.name,
-      email: member.email,
-      phone: member.phone,
-      role: member.role,
-      is_active: member.is_active,
-      profile_id: member.profile_id,
-      bio: member.bio,
-      city: member.region,
-      avatar_url: member.avatar_url,
-      commission_rate: member.commission_rate,
-      customer_count: null,
-      mrr_ore: null,
-      customer_load_level: null,
-      customer_load_label: null,
-      overloaded: null,
-    })),
-    error: null,
-  };
-}
+type LatestPublicationRow = {
+  customer_profile_id: string | null;
+  concept_id: string | null;
+  history_source: string | null;
+  published_at: string | null;
+};
 
 function nowMs() {
   return typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -148,250 +67,309 @@ function nowMs() {
     : Date.now();
 }
 
-function toBuildWarningCode(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+function toOverviewSortMode(sortMode: 'standard' | 'anomalous') {
+  return sortMode === 'anomalous' ? 'lowest_activity' : 'standard';
 }
 
-function mergeWarnings(...warningGroups: Array<string[]>) {
-  return Array.from(new Set(warningGroups.flat()));
+function buildCustomerStatsIndex(rows: TikTokStatRow[]) {
+  const statsByCustomer = new Map<
+    string,
+    {
+      followers: number;
+      videos_last_7d: number;
+      engagement_rate: number;
+      latestSnapshotDate: string | null;
+    }
+  >();
+
+  for (const row of rows) {
+    if (!row.customer_profile_id) {
+      continue;
+    }
+
+    const current = statsByCustomer.get(row.customer_profile_id) ?? {
+      followers: 0,
+      videos_last_7d: 0,
+      engagement_rate: 0,
+      latestSnapshotDate: null,
+    };
+
+    current.videos_last_7d += row.videos_last_24h ?? 0;
+
+    const snapshotDate = row.snapshot_date ?? null;
+    if (
+      snapshotDate &&
+      (!current.latestSnapshotDate || snapshotDate > current.latestSnapshotDate)
+    ) {
+      current.latestSnapshotDate = snapshotDate;
+      current.followers = row.followers ?? 0;
+      current.engagement_rate = row.engagement_rate ?? 0;
+    }
+
+    statsByCustomer.set(row.customer_profile_id, current);
+  }
+
+  return Object.fromEntries(
+    Array.from(statsByCustomer.entries()).map(([customerId, value]) => [
+      customerId,
+      {
+        followers: value.followers,
+        videos_last_7d: value.videos_last_7d,
+        engagement_rate: value.engagement_rate,
+      },
+    ]),
+  );
 }
 
-function buildFallbackTeamOverview(members: TeamOverviewMemberInput[]): TeamMemberView[] {
-  const today = startOfDay(new Date());
+function normalizePublicationSource(row: Pick<LatestPublicationRow, 'concept_id' | 'history_source'>) {
+  if (row.history_source === 'tiktok_profile') {
+    return 'tiktok' as const;
+  }
 
-  return members.map((member) => {
-    const activitySeries = new Array(14).fill(0);
-    const activityDots = Array.from({ length: 14 }, (_, index) => {
-      const date = addDays(today, -(13 - index));
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+  if (row.concept_id || row.history_source === 'hagen_library') {
+    return 'letrend' as const;
+  }
+
+  return null;
+}
+
+function buildLatestPublicationIndex(rows: LatestPublicationRow[]) {
+  const publicationsByCustomer = new Map<
+    string,
+    {
+      publishedAt: string | null;
+      source: 'letrend' | 'tiktok' | null;
+    }
+  >();
+
+  for (const row of rows) {
+    if (!row.customer_profile_id || !row.published_at || publicationsByCustomer.has(row.customer_profile_id)) {
+      continue;
+    }
+
+    publicationsByCustomer.set(row.customer_profile_id, {
+      publishedAt: row.published_at,
+      source: normalizePublicationSource(row),
+    });
+  }
+
+  return publicationsByCustomer;
+}
+
+function mapBaseCustomers(
+  baseData: BaseOverviewData,
+  latestPublicationsByCustomer: Map<
+    string,
+    {
+      publishedAt: string | null;
+      source: 'letrend' | 'tiktok' | null;
+    }
+  >,
+) {
+  const bufferByCustomer = new Map(
+    baseData.bufferRows.map((row) => [row.customer_id, row.last_published_at ?? null]),
+  );
+
+  return baseData.customers
+    .filter((customer) => customer.status !== 'archived')
+    .map((customer) => {
+      const latestPublication = latestPublicationsByCustomer.get(customer.id);
+      const lastPublishedAt =
+        bufferByCustomer.get(customer.id) ??
+        latestPublication?.publishedAt ??
+        customer.last_upload_at ??
+        null;
 
       return {
-        date,
-        count: 0,
-        level: 'empty' as const,
-        intensity: 0 as const,
-        isWeekend,
+        id: customer.id,
+        business_name: customer.business_name,
+        monthly_price: customer.monthly_price ?? null,
+        status: customer.status ?? 'active',
+        paused_until: customer.paused_until ?? null,
+        account_manager_profile_id: customer.account_manager_profile_id ?? null,
+        account_manager: customer.account_manager ?? null,
+        last_upload_at: customer.last_upload_at ?? null,
+        last_published_at: lastPublishedAt,
+        last_publication_source:
+          lastPublishedAt && latestPublication?.publishedAt === lastPublishedAt
+            ? latestPublication.source
+            : customer.last_upload_at && customer.last_upload_at === lastPublishedAt
+              ? 'tiktok'
+              : latestPublication?.source ?? null,
+        planned_concepts_count: customer.planned_concepts_count ?? 0,
+        expected_concepts_per_week:
+          customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 0,
+        overdue_7d_concepts_count: customer.overdue_7d_concepts_count ?? 0,
       };
     });
+}
 
-    return {
-      id: member.id,
-      name: member.name,
-      email: member.email ?? '',
-      phone: member.phone,
-      city: member.city,
-      bio: member.bio,
-      avatar_url: member.avatar_url,
-      role: member.role ?? 'content_manager',
-      is_active: Boolean(member.is_active ?? true),
-      commission_rate: Number.isFinite(Number(member.commission_rate)) ? Number(member.commission_rate) : 0.2,
-      active_absence: null,
-      customers: [],
-      assignmentHistory: [],
-      customerCount: 0,
-      mrr_ore: 0,
-      activityCount: 0,
-      activeWorkflowSteps: 0,
-      activityRatio: 0,
-      activitySeries,
-      activityDots,
-      activitySummary: {
-        activeDays: 0,
-        total: 0,
-        median: 0,
-        longestRest: 14,
+function mapPulseIntoMembers(
+  members: TeamMemberView[],
+  pulseRows: Awaited<ReturnType<typeof loadOverviewCmPulseSection>>['cmPulse'],
+) {
+  const pulseByCmId = new Map(
+    pulseRows.map((row) => [
+      row.member.id,
+      {
+        status: row.aggregate.status,
+        fillPct: row.aggregate.fillPct,
+        barLabel: row.aggregate.barLabel,
+        plannedConceptsTotal: row.aggregate.planned_concepts_total,
+        expectedConcepts7d: row.aggregate.expected_concepts_7d,
+        interactionCount7d: row.aggregate.interaction_count_7d,
+        lastInteractionDays: row.aggregate.last_interaction_days,
+        counts: row.aggregate.counts,
       },
-      activityBaseline: 0,
-      activityAverage7d: 0,
-      activityDeviation: 0,
-      customerLoadLevel: 'ok',
-      customerLoadClass: 'ok',
-      customerLoadLabel: 'Lätt portfölj',
-      overloaded: false,
-    };
-  });
+    ]),
+  );
+
+  return members.map((member) => ({
+    ...member,
+    pulse:
+      pulseByCmId.get(member.id) ?? {
+        status: 'ok',
+        fillPct: 0,
+        barLabel: '0/0 koncept',
+        plannedConceptsTotal: 0,
+        expectedConcepts7d: 0,
+        interactionCount7d: 0,
+        lastInteractionDays: 999,
+        counts: {
+          n_under: 0,
+          n_thin: 0,
+          n_blocked: 0,
+          n_ok: 0,
+          n_paused: 0,
+        },
+      },
+  }));
 }
 
-function addDays(baseDate: Date, days: number) {
-  const date = new Date(baseDate);
-  date.setDate(date.getDate() + days);
-  return startOfDay(date);
-}
+function includeMemberInTeamView(member: TeamMemberView) {
+  if (member.role === 'content_manager') {
+    return true;
+  }
 
-function startOfDay(value: Date) {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date;
+  return (
+    member.customers.length > 0 ||
+    member.assignmentHistory.length > 0 ||
+    Boolean(member.active_absence) ||
+    Boolean(member.isCovering)
+  );
 }
 
 async function loadTeamOverview(sortMode: 'standard' | 'anomalous'): Promise<TeamOverviewLoadResult> {
+  const queryStart = nowMs();
   const supabase = createSupabaseAdmin();
-  const activityCutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-  const statsCutoff = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const today = formatDateOnly(new Date());
+  const overviewSortMode = toOverviewSortMode(sortMode);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  const baseData = await loadCmPulseBase(supabase);
+  const activeCustomerIds = baseData.customers
+    .filter((customer) => customer.status !== 'archived')
+    .map((customer) => customer.id);
 
   const [
-    teamResult,
-    customersResult,
-    activitiesResult,
-    tiktokStatsResult,
-    absences,
+    membersResult,
     assignmentsResult,
+    statsResult,
+    latestPublicationsResult,
+    absences,
+    pulseSection,
   ] = await Promise.all([
-    fetchTeamMembersOverview(),
     supabase
-      .from('customer_profiles')
+      .from('team_members')
       .select(
-        'id, business_name, monthly_price, status, paused_until, account_manager_profile_id, account_manager, last_upload_at',
+        'id, name, email, phone, role, color, is_active, commission_rate, created_at, profile_id, avatar_url, bio, region',
       )
-      .neq('status', 'archived'),
-    fetchActivities(activityCutoff),
+      .eq('is_active', true)
+      .order('name'),
+    supabase
+      .from('cm_assignments')
+      .select('id, customer_id, cm_id, valid_from, valid_to, handover_note, scheduled_change'),
     supabase
       .from('tiktok_stats')
-      .select('customer_profile_id, followers, videos_last_24h, engagement_rate, snapshot_date')
-      .gte('snapshot_date', statsCutoff)
-      .order('snapshot_date', { ascending: false }),
-    listEnrichedCmAbsences(supabase, { limit: 200 }),
-    fetchAssignments(),
+      .select(
+        'customer_profile_id, followers, videos_last_24h, engagement_rate, snapshot_date',
+      )
+      .gte('snapshot_date', sevenDaysAgo),
+    activeCustomerIds.length > 0
+      ? supabase
+          .from('customer_concepts')
+          .select('customer_profile_id, concept_id, history_source, published_at')
+          .in('customer_profile_id', activeCustomerIds)
+          .not('published_at', 'is', null)
+          .order('customer_profile_id', { ascending: true })
+          .order('published_at', { ascending: false })
+      : Promise.resolve({ data: [], error: null }),
+    listEnrichedCmAbsences(supabase, { limit: 200, asOfDate: today }),
+    loadOverviewCmPulseSection({
+      sortMode: overviewSortMode,
+      baseData,
+    }),
   ]);
 
-  if (teamResult.error) {
-    throw new Error(teamResult.error.message || 'Kunde inte hämta teamöversikten');
-  }
-  if (customersResult.error) {
-    throw new Error(customersResult.error.message || 'Kunde inte hämta kunder');
-  }
-  if (activitiesResult.error) {
-    throw new Error(activitiesResult.error.message || 'Kunde inte hämta aktiviteter');
+  if (membersResult.error) {
+    throw new Error(membersResult.error.message || 'Kunde inte hämta teammedlemmar');
   }
   if (assignmentsResult.error) {
     throw new Error(assignmentsResult.error.message || 'Kunde inte hämta CM-historik');
   }
-  if (tiktokStatsResult.error) {
-    throw new Error(tiktokStatsResult.error.message || 'Kunde inte hämta TikTok-statistik');
+  if (statsResult.error) {
+    throw new Error(statsResult.error.message || 'Kunde inte hämta TikTok-statistik');
+  }
+  if (latestPublicationsResult.error) {
+    throw new Error(
+      latestPublicationsResult.error.message || 'Kunde inte hämta senaste publiceringar',
+    );
   }
 
-  const parsedMembers = parseRowsWithWarnings({
-    rows: teamResult.data,
-    schema: teamOverviewMemberInputSchema,
-    rowType: 'member',
-  });
-  const parsedCustomers = parseRowsWithWarnings({
-    rows: customersResult.data,
-    schema: teamOverviewCustomerInputSchema,
-    rowType: 'customer',
-  });
-  const parsedActivities = parseRowsWithWarnings({
-    rows: activitiesResult.data,
-    schema: teamOverviewActivityInputSchema,
-    rowType: 'activity',
-  });
-  const parsedAssignments = parseRowsWithWarnings({
-    rows: assignmentsResult.data,
-    schema: teamOverviewAssignmentInputSchema,
-    rowType: 'assignment',
+  const members = (membersResult.data ?? []) as TeamMemberDetailRow[];
+  const assignments = (assignmentsResult.data ?? []) as AssignmentRow[];
+  const tiktokStats = (statsResult.data ?? []) as TikTokStatRow[];
+  const latestPublicationRows = (latestPublicationsResult.data ?? []) as LatestPublicationRow[];
+  const customerStatsById = buildCustomerStatsIndex(tiktokStats);
+  const latestPublicationsByCustomer = buildLatestPublicationIndex(latestPublicationRows);
+
+  const built = buildTeamOverview({
+    members: members.map((member) => ({
+      ...member,
+      city: member.region ?? null,
+      is_active: Boolean(member.is_active),
+    })),
+    customers: mapBaseCustomers(baseData, latestPublicationsByCustomer),
+    activities: baseData.interactions.map((interaction) => ({
+      cm_id: interaction.cm_id,
+      cm_email: null,
+      type: interaction.type,
+      created_at: interaction.created_at ?? new Date().toISOString(),
+    })),
+    assignments,
+    absences,
+    byCustomer: customerStatsById,
+    sortMode,
   });
 
-  const schemaWarnings = mergeWarnings(
-    parsedMembers.warnings,
-    parsedCustomers.warnings,
-    parsedActivities.warnings,
-    parsedAssignments.warnings,
+  const pulseMappedMembers = mapPulseIntoMembers(built.members, pulseSection.cmPulse).filter(
+    includeMemberInTeamView,
   );
 
-  const byCustomer: Record<
-    string,
-    { followers: number; videos_last_7d: number; engagement_rate: number }
-  > = {};
-
-  for (const row of tiktokStatsResult.data ?? []) {
-    const key = row.customer_profile_id;
-    if (!key) continue;
-
-    const current = byCustomer[key] ?? {
-      followers: row.followers ?? 0,
-      videos_last_7d: 0,
-      engagement_rate: Number(row.engagement_rate ?? 0),
-    };
-
-    if (!byCustomer[key]) {
-      current.followers = row.followers ?? 0;
-      current.engagement_rate = Number(row.engagement_rate ?? 0);
-    }
-
-    current.videos_last_7d += row.videos_last_24h ?? 0;
-    byCustomer[key] = current;
-  }
-
-  const buildStart = nowMs();
-
-  try {
-    const built = buildTeamOverview({
-      members: parsedMembers.rows.map((member) => ({
-        id: member.id,
-        name: member.name,
-        email: member.email,
-        phone: member.phone,
-        role: member.role,
-        is_active: Boolean(member.is_active ?? true),
-        profile_id: member.profile_id,
-        bio: member.bio,
-        city: member.city,
-        avatar_url: member.avatar_url,
-        commission_rate: member.commission_rate,
-        customer_count: member.customer_count ?? null,
-        mrr_ore: member.mrr_ore ?? null,
-        customer_load_level: member.customer_load_level ?? null,
-        customer_load_label: member.customer_load_label ?? null,
-        overloaded: member.overloaded ?? null,
-      })),
-      customers: parsedCustomers.rows.map((customer) => ({
-        id: customer.id,
-        business_name: customer.business_name,
-        monthly_price: customer.monthly_price,
-        status: customer.status,
-        paused_until: customer.paused_until,
-        account_manager_profile_id: customer.account_manager_profile_id,
-        account_manager: customer.account_manager,
-        last_upload_at: customer.last_upload_at,
-      })),
-      activities: parsedActivities.rows,
-      assignments: parsedAssignments.rows,
-      absences,
-      byCustomer,
-      sortMode,
-    });
-
-    const buildDurationMs = nowMs() - buildStart;
-
-    return {
-      ...built,
-      schemaWarnings: mergeWarnings(schemaWarnings, built.schemaWarnings),
-      buildDurationMs,
-    };
-  } catch (error) {
-    const buildDurationMs = nowMs() - buildStart;
-
-    console.error('[admin.team-overview] build failed, returning degraded payload', {
-      error: toBuildWarningCode(error),
-      member_count: parsedMembers.rows.length,
-      customer_count: parsedCustomers.rows.length,
-    });
-
-    return {
-      members: buildFallbackTeamOverview(parsedMembers.rows),
-      asOfDate: formatDateOnly(new Date()),
-      schemaWarnings: mergeWarnings(schemaWarnings, [
-        'team-overview-degraded',
-        `team-overview-build-failed:${toBuildWarningCode(error)}`,
-      ]),
-      buildDurationMs,
-    };
-  }
+  return {
+    members: pulseMappedMembers,
+    asOfDate: built.asOfDate,
+    schemaWarnings: built.schemaWarnings,
+    buildDurationMs: nowMs() - queryStart,
+  };
 }
 
-export async function loadAdminTeamOverview(sortMode: 'standard' | 'anomalous') {
-  return unstable_cache(async () => loadTeamOverview(sortMode), ['admin-team-overview', sortMode], {
-    revalidate: 60,
+export async function loadAdminTeamOverview(
+  sortMode: 'standard' | 'anomalous',
+): Promise<TeamOverviewLoadResult> {
+  return unstable_cache(async () => loadTeamOverview(sortMode), ['admin-team-overview-v2', sortMode], {
+    revalidate: 30,
     tags: [ADMIN_TEAM_TAG],
   })();
 }

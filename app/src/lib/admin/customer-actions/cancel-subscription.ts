@@ -30,6 +30,8 @@ export async function handleCancelSubscription(
       creditAmountOre: input.credit_amount_ore ?? null,
       invoiceId: input.invoice_id ?? null,
       memo: input.memo ?? null,
+      reason: input.reason ?? null,
+      creditSettlementMode: input.credit_settlement_mode ?? null,
       requestId: ctx.requestId,
     });
 
@@ -56,6 +58,8 @@ export async function handleCancelSubscription(
         mode: input.mode,
         credit_amount_ore: input.credit_amount_ore ?? null,
         credit_note_id: result.creditNote?.id ?? null,
+        reason: input.reason ?? null,
+        credit_settlement_mode: input.credit_settlement_mode ?? null,
         idempotency_key: ctx.requestId,
       }),
     });

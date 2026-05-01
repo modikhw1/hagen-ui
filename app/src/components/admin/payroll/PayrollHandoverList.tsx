@@ -8,10 +8,9 @@ import EmptyState from '@/components/admin/EmptyState';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
 import { AdminField } from '@/components/admin/shared/AdminField';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, TextInput } from '@mantine/core';
 import { apiClient } from '@/lib/admin/api-client';
-import { invalidateAdminScopes } from '@/lib/admin/invalidate';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { qk } from '@/lib/admin/queryKeys';
 import type { PayrollResponse } from '@/lib/admin/schemas/payroll';
 import { toast } from 'sonner';
@@ -89,8 +88,10 @@ export function PayrollHandoverList({ periodKey, scheduledChanges }: Props) {
   const [effectiveDate, setEffectiveDate] = useState('');
   const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
+  const refresh = useAdminRefresh();
+
   const refreshViews = async () => {
-    await invalidateAdminScopes(queryClient, ['payroll', 'team']);
+    await refresh([{ type: 'global', scope: 'payroll' }, { type: 'global', scope: 'team' }]);
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: qk.payroll.period(periodKey) }),
       queryClient.invalidateQueries({ queryKey: qk.team.overview() }),
@@ -176,29 +177,31 @@ export function PayrollHandoverList({ periodKey, scheduledChanges }: Props) {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link
+                      <Button
+                        component={Link}
                         href={`/admin/customers/${change.customer_id}`}
-                        className={buttonVariants({ variant: 'outline', size: 'sm' })}
+                        variant="outline"
+                        size="sm"
                       >
                         Visa kund
-                      </Link>
+                      </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
                         onClick={() => openRescheduleDialog(change)}
+                        leftSection={<CalendarRange className="h-4 w-4" />}
                       >
-                        <CalendarRange className="h-4 w-4" />
                         Tidigarelägg
                       </Button>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="text-destructive hover:text-destructive"
+                        color="red"
                         onClick={() => setCancelTarget(change)}
+                        leftSection={<XCircle className="h-4 w-4" />}
                       >
-                        <XCircle className="h-4 w-4" />
                         Avbryt
                       </Button>
                     </div>
@@ -284,12 +287,12 @@ export function PayrollHandoverList({ periodKey, scheduledChanges }: Props) {
           htmlFor="payroll-handover-effective-date"
           hint="Datumet styr när assignment byts i cron-körningen."
         >
-          <Input
+          <TextInput
             id="payroll-handover-effective-date"
             type="date"
             value={effectiveDate}
             onChange={(event) => {
-              setEffectiveDate(event.target.value);
+              setEffectiveDate(event.currentTarget.value);
               setRescheduleError(null);
             }}
           />

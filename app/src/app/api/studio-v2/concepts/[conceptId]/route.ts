@@ -9,16 +9,17 @@ import {
   mergeCustomerConceptContentOverrides,
 } from '@/lib/customer-concept-overrides';
 import { asJsonObject } from '@/lib/database/json';
+import { logInteraction } from '@/lib/interactions';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { normalizeStudioCustomerConcept } from '@/lib/studio/customer-concepts';
 
-export const PATCH = withAuth(async (request, _user, { params }: { params: Promise<{ conceptId: string }> }) => {
+export const PATCH = withAuth(async (request, user, { params }: { params: Promise<{ conceptId: string }> }) => {
   const { conceptId } = await params;
   const body = await request.json();
   const supabase = createSupabaseAdmin();
   const { data: existing, error: existingError } = await supabase
     .from('customer_concepts')
-    .select('id, status, sent_at, content_overrides')
+    .select('id, customer_profile_id, status, sent_at, content_overrides')
     .eq('id', conceptId)
     .single();
 
@@ -29,6 +30,7 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
     );
   }
 
+  const customerId = existing.customer_profile_id;
   const safeBody = (body as Record<string, unknown>) ?? {};
   const hasOwnKey = (key: string) => Object.prototype.hasOwnProperty.call(safeBody, key);
 
@@ -105,6 +107,14 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await logInteraction({
+    type: 'customer_updated' as any,
+    cmProfileId: user.id,
+    customerId,
+    metadata: { concept_id: conceptId, updates: Object.keys(updates) },
+    client: supabase,
+  });
 
   return NextResponse.json({ concept: normalizeStudioCustomerConcept(data as Record<string, unknown>) });
 }, ['admin', 'content_manager']);

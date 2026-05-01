@@ -1,9 +1,10 @@
+// app/src/components/admin/customers/routes/CustomerManualInvoiceModalRoute.tsx
+
 'use client';
 
 import { useRouter } from 'next/navigation';
-import ManualInvoiceModal from '@/components/admin/customers/modals/ManualInvoiceModal';
-import { useCustomerBillingRefresh } from '@/hooks/admin/useAdminRefresh';
 import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
+import { StandaloneInvoiceModal } from '@/components/admin/customers/modals/StandaloneInvoiceModal';
 
 export default function CustomerManualInvoiceModalRoute({
   customerId,
@@ -11,19 +12,20 @@ export default function CustomerManualInvoiceModalRoute({
   customerId: string;
 }) {
   const router = useRouter();
-  const refresh = useCustomerBillingRefresh(customerId);
   const { data: customer } = useCustomerDetail(customerId);
 
+  if (!customer) {
+    return null;
+  }
+
   return (
-    <ManualInvoiceModal
-      open
-      customerId={customerId}
-      customerName={customer?.business_name ?? ''}
-      onClose={() => router.push(`/admin/customers/${customerId}/billing`, { scroll: false })}
-      onCreated={() => {
-        void refresh();
-        router.push(`/admin/customers/${customerId}/billing`, { scroll: false });
+    <StandaloneInvoiceModal
+      open={true}
+      onOpenChange={(open) => {
+        if (!open) router.back();
       }}
+      customerId={customerId}
+      customerName={customer.business_name}
     />
   );
 }

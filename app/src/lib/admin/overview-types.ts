@@ -15,6 +15,8 @@ export type OverviewPayload = {
     upload_schedule: string[] | null;
     concepts_per_week: number | null;
     expected_concepts_per_week?: number | null;
+    planned_concepts_count?: number | null;
+    overdue_7d_concepts_count?: number | null;
     paused_until: string | null;
     onboarding_state: 'invited' | 'cm_ready' | 'live' | 'settled' | null;
     onboarding_state_changed_at: string | null;
@@ -91,6 +93,11 @@ export type OverviewPayload = {
       // cost_30d is always expressed in ore.
       cost_30d: number;
       trend: number[];
+      quota?: {
+        used: number;
+        limit: number;
+        reset_at: string | null;
+      } | null;
     }>;
     totalOre: number;
   };
@@ -161,6 +168,18 @@ export type OverviewPayload = {
     created_by: string | null;
     created_at: string;
     updated_at: string;
+  }>;
+  creditNoteOperations: Array<{
+    id: string;
+    operation_type: string;
+    status: string;
+    requires_attention: boolean;
+    attention_reason: string | null;
+    error_message: string | null;
+    source_invoice_id: string;
+    customer_profile_id: string;
+    amount_ore: number;
+    created_at: string;
   }>;
   attentionFeedSeenAt?: string | null;
 };

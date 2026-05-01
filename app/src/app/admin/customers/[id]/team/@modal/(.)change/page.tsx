@@ -1,10 +1,5 @@
-import CustomerChangeCMRoute from '@/components/admin/customers/routes/CustomerChangeCMRoute';
-
-export default async function CustomerChangeCMModalPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+import { redirect } from 'next/navigation';
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <CustomerChangeCMRoute customerId={id} />;
+  redirect(`/admin/customers/${id}/pulse`);
 }

@@ -15,6 +15,9 @@ export default function TeamMemberHistoryList({
       <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         {teamCopy.history}
       </div>
+      <div className="mb-3 text-xs text-muted-foreground">
+        Visar senaste byten, schemalagda handovers och noter som påverkar övertagandet.
+      </div>
       <div className="space-y-2">
         {assignmentHistory.slice(0, 6).map((assignment) => (
           <div

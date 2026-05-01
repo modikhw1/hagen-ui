@@ -10,18 +10,20 @@ import { parseDto } from '@/lib/admin/dtos/parse';
 import { qk } from '@/lib/admin/queryKeys';
 
 export function useCustomerDetail(id: string) {
-  return useQuery({
+  return useQuery<CustomerDetail, Error, CustomerDetail>({
     queryKey: qk.customers.detail(id),
     enabled: Boolean(id) && id !== 'new',
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     queryFn: async ({ signal }): Promise<CustomerDetail> => {
       const payload = await apiClient.get(`/api/admin/customers/${id}`, { signal });
       return (await parseDto(customerDetailPayloadSchema, payload, {
-        name: 'customerDetailPayload',
+        name: 'customerDetail',
         path: `/api/admin/customers/${id}`,
       })).customer;
     },
-    staleTime: 60_000,
-    refetchOnWindowFocus: true,
   });
 }
 

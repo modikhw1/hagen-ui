@@ -76,9 +76,9 @@ export const PATCH = withAuth(async (request: NextRequest, user, { params }: Rou
     metadata: {
       from: existingDemo.status,
       to: nextStatus,
+      beforeState: existingDemo as Record<string, unknown>,
+      afterState: demo as Record<string, unknown>,
     },
-    beforeState: existingDemo as Record<string, unknown>,
-    afterState: demo as Record<string, unknown>,
   });
 
   return NextResponse.json({ demo });

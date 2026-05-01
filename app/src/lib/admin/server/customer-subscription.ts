@@ -1,3 +1,4 @@
+// app/src/lib/admin/server/customer-subscription.ts
 import 'server-only';
 
 import { unstable_cache } from 'next/cache';
@@ -23,20 +24,12 @@ export async function fetchCustomerDetailServer(id: string): Promise<CustomerDet
       const payload = await loadCustomerDetail({
         supabaseAdmin: createSupabaseAdmin(),
         id,
-        user: {
-          id: 'admin-rsc',
-          is_admin: true,
-          role: 'admin',
-        },
+        user: { id: 'admin-rsc', is_admin: true, role: 'admin' },
       });
-
       return customerDetailPayloadSchema.parse(payload).customer;
     },
-    ['admin-customer-detail-rsc', id],
-    {
-      revalidate: 60,
-      tags: [adminCustomerTag(id)],
-    },
+    ['admin-customer-detail-rsc-v2', id],
+    { revalidate: 30, tags: [adminCustomerTag(id)] },
   )();
 }
 
@@ -44,12 +37,13 @@ export async function fetchCustomerSubscriptionServer(
   id: string,
   stripeSubscriptionId: string | null,
 ): Promise<CustomerSubscription | null> {
+  if (!stripeSubscriptionId) return null;
+
+  // Cache-key inkluderar INTE stripeSubscriptionId — det är inte sökkriterium
+  // utan en filter (vi tar senaste raden för kunden + sub-id ändå). Tag-driven
+  // invalidation hanterar bytet.
   return unstable_cache(
     async () => {
-      if (!stripeSubscriptionId) {
-        return null;
-      }
-
       const supabaseAdmin = createSupabaseAdmin();
       const { data: subscription, error } = await supabaseAdmin
         .from('subscriptions')
@@ -62,25 +56,22 @@ export async function fetchCustomerSubscriptionServer(
         .limit(1)
         .maybeSingle();
 
-      if (error) {
-        throw new Error(error.message || 'Kunde inte ladda abonnemanget');
-      }
+      if (error) throw new Error(error.message || 'Kunde inte ladda abonnemanget');
+      if (!subscription) return null;
 
       return customerSubscriptionPayloadSchema.parse({
-        subscription: subscription
-          ? {
-              stripe_subscription_id: subscription.stripe_subscription_id,
-              status: subscription.status ?? '',
-              cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
-              current_period_end: subscription.current_period_end,
-              current_period_start: subscription.current_period_start,
-            }
-          : null,
+        subscription: {
+          stripe_subscription_id: subscription.stripe_subscription_id,
+          status: subscription.status ?? '',
+          cancel_at_period_end: Boolean(subscription.cancel_at_period_end),
+          current_period_end: subscription.current_period_end,
+          current_period_start: subscription.current_period_start,
+        },
       }).subscription;
     },
-    ['admin-customer-subscription-rsc', id, stripeSubscriptionId ?? 'none'],
+    ['admin-customer-subscription-rsc-v2', id],
     {
-      revalidate: 60,
+      revalidate: 30,
       tags: [
         adminCustomerTag(id),
         adminCustomerBillingTag(id),
@@ -88,4 +79,14 @@ export async function fetchCustomerSubscriptionServer(
       ],
     },
   )();
+}
+
+// NEW: helper som kallas från RSC subscription-page för att hämta båda parallellt
+export async function fetchCustomerWithSubscription(id: string) {
+  const customer = await fetchCustomerDetailServer(id);
+  const subscription = await fetchCustomerSubscriptionServer(
+    id,
+    customer.stripe_subscription_id,
+  );
+  return { customer, subscription };
 }

@@ -51,6 +51,7 @@ describe('buildCustomerTikTokStats', () => {
           comments: 7,
           shares: 4,
           share_url: 'https://example.com/video/1',
+          description: 'Example video',
           cover_image_url: null,
         },
       ],

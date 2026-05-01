@@ -130,8 +130,9 @@ export function buildCustomerPayload(
       latest_planned_publish_date:
         options?.bufferRow?.latest_planned_publish_date ?? null,
       last_published_at: options?.bufferRow?.last_published_at ?? null,
-      attention_snoozes: options?.attentionSnoozes ?? [],
-      coverage_absences: options?.coverageAbsences ?? [],
+      // Ensure these are ALWAYS arrays, even if the spread profile had them as null/undefined
+      attention_snoozes: Array.isArray(options?.attentionSnoozes) ? options.attentionSnoozes : [],
+      coverage_absences: Array.isArray(options?.coverageAbsences) ? options.coverageAbsences : [],
     },
   };
 }
@@ -213,14 +214,23 @@ export async function loadCustomerDetail(params: {
   };
 }) {
   const { supabaseAdmin, id, user } = params;
-  const rpcPayload = await loadCustomerDetailFromRpc(supabaseAdmin, id);
-  const fallbackEnabled = process.env.ADMIN_DETAIL_FALLBACK === '1';
+  
+  // Try RPC first
+  let rpcPayload = null;
+  let rpcError = null;
+  try {
+    rpcPayload = await loadCustomerDetailFromRpc(supabaseAdmin, id);
+  } catch (err) {
+    rpcError = err;
+    console.error('[admin.customer-detail] RPC failed:', err);
+  }
+
+  // Fallback if RPC failed or returned nothing
   const payload =
-    rpcPayload ??
-    (fallbackEnabled ? await loadCustomerDetailFromRelations(supabaseAdmin, id) : null);
+    rpcPayload ?? (await loadCustomerDetailFromRelations(supabaseAdmin, id));
 
   if (!payload) {
-    throw new Error(SERVER_COPY.fetchCustomerFailed);
+    throw rpcError || new Error(SERVER_COPY.fetchCustomerFailed);
   }
 
   if (!rpcPayload) {
@@ -261,13 +271,23 @@ export async function loadAdminCustomerHeader(id: string) {
       const supabaseAdmin = createSupabaseAdmin();
       const { data, error } = await supabaseAdmin
         .from('customer_profiles')
-        .select('id, business_name, contact_email, customer_contact_name, tiktok_handle, status, monthly_price, account_manager, next_invoice_date, created_at')
+        .select(`
+          id, business_name, contact_email, customer_contact_name, 
+          tiktok_handle, status, monthly_price, account_manager, 
+          next_invoice_date, created_at, onboarding_state,
+          discount_type, discount_value, discount_ends_at,
+          subscriptions (status, current_period_end)
+        `)
         .eq('id', id)
         .single();
 
       if (error) {
         throw new Error(error.message || SERVER_COPY.fetchCustomerHeaderFailed);
       }
+
+      // Hämta det mest relevanta datumet (Stripe först, sedan profil)
+      const activeSub = (data.subscriptions as any[])?.find(s => s.status === 'active' || s.status === 'trialing');
+      const nextInvoiceDate = activeSub?.current_period_end || data.next_invoice_date;
 
       return {
         id: data.id,
@@ -276,10 +296,16 @@ export async function loadAdminCustomerHeader(id: string) {
         customer_contact_name: data.customer_contact_name ?? null,
         tiktok_handle: data.tiktok_handle ?? null,
         status: data.status ?? 'pending',
-        monthly_price: data.monthly_price ?? null,
+        monthly_price_ore: Math.round((data.monthly_price ?? 0) * 100),
         account_manager_name: data.account_manager ?? null,
-        next_invoice_date: data.next_invoice_date ?? null,
+        next_invoice_date: nextInvoiceDate,
         created_at: data.created_at ?? '',
+        onboarding_state: data.onboarding_state ?? null,
+        discount: data.discount_type && data.discount_type !== 'none' ? {
+          type: data.discount_type,
+          value: data.discount_value,
+          ends_at: data.discount_ends_at
+        } : null
       };
     },
     ['admin-customer-header-by-id', id],

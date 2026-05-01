@@ -13,11 +13,9 @@ export async function recordAdminAction(
     entityType: string;
     entityId: string | null;
     metadata?: Record<string, unknown>;
-    beforeState?: Record<string, unknown> | null;
-    afterState?: Record<string, unknown> | null;
   },
-) {
-  return recordAuditLog(supabase, {
+): Promise<void> {
+  await recordAuditLog(supabase, {
     actorUserId: args.actorId,
     actorEmail: args.actorEmail,
     actorRole: args.actorRole,
@@ -25,7 +23,5 @@ export async function recordAdminAction(
     entityType: args.entityType,
     entityId: args.entityId,
     metadata: args.metadata ?? null,
-    beforeState: args.beforeState ?? null,
-    afterState: args.afterState ?? null,
   });
 }

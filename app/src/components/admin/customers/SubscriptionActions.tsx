@@ -51,7 +51,8 @@ export default function SubscriptionActions({
   });
 
   const { data: subscription } = useCustomerSubscription(customerId);
-  const { data: invoices = [] } = useCustomerInvoices(customerId);
+  const { data: invoicesData = { invoices: [], operations: [] } } = useCustomerInvoices(customerId);
+  const { invoices } = invoicesData;
 
   const latestPaidInvoice = useMemo(
     () => invoices.find((invoice) => invoice.status === 'paid') ?? null,

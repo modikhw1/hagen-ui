@@ -9,7 +9,7 @@ import {
   type NotificationsUnreadCountDTO,
   type NotificationsDTO,
 } from '@/lib/admin/dtos/overview';
-import { invalidateAdminScopes } from '@/lib/admin/invalidate';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { qk } from '@/lib/admin/queryKeys';
 
 export function useNotifications(options: { unread?: boolean; limit?: number } = {}) {
@@ -57,24 +57,24 @@ export function useNotificationsUnreadCount() {
 }
 
 export function useMarkNotificationsSeen() {
-  const queryClient = useQueryClient();
+  const refresh = useAdminRefresh();
 
   return useMutation({
     mutationFn: async (surface: 'overview' | 'notifications' = 'notifications') =>
       apiClient.post('/api/admin/notifications/mark-seen', { surface }),
     onSuccess: async () => {
-      await invalidateAdminScopes(queryClient, ['notifications']);
+      await refresh([{ type: 'global', scope: 'notifications' }]);
     },
   });
 }
 
 export function useMarkNotificationRead() {
-  const queryClient = useQueryClient();
+  const refresh = useAdminRefresh();
 
   return useMutation({
     mutationFn: async (id: string) => apiClient.post(`/api/admin/notifications/${id}/read`, {}),
     onSuccess: async () => {
-      await invalidateAdminScopes(queryClient, ['notifications']);
+      await refresh([{ type: 'global', scope: 'notifications' }]);
     },
   });
 }

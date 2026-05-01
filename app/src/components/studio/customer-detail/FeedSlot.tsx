@@ -130,6 +130,12 @@ function FeedSlot({
     if (!dateValue) return null;
     return new Date(dateValue).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
   })();
+  const historySourceLabel = (() => {
+    if (type !== 'history') return null;
+    if (concept?.origin.history_source === 'tiktok_profile') return 'TikTok ground truth';
+    if (concept?.origin.history_source === 'hagen_library') return 'Hagen-import';
+    return null;
+  })();
   const collaborationTitle = concept
     ? getStudioCustomerConceptDisplayTitle(
         concept,
@@ -1122,6 +1128,28 @@ function FeedSlot({
                 }}
               >
                 {historyDateLabel}
+              </div>
+            )}
+            {historySourceLabel && (
+              <div
+                style={{
+                  alignSelf: 'flex-start',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  padding: '3px 6px',
+                  borderRadius: 999,
+                  background: hasHistoryThumbnail ? 'rgba(255,255,255,0.18)' : 'rgba(74,47,24,0.08)',
+                  color: hasHistoryThumbnail ? '#fff' : LeTrendColors.textSecondary,
+                  border: hasHistoryThumbnail ? '1px solid rgba(255,255,255,0.15)' : '1px solid rgba(74,47,24,0.08)',
+                  textShadow: hasHistoryThumbnail ? '0 1px 3px rgba(0,0,0,0.6)' : undefined,
+                }}
+              >
+                {historySourceLabel}
               </div>
             )}
             {concept.row_kind === 'imported_history' && linkedHistoryTitle && (

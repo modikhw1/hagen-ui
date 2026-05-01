@@ -31,6 +31,12 @@ export interface NormalizedHistoryClip {
   tiktok_comments: number | null;
   published_at: string | null;
   description: string | null;
+  history_source?: 'tiktok_profile' | 'hagen_library' | null;
+  observed_profile_handle?: string | null;
+  provider_name?: string | null;
+  provider_video_id?: string | null;
+  first_observed_at?: string | null;
+  last_observed_at?: string | null;
 }
 
 export interface Scraper7Video {
@@ -73,6 +79,56 @@ export function normalizeVideo(v: Scraper7Video, handle: string): NormalizedHist
     tiktok_comments: v.comment_count ?? null,
     published_at: publishedAt,
     description: typeof v.title === 'string' && v.title.trim() ? v.title.trim() : null,
+    history_source: 'tiktok_profile',
+    observed_profile_handle: handle,
+    provider_name: 'rapidapi:tiktok-scraper7',
+    provider_video_id: v.video_id,
+  };
+}
+
+export interface Scraper7User {
+  stats?: {
+    followerCount?: number;
+    followingCount?: number;
+    heartCount?: number;
+    videoCount?: number;
+    diggCount?: number;
+  };
+  user?: {
+    nickname?: string;
+    avatarMedium?: string;
+    signature?: string;
+  };
+}
+
+export async function fetchProviderUser(
+  handle: string,
+  apiKey: string
+): Promise<{ stats: Scraper7User['stats']; user: Scraper7User['user']; error?: string }> {
+  const RAPIDAPI_HOST = 'tiktok-scraper7.p.rapidapi.com';
+  const url = new URL(`https://${RAPIDAPI_HOST}/user/info`);
+  url.searchParams.set('unique_id', handle);
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      'x-rapidapi-key': apiKey,
+      'x-rapidapi-host': RAPIDAPI_HOST,
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!res.ok) {
+    return { stats: undefined, user: undefined, error: `tiktok-scraper7 error: ${res.status}` };
+  }
+
+  const data = await res.json();
+  if (data.code !== 0) {
+    return { stats: undefined, user: undefined, error: `tiktok-scraper7 code: ${data.code}` };
+  }
+
+  return {
+    stats: data.data?.stats,
+    user: data.data?.user,
   };
 }
 

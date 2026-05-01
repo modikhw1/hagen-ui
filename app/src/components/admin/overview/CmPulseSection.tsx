@@ -6,8 +6,9 @@ import CmPulseRow from '@/components/admin/CmPulseRow';
 import { CM_PREVIEW_COUNT } from '@/lib/admin-derive/constants';
 import { sortCmRows } from '@/lib/admin-derive/cm-pulse';
 import type { OverviewDerivedPayload } from '@/lib/admin/overview-types';
-import { Filter } from 'lucide-react';
+import { ListFilter, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Menu, UnstyledButton } from '@mantine/core';
 
 export default function CmPulseSection({
   rows,
@@ -26,14 +27,21 @@ export default function CmPulseSection({
   }, [sortMode]);
 
   const expanded = searchParams?.get('cm') === 'all';
+  
+  const updateSortMode = (nextMode: 'standard' | 'lowest_activity') => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    if (nextMode === 'standard') {
+      params.delete('sort');
+    } else {
+      params.set('sort', nextMode);
+    }
+    setCurrentSortMode(nextMode);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
   const sortedRows = useMemo(() => {
-    const rowByCmId = new Map(rows.map((row) => [row.aggregate.cmId, row]));
-    return sortCmRows(
-      rows.map((row) => row.aggregate),
-      currentSortMode,
-    )
-      .map((aggregate) => rowByCmId.get(aggregate.cmId))
-      .filter((row): row is OverviewDerivedPayload['cmPulse'][number] => Boolean(row));
+    // We sort the existing rows array which already contains { member, aggregate }
+    return sortCmRows(rows, currentSortMode);
   }, [currentSortMode, rows]);
 
   const visibleRows = expanded ? sortedRows : sortedRows.slice(0, CM_PREVIEW_COUNT);
@@ -56,17 +64,40 @@ export default function CmPulseSection({
           <h2 className="text-sm font-semibold text-foreground uppercase tracking-wider">CM-puls</h2>
           <p className="text-xs text-muted-foreground">Arbetsbelastning senaste 7 dagarna</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <select
-            value={currentSortMode}
-            onChange={(e) => setCurrentSortMode(e.target.value as any)}
-            className="bg-transparent text-xs font-medium text-muted-foreground focus:outline-none hover:text-foreground cursor-pointer"
-          >
-            <option value="standard">Sortera: Standard</option>
-            <option value="lowest_activity">Sortera: Lägst aktivitet</option>
-          </select>
-        </div>
+        
+        <Menu position="bottom-end" shadow="md" width={220}>
+          <Menu.Target>
+            <UnstyledButton className="group flex items-center gap-2 rounded-md px-2 py-1 transition-colors hover:bg-secondary/50">
+              <ListFilter className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-foreground" />
+              <span className="text-xs font-medium text-muted-foreground transition-colors group-hover:text-foreground">
+                {currentSortMode === 'standard' ? 'Sortering: Operativ status' : 'Sortering: Lägst aktivitet'}
+              </span>
+              <ChevronDown className="h-3 w-3 text-muted-foreground/50 transition-colors group-hover:text-foreground" />
+            </UnstyledButton>
+          </Menu.Target>
+
+          <Menu.Dropdown className="border-border bg-popover/95 backdrop-blur-sm">
+            <Menu.Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Sorteringsalternativ</Menu.Label>
+            <Menu.Item 
+              onClick={() => updateSortMode('standard')}
+              className={cn(
+                "text-xs",
+                currentSortMode === 'standard' && "bg-accent font-semibold text-accent-foreground"
+              )}
+            >
+              Operativ status (Högst prio)
+            </Menu.Item>
+            <Menu.Item 
+              onClick={() => updateSortMode('lowest_activity')}
+              className={cn(
+                "text-xs",
+                currentSortMode === 'lowest_activity' && "bg-accent font-semibold text-accent-foreground"
+              )}
+            >
+              Lägst aktivitet
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
       </div>
 
       <div className="space-y-2">

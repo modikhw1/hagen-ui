@@ -68,9 +68,9 @@ export const PATCH = withAuth(async (request, user) => {
       entityId: null,
       metadata: {
         changed_fields: changedFields,
+        beforeState: before.settings as Record<string, unknown>,
+        afterState: after.settings as Record<string, unknown>,
       },
-      beforeState: before.settings as Record<string, unknown>,
-      afterState: after.settings as Record<string, unknown>,
     });
 
     const response = jsonOk(adminSettingsResponseSchema.parse(after));

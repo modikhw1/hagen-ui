@@ -57,6 +57,8 @@ export default function BillingPageRoute() {
         { key: 'active', label: 'Aktiva' },
         { key: 'past_due', label: 'Förfallna' },
         { key: 'trialing', label: 'Trial' },
+        { key: 'paused', label: 'Pausade' },
+        { key: 'canceled', label: 'Avslutade' },
       ];
 
   return (

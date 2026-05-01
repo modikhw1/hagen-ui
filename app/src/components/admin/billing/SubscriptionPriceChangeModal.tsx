@@ -5,17 +5,8 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { changeSubscriptionPrice, previewSubscriptionPrice } from '@/app/admin/_actions/billing';
 import { Metric, ModeButton } from '@/components/admin/_primitives';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { TextInput, Table } from '@mantine/core';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { parseMonthlyPriceSekInput } from '@/lib/admin/billing';
 import { logAdminClientError } from '@/lib/admin/logger';
 import { formatPriceSEK, formatSek } from '@/lib/admin/money';
@@ -217,9 +208,9 @@ export default function SubscriptionPriceChangeModal({
           <div className="space-y-1.5">
             <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Nytt månadspris</label>
             <div className="relative">
-              <Input
+              <TextInput
                 value={monthlyPrice}
-                onChange={(event) => setMonthlyPrice(event.target.value)}
+                onChange={(event) => setMonthlyPrice(event.currentTarget.value)}
                 inputMode="numeric"
                 className="pr-8"
               />
@@ -300,20 +291,20 @@ export default function SubscriptionPriceChangeModal({
 
               <div className="overflow-hidden rounded-lg border border-border bg-card">
                 <Table>
-                  <TableHeader className="bg-secondary/40">
-                    <TableRow>
-                      <TableHead className="h-8 text-[10px] font-bold uppercase">Beskrivning</TableHead>
-                      <TableHead className="h-8 text-right text-[10px] font-bold uppercase">Belopp</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+                  <Table.Thead className="bg-secondary/40">
+                    <Table.Tr>
+                      <Table.Th className="h-8 text-[10px] font-bold uppercase">Beskrivning</Table.Th>
+                      <Table.Th className="h-8 text-right text-[10px] font-bold uppercase">Belopp</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
                     {preview.line_items.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="py-2 text-[11px]">{item.description}</TableCell>
-                        <TableCell className="py-2 text-right text-[11px] font-bold">{formatSek(item.amount_ore)}</TableCell>
-                      </TableRow>
+                      <Table.Tr key={item.id}>
+                        <Table.Td className="py-2 text-[11px]">{item.description}</Table.Td>
+                        <Table.Td className="py-2 text-right text-[11px] font-bold">{formatSek(item.amount_ore)}</Table.Td>
+                      </Table.Tr>
                     ))}
-                  </TableBody>
+                  </Table.Tbody>
                 </Table>
               </div>
             </div>

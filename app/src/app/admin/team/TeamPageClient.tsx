@@ -1,20 +1,21 @@
+// app/src/app/admin/team/TeamPageClient.tsx
 'use client';
 
 import Link from 'next/link';
-import { Plus, Users } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Users } from 'lucide-react';
+import { useCallback, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import EmptyState from '@/components/admin/EmptyState';
-import AddCMDialog from '@/components/admin/team/AddCMDialog';
+import { AddCMDialog } from '@/components/admin/team/AddCMDialog';
 import CMAbsenceModal from '@/components/admin/team/CMAbsenceModal';
-import CMEditDialog from '@/components/admin/team/CMEditDialog';
 import TeamMemberCard from '@/components/admin/team/TeamMemberCard';
 import TeamMemberCardSkeleton from '@/components/admin/team/TeamMemberCardSkeleton';
 import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { Button } from '@mantine/core';
 import { useEndAbsence } from '@/hooks/admin/useEndAbsence';
 import { useFocusedTeamMember } from '@/hooks/admin/useFocusedTeamMember';
 import { useTeam, type TeamMemberView } from '@/hooks/admin/useTeam';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { teamCopy } from '@/lib/admin/copy/team';
 
 export default function TeamPageClient({
@@ -29,37 +30,32 @@ export default function TeamPageClient({
   const pathname = usePathname() ?? '/admin/team';
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [selected, setSelected] = useState<TeamMemberView | null>(null);
+
   const [absenceTarget, setAbsenceTarget] = useState<TeamMemberView | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
 
   const focusedMemberId = searchParams?.get('focus') ?? initialFocusedMemberId;
-  const sortMode = (searchParams?.get('sort') ?? initialSortMode) === 'anomalous' ? 'anomalous' : 'standard';
+  const sortMode =
+    (searchParams?.get('sort') ?? initialSortMode) === 'anomalous' ? 'anomalous' : 'standard';
 
-  const { data: team = initialTeam, isLoading, refetch } = useTeam(sortMode, {
+  const { data: team = initialTeam, isLoading } = useTeam(sortMode, {
     initialData: initialTeam,
   });
-  
+
   const endAbsence = useEndAbsence();
-  useFocusedTeamMember(focusedMemberId, isLoading);
+  useFocusedTeamMember(focusedMemberId, false);
 
-  const activeCmOptions = useMemo(
-    () =>
-      team
-        .filter((member) => member.is_active)
-        .map((member) => ({
-          id: member.id,
-          name: member.name,
-          is_active: member.is_active,
-        })),
-    [team],
-  );
-
-  const toggleSort = () => {
+  const toggleSort = useCallback(() => {
     const params = new URLSearchParams(searchParams?.toString() ?? '');
     params.set('sort', sortMode === 'standard' ? 'anomalous' : 'standard');
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-  };
+  }, [pathname, router, searchParams, sortMode]);
+
+  const refresh = useAdminRefresh();
+
+  const handleAbsenceSaved = useCallback(async () => {
+    setAbsenceTarget(null);
+    await refresh(['team', 'customers']);
+  }, [refresh]);
 
   return (
     <div className="space-y-6">
@@ -68,28 +64,23 @@ export default function TeamPageClient({
         subtitle={teamCopy.subtitle}
         actions={
           <>
-            <Link
-              href="/admin/payroll"
-              className={buttonVariants({ variant: 'outline', size: 'sm' })}
-            >
-              {teamCopy.payroll}
-            </Link>
             <Button
+              component={Link}
+              href="/admin/payroll"
               variant="outline"
               size="sm"
-              onClick={toggleSort}
             >
+              {teamCopy.payroll}
+            </Button>
+            <Button variant="outline" size="sm" onClick={toggleSort}>
               {sortMode === 'anomalous' ? teamCopy.sortStandard : teamCopy.sortAnomalous}
             </Button>
-            <Button size="sm" onClick={() => setShowAdd(true)}>
-              <Plus className="h-4 w-4" />
-              {teamCopy.addCm}
-            </Button>
+            <AddCMDialog />
           </>
         }
       />
 
-      {isLoading ? (
+      {isLoading && team.length === 0 ? (
         <div className="space-y-4">
           <TeamMemberCardSkeleton />
           <TeamMemberCardSkeleton />
@@ -98,10 +89,7 @@ export default function TeamPageClient({
       ) : team.length === 0 ? (
         <div className="space-y-4">
           <EmptyState icon={Users} title={teamCopy.emptyTitle} hint={teamCopy.emptyHint} />
-          <Button size="sm" onClick={() => setShowAdd(true)} className="w-fit">
-            <Plus className="h-4 w-4" />
-            {teamCopy.addCm}
-          </Button>
+          <AddCMDialog />
         </div>
       ) : (
         <div className="space-y-4">
@@ -111,34 +99,11 @@ export default function TeamPageClient({
               member={member}
               focused={focusedMemberId === member.id}
               onSetAbsence={setAbsenceTarget}
-              onEdit={setSelected}
               onClearAbsence={(absenceId) => void endAbsence.mutateAsync(absenceId)}
             />
           ))}
         </div>
       )}
-
-      <AddCMDialog
-        open={showAdd}
-        onClose={() => setShowAdd(false)}
-        onSaved={async () => {
-          setShowAdd(false);
-          await refetch();
-        }}
-      />
-
-      {selected ? (
-        <CMEditDialog
-          open={Boolean(selected)}
-          cm={selected}
-          allCMs={activeCmOptions}
-          onClose={() => setSelected(null)}
-          onSaved={async () => {
-            setSelected(null);
-            await refetch();
-          }}
-        />
-      ) : null}
 
       {absenceTarget ? (
         <CMAbsenceModal
@@ -146,9 +111,7 @@ export default function TeamPageClient({
           cm={absenceTarget}
           team={team}
           onClose={() => setAbsenceTarget(null)}
-          onSaved={() => {
-            setAbsenceTarget(null);
-          }}
+          onSaved={handleAbsenceSaved}
         />
       ) : null}
     </div>

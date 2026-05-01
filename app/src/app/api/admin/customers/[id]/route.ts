@@ -44,18 +44,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
         logContext.entityId = id;
         logContext.supabaseAdmin = supabaseAdmin;
 
-        const limitedResponse = await enforceAdminReadRateLimit({
-          supabaseAdmin,
-          actorUserId: user.id,
-          actorEmail: user.email,
-          actorRole: user.role,
-          route: request.nextUrl.pathname,
-          action: 'customer_detail_get',
-        });
-        if (limitedResponse) {
-          return limitedResponse;
-        }
-
         return jsonOk(await loadCustomerDetail({ supabaseAdmin, id, user }));
       } catch (error) {
         return buildRouteErrorResponse(error);

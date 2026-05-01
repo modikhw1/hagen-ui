@@ -4,13 +4,7 @@ import { useMemo, useState } from 'react';
 import { AuditLogFilters } from '@/components/admin/audit/AuditLogFilters';
 import { AuditLogTable } from '@/components/admin/audit/AuditLogTable';
 import { SchemaWarningBanner } from '@/components/admin/shared/SchemaWarningBanner';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, Text } from '@mantine/core';
 import { useAuditLog } from '@/hooks/admin/useAuditLog';
 import { useUrlState } from '@/hooks/useUrlState';
 import { todayDateInput } from '@/lib/admin/time';
@@ -109,8 +103,10 @@ export function AuditLogScreen({
         actions={
           <div className="w-[200px]">
             <Select
+              placeholder="Exportera logg"
               value={exportMode}
-              onValueChange={(next) => {
+              onChange={(next) => {
+                if (!next) return;
                 setExportMode(next);
                 const today = todayDateInput();
                 const filteredCsvUrl = buildAuditExportUrl({
@@ -138,16 +134,12 @@ export function AuditLogScreen({
                 window.location.assign(target);
                 queueMicrotask(() => setExportMode(''));
               }}
-            >
-              <SelectTrigger className="h-9 bg-card">
-                <SelectValue placeholder="Exportera logg" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="csv_filtered">CSV (filtrerade)</SelectItem>
-                <SelectItem value="csv_today">CSV (alla idag)</SelectItem>
-                <SelectItem value="json_filtered">JSON (filtrerade)</SelectItem>
-              </SelectContent>
-            </Select>
+              data={[
+                { value: 'csv_filtered', label: 'CSV (filtrerade)' },
+                { value: 'csv_today', label: 'CSV (alla idag)' },
+                { value: 'json_filtered', label: 'JSON (filtrerade)' },
+              ]}
+            />
           </div>
         }
       />

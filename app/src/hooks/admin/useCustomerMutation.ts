@@ -235,9 +235,14 @@ export function useCustomerMutation<TAction extends CustomerMutationAction>(
             return current;
           }
 
+          const customers = current.customers;
+          if (!Array.isArray(customers)) {
+            return current;
+          }
+
           return {
             ...current,
-            customers: current.customers.map((row) =>
+            customers: customers.map((row) =>
               patchCustomerListRow(row, customerId, action, input),
             ),
           };

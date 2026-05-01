@@ -74,6 +74,17 @@ export interface CustomerConceptResultBoundary {
   tiktok_last_synced_at: string | null;
 }
 
+export type CustomerConceptHistorySource = 'tiktok_profile' | 'hagen_library';
+
+export interface CustomerConceptOriginBoundary {
+  history_source: CustomerConceptHistorySource | null;
+  observed_profile_handle: string | null;
+  provider_name: string | null;
+  provider_video_id: string | null;
+  first_observed_at: string | null;
+  last_observed_at: string | null;
+}
+
 export interface CustomerConceptReconciliationBoundary {
   linked_customer_concept_id: string | null;
   linked_by_cm_id: string | null;
@@ -169,6 +180,7 @@ interface CustomerConceptBase {
   content: CustomerConceptContentBoundary;
   placement: CustomerConceptPlacementBoundary;
   result: CustomerConceptResultBoundary;
+  origin: CustomerConceptOriginBoundary;
   reconciliation: CustomerConceptReconciliationBoundary;
   markers: CustomerConceptMarkerBoundary;
 }
@@ -342,10 +354,65 @@ export interface CustomerProfile {
   // TikTok profile identity
   tiktok_profile_url?: string | null;   // canonical: full profile URL (e.g. https://www.tiktok.com/@brand)
   tiktok_handle?: string | null;        // derived display value, normalized from tiktok_profile_url
+  tiktok_profile_pic_url?: string | null;
   last_history_sync_at?: string | null;
+  last_upload_at?: string | null;
   // Operation lock: non-null = mark-produced is in progress; frontend shows badge if >60s old
   pending_history_advance_at?: string | null;
   operation_lock_until?: string | null;
+  tiktok_runtime?: {
+    profile: {
+      id: string;
+      tiktok_profile_url: string | null;
+      tiktok_handle: string | null;
+      tiktok_profile_pic_url: string | null;
+      last_history_sync_at: string | null;
+      pending_history_advance_at: string | null;
+      last_upload_at: string | null;
+    } | null;
+    stats: {
+      followers: number;
+      follower_delta_7d: number;
+      follower_delta_30d: number;
+      avg_views_7d: number;
+      avg_views_30d: number;
+      engagement_rate: number;
+      total_videos: number;
+      videos_last_7d: number;
+      follower_history_30d: number[];
+      views_history_30d: number[];
+      snapshot_dates_30d: string[];
+      recent_videos: Array<{
+        video_id: string;
+        uploaded_at: string;
+        views: number;
+        likes: number;
+        comments: number;
+        shares: number;
+        share_url: string | null;
+        cover_image_url: string | null;
+      }>;
+      window_end_iso: string;
+    } | null;
+    stats_history_30d: Array<{
+      snapshot_date: string;
+      followers: number;
+      total_videos: number;
+      videos_last_24h: number;
+      total_views_24h: number;
+      engagement_rate: number;
+    }>;
+    recent_videos_30d: Array<{
+      video_id: string;
+      uploaded_at: string;
+      views: number;
+      likes: number;
+      comments: number;
+      shares: number;
+      share_url: string | null;
+      cover_image_url: string | null;
+    }>;
+  } | null;
 
   created_at: string | null;
   updated_at?: string | null;
@@ -386,6 +453,46 @@ export interface CustomerCard {
     color: string;
     label: string;
   };
+}
+
+export interface StudioCustomerGamePlanSummary {
+  title?: string;
+  goals?: string[];
+}
+
+export interface StudioCustomerConceptStats {
+  draft: number;
+  sent: number;
+  produced: number;
+}
+
+export interface StudioCustomerTikTokSummary {
+  followers: number;
+  videos_last_7d: number;
+  engagement_rate: number;
+  follower_delta_7d: number;
+  follower_delta_30d: number;
+  total_videos: number;
+  window_end_iso: string | null;
+}
+
+export interface StudioCustomerListItem {
+  id: string;
+  business_name: string;
+  contact_email: string | null;
+  customer_contact_name: string | null;
+  account_manager: string | null;
+  account_manager_profile_id: string | null;
+  monthly_price: number | null;
+  status: 'pending' | 'active' | 'archived' | 'invited' | 'agreed';
+  created_at: string | null;
+  game_plan: StudioCustomerGamePlanSummary | null;
+  tiktok_handle: string | null;
+  last_history_sync_at: string | null;
+  tiktok_summary: StudioCustomerTikTokSummary | null;
+  concept_stats: StudioCustomerConceptStats;
+  last_email_at: string | null;
+  active_signal_count: number;
 }
 
 /**

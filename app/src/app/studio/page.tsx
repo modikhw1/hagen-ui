@@ -3,27 +3,12 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { normalizeStudioCustomerStatus } from '@/lib/studio/customer-status';
 import { buildStudioWorkspaceHref } from '@/lib/studio/navigation';
-import { supabase } from '@/lib/supabase/client';
+import type { StudioCustomerListItem } from '@/types/studio-v2';
 
-interface CustomerRow {
-  id: string;
-  business_name: string;
-  account_manager?: string | null;
-  account_manager_profile_id?: string | null;
-  status: string;
-}
-
-interface ConceptStats {
-  draft: number;
-  sent: number;
-  produced: number;
-}
-
-interface CustomerWithStats extends CustomerRow {
-  stats: ConceptStats;
-}
+type CustomerWithStats = StudioCustomerListItem & {
+  stats: StudioCustomerListItem['concept_stats'];
+};
 
 interface CmWorkloadRow {
   name: string;
@@ -35,99 +20,64 @@ interface CmWorkloadRow {
 
 export default function StudioDashboard() {
   const { user, profile } = useAuth();
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
-  const [conceptStats, setConceptStats] = useState<Record<string, ConceptStats>>({});
+  const [customers, setCustomers] = useState<StudioCustomerListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastEmailDates, setLastEmailDates] = useState<Record<string, string>>({});
-
-  const fetchCustomers = async () => {
-    const { data } = await supabase
-      .from('customer_profiles')
-      .select('id, business_name, account_manager, account_manager_profile_id, status')
-      .neq('status', 'archived')
-      .order('created_at', { ascending: false });
-    setCustomers(
-      (data ?? []).map((customer) => ({
-        ...customer,
-        status: normalizeStudioCustomerStatus(customer.status),
-      }))
-    );
-  };
-
-  const fetchLastEmailDates = async () => {
-    const { data, error } = await supabase
-      .from('email_log')
-      .select('customer_id, sent_at')
-      .not('sent_at', 'is', null);
-    if (error || !data) return;
-    const dates: Record<string, string> = {};
-    for (const row of data) {
-      const id = row.customer_id as string;
-      const sentAt = row.sent_at as string;
-      if (!dates[id] || sentAt > dates[id]) dates[id] = sentAt;
-    }
-    setLastEmailDates(dates);
-  };
-
-  const fetchConceptStats = async () => {
-    const { data } = await supabase
-      .from('customer_concepts')
-      .select('customer_profile_id, status')
-      .neq('status', 'archived');
-
-    if (!data) return;
-
-    const stats: Record<string, ConceptStats> = {};
-    for (const row of data) {
-      const id = row.customer_profile_id as string;
-      if (!stats[id]) stats[id] = { draft: 0, sent: 0, produced: 0 };
-      const s = row.status as string;
-      if (s === 'draft' || s === 'active') stats[id].draft++;
-      else if (s === 'sent' || s === 'paused') stats[id].sent++;
-      else if (s === 'produced' || s === 'completed') stats[id].produced++;
-    }
-    setConceptStats(stats);
-  };
 
   useEffect(() => {
     let cancelled = false;
 
     const loadDashboard = async () => {
-      await Promise.all([fetchCustomers(), fetchConceptStats()]);
-      if (!cancelled) {
-        setLoading(false);
+      try {
+        const response = await fetch('/api/studio-v2/customers');
+        const payload = (await response.json().catch(() => null)) as
+          | { customers?: StudioCustomerListItem[]; error?: string }
+          | null;
+
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Kunde inte ladda dashboard');
+        }
+
+        if (!cancelled) {
+          setCustomers(Array.isArray(payload?.customers) ? payload.customers : []);
+        }
+      } catch (error) {
+        console.error('Error loading studio dashboard:', error);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     void loadDashboard();
-    void Promise.resolve().then(fetchLastEmailDates);
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const activeCustomers = customers.filter((c) => c.status === 'active' || c.status === 'agreed');
+  const activeCustomers = customers.filter((customer) =>
+    customer.status === 'active' || customer.status === 'agreed',
+  );
   const orgWideWithDrafts: CustomerWithStats[] = activeCustomers
-    .filter((c) => (conceptStats[c.id]?.draft ?? 0) > 0)
-    .map((c) => ({ ...c, stats: conceptStats[c.id] }))
+    .filter((customer) => customer.concept_stats.draft > 0)
+    .map((customer) => ({ ...customer, stats: customer.concept_stats }))
     .sort((a, b) => b.stats.draft - a.stats.draft);
   const orgWideWithSent: CustomerWithStats[] = activeCustomers
-    .filter((c) => (conceptStats[c.id]?.sent ?? 0) > 0)
-    .map((c) => ({ ...c, stats: conceptStats[c.id] }));
+    .filter((customer) => customer.concept_stats.sent > 0)
+    .map((customer) => ({ ...customer, stats: customer.concept_stats }));
 
   const displayName = profile?.email?.split('@')[0] ?? 'Studio';
-  const isAdmin = Boolean(profile?.is_admin || (profile as { role?: string } | null)?.role === 'admin');
-  const isContentManager = !isAdmin && ((profile as { role?: string } | null)?.role === 'content_manager');
+  const isAdmin = Boolean(
+    profile?.is_admin || (profile as { role?: string } | null)?.role === 'admin',
+  );
+  const isContentManager = !isAdmin && (profile as { role?: string } | null)?.role === 'content_manager';
 
-  // Scope only when every actionable row has a real assignment ID. If assignment IDs are
-  // mixed or missing, keep org-wide visibility rather than hiding potentially owned work.
-  const actionableCustomersHaveAssignmentIds = [...orgWideWithDrafts, ...orgWideWithSent]
-    .every((customer) => Boolean(customer.account_manager_profile_id));
+  const actionableCustomersHaveAssignmentIds = [...orgWideWithDrafts, ...orgWideWithSent].every(
+    (customer) => Boolean(customer.account_manager_profile_id),
+  );
   const canScopeToAssignedCustomers = Boolean(
-    isContentManager &&
-    user?.id &&
-    actionableCustomersHaveAssignmentIds
+    isContentManager && user?.id && actionableCustomersHaveAssignmentIds,
   );
 
   const withDrafts = canScopeToAssignedCustomers
@@ -137,49 +87,56 @@ export default function StudioDashboard() {
     ? orgWideWithSent.filter((customer) => customer.account_manager_profile_id === user?.id)
     : orgWideWithSent;
 
-  const actionListHeading = canScopeToAssignedCustomers ? 'Dina kunder - väntar på åtgärd' : 'Väntar på åtgärd';
+  const actionListHeading = canScopeToAssignedCustomers
+    ? 'Dina kunder - vantar pa atgard'
+    : 'Vantar pa atgard';
   const actionListMeta = canScopeToAssignedCustomers
-    ? 'Visar kunder som är tilldelade till dig via account manager-ID.'
+    ? 'Visar kunder som ar tilldelade till dig via account manager-ID.'
     : null;
   const showAssignmentFallbackNote = Boolean(
     isContentManager &&
-    !canScopeToAssignedCustomers &&
-    !actionableCustomersHaveAssignmentIds &&
-    (orgWideWithDrafts.length > 0 || orgWideWithSent.length > 0)
+      !canScopeToAssignedCustomers &&
+      !actionableCustomersHaveAssignmentIds &&
+      (orgWideWithDrafts.length > 0 || orgWideWithSent.length > 0),
   );
-  const assignmentFallbackNote = 'Visar hela översikten just nu eftersom tilldelning inte är entydig för alla kunder i listan.';
+  const assignmentFallbackNote =
+    'Visar hela oversikten just nu eftersom tilldelning inte ar entydig for alla kunder i listan.';
   const sentListHeading = canScopeToAssignedCustomers
-    ? 'Dina skickade - väntar på produktion'
-    : 'Skickade - väntar på produktion';
+    ? 'Dina skickade - vantar pa produktion'
+    : 'Skickade - vantar pa produktion';
   const emptyStateText = canScopeToAssignedCustomers
-    ? 'Inga av dina tilldelade kunder har koncept som väntar på åtgärd just nu.'
-    : 'Inga koncept väntar på åtgärd just nu.';
+    ? 'Inga av dina tilldelade kunder har koncept som vantar pa atgard just nu.'
+    : 'Inga koncept vantar pa atgard just nu.';
 
-  const cmWorkload: CmWorkloadRow[] = isAdmin ? (() => {
-    const map: Record<string, CmWorkloadRow> = {};
-    for (const c of customers) {
-      const cm = c.account_manager?.trim() || '(Ingen CM)';
-      if (!map[cm]) {
-        map[cm] = {
-          name: cm,
-          draftCustomers: 0,
-          totalDrafts: 0,
-          sentCustomers: 0,
-          totalSent: 0,
-        };
-      }
-      const s = conceptStats[c.id];
-      if (s && s.draft > 0) {
-        map[cm].draftCustomers++;
-        map[cm].totalDrafts += s.draft;
-      }
-      if (s && s.sent > 0) {
-        map[cm].sentCustomers++;
-        map[cm].totalSent += s.sent;
-      }
-    }
-    return Object.values(map).sort((a, b) => b.totalDrafts - a.totalDrafts || b.totalSent - a.totalSent);
-  })() : [];
+  const cmWorkload: CmWorkloadRow[] = isAdmin
+    ? (() => {
+        const map: Record<string, CmWorkloadRow> = {};
+        for (const customer of customers) {
+          const cm = customer.account_manager?.trim() || '(Ingen CM)';
+          if (!map[cm]) {
+            map[cm] = {
+              name: cm,
+              draftCustomers: 0,
+              totalDrafts: 0,
+              sentCustomers: 0,
+              totalSent: 0,
+            };
+          }
+          const stats = customer.concept_stats;
+          if (stats.draft > 0) {
+            map[cm].draftCustomers += 1;
+            map[cm].totalDrafts += stats.draft;
+          }
+          if (stats.sent > 0) {
+            map[cm].sentCustomers += 1;
+            map[cm].totalSent += stats.sent;
+          }
+        }
+        return Object.values(map).sort(
+          (a, b) => b.totalDrafts - a.totalDrafts || b.totalSent - a.totalSent,
+        );
+      })()
+    : [];
 
   if (loading) {
     return (
@@ -196,7 +153,7 @@ export default function StudioDashboard() {
           Hej, {displayName}
         </h1>
         <p style={{ margin: '6px 0 0', fontSize: 14, color: '#6b7280' }}>
-          Här är en snabb översikt. Öppna en kund för att fortsätta arbetet.
+          Har ar en snabb oversikt. Oppna en kund for att fortsatta arbetet.
         </p>
       </div>
 
@@ -238,13 +195,13 @@ export default function StudioDashboard() {
             }}
           >
             <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', margin: 0 }}>
-              Teamöversikt
+              Teamoversikt
             </h2>
             <Link
               href="/studio/customers"
               style={{ fontSize: 13, color: '#4f46e5', textDecoration: 'none', fontWeight: 500 }}
             >
-              {'Se alla kunder →'}
+              Se alla kunder →
             </Link>
           </div>
           <div
@@ -286,9 +243,7 @@ export default function StudioDashboard() {
                   borderBottom: index < cmWorkload.length - 1 ? '1px solid #f3f4f6' : 'none',
                 }}
               >
-                <div style={{ fontWeight: 600, color: '#1a1a2e', fontSize: 14 }}>
-                  {row.name}
-                </div>
+                <div style={{ fontWeight: 600, color: '#1a1a2e', fontSize: 14 }}>{row.name}</div>
                 <div style={{ textAlign: 'right' }}>
                   {row.draftCustomers > 0 ? (
                     <span
@@ -350,9 +305,7 @@ export default function StudioDashboard() {
                 {actionListHeading}
               </h2>
               {actionListMeta && (
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                  {actionListMeta}
-                </div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{actionListMeta}</div>
               )}
               {showAssignmentFallbackNote && (
                 <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, lineHeight: 1.5 }}>
@@ -364,7 +317,7 @@ export default function StudioDashboard() {
               href="/studio/customers"
               style={{ fontSize: 13, color: '#4f46e5', textDecoration: 'none', fontWeight: 500 }}
             >
-              {'Se alla kunder →'}
+              Se alla kunder →
             </Link>
           </div>
 
@@ -385,9 +338,8 @@ export default function StudioDashboard() {
                   justifyContent: 'space-between',
                   padding: '14px 20px',
                   gap: 16,
-                  borderBottom: index < Math.min(withDrafts.length, 6) - 1
-                    ? '1px solid #f3f4f6'
-                    : 'none',
+                  borderBottom:
+                    index < Math.min(withDrafts.length, 6) - 1 ? '1px solid #f3f4f6' : 'none',
                 }}
               >
                 <div style={{ minWidth: 0 }}>
@@ -425,7 +377,7 @@ export default function StudioDashboard() {
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
-                    {formatLastEmail(lastEmailDates[customer.id])}
+                    {formatLastEmail(customer.last_email_at ?? undefined)}
                   </div>
                 </div>
 
@@ -476,9 +428,8 @@ export default function StudioDashboard() {
                   justifyContent: 'space-between',
                   padding: '14px 20px',
                   gap: 16,
-                  borderBottom: index < Math.min(withSent.length, 4) - 1
-                    ? '1px solid #f3f4f6'
-                    : 'none',
+                  borderBottom:
+                    index < Math.min(withSent.length, 4) - 1 ? '1px solid #f3f4f6' : 'none',
                 }}
               >
                 <div>
@@ -501,7 +452,7 @@ export default function StudioDashboard() {
                     {customer.stats.sent} skickad{customer.stats.sent > 1 ? 'e' : ''}
                   </span>
                   <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
-                    {formatLastEmail(lastEmailDates[customer.id])}
+                    {formatLastEmail(customer.last_email_at ?? undefined)}
                   </div>
                 </div>
                 <ActionLink
@@ -525,9 +476,7 @@ export default function StudioDashboard() {
             textAlign: 'center',
           }}
         >
-          <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 12 }}>
-            {emptyStateText}
-          </div>
+          <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 12 }}>{emptyStateText}</div>
           <Link
             href="/studio/customers"
             style={{
@@ -541,7 +490,7 @@ export default function StudioDashboard() {
               textDecoration: 'none',
             }}
           >
-            Öppna kundlistan
+            Oppna kundlistan
           </Link>
         </div>
       )}
@@ -557,13 +506,18 @@ function formatLastEmail(isoString: string | undefined): string {
   const now = new Date();
   const daysDiff = Math.floor((now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24));
   if (daysDiff === 0) return 'Senaste mail: idag';
-  if (daysDiff === 1) return 'Senaste mail: igår';
+  if (daysDiff === 1) return 'Senaste mail: igar';
   if (daysDiff < 14) return `Senaste mail: ${daysDiff} dagar sedan`;
   return `Senaste mail: ${sent.getDate()} ${MONTHS_SV[sent.getMonth()]}`;
 }
 
 function SummaryCard({
-  value, label, accent, bg, border, href,
+  value,
+  label,
+  accent,
+  bg,
+  border,
+  href,
 }: {
   value: number;
   label: string;
@@ -585,12 +539,8 @@ function SummaryCard({
         padding: '16px 20px',
       }}
     >
-      <div style={{ fontSize: 32, fontWeight: 800, color: accent, lineHeight: 1 }}>
-        {value}
-      </div>
-      <div style={{ fontSize: 13, color: accent, marginTop: 4, opacity: 0.85 }}>
-        {label}
-      </div>
+      <div style={{ fontSize: 32, fontWeight: 800, color: accent, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 13, color: accent, marginTop: 4, opacity: 0.85 }}>{label}</div>
     </Link>
   );
 }

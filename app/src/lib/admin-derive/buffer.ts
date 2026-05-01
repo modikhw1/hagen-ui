@@ -21,13 +21,20 @@ export function bufferDays(input: CustomerBufferInput): number {
   return Math.max(0, diff);
 }
 
-export function customerBufferStatus(input: CustomerBufferInput, blockedDays: number): CustomerBufferStatus {
+export function customerBufferStatus(input: {
+  pace: 1 | 2 | 3 | 4 | 5;
+  latestPlannedPublishDate: Date | null;
+  pausedUntil: Date | null;
+  today: Date;
+  overdue7dConceptsCount?: number;
+}, blockedDays: number): CustomerBufferStatus {
   if (input.pausedUntil && input.pausedUntil > input.today) return 'paused';
 
   const days = bufferDays(input);
   const requirement = REQUIREMENTS[input.pace];
 
-  if (blockedDays >= 7 && days >= requirement.min) return 'blocked';
+  // If we have concepts overdue by 7+ days, or if publication has stalled for 7+ days
+  if ((input.overdue7dConceptsCount || 0) > 0 || (blockedDays >= 7 && days >= requirement.min)) return 'blocked';
   if (days >= requirement.goal) return 'ok';
   if (days >= requirement.min) return 'thin';
   return 'under';

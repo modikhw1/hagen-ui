@@ -8,6 +8,7 @@ export function customerBlocking(input: {
   isLive: boolean;
   pausedUntil: Date | null;
   today: Date;
+  overdue7dConceptsCount?: number;
 }): {
   state: BlockingState;
   daysSincePublish: number;
@@ -22,6 +23,9 @@ export function customerBlocking(input: {
       daysSinceReference: 0,
     };
   }
+
+  // If we have concepts that are 7+ days overdue, mark as blocked.
+  const hasSignificantOverdue = (input.overdue7dConceptsCount || 0) > 0;
 
   if (!input.lastPublishedAt) {
     if (!input.isLive || !input.activatedAt) {
@@ -45,6 +49,7 @@ export function customerBlocking(input: {
   }
 
   const days = Math.floor((+input.today - +input.lastPublishedAt) / 86_400_000);
+  
   if (days >= 10) {
     return {
       state: 'escalated',
@@ -53,7 +58,9 @@ export function customerBlocking(input: {
       daysSinceReference: days,
     };
   }
-  if (days >= 7) {
+
+  // Blocked if: 7 days since last pub OR we have concepts overdue by 7+ days
+  if (days >= 7 || hasSignificantOverdue) {
     return {
       state: 'blocked',
       daysSincePublish: days,
@@ -61,6 +68,7 @@ export function customerBlocking(input: {
       daysSinceReference: days,
     };
   }
+
   return {
     state: 'none',
     daysSincePublish: days,

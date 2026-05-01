@@ -11,7 +11,7 @@ import { AdminField } from '@/components/admin/ui/form/AdminField';
 import { addAdminBreadcrumb, captureAdminError } from '@/lib/admin/admin-telemetry';
 import { apiClient } from '@/lib/admin/api-client';
 import { cmAbsenceCopy } from '@/lib/admin/copy/team';
-import { invalidateAdminScopes } from '@/lib/admin/invalidate';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { absenceSchema, type CmAbsenceInput } from '@/lib/admin/schemas/team';
 import { todayDateInput } from '@/lib/admin/time';
 import type { TeamMemberView } from '@/hooks/admin/useTeam';
@@ -51,6 +51,7 @@ export default function CMAbsenceModal({
 }) {
   const today = todayDateInput();
   const queryClient = useQueryClient();
+  const refresh = useAdminRefresh();
   const [formError, setFormError] = useState<string | null>(null);
   
   const form = useForm<CmAbsenceInput>({
@@ -108,7 +109,7 @@ export default function CMAbsenceModal({
               ? cmAbsenceCopy.payrollImpactBackupRetained
               : cmAbsenceCopy.payrollImpactBackupSuppressed;
 
-      await invalidateAdminScopes(queryClient, ['team']);
+      await refresh([{ type: 'global', scope: 'team' }]);
       toast.success(cmAbsenceCopy.savedTitle, { description });
       onSaved();
       onClose();

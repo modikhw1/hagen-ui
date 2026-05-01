@@ -47,6 +47,9 @@ export function revalidateAdminCustomerViews(id: string) {
   revalidateTag(adminCustomerTag(id), 'max');
   revalidateTag(adminCustomerBillingTag(id), 'max');
   revalidateTag(adminCustomerSubscriptionTag(id), 'max');
+  revalidateTag('admin:customer:detail', 'max');
+  revalidateTag('admin:customer:billing', 'max');
+  revalidateTag('admin:customer:pulse', 'max');
   revalidateAdminOverviewViews();
 }
 

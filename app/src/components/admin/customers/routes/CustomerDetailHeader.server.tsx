@@ -1,6 +1,6 @@
 // components/admin/customers/routes/CustomerDetailHeader.server.tsx
-import { ExternalLink, Sparkles } from 'lucide-react';
-import { customerStatusConfig } from '@/lib/admin/labels';
+import { ExternalLink, Sparkles, Tag } from 'lucide-react';
+import { customerStatusConfig, onboardingLabel, onboardingTone } from '@/lib/admin/labels';
 import { loadAdminCustomerHeader } from '@/lib/admin/customer-detail/load';
 import { formatSek } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
@@ -9,10 +9,21 @@ import { studioUrlForCustomer } from '@/lib/studio/urls';
 import CustomerBackButton from './CustomerBackButton';
 import CustomerHeaderAttention from './CustomerHeaderAttention';
 
-export default async function CustomerDetailHeader({ customerId }: { customerId: string }) {
-  const customer = await loadAdminCustomerHeader(customerId);
+type HeaderData = Awaited<ReturnType<typeof loadAdminCustomerHeader>>;
+
+export default async function CustomerDetailHeader({ 
+  customerId,
+  initialData 
+}: { 
+  customerId: string;
+  initialData?: HeaderData;
+}) {
+  const customer = initialData ?? await loadAdminCustomerHeader(customerId);
   const statusCfg = customerStatusConfig(customer.status);
-  const studioHref = studioUrlForCustomer(customer);
+  const studioHref = studioUrlForCustomer(customer as any);
+
+  // Hantera onboarding-labels
+  const showOnboarding = customer.onboarding_state && customer.onboarding_state !== 'live';
 
   return (
     <>
@@ -26,6 +37,14 @@ export default async function CustomerDetailHeader({ customerId }: { customerId:
               {customer.business_name || 'Kunddetalj'}
             </h1>
             <StatusPill label={statusCfg.label} tone={statusCfg.tone} />
+            
+            {showOnboarding && (
+              <StatusPill 
+                label={`Onboarding: ${onboardingLabel(customer.onboarding_state as any)}`} 
+                tone={onboardingTone(customer.onboarding_state as any)} 
+              />
+            )}
+
             {studioHref ? (
               <a
                 href={studioHref}
@@ -46,11 +65,11 @@ export default async function CustomerDetailHeader({ customerId }: { customerId:
               <>
                 {' · '}
                 <a
-                  href={`https://www.tiktok.com/@${customer.tiktok_handle}`}
+                  href={`https://www.tiktok.com/@${customer.tiktok_handle.replace('@', '')}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-primary hover:underline"
-                >@{customer.tiktok_handle}</a>
+                >@{customer.tiktok_handle.replace('@', '')}</a>
               </>
             ) : ''}
           </p>
@@ -62,7 +81,15 @@ export default async function CustomerDetailHeader({ customerId }: { customerId:
 
       {/* Rad 2 — fakta-strip */}
       <dl className="mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1.5 text-xs">
-        <Fact label="MRR"           value={customer.monthly_price ? formatSek(customer.monthly_price) : '—'} />
+        <div className="flex items-center gap-2">
+          <Fact label="MRR" value={customer.monthly_price_ore ? formatSek(customer.monthly_price_ore) : '—'} />
+          {customer.discount && (
+            <div className="flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">
+              <Tag size={10} />
+              {customer.discount.value}{customer.discount.type === 'percent' ? '%' : 'kr'} rabatt
+            </div>
+          )}
+        </div>
         <Fact label="CM"            value={customer.account_manager_name ?? 'Ingen'} />
         <Fact label="Nästa faktura" value={customer.next_invoice_date ? shortDateSv(customer.next_invoice_date) : '—'} />
         <Fact label="Kund sedan"    value={customer.created_at ? shortDateSv(customer.created_at) : '—'} />

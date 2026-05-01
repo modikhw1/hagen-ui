@@ -31,11 +31,9 @@ export default function AdminAvatar({
 
   if (avatarUrl) {
     return (
-      <Image
+      <img
         src={avatarUrl}
         alt={name}
-        width={imageSize[size]}
-        height={imageSize[size]}
         className={`${sizeClass[size]} shrink-0 rounded-full border border-border object-cover`}
       />
     );

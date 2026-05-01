@@ -24,6 +24,7 @@ export type SubscriptionListParams = {
   limit: number;
   page: number;
   status?: BillingSubscriptionStatusFilter;
+  sort?: string;
   q?: string;
   fromDate?: string;
   toDate?: string;
@@ -264,6 +265,8 @@ export async function listAdminInvoices(params: {
         summary: {
           openOre: summaryRows.reduce((s, r) => (r.display_status === 'open' ? s + r.total_amount_due : s), 0),
           paidOre: summaryRows.reduce((s, r) => (r.display_status === 'paid' ? s + r.total_amount_paid : s), 0),
+          partiallyRefundedCount: summaryRows.reduce((s, r) => (r.display_status === 'partially_refunded' ? s + r.invoice_count : s), 0),
+          invoicesNeedingActionCount: summaryRows.reduce((s, r) => (['open', 'past_due', 'uncollectible'].includes(r.display_status) ? s + r.invoice_count : s), 0),
           totalCount: summaryRows.reduce((s, r) => s + r.invoice_count, 0),
         }
       };
@@ -281,15 +284,45 @@ export async function listAdminSubscriptions(params: {
   const from = (filters.page - 1) * filters.limit;
   const to = from + filters.limit - 1;
 
+  let query = supabaseAdmin
+    .from('v_admin_subscriptions')
+    .select(
+      'id, customer_profile_id, stripe_customer_id, stripe_subscription_id, status, amount, currency, interval, interval_count, created, current_period_start, current_period_end, cancel_at_period_end, canceled_at, environment, customer_name',
+      { count: 'exact' },
+    );
+
+  // Apply sorting
+  if (filters.sort) {
+    const lastUnderscoreIndex = filters.sort.lastIndexOf('_');
+    const field = filters.sort.substring(0, lastUnderscoreIndex);
+    const direction = filters.sort.substring(lastUnderscoreIndex + 1);
+    const ascending = direction === 'asc';
+    
+    if (field === 'status') {
+      // Sort by status and then by cancel_at_period_end to group "Aktiv" and "Avslutas" logically
+      query = query
+        .order('status', { ascending })
+        .order('cancel_at_period_end', { ascending });
+    } else {
+      const dbField = field === 'customer' ? 'customer_name' : 
+                      field === 'price' ? 'amount' :
+                      field === 'since' ? 'created' :
+                      field === 'next_payment' ? 'current_period_end' :
+                      field;
+      
+      query = query.order(dbField, { ascending });
+    }
+    
+    // Always add a stable secondary sort if not already sorting by created
+    if (field !== 'since') {
+      query = query.order('created', { ascending: false });
+    }
+  } else {
+    query = query.order('created', { ascending: false });
+  }
+
   const listQuery = applySubscriptionFilters(
-    supabaseAdmin
-      .from('v_admin_subscriptions')
-      .select(
-        'id, customer_profile_id, stripe_customer_id, stripe_subscription_id, status, amount, currency, interval, interval_count, created, current_period_start, current_period_end, cancel_at_period_end, canceled_at, environment, customer_name',
-        { count: 'exact' },
-      )
-      .order('created', { ascending: false })
-      .range(from, to),
+    query.range(from, to),
     filters,
   );
 
@@ -362,6 +395,9 @@ export async function listAdminSubscriptions(params: {
         .reduce((sum, row) => sum + row.subscription_count, 0),
       expiringCount: summaryRows
         .filter((row) => row.cancel_at_period_end)
+        .reduce((sum, row) => sum + row.subscription_count, 0),
+      pastDueCount: summaryRows
+        .filter((row) => row.status === 'past_due')
         .reduce((sum, row) => sum + row.subscription_count, 0),
       mrrOre,
     },

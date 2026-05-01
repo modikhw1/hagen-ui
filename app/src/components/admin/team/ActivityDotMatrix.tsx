@@ -1,4 +1,4 @@
-﻿import type { DailyDot } from '@/lib/admin/dtos/team';
+import type { DailyDot } from '@/lib/admin/dtos/team';
 import { shortDateSv } from '@/lib/admin/time';
 
 export default function ActivityDotMatrix({ dots }: { dots: DailyDot[] }) {
@@ -26,6 +26,3 @@ function dotClassName(dot: DailyDot) {
   if (dot.level === 'high' || dot.level === 'peak') return `${base} bg-primary border-primary`;
   return `${base} bg-primary border-primary`;
 }
-
-
-

@@ -18,6 +18,7 @@ type CustomerOperationalInput = {
   expected_concepts_per_week?: number | null;
   concepts_per_week?: number | null;
   latest_planned_publish_date: string | null;
+  planned_concepts_count?: number | null;
   last_published_at: string | null;
   paused_until: string | null;
   tiktok_handle: string | null;
@@ -112,7 +113,7 @@ export function deriveCustomerOperationalSignals(
     blockedDays,
   );
 
-  const activeSnooze = customer.attention_snoozes.find((snooze) => {
+  const activeSnooze = customer.attention_snoozes?.find((snooze) => {
     if (snooze.released_at) return false;
     if (!snooze.snoozed_until) return true;
     return new Date(snooze.snoozed_until) > today;

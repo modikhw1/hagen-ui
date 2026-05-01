@@ -1,7 +1,8 @@
 import { Suspense } from 'react';
-import CustomersPageClient from '@/components/admin/customers/CustomersPageClient';
-import { Skeleton } from '@/components/ui/skeleton';
+import { CustomersPageClient } from '@/components/admin/customers/CustomersPageClient';
+import { Skeleton } from '@mantine/core';
 import { loadAdminCustomers, parseCustomerListParams } from '@/lib/admin/customers/list.server';
+import { CUSTOMERS_PAGE_SIZE } from '@/lib/admin/customers/list.constants';
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -22,14 +23,9 @@ async function CustomersPageContent({ searchParams }: PageProps) {
 
   return (
     <CustomersPageClient
-      rows={data.rows}
-      total={data.total}
-      page={data.page}
-      totalPages={data.totalPages}
-      search={params.search}
-      filter={params.filter}
-      sort={params.sort}
-      team={data.team}
+      initialItems={data.rows}
+      initialTotal={data.total}
+      initialPageSize={CUSTOMERS_PAGE_SIZE}
     />
   );
 }
@@ -39,25 +35,25 @@ function CustomersTableSkeleton() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div className="space-y-2">
-          <Skeleton className="h-8 w-32" />
-          <Skeleton className="h-4 w-24" />
+          <Skeleton height={32} width={128} />
+          <Skeleton height={16} width={96} />
         </div>
         <div className="flex gap-2">
-          <Skeleton className="h-10 w-28 rounded-md" />
-          <Skeleton className="h-10 w-32 rounded-md" />
+          <Skeleton height={40} width={112} radius="md" />
+          <Skeleton height={40} width={128} radius="md" />
         </div>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Skeleton className="h-10 w-72 rounded-md" />
-        <Skeleton className="h-10 w-64 rounded-md" />
-        <Skeleton className="h-10 w-36 rounded-md" />
+        <Skeleton height={40} width={288} radius="md" />
+        <Skeleton height={40} width={256} radius="md" />
+        <Skeleton height={40} width={144} radius="md" />
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         <div className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 border-b border-border px-5 py-3">
           {Array.from({ length: 5 }, (_, index) => (
-            <Skeleton key={index} className="h-3 w-full max-w-24" />
+            <Skeleton key={index} height={12} width="100%" />
           ))}
         </div>
         <div className="space-y-0">
@@ -68,11 +64,11 @@ function CustomersTableSkeleton() {
                 index < 5 ? 'border-b border-border' : ''
               }`}
             >
-              <Skeleton className="h-12 w-full rounded-md" />
-              <Skeleton className="h-12 w-full rounded-md" />
-              <Skeleton className="h-12 w-full rounded-md" />
-              <Skeleton className="h-12 w-full rounded-md" />
-              <Skeleton className="h-12 w-full rounded-md" />
+              <Skeleton height={48} width="100%" radius="md" />
+              <Skeleton height={48} width="100%" radius="md" />
+              <Skeleton height={48} width="100%" radius="md" />
+              <Skeleton height={48} width="100%" radius="md" />
+              <Skeleton height={48} width="100%" radius="md" />
             </div>
           ))}
         </div>

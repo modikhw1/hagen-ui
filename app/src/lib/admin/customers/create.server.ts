@@ -9,7 +9,7 @@ import { createCustomerServerSchema } from '@/lib/schemas/customer';
 import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
-import { deriveTikTokHandle, toCanonicalTikTokProfileUrl } from '@/lib/tiktok/profile';
+import { normalizeTikTokProfileIdentityInput } from '@/lib/tiktok/customer-profile-link';
 import { getAppUrl } from '@/lib/url/public';
 import type { Database, Tables } from '@/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -368,12 +368,13 @@ export async function createAdminCustomer(params: {
       waiveDaysUntilBilling: waive_days_until_billing,
     });
 
-    const canonicalTikTokProfileUrl = tiktok_profile_url
-      ? toCanonicalTikTokProfileUrl(tiktok_profile_url)
+    const tiktokIdentity = normalizeTikTokProfileIdentityInput(tiktok_profile_url ?? null);
+    const canonicalTikTokProfileUrl = tiktokIdentity.ok
+      ? tiktokIdentity.value.tiktok_profile_url
       : null;
-    const tiktokHandle = tiktok_profile_url ? deriveTikTokHandle(tiktok_profile_url) : null;
+    const tiktokHandle = tiktokIdentity.ok ? tiktokIdentity.value.tiktok_handle : null;
 
-    if (tiktok_profile_url && (!canonicalTikTokProfileUrl || !tiktokHandle)) {
+    if (!tiktokIdentity.ok) {
       return {
         ok: false,
         status: 400,

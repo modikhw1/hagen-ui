@@ -49,7 +49,7 @@ export default function CmAssignmentSection({ customerId }: { customerId: string
           <p className="text-xs text-muted-foreground">Ingen CM tilldelad.</p>
         )}
 
-        {customer.coverage_absences.length > 0 && (
+        {Array.isArray(customer.coverage_absences) && customer.coverage_absences.length > 0 && (
           <div className="space-y-2 border-t border-border pt-3">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Aktiv / Schemalagd coverage</div>
             {customer.coverage_absences.map((absence) => (
@@ -68,6 +68,7 @@ export default function CmAssignmentSection({ customerId }: { customerId: string
         open={modalOpen} 
         onOpenChange={setModalOpen} 
         customerId={customerId} 
+        customerName={customer.business_name}
         currentCmId={customer.account_manager_profile_id ?? null}
       />
     </CustomerSection>

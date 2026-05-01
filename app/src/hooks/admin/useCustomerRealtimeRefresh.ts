@@ -35,7 +35,7 @@ export function useCustomerRealtimeRefresh(customerId: string) {
       }
 
       refreshTimeoutRef.current = setTimeout(() => {
-        void refresh([{ type: 'customer-billing', customerId }]);
+        void refresh([{ type: 'customer', customerId }]);
       }, REFRESH_DEBOUNCE_MS);
     };
 

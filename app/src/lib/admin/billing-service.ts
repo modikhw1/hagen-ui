@@ -1,3 +1,4 @@
+// app/src/lib/admin/billing-service.ts
 import Stripe from 'stripe';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { STRIPE_API_VERSION } from '@/lib/stripe/config';
@@ -19,11 +20,7 @@ type SyncLogRow = {
 };
 
 function isMissingColumnError(message?: string | null) {
-  return (
-    typeof message === 'string' &&
-    message.toLowerCase().includes('column') &&
-    message.toLowerCase().includes('does not exist')
-  );
+  return typeof message === 'string' && message.toLowerCase().includes('column') && message.toLowerCase().includes('does not exist');
 }
 
 function createStripeClient(env: StripeEnv) {
@@ -37,115 +34,91 @@ function createStripeClient(env: StripeEnv) {
   return new Stripe(value, {
     apiVersion: STRIPE_API_VERSION,
     typescript: true,
-    timeout: 10000,
+    timeout: 20000,
   });
 }
 
-async function listInvoices(client: Stripe) {
-  const invoices: Stripe.Invoice[] = [];
-  let hasMore = true;
-  let startingAfter: string | undefined;
-
-  while (hasMore) {
-    const result = await client.invoices.list({
-      limit: 100,
-      created: { gte: Math.floor(new Date('2024-01-01').getTime() / 1000) },
-      starting_after: startingAfter,
-    }, { timeout: 10000 });
-
-    invoices.push(...result.data);
-    hasMore = result.has_more;
-    startingAfter = result.data.at(-1)?.id;
-  }
-
-  return invoices;
-}
-
-async function listSubscriptions(client: Stripe) {
-  const subscriptions: Stripe.Subscription[] = [];
-  let hasMore = true;
-  let startingAfter: string | undefined;
-
-  while (hasMore) {
-    const result = await client.subscriptions.list({
-      limit: 100,
-      status: 'active',
-      starting_after: startingAfter,
-    }, { timeout: 10000 });
-
-    subscriptions.push(...result.data);
-    hasMore = result.has_more;
-    startingAfter = result.data.at(-1)?.id;
-  }
-
-  return subscriptions;
-}
-
-async function syncSingleEnv(params: {
-  supabaseAdmin: SupabaseClient;
-  env: StripeEnv;
-  kind: 'invoices' | 'subscriptions';
-}) {
-  const client = createStripeClient(params.env);
+async function syncSingleEnv(params: { supabaseAdmin: SupabaseClient; env: StripeEnv; kind: 'invoices' | 'subscriptions' }) {
+  const { supabaseAdmin, env, kind } = params;
+  const client = createStripeClient(env);
   if (!client) {
-    throw new Error(`Stripe är inte konfigurerat för ${params.env}`);
+    throw new Error(`Stripe är inte konfigurerat för ${env}`);
   }
 
-  const items =
-    params.kind === 'invoices'
-      ? await listInvoices(client)
-      : await listSubscriptions(client);
+  console.log(`[BillingSync] Starting ${kind} sync for environment: ${env}`);
+
+  // 1. Build profileIdMap ONCE to avoid N+1 queries.
+  const { data: profiles, error: profileError } = await supabaseAdmin
+    .from('customer_profiles')
+    .select('id, stripe_customer_id')
+    .not('stripe_customer_id', 'is', null);
+
+  if (profileError) {
+    throw new Error(`Failed to fetch customer profiles for mapping: ${profileError.message}`);
+  }
+
+  const profileIdMap = new Map<string, string>();
+  for (const profile of profiles || []) {
+    if (profile.stripe_customer_id) {
+      profileIdMap.set(profile.stripe_customer_id, profile.id);
+    }
+  }
+  console.log(`[BillingSync] Built profileIdMap with ${profileIdMap.size} entries.`);
 
   let syncedCount = 0;
   let skippedCount = 0;
+  let totalProcessed = 0;
 
-  const chunkSize = 20;
-  for (let i = 0; i < items.length; i += chunkSize) {
-    const chunk = items.slice(i, i + chunkSize);
-    
-    await Promise.all(
-      chunk.map(async (item) => {
-        try {
-          if (params.kind === 'invoices') {
-            await upsertInvoiceMirror({
-              supabaseAdmin: params.supabaseAdmin,
-              invoice: item as Stripe.Invoice,
-              environment: params.env,
-            });
-          } else {
-            await upsertSubscriptionMirror({
-              supabaseAdmin: params.supabaseAdmin,
-              subscription: item as Stripe.Subscription,
-              environment: params.env,
-            });
-          }
-          syncedCount += 1;
-        } catch (error) {
-          skippedCount += 1;
+  const listPromise =
+    kind === 'invoices'
+      ? client.invoices.list({ created: { gte: Math.floor(new Date('2024-01-01').getTime() / 1000) }, limit: 100 })
+      : client.subscriptions.list({ status: 'all', limit: 100 });
 
-          await logStripeSync({
-            supabaseAdmin: params.supabaseAdmin,
-            eventType: `admin.billing.sync_${params.kind}.item_failed`,
-            objectType: params.kind === 'invoices' ? 'invoice' : 'subscription',
-            objectId: item.id,
-            syncDirection: 'stripe_to_supabase',
-            status: 'failed',
-            errorMessage: error instanceof Error ? error.message : 'Okänt syncfel',
-            payloadSummary: {
-              environment: params.env,
-            },
-            environment: params.env,
-          });
-        }
-      })
-    );
-  }
+  await listPromise.autoPagingEach(async (item) => {
+    totalProcessed++;
+    try {
+      if (kind === 'invoices') {
+        await upsertInvoiceMirror({
+          supabaseAdmin,
+          invoice: item as Stripe.Invoice,
+          environment: env,
+          profileIdMap,
+        });
+      } else {
+        await upsertSubscriptionMirror({
+          supabaseAdmin,
+          subscription: item as Stripe.Subscription,
+          environment: env,
+          profileIdMap,
+        });
+      }
+      syncedCount++;
+    } catch (error) {
+      skippedCount++;
+      const errorMessage = error instanceof Error ? error.message : 'Okänt syncfel';
+      console.error(`[BillingSync] Failed to process item ${item.id}:`, errorMessage);
 
-  return {
-    syncedCount,
-    skippedCount,
-    total: items.length,
-  };
+      await logStripeSync({
+        supabaseAdmin: supabaseAdmin,
+        eventType: `admin.billing.sync_${kind}.item_failed`,
+        objectType: kind === 'invoices' ? 'invoice' : 'subscription',
+        objectId: item.id,
+        syncDirection: 'stripe_to_supabase',
+        status: 'failed',
+        errorMessage,
+        payloadSummary: { environment: env },
+        environment: env,
+      });
+    }
+
+    if (totalProcessed % 100 === 0) {
+      console.log(`[BillingSync] Progress: Processed ${totalProcessed} ${kind}. Synced: ${syncedCount}, Skipped: ${skippedCount}.`);
+    }
+  });
+
+  console.log(`[BillingSync] Finished ${kind} sync for ${env}. Total processed: ${totalProcessed}, Synced: ${syncedCount}, Skipped: ${skippedCount}.`);
+
+  return { syncedCount, skippedCount };
 }
 
 async function logBillingSync(params: {
@@ -174,11 +147,11 @@ export async function syncBillingFromStripe(params: {
   env: StripeEnv | 'all';
   idempotencyKey: string;
   kind: 'invoices' | 'subscriptions';
-}) {
+}): Promise<{ syncedCount: number; skippedCount: number }> {
   const environments = params.env === 'all' ? (['test', 'live'] as const) : [params.env];
 
-  let syncedCount = 0;
-  let skippedCount = 0;
+  let totalSynced = 0;
+  let totalSkipped = 0;
 
   for (const env of environments) {
     const result = await syncSingleEnv({
@@ -186,14 +159,14 @@ export async function syncBillingFromStripe(params: {
       env,
       kind: params.kind,
     });
-    syncedCount += result.syncedCount;
-    skippedCount += result.skippedCount;
+    totalSynced += result.syncedCount;
+    totalSkipped += result.skippedCount;
   }
 
   const payload = {
     ok: true,
-    syncedCount,
-    skippedCount,
+    syncedCount: totalSynced,
+    skippedCount: totalSkipped,
     idempotencyKey: params.idempotencyKey,
     environment: params.env,
   } satisfies BillingSyncPayload;
@@ -206,13 +179,10 @@ export async function syncBillingFromStripe(params: {
     environment: params.env,
   });
 
-  return payload;
+  return { syncedCount: totalSynced, skippedCount: totalSkipped };
 }
 
-export async function getBillingHealthSnapshot(params: {
-  supabaseAdmin: SupabaseClient;
-  environment: StripeEnv;
-}) {
+export async function getBillingHealthSnapshot(params: { supabaseAdmin: SupabaseClient; environment: StripeEnv }) {
   const { supabaseAdmin, environment } = params;
   const schemaWarnings: string[] = [];
   const syncLogEnvironmentWarning =
@@ -242,49 +212,38 @@ export async function getBillingHealthSnapshot(params: {
       applyEnv(supabaseAdmin.from('stripe_sync_log').select('*', { count: 'exact', head: true }).eq('status', 'failed')),
       applyEnv(supabaseAdmin.from('stripe_sync_log').select('*').order('created_at', { ascending: false }).limit(20)),
       applyEnv(supabaseAdmin.from('stripe_sync_log').select('*').eq('status', 'failed').order('created_at', { ascending: false }).limit(10)),
-      applyEnv(supabaseAdmin.from('stripe_sync_log').select('created_at, event_type, object_type, object_id').eq('status', 'success').order('created_at', { ascending: false }).limit(1)).maybeSingle(),
+      applyEnv(
+        supabaseAdmin
+          .from('stripe_sync_log')
+          .select('created_at, event_type, object_type, object_id')
+          .eq('status', 'success')
+          .order('created_at', { ascending: false })
+          .limit(1),
+      ).maybeSingle(),
     ];
   };
 
   // Run everything in parallel
-  const [
-    invoicesCountResult,
-    subscriptionsCountResult,
-    failedSyncCountResult,
-    recentSyncsResult,
-    recentFailuresResult,
-    latestSuccessResult
-  ] = await Promise.all([
-    countInvoicesQuery(true),
-    countSubscriptionsQuery(true),
-    ...getSyncLogQueries(true)
-  ] as const);
+  const [invoicesCountResult, subscriptionsCountResult, failedSyncCountResult, recentSyncsResult, recentFailuresResult, latestSuccessResult] =
+    await Promise.all([countInvoicesQuery(true), countSubscriptionsQuery(true), ...getSyncLogQueries(true)] as const);
 
   let mirroredInvoices = invoicesCountResult.count || 0;
   let mirroredSubscriptions = subscriptionsCountResult.count || 0;
 
   if (invoicesCountResult.error && isMissingColumnError(invoicesCountResult.error.message)) {
-    schemaWarnings.push(
-      'Migration 040 saknas i databasen. Billing Health visar totalsiffror utan miljöseparation.',
-    );
+    schemaWarnings.push('Migration 040 saknas i databasen. Billing Health visar totalsiffror utan miljöseparation.');
     const fallbackInvoices = await countInvoicesQuery(false);
     mirroredInvoices = fallbackInvoices.count || 0;
   }
 
-  if (
-    subscriptionsCountResult.error &&
-    isMissingColumnError(subscriptionsCountResult.error.message)
-  ) {
+  if (subscriptionsCountResult.error && isMissingColumnError(subscriptionsCountResult.error.message)) {
     const fallbackSubscriptions = await countSubscriptionsQuery(false);
     mirroredSubscriptions = fallbackSubscriptions.count || 0;
   }
 
-  const syncLogEnvironmentColumnMissing = [
-    failedSyncCountResult,
-    recentSyncsResult,
-    recentFailuresResult,
-    latestSuccessResult,
-  ].some((result: any) => isMissingColumnError(result.error?.message));
+  const syncLogEnvironmentColumnMissing = [failedSyncCountResult, recentSyncsResult, recentFailuresResult, latestSuccessResult].some(
+    (result: any) => isMissingColumnError(result.error?.message),
+  );
 
   let finalFailedSyncCountResult = failedSyncCountResult;
   let finalRecentSyncsResult = recentSyncsResult;
@@ -315,11 +274,7 @@ export async function getBillingHealthSnapshot(params: {
   };
 }
 
-export async function findRecentBillingResult(params: {
-  supabaseAdmin: SupabaseClient;
-  idempotencyKey: string;
-  withinMs: number;
-}) {
+export async function findRecentBillingResult(params: { supabaseAdmin: SupabaseClient; idempotencyKey: string; withinMs: number }) {
   const result = await (((params.supabaseAdmin.from('stripe_sync_log' as never) as never) as {
     select: (columns: string) => {
       eq: (column: string, value: string) => {

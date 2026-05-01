@@ -10,6 +10,7 @@ export type CustomerListFilter = {
 
 type BillingListFilter = {
   status?: string;
+  sort?: string;
   q?: string;
   page?: number;
   limit?: number;
@@ -109,7 +110,7 @@ export const qk = {
   payroll: {
     all: () => ['admin', 'payroll'] as const,
     root: () => ['admin', 'payroll'] as const,
-    period: (period: string | null) => ['admin', 'payroll', 'period', period ?? 'current'] as const,
+    period: (key: string | null) => ['admin', 'payroll', key ?? 'current'] as const,
     breakdown: (period: string, cmId: string) =>
       ['admin', 'payroll', 'breakdown', period, cmId] as const,
   },
@@ -120,6 +121,7 @@ export const qk = {
   auditLog: {
     all: () => ['admin', 'audit-log'] as const,
     root: () => ['admin', 'audit-log'] as const,
-    list: (filter: AuditLogFilter) => ['admin', 'audit-log', 'list', stable(filter)] as const,
+    list: (filter: { actor?: string; entity?: string; limit: number; cursor?: string | null }) =>
+      ['admin', 'audit-log', filter] as const,
   },
 } as const;

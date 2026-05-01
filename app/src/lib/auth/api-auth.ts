@@ -19,19 +19,16 @@
  */
 
 import { NextRequest } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import {
-  getAdminRoles,
   OPERATIONS_ADMIN_GRANTED_SCOPES,
   type AdminRole,
   type AdminScope,
 } from '@/lib/admin/admin-roles'
 
 const operationsAdminGrantedScopeSet = new Set<string>(OPERATIONS_ADMIN_GRANTED_SCOPES)
-import { isMissingRelationError } from '@/lib/admin/schema-guards'
 import { jsonError, jsonOk } from '@/lib/server/api-response'
-import { createSupabaseAdmin } from '@/lib/server/supabase-admin'
+import { AuthError } from './auth-error'
+export { AuthError } from './auth-error'
 
 export type UserRole = 'admin' | 'content_manager' | 'customer' | 'user'
 
@@ -42,19 +39,6 @@ export interface AuthenticatedUser {
   is_admin: boolean
   admin_roles: AdminRole[]
   matching_data: Record<string, unknown> | null
-}
-
-/**
- * Custom error class for authentication failures
- */
-export class AuthError extends Error {
-  constructor(
-    public statusCode: number,
-    message: string
-  ) {
-    super(message)
-    this.name = 'AuthError'
-  }
 }
 
 import { getAuthenticatedUser } from './shared-auth';
@@ -125,8 +109,19 @@ export function withAuth<T, Args extends unknown[] = unknown[]>(
   requiredRoles: UserRole[] = ['admin']
 ) {
   return async (request: NextRequest, ...args: Args): Promise<Response> => {
+    let user: AuthenticatedUser
     try {
-      const user = await validateApiRequest(request, requiredRoles)
+      user = await validateApiRequest(request, requiredRoles)
+    } catch (error) {
+      if (error instanceof AuthError) {
+        return jsonError(error.message, error.statusCode)
+      }
+
+      console.error('API authentication validation failed:', error)
+      return jsonError('Autentisering misslyckades', 500)
+    }
+
+    try {
       const result = await handler(request, user, ...args)
 
       // If handler returns a Response, return it directly
@@ -141,8 +136,8 @@ export function withAuth<T, Args extends unknown[] = unknown[]>(
         return jsonError(error.message, error.statusCode)
       }
 
-      console.error('API authentication error:', error)
-      return jsonError('Autentisering misslyckades', 500)
+      console.error('API route handler error:', error)
+      return jsonError('Internt serverfel', 500)
     }
   }
 }

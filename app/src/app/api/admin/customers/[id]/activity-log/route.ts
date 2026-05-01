@@ -50,6 +50,7 @@ function humanizeAuditAction(action: string) {
     'admin.invoice.credit_note_reissue_failed':
       'Kreditnota skapad men ersattningsfaktura misslyckades',
     'admin.invoice_item.created': 'Pending invoice item skapad',
+    'admin.invoice_item.updated': 'Pending invoice item uppdaterad',
     'admin.invoice_item.deleted': 'Pending invoice item borttagen',
     'system.customer.auto_archived_after_subscription_end':
       'Kund auto-arkiverad efter avslutat abonnemang',

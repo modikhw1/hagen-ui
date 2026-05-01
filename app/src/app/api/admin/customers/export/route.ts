@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { formatDateOnly } from '@/lib/admin/billing-periods';
 import { withAdmin } from '@/lib/admin/with-admin';
 import { customerListParamsInputSchema } from '@/lib/admin/customers/list.schemas';
@@ -17,14 +16,7 @@ function onboardingLabel(state: string) {
   return 'Inviterad';
 }
 
-const customerExportQuerySchema = customerListParamsInputSchema.pipe(
-  z.object({
-    search: z.string(),
-    filter: z.enum(['all', 'active', 'pipeline', 'archived']),
-    sort: z.enum(['newest', 'oldest']),
-    page: z.number().int().min(1).max(1000),
-  }),
-);
+const customerExportQuerySchema = customerListParamsInputSchema;
 
 export const GET = withAdmin(
   async ({ input }) => {

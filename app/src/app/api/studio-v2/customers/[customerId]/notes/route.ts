@@ -64,7 +64,7 @@ export const POST = withAuth(async (request, user, { params }: { params: Promise
   return NextResponse.json({ note: data });
 }, ['admin', 'content_manager']);
 
-export const PATCH = withAuth(async (request, _user, { params }: { params: Promise<{ customerId: string }> }) => {
+export const PATCH = withAuth(async (request, user, { params }: { params: Promise<{ customerId: string }> }) => {
   const { customerId } = await params;
   const noteId = new URL(request.url).searchParams.get('note_id');
   if (!noteId) {
@@ -100,6 +100,14 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await logInteraction({
+    type: 'note_added',
+    cmProfileId: user.id,
+    customerId,
+    metadata: { note_id: noteId, action: 'patch' },
+    client: supabase,
+  });
 
   return NextResponse.json({ note: data });
 }, ['admin', 'content_manager']);

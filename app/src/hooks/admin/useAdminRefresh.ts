@@ -13,7 +13,7 @@ export function useAdminRefresh() {
   const queryClient = useQueryClient();
 
   return useCallback(
-    async (scopes: readonly AdminRefreshScope[]) => {
+    async (scopes: readonly AdminRefreshScope[] = []) => {
       await invalidateAdminScopes(queryClient, scopes);
       router.refresh();
     },

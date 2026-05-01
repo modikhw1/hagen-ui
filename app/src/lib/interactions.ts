@@ -7,9 +7,17 @@ export type InteractionType =
   | 'concept_added'
   | 'email_sent'
   | 'note_added'
-  | 'tiktok_upload_synced';
+  | 'tiktok_upload_synced'
+  | 'customer_updated';
 
-type JsonObject = Record<string, unknown>;
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: JsonValue | undefined }
+  | JsonValue[];
+type JsonObject = Record<string, JsonValue | undefined>;
 type DatabaseClient = SupabaseClient<Database>;
 
 const teamMemberCache = new Map<string, string | null>();
@@ -82,6 +90,37 @@ export async function logInteraction(input: {
     if (error) {
       console.error('[interactions] Failed to log interaction:', error);
     }
+
+    // Resolve cm_email (required by cm_activities)
+    const { data: profile } = input.cmProfileId 
+      ? await supabase.from('profiles').select('email').eq('id', input.cmProfileId).single()
+      : { data: null };
+    
+    const cmEmail = profile?.email || 'unknown';
+
+    // ALSO log to cm_activities for the new operational pulse logic
+    // We try to map InteractionType to ActivityType where possible
+    const activityMap: Record<InteractionType, string> = {
+      'concept_added': 'concept_added',
+      'note_added': 'customer_updated',
+      'feedplan_edit': 'concept_reordered',
+      'tiktok_upload_synced': 'customer_updated',
+      'customer_updated': 'customer_updated',
+      'login': 'customer_updated',
+      'email_sent': 'customer_updated'
+    };
+
+    const activityType = activityMap[input.type] || 'customer_updated';
+
+    await (supabase.from('cm_activities') as any).insert({
+      cm_id: cmId,
+      cm_user_id: input.cmProfileId || null,
+      cm_email: cmEmail,
+      customer_profile_id: input.customerId ?? null,
+      activity_type: activityType,
+      description: `Interaction: ${input.type}`,
+      metadata: (input.metadata ?? {}) as JsonObject,
+    });
   } catch (error) {
     console.error('[interactions] Unexpected logging error:', error);
   }

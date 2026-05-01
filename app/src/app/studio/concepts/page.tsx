@@ -837,10 +837,23 @@ export default function StudioConceptsPage() {
 
   const fetchCustomers = useCallback(async (userId: string) => {
     try {
-      const { data } = await supabase
-        .from('customer_profiles')
-        .select('id, business_name, account_manager_profile_id')
-        .order('business_name');
+      const response = await fetch('/api/studio-v2/customers');
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            customers?: Array<{
+              id: string;
+              business_name: string;
+              account_manager_profile_id?: string | null;
+            }>;
+            error?: string;
+          }
+        | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Kunde inte ladda kunder');
+      }
+
+      const data = Array.isArray(payload?.customers) ? payload.customers : [];
 
       const sorted = [...(data || [])].sort((a, b) => {
         const aOwned = a.account_manager_profile_id === userId ? 1 : 0;

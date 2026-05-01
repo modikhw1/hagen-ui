@@ -90,6 +90,8 @@ function normalizeUpdatePayload(
   };
 }
 
+import { revalidateAdminTeamViews } from '@/lib/admin/cache-tags';
+
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const user = await validateApiRequest(request, ['admin']);
@@ -150,6 +152,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         role: user.role,
       },
     });
+
+    revalidateAdminTeamViews();
 
     return jsonOk({
       member: result.member,
@@ -220,6 +224,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         is_active: false,
       },
     });
+
+    revalidateAdminTeamViews();
 
     return jsonOk({ success: true });
   } catch (error) {

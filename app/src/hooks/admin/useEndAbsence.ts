@@ -3,10 +3,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { addAdminBreadcrumb, captureAdminError } from '@/lib/admin/admin-telemetry';
 import { apiClient } from '@/lib/admin/api-client';
-import { invalidateAdminScopes } from '@/lib/admin/invalidate';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 
 export function useEndAbsence() {
   const queryClient = useQueryClient();
+  const refresh = useAdminRefresh();
 
   return useMutation({
     mutationKey: ['admin', 'team', 'absence-end'],
@@ -23,7 +24,7 @@ export function useEndAbsence() {
         absence_id: absenceId,
       });
     },
-    onSuccess: async () => invalidateAdminScopes(queryClient, ['team']),
+    onSuccess: async () => refresh([{ type: 'global', scope: 'team' }]),
     onError: (error, absenceId) => {
       captureAdminError('admin.team.absence_end', error, { absence_id: absenceId });
     },

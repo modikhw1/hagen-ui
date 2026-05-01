@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE public.team_members 
+ADD COLUMN IF NOT EXISTS city TEXT,
+ADD COLUMN IF NOT EXISTS bio TEXT;
+
+END;

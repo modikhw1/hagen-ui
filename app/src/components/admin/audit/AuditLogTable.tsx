@@ -5,13 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import AdminAvatar from '@/components/admin/AdminAvatar';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Modal, Text } from '@mantine/core';
 import { apiClient } from '@/lib/admin/api-client';
 import { formatAuditMetadata } from '@/lib/admin-derive/audit';
 import { parseDto } from '@/lib/admin/dtos/parse';
@@ -226,45 +220,45 @@ export function AuditLogTable({
         </div>
       )}
 
-      <Dialog open={Boolean(openEntryId)} onOpenChange={(open) => !open && setOpenEntryId(null)}>
-        <DialogContent className="sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Audit-diff</DialogTitle>
-            <DialogDescription>
-              {openEntryId && detailById[openEntryId]
-                ? `${detailById[openEntryId]?.action} · ${entityLabel(detailById[openEntryId] as AuditEntry)}`
-                : 'Laddar detaljer...'}
-            </DialogDescription>
-          </DialogHeader>
+      <Modal
+        opened={Boolean(openEntryId)}
+        onClose={() => setOpenEntryId(null)}
+        title="Audit-diff"
+        size="xl"
+      >
+        <Text size="sm" color="dimmed" mb="lg">
+          {openEntryId && detailById[openEntryId]
+            ? `${detailById[openEntryId]?.action} · ${entityLabel(detailById[openEntryId] as AuditEntry)}`
+            : 'Laddar detaljer...'}
+        </Text>
 
-          {loadingDetail ? (
-            <div className="text-sm text-muted-foreground">Laddar diff...</div>
-          ) : detailError ? (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {detailError}
-            </div>
-          ) : openEntryId && detailById[openEntryId] ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <section>
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Before
-                </div>
-                <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-secondary/20 p-3 text-[11px] text-foreground">
-                  {JSON.stringify(detailById[openEntryId]?.before_state ?? {}, null, 2)}
-                </pre>
-              </section>
-              <section>
-                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  After
-                </div>
-                <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-secondary/20 p-3 text-[11px] text-foreground">
-                  {JSON.stringify(detailById[openEntryId]?.after_state ?? {}, null, 2)}
-                </pre>
-              </section>
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+        {loadingDetail ? (
+          <div className="text-sm text-muted-foreground">Laddar diff...</div>
+        ) : detailError ? (
+          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {detailError}
+          </div>
+        ) : openEntryId && detailById[openEntryId] ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            <section>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Before
+              </div>
+              <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-secondary/20 p-3 text-[11px] text-foreground">
+                {JSON.stringify(detailById[openEntryId]?.before_state ?? {}, null, 2)}
+              </pre>
+            </section>
+            <section>
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                After
+              </div>
+              <pre className="max-h-[420px] overflow-auto rounded-md border border-border bg-secondary/20 p-3 text-[11px] text-foreground">
+                {JSON.stringify(detailById[openEntryId]?.after_state ?? {}, null, 2)}
+              </pre>
+            </section>
+          </div>
+        ) : null}
+      </Modal>
     </>
   );
 }

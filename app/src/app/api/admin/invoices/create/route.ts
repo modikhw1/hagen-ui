@@ -5,6 +5,10 @@ import { requireAdminScope, withAuth } from '@/lib/auth/api-auth';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { createManualInvoice } from '@/lib/stripe/admin-billing';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
+import {
+  revalidateAdminBillingViews,
+  revalidateAdminCustomerViews,
+} from '@/lib/admin/cache-tags';
 
 export const POST = withAuth(async (request: NextRequest, user) => {
   requireAdminScope(
@@ -46,6 +50,9 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       auto_finalize: parsed.data.auto_finalize,
     },
   });
+
+  revalidateAdminCustomerViews(parsed.data.customer_profile_id);
+  revalidateAdminBillingViews();
 
   return NextResponse.json({ invoice });
 }, ['admin']);

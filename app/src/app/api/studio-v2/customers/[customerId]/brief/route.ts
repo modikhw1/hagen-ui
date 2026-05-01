@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { TablesUpdate } from '@/types/database';
 import { withAuth } from '@/lib/auth/api-auth';
 import { EMPTY_CUSTOMER_BRIEF, normalizeCustomerBrief } from '@/lib/database/json';
+import { logInteraction } from '@/lib/interactions';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 function extractBriefPatch(body: Record<string, unknown>) {
@@ -59,7 +60,7 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
   return NextResponse.json({ brief: normalizeCustomerBrief(data?.brief) });
 }, ['admin', 'content_manager']);
 
-export const PATCH = withAuth(async (request, _user, { params }: { params: Promise<{ customerId: string }> }) => {
+export const PATCH = withAuth(async (request, user, { params }: { params: Promise<{ customerId: string }> }) => {
   const { customerId } = await params;
   const body = await request.json().catch(() => ({}));
   const supabase = createSupabaseAdmin();
@@ -96,6 +97,14 @@ export const PATCH = withAuth(async (request, _user, { params }: { params: Promi
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  await logInteraction({
+    type: 'customer_updated' as any,
+    cmProfileId: user.id,
+    customerId,
+    metadata: { updates: Object.keys(payload) },
+    client: supabase,
+  });
 
   return NextResponse.json({ brief: nextBrief });
 }, ['admin', 'content_manager']);

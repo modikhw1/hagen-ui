@@ -1,17 +1,7 @@
 'use client';
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { Modal, Button, Text, Group } from '@mantine/core';
 import { SHELL_COPY } from '@/lib/admin/copy/shell-strings';
-import { cn } from '@/lib/utils';
 
 export default function ConfirmActionDialog({
   open,
@@ -35,32 +25,27 @@ export default function ConfirmActionDialog({
   tone?: 'default' | 'danger';
 }) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>
-            {cancelLabel}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={(e) => {
-              e.preventDefault();
-              onConfirm();
-            }}
-            disabled={pending}
-            className={cn(
-              tone === 'danger'
-                ? 'bg-status-danger-bg text-status-danger-fg border-status-danger-fg/20 hover:bg-status-danger-bg/80 border'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90'
-            )}
-          >
-            {pending ? SHELL_COPY.working : confirmLabel}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Modal
+      opened={open}
+      onClose={() => onOpenChange(false)}
+      title={title}
+      centered
+    >
+      <Text size="sm" mb="lg">
+        {description}
+      </Text>
+      <Group justify="flex-end">
+        <Button variant="subtle" onClick={() => onOpenChange(false)} disabled={pending}>
+          {cancelLabel}
+        </Button>
+        <Button
+          color={tone === 'danger' ? 'red' : 'blue'}
+          onClick={onConfirm}
+          loading={pending}
+        >
+          {confirmLabel}
+        </Button>
+      </Group>
+    </Modal>
   );
 }

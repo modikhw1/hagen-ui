@@ -955,13 +955,15 @@ function CustomerWorkspacePageContent() {
       const data = await fetchAndCacheClient<WorkspaceCustomerProfile>(
         customerCacheKey,
         async () => {
-          const { data: customerData, error } = await supabase
-            .from('customer_profiles')
-            .select('*')
-            .eq('id', customerId)
-            .single();
+          const response = await fetch(`/api/studio-v2/customers/${customerId}/profile`);
+          const customerData = (await response.json().catch(() => ({}))) as WorkspaceCustomerProfile & {
+            error?: string;
+          };
 
-          if (error) throw error;
+          if (!response.ok) {
+            throw new Error(customerData.error || `Failed to fetch customer (${response.status})`);
+          }
+
           return {
             ...customerData,
             brief: normalizeCustomerBrief(customerData.brief),
@@ -1422,6 +1424,7 @@ function CustomerWorkspacePageContent() {
           prev.map(concept => (concept.id === conceptId ? { ...concept, ...data.concept } : concept))
         );
       }
+
       clearClientCache(conceptsCacheKey);
     } catch (err) {
       setConcepts(previousConcepts);
@@ -1489,6 +1492,7 @@ function CustomerWorkspacePageContent() {
         p_concept_b: conceptIdB,
       });
       if (error) throw new Error(error.message);
+
       await fetchConcepts(true);
     } catch (err) {
       console.error('Swap feed_order error:', err);
@@ -3305,7 +3309,10 @@ function CustomerWorkspacePageContent() {
                     )}
                     {customer?.last_history_sync_at && !fetchingProfileHistory && !profileHistoryFetchResult && !profileHistoryFetchError && (
                       <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
-                        {concepts.filter(c => (c.feed_order ?? 1) < 0).length} klipp Â· Senast: {new Date(customer.last_history_sync_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {customer.tiktok_runtime?.stats
+                          ? `${customer.tiktok_runtime.stats.total_videos} videor Â· ${customer.tiktok_runtime.stats.followers.toLocaleString('sv-SE')} foljare`
+                          : `${concepts.filter(c => (c.feed_order ?? 1) < 0).length} klipp`}
+                        {` Â· Senast: ${new Date(customer.last_history_sync_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                       </span>
                     )}
                   </div>

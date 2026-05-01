@@ -13,25 +13,14 @@ const getCachedUnreadCount = (userId: string) => unstable_cache(
       userId,
     });
 
-    const lastSeenDate = payload.attentionFeedSeenAt
-      ? new Date(payload.attentionFeedSeenAt)
-      : null;
-    
-    const count = payload.attentionItems.filter((item) => {
-      const timestamp = attentionTimestamp(item);
-      if (!timestamp) return false;
-      return lastSeenDate ? +timestamp > +lastSeenDate : true;
-    }).length;
-
     return {
-      count,
+      count: payload.attentionItems.length,
       fetchedAt: new Date().toISOString()
     };
   },
   ['admin-unread-count-v2', userId],
   { revalidate: 30, tags: ['admin-notifications'] }
 )();
-
 export const GET = withAuth(async (_request, user) => {
   requireScope(user, 'overview.read');
 
@@ -44,7 +33,7 @@ export const GET = withAuth(async (_request, user) => {
         status: 200,
         headers: {
           'Content-Type': 'application/json',
-          'Cache-Control': 'private, max-age=15',
+          'Cache-Control': 'private, max-age=60, stale-while-revalidate=300',
         },
       },
     );

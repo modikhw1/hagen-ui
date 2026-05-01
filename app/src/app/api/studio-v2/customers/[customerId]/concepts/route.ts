@@ -62,6 +62,13 @@ export const GET = withAuth(async (_request, _user, { params }: { params: Promis
             tiktok_comments: importedStats.tiktok_comments ?? row.tiktok_comments,
             tiktok_watch_time_seconds: importedStats.tiktok_watch_time_seconds ?? row.tiktok_watch_time_seconds,
             tiktok_last_synced_at: importedStats.tiktok_last_synced_at ?? row.tiktok_last_synced_at,
+            history_source: importedStats.history_source ?? row.history_source,
+            observed_profile_handle:
+              importedStats.observed_profile_handle ?? row.observed_profile_handle,
+            provider_name: importedStats.provider_name ?? row.provider_name,
+            provider_video_id: importedStats.provider_video_id ?? row.provider_video_id,
+            first_observed_at: importedStats.first_observed_at ?? row.first_observed_at,
+            last_observed_at: importedStats.last_observed_at ?? row.last_observed_at,
             // Expose the imported clip's own ID so the client can call undo-reconciliation
             // from the LeTrend historik card side (the imported clip is hidden from the grid).
             reconciled_imported_clip_id: importedStats.id,

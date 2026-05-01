@@ -7,7 +7,7 @@ import { ChevronDown, ChevronRight, ExternalLink, Filter } from 'lucide-react';
 import { apiClient } from '@/lib/admin/api-client';
 import { formatSek } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
-import { useOverviewRefresh } from '@/hooks/admin/useAdminRefresh';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import {
   addAdminBreadcrumb,
   captureAdminError,
@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 type SortMode = 'standard' | 'oldest' | 'cm';
 
 const GROUP_ORDER = [
+  'credit_note_failed',
   'invoice_unpaid',
   'customer_blocked',
   'cm_low_activity',
@@ -50,7 +51,14 @@ export default function AttentionList({
   trackSeen?: boolean;
   surface?: 'overview' | 'notifications';
 }) {
-  const refreshOverview = useOverviewRefresh();
+  const refresh = useAdminRefresh();
+  const refreshOverview = async (cid?: string | null) => {
+    if (cid) {
+      await refresh([{ type: 'customer', customerId: cid }, { type: 'global', scope: 'overview' }]);
+    } else {
+      await refresh([{ type: 'global', scope: 'overview' }]);
+    }
+  };
   const [sortMode, setSortMode] = useState<SortMode>('standard');
   const parsedLastSeenAt = lastSeenAt ? new Date(lastSeenAt) : null;
 
@@ -271,6 +279,7 @@ function hrefForItem(item: AttentionItem) {
     case 'customer_blocked': return `/admin/customers/${item.customerId}`;
     case 'cm_change_due_today': return `/admin/customers/${item.customerId}/operations#cm`;
     case 'pause_resume_due_today': return `/admin/customers/${item.customerId}/operations`;
+    case 'credit_note_failed': return `/admin/customers/${item.customerId}/billing`;
     default: return '#';
   }
 }
@@ -282,7 +291,8 @@ function labelForItem(item: AttentionItem) {
     case 'onboarding_stuck':
     case 'customer_blocked':
     case 'cm_change_due_today':
-    case 'pause_resume_due_today': return item.customerName;
+    case 'pause_resume_due_today': 
+    case 'credit_note_failed': return item.customerName;
     case 'demo_responded': return item.companyName;
     case 'cm_low_activity': return item.cmName;
     default: return '';
@@ -299,6 +309,7 @@ function subLabelForItem(item: AttentionItem) {
     case 'cm_change_due_today': return `Byte planerat idag`;
     case 'pause_resume_due_today': return `Planerat återupptag idag`;
     case 'cm_low_activity': return `${item.interactionCount7d}/${item.expectedConcepts7d} interaktioner`;
+    case 'credit_note_failed': return `Kreditering misslyckades: ${item.errorMessage || item.attentionReason || 'Okänt fel'}`;
     default: return '';
   }
 }

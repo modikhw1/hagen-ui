@@ -155,11 +155,11 @@ export function bufferTone(state: keyof typeof OPERATOR_COPY.contentQueue) {
 }
 
 export function cmStatusLabel(status: keyof typeof OPERATOR_COPY.cmStatus) {
-  return OPERATOR_COPY.cmStatus[status].label;
+  return OPERATOR_COPY.cmStatus[status]?.label ?? status;
 }
 
 export function cmStatusTone(status: keyof typeof OPERATOR_COPY.cmStatus) {
-  return OPERATOR_COPY.cmStatus[status].tone;
+  return OPERATOR_COPY.cmStatus[status]?.tone ?? 'neutral';
 }
 
 export function blockingLabel(state: 'none' | 'blocked' | 'escalated') {

@@ -27,18 +27,6 @@ export const GET = withAuth(async (request: NextRequest, user) => {
       try {
         requireScope(user, 'billing.invoices.read');
 
-        const limitedResponse = await enforceAdminReadRateLimit({
-          supabaseAdmin,
-          actorUserId: user.id,
-          actorEmail: user.email,
-          actorRole: user.role,
-          route: request.nextUrl.pathname,
-          action: 'billing_invoices_list_get',
-        });
-        if (limitedResponse) {
-          return limitedResponse;
-        }
-
         const parsed = parseInvoiceListQuery(request);
         if (!parsed.success) {
           return jsonError(SERVER_COPY.invalidQuery, 400);
@@ -66,30 +54,22 @@ export const GET = withAuth(async (request: NextRequest, user) => {
           pagination: result.pagination,
           summary: result.summary,
         };
-        const { body, etag } = createStrongEtag(payload);
-        const cacheTag = `admin:billing:invoices,env:${filters.environment ?? 'all'}`;
+        
+        // Fast ETag generation based on the first and last ID + total count
+        const lastId = result.invoices[result.invoices.length - 1]?.id ?? 'none';
+        const etag = `W/"${result.pagination.total}-${result.pagination.page}-${lastId}"`;
 
         if (request.headers.get('if-none-match') === etag) {
-          return new Response(null, {
-            status: 304,
-            headers: {
-              ETag: etag,
-              'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
-              'Cache-Tag': cacheTag,
-            },
-          });
+          return new Response(null, { status: 304, headers: { ETag: etag } });
         }
 
-        return new Response(body, {
+        return new Response(JSON.stringify(payload), {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
-            ETag: etag,
-            'Cache-Tag': cacheTag,
+            'Cache-Control': 'private, max-age=5, stale-while-revalidate=60',
+            'ETag': etag,
             'X-Total-Count': String(result.pagination.total),
-            'X-Page': String(result.pagination.page),
-            'X-Page-Size': String(result.pagination.limit),
           },
         });
       } catch (error) {

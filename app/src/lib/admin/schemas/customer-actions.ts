@@ -15,8 +15,16 @@ export const cancelSubscriptionActionSchema = z
       .enum(['end_of_period', 'immediate', 'immediate_with_credit'])
       .default('end_of_period'),
     credit_amount_ore: z.number().int().min(0).optional().nullable(),
-    invoice_id: z.string().uuid().optional().nullable(),
+    invoice_id: z.string().trim().min(1).optional().nullable(),
     memo: z.string().trim().max(1000).optional().nullable(),
+    reason: z
+      .enum(['duplicate', 'fraudulent', 'order_change', 'product_unsatisfactory'])
+      .optional()
+      .nullable(),
+    credit_settlement_mode: z
+      .enum(['refund', 'customer_balance', 'outside_stripe'])
+      .optional()
+      .nullable(),
   })
   .strict();
 
@@ -25,6 +33,14 @@ export const changeSubscriptionPriceActionSchema = z
     action: z.literal('change_subscription_price'),
     monthly_price: z.number().min(0).max(1_000_000),
     mode: z.enum(['now', 'next_period']),
+    discount: z
+      .object({
+        type: z.string(),
+        value: z.number(),
+        duration_months: z.number(),
+      })
+      .nullable()
+      .optional(),
   })
   .strict();
 

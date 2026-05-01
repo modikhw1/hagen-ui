@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
-import CustomerOverviewPage from '@/components/admin/customers/routes/CustomerOverviewPage.server';
+import { loadCustomerView } from '@/lib/admin/server/customer-view';
+import { CustomerOverviewRoute } from '@/components/admin/customers/routes/CustomerOverviewRoute';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -21,22 +22,30 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
   }
 
   const focusMap: Record<string, string> = {
-    contract:           `/admin/customers/${id}/operations#contract`,
+    contract:           `/admin/customers/${id}/organisation`,
     invoices:           `/admin/customers/${id}/billing`,
-    "upcoming-invoice": `/admin/customers/${id}/billing#upcoming`,
-    pending:            `/admin/customers/${id}/billing#pending`,
-    operations:         `/admin/customers/${id}/operations`,
-    cm:                 `/admin/customers/${id}/operations#cm`,
-    activity:           `/admin/customers/${id}/activity`,
-    contact:            `/admin/customers/${id}/operations#contact`,
-    "tiktok-profile":   `/admin/customers/${id}#tiktok`,
-    studio:             `/admin/customers/${id}#studio`,
-    subscription:       `/admin/customers/${id}/operations#subscription`,
+    "upcoming-invoice": `/admin/customers/${id}/billing`,
+    pending:            `/admin/customers/${id}/billing`,
+    operations:         `/admin/customers/${id}/pulse`,
+    cm:                 `/admin/customers/${id}/pulse`,
+    activity:           `/admin/customers/${id}/pulse`,
+    contact:            `/admin/customers/${id}/organisation`,
+    "tiktok-profile":   `/admin/customers/${id}/organisation`,
+    studio:             `/admin/customers/${id}/pulse`,
+    subscription:       `/admin/customers/${id}/billing`,
   };
 
   if (focus && focus in focusMap) {
     redirect(focusMap[focus]);
   }
 
-  return <CustomerOverviewPage customerId={id} />;
+  const data = await loadCustomerView(id);
+
+  return (
+    <CustomerOverviewRoute
+      customerId={id}
+      initialData={data.overview}
+      pulseData={data.pulse}
+    />
+  );
 }

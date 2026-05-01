@@ -1,40 +1,100 @@
+// app/src/hooks/useUrlState.ts
+
 'use client';
 
 import { useCallback } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
-type UrlStateValue = string | number | boolean | null | undefined;
+export interface UseUrlStateOptions {
+  /** Använd router.replace istället för router.push för att inte spamma history.
+   *  Default: true. */
+  replace?: boolean;
+  /** Scrolla inte till toppen vid URL-uppdatering. Default: false (Next default). */
+  scroll?: boolean;
+}
 
-export function useUrlState() {
+/**
+ * Generisk hook för att läsa/skriva en enskild URL-search-param.
+ * Stödjer även parameterlöst anrop för bakåtkompatibilitet.
+ *
+ * @example
+ *   const [view, setView] = useUrlState('view', { defaultValue: 'grid' });
+ *   // eller gammalt format:
+ *   const { get, set } = useUrlState();
+ */
+export function useUrlState<T extends string = string>(
+  key: string,
+  options: { defaultValue: T } & UseUrlStateOptions,
+): [T, (value: T | null) => void];
+
+export function useUrlState(
+  key: string,
+  options?: UseUrlStateOptions,
+): [string | null, (value: string | null) => void];
+
+export function useUrlState(): {
+  get: (key: string) => string | null;
+  set: (keyOrMap: string | Record<string, string | null>, value?: string | null) => void;
+};
+
+export function useUrlState(
+  keyOrOptions?: string | UseUrlStateOptions,
+  maybeOptions: UseUrlStateOptions & { defaultValue?: string } = {},
+): any {
   const router = useRouter();
-  const pathname = usePathname() ?? '/';
-  const params = useSearchParams();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const set = useCallback(
-    (updates: Record<string, UrlStateValue>) => {
-      const next = new URLSearchParams(params?.toString() ?? '');
-      for (const [key, value] of Object.entries(updates)) {
-        if (value === null || value === '' || value === undefined) {
-          next.delete(key);
-          continue;
+  // Hantera parameterlöst anrop: useUrlState()
+  if (keyOrOptions === undefined || typeof keyOrOptions !== 'string') {
+    const get = (k: string) => searchParams?.get(k) ?? null;
+    const set = (kOrMap: string | Record<string, string | null>, v?: string | null) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      
+      if (typeof kOrMap === 'string') {
+        if (v === null || v === '' || v === undefined) {
+          params.delete(kOrMap);
+        } else {
+          params.set(kOrMap, v);
         }
-
-        next.set(key, String(value));
+      } else {
+        Object.entries(kOrMap).forEach(([k, val]) => {
+          if (val === null || val === '' || val === undefined) {
+            params.delete(k);
+          } else {
+            params.set(k, val);
+          }
+        });
       }
 
-      const queryString = next.toString();
-      router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
-        scroll: false,
-      });
+      const url = `${pathname}?${params.toString()}`;
+      router.replace(url, { scroll: false });
+    };
+    return { get, set };
+  }
+
+  const key = keyOrOptions;
+  const options = maybeOptions;
+  const { replace = true, scroll = false, defaultValue } = options;
+  const value = searchParams?.get(key) ?? defaultValue ?? null;
+
+  const setValue = useCallback(
+    (newValue: string | null) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      if (newValue === null || newValue === '') {
+        params.delete(key);
+      } else {
+        params.set(key, newValue);
+      }
+      const url = `${pathname}?${params.toString()}`;
+      if (replace) {
+        router.replace(url, { scroll });
+      } else {
+        router.push(url, { scroll });
+      }
     },
-    [params, pathname, router],
+    [router, pathname, searchParams, key, replace, scroll],
   );
 
-  const get = useCallback(
-    <T extends string = string>(key: string): T | null =>
-      (params?.get(key) as T | null) ?? null,
-    [params],
-  );
-
-  return { get, set, params };
+  return [value, setValue];
 }

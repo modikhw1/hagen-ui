@@ -86,7 +86,7 @@ export default function TikTokStatsSection({ customerId }: { customerId: string 
           </div>
           <div className="bg-secondary/30 rounded-lg p-4 border border-border/5">
             <Chart xDomain={[0, 30]} yDomain="auto" height={80}>
-              <LineSeries data={viewsData} color="hsl(var(--status-info-fg))" strokeWidth={2} />
+              <LineSeries data={viewsData} stroke="hsl(var(--status-info-fg))" strokeWidth={2} />
             </Chart>
             <div className="flex justify-between text-[10px] text-muted-foreground mt-2 font-medium">
               <span>30d sedan</span>

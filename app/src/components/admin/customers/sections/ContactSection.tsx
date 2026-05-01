@@ -2,6 +2,8 @@
 
 import { CustomerSection, CustomerSectionSkeleton, CustomerField } from '@/components/admin/customers/routes/shared';
 import { InlineEditField } from '@/components/admin/ui/form/InlineEditField';
+import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
+import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
 
 export default function ContactSection({ customerId }: { customerId: string }) {
   const { data: customer, isLoading } = useCustomerDetail(customerId);

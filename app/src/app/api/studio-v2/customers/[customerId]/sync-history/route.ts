@@ -3,29 +3,10 @@ import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { logInteraction } from '@/lib/interactions';
 import {
-  createMotorSignalNudge,
-  inferMotorSignalKind,
-} from '@/lib/studio/motor-signal';
-
-// ─────────────────────────────────────────────
-// POST /api/studio-v2/customers/[customerId]/sync-history
-//
-// One-click history sync:
-//   1. Reads customer_profiles.tiktok_handle for this customer
-//   2. Fetches all TikTok clips from hagen (?all=true&platform=tiktok)
-//   3. Filters to clips whose source username matches the handle
-//   4. Deduplicates against existing customer_concepts.tiktok_url
-//   5. Inserts new clips as imported_history rows (negative feed_order)
-//   6. Updates customer_profiles.last_history_sync_at = NOW()
-//
-// ?preview=true — dry-run mode:
-//   Runs steps 1–4 only. Does NOT insert rows or update last_history_sync_at.
-//   Returns { preview: true, handle, wouldImport, wouldSkip, samples }.
-//   samples: up to 3 clips with tiktok_url, source_username, description.
-//
-// Returns { imported, skipped } summary (real mode).
-// Requires HAGEN_BASE_URL env var.
-// ─────────────────────────────────────────────
+  importNewClips,
+  partitionHistoryClips,
+} from '@/lib/studio/history-import';
+import type { NormalizedHistoryClip } from '@/lib/studio/tiktok-provider';
 
 interface HagenLibraryVideo {
   video_url?: string;
@@ -34,9 +15,73 @@ interface HagenLibraryVideo {
   created_at?: string;
 }
 
-/** Strip leading @ and lowercase for fuzzy handle comparison */
-function normHandle(s: string): string {
-  return s.toLowerCase().replace(/^@/, '').trim();
+type HagenImportClip = NormalizedHistoryClip & {
+  source_username: string | null;
+};
+
+function normHandle(value: string): string {
+  return value.toLowerCase().replace(/^@/, '').trim();
+}
+
+function extractTikTokVideoId(url: string): string | null {
+  const match = url.match(/\/video\/([^/?#]+)/i);
+  return match?.[1] ?? null;
+}
+
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function buildMatchingClips(params: {
+  libVideos: HagenLibraryVideo[];
+  normalizedHandle: string;
+}): HagenImportClip[] {
+  const observedAt = new Date().toISOString();
+
+  return params.libVideos
+    .filter((video) => {
+      if (typeof video.video_url !== 'string') return false;
+
+      const author = ((video.metadata ?? {}).author ?? {}) as Record<string, unknown>;
+      const username =
+        typeof author.username === 'string' ? author.username
+        : typeof author.displayName === 'string' ? author.displayName
+        : '';
+
+      return normHandle(username).includes(params.normalizedHandle);
+    })
+    .map((video) => {
+      const metadata = video.metadata ?? {};
+      const author = (metadata.author ?? {}) as Record<string, unknown>;
+      const stats = (metadata.stats ?? {}) as Record<string, unknown>;
+      const sourceUsername =
+        typeof author.username === 'string' && author.username ? author.username
+        : typeof author.displayName === 'string' && author.displayName ? author.displayName
+        : null;
+      const tiktokUrl = video.video_url!.trim();
+
+      return {
+        tiktok_url: tiktokUrl,
+        tiktok_thumbnail_url:
+          typeof metadata.thumbnail_url === 'string' ? metadata.thumbnail_url : null,
+        tiktok_views: asNumber(stats.views),
+        tiktok_likes: asNumber(stats.likes),
+        tiktok_comments: asNumber(stats.comments),
+        description: typeof metadata.title === 'string' ? metadata.title : null,
+        published_at:
+          typeof metadata.createdAt === 'string' ? metadata.createdAt
+          : typeof video.rated_at === 'string' ? video.rated_at
+          : typeof video.created_at === 'string' ? video.created_at
+          : null,
+        history_source: 'hagen_library',
+        observed_profile_handle: params.normalizedHandle,
+        provider_name: 'hagen:video-library',
+        provider_video_id: extractTikTokVideoId(tiktokUrl),
+        first_observed_at: observedAt,
+        last_observed_at: observedAt,
+        source_username: sourceUsername,
+      };
+    });
 }
 
 export const POST = withAuth(
@@ -49,7 +94,6 @@ export const POST = withAuth(
     const isPreview = new URL(request.url).searchParams.get('preview') === 'true';
     const supabase = createSupabaseAdmin();
 
-    // ── 1. Read tiktok_handle ──────────────────────────────────────────
     const { data: profile, error: profileError } = await supabase
       .from('customer_profiles')
       .select('tiktok_handle')
@@ -67,10 +111,10 @@ export const POST = withAuth(
         { status: 400 }
       );
     }
+
     const handle = rawHandle.trim();
     const normalizedHandle = normHandle(handle);
 
-    // ── 2. Fetch from hagen ────────────────────────────────────────────
     const hagenBase = process.env.HAGEN_BASE_URL;
     if (!hagenBase) {
       return NextResponse.json({ error: 'HAGEN_BASE_URL is not configured' }, { status: 503 });
@@ -78,116 +122,78 @@ export const POST = withAuth(
 
     let libVideos: HagenLibraryVideo[];
     try {
-      const res = await fetch(`${hagenBase}/api/videos/library?all=true&platform=tiktok`, {
+      const response = await fetch(`${hagenBase}/api/videos/library?all=true&platform=tiktok`, {
         signal: AbortSignal.timeout(8000),
       });
-      if (!res.ok) {
-        return NextResponse.json({ error: `hagen library returned ${res.status}` }, { status: 502 });
+
+      if (!response.ok) {
+        return NextResponse.json(
+          { error: `hagen library returned ${response.status}` },
+          { status: 502 },
+        );
       }
-      const libData = (await res.json()) as { videos?: HagenLibraryVideo[] };
-      libVideos = libData.videos ?? [];
-    } catch (err) {
+
+      const payload = (await response.json()) as { videos?: HagenLibraryVideo[] };
+      libVideos = payload.videos ?? [];
+    } catch (error) {
       return NextResponse.json(
-        { error: `Could not reach hagen at ${hagenBase}: ${(err as Error).message}` },
-        { status: 502 }
+        { error: `Could not reach hagen at ${hagenBase}: ${(error as Error).message}` },
+        { status: 502 },
       );
     }
 
-    // ── 3. Filter by handle + map to import shape ──────────────────────
-    const matchingClips = libVideos
-      .filter((v) => {
-        if (typeof v.video_url !== 'string') return false;
-        const author = ((v.metadata ?? {}).author ?? {}) as Record<string, unknown>;
-        const username =
-          typeof author.username === 'string' ? author.username
-          : typeof author.displayName === 'string' ? author.displayName
-          : '';
-        return normHandle(username).includes(normalizedHandle);
-      })
-      .map((v) => {
-        const meta = v.metadata ?? {};
-        const stats = (meta.stats ?? {}) as Record<string, unknown>;
-        const author = (meta.author ?? {}) as Record<string, unknown>;
-        return {
-          tiktok_url: (v.video_url as string).trim(),
-          tiktok_thumbnail_url:
-            typeof meta.thumbnail_url === 'string' ? meta.thumbnail_url : null,
-          tiktok_views: typeof stats.views === 'number' ? stats.views : null,
-          tiktok_likes: typeof stats.likes === 'number' ? stats.likes : null,
-          tiktok_comments: typeof stats.comments === 'number' ? stats.comments : null,
-          description: typeof meta.title === 'string' ? meta.title : null,
-          published_at:
-            typeof meta.createdAt === 'string' ? meta.createdAt
-            : typeof v.rated_at === 'string' ? v.rated_at
-            : typeof v.created_at === 'string' ? v.created_at
-            : null,
-          source_username:
-            typeof author.username === 'string' && author.username ? author.username
-            : typeof author.displayName === 'string' ? author.displayName
-            : null,
-        };
-      });
+    const matchingClips = buildMatchingClips({
+      libVideos,
+      normalizedHandle,
+    });
+    const partitioned = await partitionHistoryClips(supabase, customerId, matchingClips);
 
-    // ── 4. Deduplicate against existing tiktok_url ────────────────────
-    const { data: existing } = await supabase
-      .from('customer_concepts')
-      .select('tiktok_url')
-      .eq('customer_profile_id', customerId)
-      .not('tiktok_url', 'is', null);
-
-    const existingUrls = new Set((existing ?? []).map((r) => r.tiktok_url as string));
-    const newClips = matchingClips.filter((c) => !existingUrls.has(c.tiktok_url));
-    const skipped = matchingClips.length - newClips.length;
-
-    // ── Preview / dry-run: return without writing ──────────────────────
     if (isPreview) {
-      const samples = newClips.slice(0, 3).map((c) => ({
-        tiktok_url: c.tiktok_url,
-        source_username: c.source_username,
-        description: c.description,
-      }));
+      const samples = partitioned.newClips
+        .slice(0, 3)
+        .map((clip) => {
+          const previewClip = clip as HagenImportClip;
+          return {
+            tiktok_url: previewClip.tiktok_url,
+            source_username: previewClip.source_username,
+            description: previewClip.description,
+          };
+        });
 
-      // When the handle matched nothing, surface unique source usernames
-      // from the full hagen clip pool so the CM can diagnose what handle
-      // forms are actually stored and adjust accordingly.
       let availableUsernames: string[] | undefined;
       if (matchingClips.length === 0 && libVideos.length > 0) {
         const seen = new Set<string>();
-        for (const v of libVideos) {
-          const author = ((v.metadata ?? {}).author ?? {}) as Record<string, unknown>;
+
+        for (const video of libVideos) {
+          const author = ((video.metadata ?? {}).author ?? {}) as Record<string, unknown>;
           const raw =
             typeof author.username === 'string' && author.username ? author.username
             : typeof author.displayName === 'string' && author.displayName ? author.displayName
             : null;
+
           if (raw) {
             const normalized = raw.toLowerCase().replace(/^@/, '').trim();
             if (normalized) seen.add(normalized);
           }
-          if (seen.size >= 20) break; // cap at 20 unique handles
+
+          if (seen.size >= 20) break;
         }
+
         availableUsernames = [...seen];
       }
 
       return NextResponse.json({
         preview: true,
         handle,
-        wouldImport: newClips.length,
-        wouldSkip: skipped,
+        wouldImport: partitioned.newClips.length,
+        wouldSkip: partitioned.skipped,
         totalMatched: matchingClips.length,
         samples,
         ...(availableUsernames !== undefined && { availableUsernames }),
       });
     }
 
-    // Always update last_history_sync_at, even if no clips found
-    const stampSync = () =>
-      supabase
-        .from('customer_profiles')
-        .update({ last_history_sync_at: new Date().toISOString() })
-        .eq('id', customerId);
-
     if (matchingClips.length === 0) {
-      await stampSync();
       return NextResponse.json({
         imported: 0,
         skipped: 0,
@@ -195,68 +201,24 @@ export const POST = withAuth(
       });
     }
 
-    if (newClips.length === 0) {
-      await stampSync();
-      return NextResponse.json({ imported: 0, skipped, message: 'All clips already present' });
-    }
+    const importResult = await importNewClips(supabase, customerId, matchingClips);
+    const importedUrls = partitioned.newClips.map((clip) => clip.tiktok_url);
 
-    // ── 5. Find current most-negative feed_order ──────────────────────
-    const { data: historySlots } = await supabase
-      .from('customer_concepts')
-      .select('feed_order')
-      .eq('customer_profile_id', customerId)
-      .lt('feed_order', 0)
-      .order('feed_order', { ascending: true })
-      .limit(1);
+    let slots: Array<{ id: string; feed_order: number | null; tiktok_url: string | null }> = [];
+    if (importedUrls.length > 0) {
+      const { data: insertedRows } = await supabase
+        .from('customer_concepts')
+        .select('id, feed_order, tiktok_url')
+        .eq('customer_profile_id', customerId)
+        .eq('history_source', 'hagen_library')
+        .in('tiktok_url', importedUrls)
+        .order('feed_order', { ascending: true });
 
-    const currentMostNegative = historySlots?.[0]?.feed_order ?? 0;
-    const startOrder = Math.min(currentMostNegative - 1, -1);
-
-    // ── 6. Insert new imported_history rows ───────────────────────────
-    const inserts = newClips.map((clip, i) => ({
-      customer_profile_id: customerId,
-      customer_id: customerId,
-      concept_id: null,
-      status: 'produced',
-      feed_order: startOrder - i,
-      tiktok_url: clip.tiktok_url,
-      tiktok_thumbnail_url: clip.tiktok_thumbnail_url,
-      tiktok_views: clip.tiktok_views,
-      tiktok_likes: clip.tiktok_likes,
-      tiktok_comments: clip.tiktok_comments,
-      published_at: clip.published_at,
-      tags: [] as string[],
-      content_overrides: clip.description ? { script: clip.description } : {},
-    }));
-
-    const { data: inserted, error: insertError } = await supabase
-      .from('customer_concepts')
-      .insert(inserts)
-      .select('id, feed_order, tiktok_url');
-
-    if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
-    }
-
-    // ── 7. Stamp sync time and persist motor signal ───────────────────
-    const importedCount = inserted?.length ?? 0;
-    // Compute MAX(published_at) of newly imported clips for the freshness seam.
-    const latestPublishedAt = newClips.reduce<string | null>((max, c) => {
-      if (!c.published_at) return max;
-      if (!max) return c.published_at;
-      return c.published_at > max ? c.published_at : max;
-    }, null);
-    await supabase
-      .from('customer_profiles')
-      .update({ last_history_sync_at: new Date().toISOString() })
-      .eq('id', customerId);
-
-    if (importedCount > 0) {
-      await createMotorSignalNudge(supabase, customerId, {
-        imported_count: importedCount,
-        latest_published_at: latestPublishedAt,
-        kind: inferMotorSignalKind(latestPublishedAt),
-      });
+      slots = (insertedRows ?? []) as Array<{
+        id: string;
+        feed_order: number | null;
+        tiktok_url: string | null;
+      }>;
     }
 
     await logInteraction({
@@ -264,17 +226,18 @@ export const POST = withAuth(
       cmProfileId: typeof user === 'object' && user && 'id' in user ? String(user.id) : null,
       customerId,
       metadata: {
-        imported: importedCount,
-        skipped,
+        imported: importResult.imported,
+        skipped: importResult.skipped,
         preview: false,
+        source: 'hagen_library',
       },
       client: supabase,
     });
 
     return NextResponse.json({
-      imported: importedCount,
-      skipped,
-      slots: inserted,
+      imported: importResult.imported,
+      skipped: importResult.skipped,
+      slots,
     });
   },
   ['admin', 'content_manager']

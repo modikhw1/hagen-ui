@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
+import { logInteraction } from '@/lib/interactions';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import type { TablesUpdate } from '@/types/database';
-import {
-  deriveTikTokHandle,
-  toCanonicalTikTokProfileUrl,
-} from '@/lib/tiktok/profile';
+import { fetchCustomerTikTokRuntime } from '@/lib/tiktok/customer-runtime';
+import { buildTikTokProfileLinkPatch } from '@/lib/tiktok/customer-profile-link';
+import { triggerInitialTikTokSync } from '@/lib/tiktok/trigger-initial-sync';
 
 export const GET = withAuth(
   async (
@@ -15,18 +15,25 @@ export const GET = withAuth(
   ) => {
     const { customerId } = await params;
     const supabase = createSupabaseAdmin();
-
     const { data, error } = await supabase
       .from('customer_profiles')
-      .select('id, tiktok_profile_url, tiktok_handle, last_history_sync_at, pending_history_advance_at')
+      .select('*')
       .eq('id', customerId)
       .single();
 
-    if (error || !data) {
+    const runtime = await fetchCustomerTikTokRuntime({
+      customerId,
+      supabase,
+    });
+
+    if (error || !data || !runtime.profile) {
       return NextResponse.json({ error: 'Kundprofilen hittades inte.' }, { status: 404 });
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      tiktok_runtime: runtime,
+    });
   },
   ['admin', 'content_manager'],
 );
@@ -41,29 +48,60 @@ export const PATCH = withAuth(
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
     const patch: TablesUpdate<'customer_profiles'> = {};
+    const { data: currentProfile, error: currentProfileError } = await supabase
+      .from('customer_profiles')
+      .select('tiktok_profile_url, last_history_sync_at')
+      .eq('id', customerId)
+      .maybeSingle();
+
+    if (currentProfileError) {
+      return NextResponse.json(
+        { error: 'Kunde inte lasa befintlig TikTok-profil.' },
+        { status: 500 },
+      );
+    }
 
     if ('tiktok_profile_url' in body) {
-      const raw = body.tiktok_profile_url;
-      const url = typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null;
+      const raw = typeof body.tiktok_profile_url === 'string' ? body.tiktok_profile_url : null;
+      const profilePatch = buildTikTokProfileLinkPatch({
+        input: raw,
+        previousProfileUrl:
+          typeof currentProfile?.tiktok_profile_url === 'string'
+            ? currentProfile.tiktok_profile_url
+            : null,
+      });
 
-      patch.tiktok_profile_url = url ? toCanonicalTikTokProfileUrl(url) : null;
-      patch.tiktok_handle = url ? deriveTikTokHandle(url) : null;
-      patch.tiktok_user_id = null;
-
-      if (url && (!patch.tiktok_profile_url || !patch.tiktok_handle)) {
+      if (!profilePatch.ok) {
         return NextResponse.json(
           { error: 'Ogiltig TikTok-profil. Anvand en profil-URL eller @handle.' },
           { status: 400 },
         );
       }
+
+      Object.assign(patch, profilePatch.patch);
     }
 
     if ('tiktok_handle' in body && !('tiktok_profile_url' in body)) {
-      const value = body.tiktok_handle;
-      patch.tiktok_handle =
-        typeof value === 'string' && value.trim() !== ''
-          ? value.trim().replace(/^@/, '')
+      const rawHandle =
+        typeof body.tiktok_handle === 'string' && body.tiktok_handle.trim() !== ''
+          ? `@${body.tiktok_handle.trim().replace(/^@/, '')}`
           : null;
+      const profilePatch = buildTikTokProfileLinkPatch({
+        input: rawHandle,
+        previousProfileUrl:
+          typeof currentProfile?.tiktok_profile_url === 'string'
+            ? currentProfile.tiktok_profile_url
+            : null,
+      });
+
+      if (!profilePatch.ok) {
+        return NextResponse.json(
+          { error: 'Ogiltig TikTok-profil. Anvand en profil-URL eller @handle.' },
+          { status: 400 },
+        );
+      }
+
+      Object.assign(patch, profilePatch.patch);
     }
 
     if (Object.keys(patch).length === 0) {
@@ -84,6 +122,30 @@ export const PATCH = withAuth(
         { status: 500 },
       );
     }
+
+    await triggerInitialTikTokSync({
+      supabaseAdmin: supabase,
+      customerId,
+      tiktokHandle: typeof patch.tiktok_handle === 'string' ? patch.tiktok_handle : null,
+      lastHistorySyncAt:
+        typeof currentProfile?.last_history_sync_at === 'string'
+          ? currentProfile.last_history_sync_at
+          : null,
+      source: 'profile_link',
+    });
+
+    const requestUser = (request as NextRequest & {
+      user?: { id?: string | null };
+    }).user;
+    const cmProfileId = requestUser?.id ?? null;
+
+    await logInteraction({
+      type: 'customer_updated',
+      cmProfileId,
+      customerId,
+      metadata: { updates: Object.keys(patch) },
+      client: supabase,
+    });
 
     return NextResponse.json({ ok: true, patched: Object.keys(patch) });
   },

@@ -11,45 +11,45 @@ describe('useCustomerListParamsState helpers', () => {
       {
         search: 'acme',
         filter: 'all',
-        sort: 'newest',
+        sort: 'recent',
         page: 4,
       },
       {
-        type: 'filter',
+        type: 'SET_FILTER',
         value: 'active',
       },
     );
 
     const afterSort = reduceCustomerListParams(afterFilter, {
-      type: 'sort',
-      value: 'oldest',
+      type: 'SET_SORT',
+      value: 'name_asc',
     });
 
     expect(afterSort).toEqual({
       search: 'acme',
       filter: 'active',
-      sort: 'oldest',
+      sort: 'name_asc',
       page: 1,
     });
   });
 
   it('serializes only non-default values into list urls', () => {
     expect(
-      buildCustomerListUrl('/admin/customers', {
+      buildCustomerListUrl({
         search: 'acme',
         filter: 'active',
-        sort: 'oldest',
+        sort: 'name_asc',
         page: 3,
-      }),
-    ).toBe('/admin/customers?q=acme&filter=active&sort=oldest&page=3');
+      }, '/admin/customers'),
+    ).toBe('/admin/customers?q=acme&filter=active&sort=name_asc&page=3');
 
     expect(
-      buildCustomerListUrl('/admin/customers', {
+      buildCustomerListUrl({
         search: '',
         filter: 'all',
-        sort: 'newest',
+        sort: 'recent',
         page: 1,
-      }),
+      }, '/admin/customers'),
     ).toBe('/admin/customers');
   });
 

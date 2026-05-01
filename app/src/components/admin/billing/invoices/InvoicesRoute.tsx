@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import AdminTable, { type AdminTableColumn } from '@/components/admin/_shared/AdminTable';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
 import { InvoiceDetailModal } from '@/components/admin/billing/invoices/InvoiceDetailModal';
-import { useBillingInvoicesRefresh } from '@/hooks/admin/useAdminRefresh';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { apiClient } from '@/lib/admin/api-client';
 import {
   type BillingInvoiceStatusFilter,
@@ -25,7 +25,6 @@ import { cn } from '@/lib/utils';
 import { EnvTag } from '../shared/EnvTag';
 import { StatusPill } from '@/components/admin/ui/StatusPill';
 import { AdminActionMenu } from '@/components/admin/ui/AdminActionMenu';
-import { InvoiceCreditModal } from './InvoiceCreditModal';
 import { FileText, Receipt, Scissors } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,9 +39,9 @@ export default function InvoicesRoute({
   status: BillingInvoiceStatusFilter;
   page: number;
 }) {
-  const refreshInvoices = useBillingInvoicesRefresh();
+  const refresh = useAdminRefresh();
+  const refreshInvoices = () => refresh(['billing']);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
-  const [creditInvoice, setCreditInvoice] = useState<any | null>(null);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
   const {
     run: syncInvoices,
@@ -152,14 +151,9 @@ export default function InvoicesRoute({
         <AdminActionMenu
           items={[
             {
-              label: 'Visa detaljer',
+              label: 'Visa detaljer/kreditera',
               icon: <FileText className="h-3.5 w-3.5" />,
               onClick: () => setSelectedInvoiceId(inv.id),
-            },
-            {
-              label: 'Kreditera faktura',
-              icon: <Scissors className="h-3.5 w-3.5" />,
-              onClick: () => setCreditInvoice(inv),
             },
             {
               label: 'Ladda ner PDF',
@@ -213,25 +207,10 @@ export default function InvoicesRoute({
       <InvoiceDetailModal
         invoiceId={selectedInvoiceId!}
         open={Boolean(selectedInvoiceId)}
-        onClose={() => setSelectedInvoiceId(null)}
-        onUpdated={async () => {
-          setSelectedInvoiceId(null);
-          await refreshInvoices();
+        onOpenChange={(open) => {
+          if (!open) setSelectedInvoiceId(null);
         }}
       />
-
-      {creditInvoice && (
-        <InvoiceCreditModal
-          open={Boolean(creditInvoice)}
-          onClose={() => setCreditInvoice(null)}
-          invoice={creditInvoice}
-          lineItems={creditInvoice.line_items || []}
-          onUpdated={async () => {
-            setCreditInvoice(null);
-            await refreshInvoices();
-          }}
-        />
-      )}
 
       <ConfirmActionDialog
         open={confirmSyncOpen}

@@ -464,12 +464,17 @@ export type Database = {
           customer_profile_id: string
           feed_order: number | null
           feed_slot: number | null
+          first_observed_at: string | null
           filming_instructions: string | null
+          history_source: string | null
           id: string
           match_percentage: number | null
           notes: string | null
+          observed_profile_handle: string | null
           planned_publish_at: string | null
           produced_at: string | null
+          provider_name: string | null
+          provider_video_id: string | null
           published_at: string | null
           sent_at: string | null
           status: string | null
@@ -483,6 +488,7 @@ export type Database = {
           tiktok_watch_time_seconds: number | null
           updated_at: string | null
           why_it_fits: string | null
+          last_observed_at: string | null
         }
         Insert: {
           added_at?: string | null
@@ -505,12 +511,17 @@ export type Database = {
           customer_profile_id: string
           feed_order?: number | null
           feed_slot?: number | null
+          first_observed_at?: string | null
           filming_instructions?: string | null
+          history_source?: string | null
           id?: string
           match_percentage?: number | null
           notes?: string | null
+          observed_profile_handle?: string | null
           planned_publish_at?: string | null
           produced_at?: string | null
+          provider_name?: string | null
+          provider_video_id?: string | null
           published_at?: string | null
           sent_at?: string | null
           status?: string | null
@@ -524,6 +535,7 @@ export type Database = {
           tiktok_watch_time_seconds?: number | null
           updated_at?: string | null
           why_it_fits?: string | null
+          last_observed_at?: string | null
         }
         Update: {
           added_at?: string | null
@@ -546,12 +558,17 @@ export type Database = {
           customer_profile_id?: string
           feed_order?: number | null
           feed_slot?: number | null
+          first_observed_at?: string | null
           filming_instructions?: string | null
+          history_source?: string | null
           id?: string
           match_percentage?: number | null
           notes?: string | null
+          observed_profile_handle?: string | null
           planned_publish_at?: string | null
           produced_at?: string | null
+          provider_name?: string | null
+          provider_video_id?: string | null
           published_at?: string | null
           sent_at?: string | null
           status?: string | null
@@ -565,6 +582,7 @@ export type Database = {
           tiktok_watch_time_seconds?: number | null
           updated_at?: string | null
           why_it_fits?: string | null
+          last_observed_at?: string | null
         }
         Relationships: [
           {

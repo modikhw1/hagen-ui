@@ -2,9 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { Link2, Upload } from 'lucide-react';
+import { Button, TextInput } from '@mantine/core';
 import AdminAvatar from '@/components/admin/AdminAvatar';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/admin/api-client';
 
 type AvatarUploadResponse = {
@@ -82,20 +81,20 @@ export function AvatarUploader({
               type="button"
               variant="outline"
               size="sm"
+              leftSection={<Upload className="h-4 w-4" />}
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled || uploading}
             >
-              <Upload className="h-4 w-4" />
               {uploading ? 'Laddar upp...' : 'Ladda upp'}
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="subtle"
               size="sm"
+              leftSection={<Link2 className="h-4 w-4" />}
               onClick={() => setShowUrlField((current) => !current)}
               disabled={disabled}
             >
-              <Link2 className="h-4 w-4" />
               {showUrlField ? 'Dölj URL-fält' : 'Ange URL manuellt'}
             </Button>
           </div>
@@ -117,7 +116,7 @@ export function AvatarUploader({
       />
 
       {showUrlField ? (
-        <Input
+        <TextInput
           type="url"
           value={value}
           onChange={(event) => onChange(event.target.value)}

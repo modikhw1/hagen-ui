@@ -27,18 +27,6 @@ export const GET = withAuth(async (request: NextRequest, user) => {
       try {
         requireScope(user, 'billing.subscriptions.read');
 
-        const limitedResponse = await enforceAdminReadRateLimit({
-          supabaseAdmin,
-          actorUserId: user.id,
-          actorEmail: user.email,
-          actorRole: user.role,
-          route: request.nextUrl.pathname,
-          action: 'billing_subscriptions_list_get',
-        });
-        if (limitedResponse) {
-          return limitedResponse;
-        }
-
         const parsed = parseSubscriptionListQuery(request);
         if (!parsed.success) {
           return jsonError(SERVER_COPY.invalidQuery, 400);
@@ -51,6 +39,7 @@ export const GET = withAuth(async (request: NextRequest, user) => {
             limit: filters.limit ?? 50,
             page: filters.page ?? 1,
             status: filters.status,
+            sort: filters.sort,
             q: filters.q,
             fromDate: filters.from,
             toDate: filters.to,
@@ -66,30 +55,21 @@ export const GET = withAuth(async (request: NextRequest, user) => {
           summary: result.summary,
           pagination: result.pagination,
         };
-        const { body, etag } = createStrongEtag(payload);
-        const cacheTag = `admin:billing:subscriptions,env:${filters.environment ?? 'all'}`;
+        
+        const lastId = result.subscriptions[result.subscriptions.length - 1]?.id ?? 'none';
+        const etag = `W/"${result.pagination.total}-${result.pagination.page}-${lastId}"`;
 
         if (request.headers.get('if-none-match') === etag) {
-          return new Response(null, {
-            status: 304,
-            headers: {
-              ETag: etag,
-              'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
-              'Cache-Tag': cacheTag,
-            },
-          });
+          return new Response(null, { status: 304, headers: { ETag: etag } });
         }
 
-        return new Response(body, {
+        return new Response(JSON.stringify(payload), {
           status: 200,
           headers: {
             'Content-Type': 'application/json',
-            'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
-            ETag: etag,
-            'Cache-Tag': cacheTag,
+            'Cache-Control': 'private, max-age=5, stale-while-revalidate=60',
+            'ETag': etag,
             'X-Total-Count': String(result.pagination.total),
-            'X-Page': String(result.pagination.page),
-            'X-Page-Size': String(result.pagination.limit),
           },
         });
       } catch (error) {

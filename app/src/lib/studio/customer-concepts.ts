@@ -8,6 +8,7 @@ import type { Json } from '@/types/database';
 import type {
   AssignedCustomerConcept,
   CustomerConcept,
+  CustomerConceptHistorySource,
   CustomerConceptRowKind,
 } from '@/types/studio-v2';
 
@@ -42,6 +43,12 @@ export const STUDIO_CUSTOMER_CONCEPT_SELECT = `
   tiktok_comments,
   tiktok_watch_time_seconds,
   tiktok_last_synced_at,
+  history_source,
+  observed_profile_handle,
+  provider_name,
+  provider_video_id,
+  first_observed_at,
+  last_observed_at,
   partner_name,
   profile_name,
   profile_image_url,
@@ -178,6 +185,16 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
   const tiktokComments = readNumber(row.tiktok_comments);
   const tiktokWatchTimeSeconds = readNumber(row.tiktok_watch_time_seconds);
   const tiktokLastSyncedAt = readString(row.tiktok_last_synced_at);
+  const historySourceRaw = readString(row.history_source);
+  const historySource: CustomerConceptHistorySource | null =
+    historySourceRaw === 'tiktok_profile' || historySourceRaw === 'hagen_library'
+      ? historySourceRaw
+      : null;
+  const observedProfileHandle = readString(row.observed_profile_handle);
+  const providerName = readString(row.provider_name);
+  const providerVideoId = readString(row.provider_video_id);
+  const firstObservedAt = readString(row.first_observed_at);
+  const lastObservedAt = readString(row.last_observed_at);
   const reconciledCustomerConceptId = readString(row.reconciled_customer_concept_id);
   const reconciledByCmId = readString(row.reconciled_by_cm_id);
   const reconciledAt = readString(row.reconciled_at);
@@ -260,6 +277,14 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
       tiktok_comments: tiktokComments,
       tiktok_watch_time_seconds: tiktokWatchTimeSeconds,
       tiktok_last_synced_at: tiktokLastSyncedAt,
+    },
+    origin: {
+      history_source: historySource,
+      observed_profile_handle: observedProfileHandle,
+      provider_name: providerName,
+      provider_video_id: providerVideoId,
+      first_observed_at: firstObservedAt,
+      last_observed_at: lastObservedAt,
     },
     reconciliation: {
       linked_customer_concept_id: reconciledCustomerConceptId,

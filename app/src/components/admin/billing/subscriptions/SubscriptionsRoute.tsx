@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import AdminTable, { type AdminTableColumn } from '@/components/admin/_shared/AdminTable';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
 import SubscriptionPriceChangeModal from '@/components/admin/billing/SubscriptionPriceChangeModal';
-import { useBillingSubscriptionsRefresh } from '@/hooks/admin/useAdminRefresh';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { apiClient } from '@/lib/admin/api-client';
 import {
   subscriptionMonthlyPriceSek,
@@ -18,13 +19,14 @@ import {
   type BillingSubscriptionsResponse,
 } from '@/lib/admin/dtos/billing';
 import { parseDto } from '@/lib/admin/dtos/parse';
-import { subscriptionStatusRich } from '@/lib/admin/labels';
 import { formatSek } from '@/lib/admin/money';
 import { qk } from '@/lib/admin/queryKeys';
+import { shortDateSv } from '@/lib/admin/time';
 import { EnvTag } from '../shared/EnvTag';
 import { AdminActionMenu } from '@/components/admin/ui/AdminActionMenu';
-import { toast } from 'sonner';
-import { Settings2, User, ExternalLink } from 'lucide-react';
+import { StatusPill } from '@/components/admin/ui/StatusPill';
+import { subscriptionStatusConfig } from '@/lib/admin/labels';
+import { Settings2, User, ExternalLink, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 
 const PAGE_SIZE = 50;
 
@@ -37,7 +39,14 @@ export default function SubscriptionsRoute({
   status: BillingSubscriptionStatusFilter;
   page: number;
 }) {
-  const refreshSubscriptions = useBillingSubscriptionsRefresh();
+  const refresh = useAdminRefresh();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  const currentSort = searchParams?.get('sort') || '';
+  
+  const refreshSubscriptions = () => refresh(['billing']);
   const [selectedSubscription, setSelectedSubscription] = useState<
     BillingSubscriptionsResponse['subscriptions'][number] | null
   >(null);
@@ -50,7 +59,7 @@ export default function SubscriptionsRoute({
   } = useStripeSyncSubscriptions(env);
 
   const { data, isLoading } = useQuery({
-    queryKey: qk.billing.subscriptionList(env, status, page, PAGE_SIZE),
+    queryKey: qk.billing.subscriptions(env, { status, page, limit: PAGE_SIZE, q: searchParams?.get('q') || undefined, sort: currentSort || undefined }),
     queryFn: async ({ signal }) => {
       const payload = await apiClient.get<BillingSubscriptionsResponse>('/api/admin/subscriptions', {
         signal,
@@ -59,6 +68,8 @@ export default function SubscriptionsRoute({
           page,
           environment: env === 'all' ? undefined : env,
           status: status === 'all' ? undefined : status,
+          sort: currentSort || undefined,
+          q: searchParams?.get('q') || undefined,
         },
       });
       return parseDto(billingSubscriptionsResponseSchema, payload, {
@@ -66,51 +77,125 @@ export default function SubscriptionsRoute({
         path: '/api/admin/subscriptions',
       });
     },
+    placeholderData: keepPreviousData,
   });
 
   const subscriptions = data?.subscriptions ?? [];
   const pagination = data?.pagination;
 
+  const handleSort = (field: string) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    const asc = `${field}_asc`;
+    const desc = `${field}_desc`;
+    const rawSort = searchParams?.get('sort');
+    
+    if (rawSort === asc) {
+      params.set('sort', desc);
+    } else if (rawSort === desc) {
+      params.delete('sort');
+    } else {
+      params.set('sort', asc);
+    }
+    
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const SortHeader = ({ label, field }: { label: string; field: string }) => {
+    const isActive = currentSort.startsWith(field);
+    const isAsc = currentSort.endsWith('asc');
+    
+    return (
+      <button 
+        onClick={() => handleSort(field)}
+        className="group flex items-center gap-1 hover:text-foreground transition-colors"
+        style={{ all: 'unset', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+      >
+        <span className="text-[11px] font-semibold uppercase tracking-wider">{label}</span>
+        {isActive ? (
+          isAsc ? <ChevronUp size={12} className="text-primary ml-1" /> : <ChevronDown size={12} className="text-primary ml-1" />
+        ) : (
+          <ArrowUpDown size={12} className="ml-1 opacity-0 group-hover:opacity-50 transition-opacity" />
+        )}
+      </button>
+    );
+  };
+
   const columns: Array<AdminTableColumn<BillingSubscriptionsResponse['subscriptions'][number]>> = [
     {
       key: 'customer',
-      header: 'Kund',
-      width: '2fr',
+      header: 'KUND',
+      width: '2.5fr',
       render: (sub) => (
-        <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium text-foreground">{sub.customer_name}</span>
-          <EnvTag env={sub.environment} />
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold text-foreground">{sub.customer_name}</span>
+            <EnvTag env={sub.environment} />
+          </div>
+          <span className="text-[10px] text-muted-foreground truncate font-mono uppercase tracking-tight">
+            {sub.stripe_subscription_id}
+          </span>
         </div>
       ),
     },
     {
-      key: 'price',
-      header: 'Belopp',
-      width: '1fr',
-      align: 'right',
+      key: 'next_payment',
+      header: 'NÄSTA BETALNING',
+      width: '1.2fr',
       render: (sub) => (
-        <div className="text-sm font-semibold text-foreground">{formatSek(sub.amount)}</div>
+        <div className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+          {sub.current_period_end ? shortDateSv(sub.current_period_end) : '—'}
+        </div>
+      ),
+    },
+    {
+      key: 'spacer',
+      header: '',
+      width: '48px',
+      render: () => <div />,
+    },
+    {
+      key: 'price',
+      header: 'BELOPP',
+      width: '1fr',
+      render: (sub) => (
+        <div className="flex flex-col">
+          <div className="text-sm font-bold text-foreground">{formatSek(sub.amount)}</div>
+          <div className="text-[10px] text-muted-foreground font-medium">{sub.interval_label}</div>
+        </div>
+      ),
+    },
+    {
+      key: 'since',
+      header: 'KUND SEDAN',
+      width: '1fr',
+      render: (sub) => (
+        <div className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+          {shortDateSv(sub.created)}
+        </div>
       ),
     },
     {
       key: 'status',
-      header: 'Status',
-      width: '1.5fr',
-      render: (sub) => (
-        <div className="text-xs text-muted-foreground">
-          {subscriptionStatusRich({
-            status: sub.status,
-            cancel_at_period_end: sub.cancel_at_period_end,
-            current_period_end: sub.current_period_end,
-            created: sub.created
-          })}
-        </div>
-      ),
+      header: 'STATUS',
+      width: '1fr',
+      render: (sub) => {
+        const config = subscriptionStatusConfig({
+          status: sub.status,
+          cancel_at_period_end: sub.cancel_at_period_end,
+        });
+        return (
+          <StatusPill
+            label={config.label}
+            tone={config.tone}
+            size="xs"
+          />
+        );
+      },
     },
     {
       key: 'actions',
       header: '',
-      width: '40px',
+      width: '48px',
       align: 'right',
       render: (sub) => (
         <AdminActionMenu
@@ -143,6 +228,15 @@ export default function SubscriptionsRoute({
     },
   ];
 
+  const tableColumns = columns.map(col => {
+    if (col.key === 'customer') return { ...col, header: <SortHeader label="KUND" field="customer" /> };
+    if (col.key === 'price') return { ...col, header: <SortHeader label="BELOPP" field="price" /> };
+    if (col.key === 'status') return { ...col, header: <SortHeader label="STATUS" field="status" /> };
+    if (col.key === 'next_payment') return { ...col, header: <SortHeader label="NÄSTA BETALNING" field="next_payment" /> };
+    if (col.key === 'since') return { ...col, header: <SortHeader label="KUND SEDAN" field="since" /> };
+    return col;
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center px-1">
@@ -159,21 +253,41 @@ export default function SubscriptionsRoute({
       </div>
 
       <AdminTable
-        columns={columns}
+        columns={tableColumns as any}
         rows={subscriptions}
         getRowKey={(sub) => sub.id}
         rowHrefBuilder={(sub) => sub.customer_profile_id ? `/admin/customers/${sub.customer_profile_id}` : null}
-        loadingRows={isLoading ? 6 : 0}
+        loadingRows={isLoading && !data ? 6 : 0}
         emptyLabel="Inga abonnemang hittades."
-        gridTemplateColumns="2fr 1fr 1.5fr 40px"
+        gridTemplateColumns="minmax(200px, 2.5fr) minmax(120px, 1.2fr) 48px 1fr 1fr 1fr 48px"
         density="comfortable"
       />
 
       {pagination && pagination.pageCount > 1 && (
         <div className="flex items-center justify-center gap-4 text-xs font-medium text-muted-foreground pt-2">
-          <button disabled={!pagination.hasPreviousPage} className="hover:text-foreground disabled:opacity-30">Föregående</button>
+          <button 
+            disabled={!pagination.hasPreviousPage} 
+            onClick={() => {
+              const params = new URLSearchParams(searchParams?.toString() ?? '');
+              params.set('page', String(pagination.page - 1));
+              router.push(`${pathname}?${params.toString()}`, { scroll: false });
+            }}
+            className="hover:text-foreground disabled:opacity-30"
+          >
+            Föregående
+          </button>
           <span>{pagination.page} / {pagination.pageCount}</span>
-          <button disabled={!pagination.hasNextPage} className="hover:text-foreground disabled:opacity-30">Nästa</button>
+          <button 
+            disabled={!pagination.hasNextPage} 
+            onClick={() => {
+              const params = new URLSearchParams(searchParams?.toString() ?? '');
+              params.set('page', String(pagination.page + 1));
+              router.push(`${pathname}?${params.toString()}`, { scroll: false });
+            }}
+            className="hover:text-foreground disabled:opacity-30"
+          >
+            Nästa
+          </button>
         </div>
       )}
 

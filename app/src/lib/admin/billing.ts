@@ -11,9 +11,12 @@ export type BillingInvoiceStatusFilter = (typeof billingInvoiceStatuses)[number]
 export const billingSubscriptionStatuses = [
   'all',
   'active',
+  'past_due',
+  'trialing',
   'paused',
   'canceled',
   'expiring',
+  'unpaid',
 ] as const;
 export type BillingSubscriptionStatusFilter = (typeof billingSubscriptionStatuses)[number];
 

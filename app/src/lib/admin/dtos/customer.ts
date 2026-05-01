@@ -208,6 +208,7 @@ export const tiktokVideoSchema = z.object({
   shares: z.number(),
   share_url: z.string().nullable(),
   cover_image_url: z.string().nullable(),
+  description: z.string().nullable().optional(),
 });
 
 export const tikTokStatsSchema = z.object({

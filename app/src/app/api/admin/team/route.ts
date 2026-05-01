@@ -37,11 +37,11 @@ function deriveTeamMemberStatus(params: {
 }
 
 function lastActivityAt(member: {
-  customers?: Array<{ last_upload_at?: string | null }>;
+  customers?: Array<{ last_upload_at?: string | null; last_published_at?: string | null }>;
   assignmentHistory?: Array<{ valid_from?: string }>;
 }) {
   const uploads = (member.customers ?? [])
-    .map((customer) => customer.last_upload_at)
+    .map((customer) => customer.last_published_at ?? customer.last_upload_at)
     .filter((value): value is string => typeof value === 'string');
   const latestUpload = uploads.length > 0 ? uploads.sort().at(-1) ?? null : null;
   if (latestUpload) {

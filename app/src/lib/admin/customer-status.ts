@@ -1,8 +1,10 @@
 export type DerivedCustomerStatus =
   | 'archived'
   | 'paused'
+  | 'prospect'
   | 'invited_new'
   | 'invited_stale'
+  | 'stripe_error'
   | 'live_underfilled'
   | 'live_healthy'
   | 'escalated';
@@ -13,8 +15,10 @@ type DeriveCustomerStatusInput = {
   paused_until?: string | null;
   invited_at?: string | null;
   concepts_per_week?: number | null;
+  expected_concepts_per_week?: number | null;
   latest_planned_publish_date?: string | null;
   escalation_flag?: boolean | null;
+  stripe_customer_id?: string | null;
 };
 
 function isFutureDate(value?: string | null, now = Date.now()) {
@@ -38,31 +42,40 @@ export function deriveCustomerStatus(
     return 'escalated';
   }
 
+  if (status === 'prospect') {
+    return 'prospect';
+  }
+
   if (isFutureDate(input.paused_until, nowMs)) {
     return 'paused';
   }
 
-  if (status === 'invited') {
+  if (status === 'invited' || status === 'pending') {
+    // Om kunden är inbjuden men saknar Stripe-koppling är det ett kritiskt fel
+    if (!input.stripe_customer_id) {
+      return 'stripe_error';
+    }
+
     const invitedAtMs = input.invited_at ? Date.parse(input.invited_at) : Number.NaN;
     if (Number.isFinite(invitedAtMs)) {
-      const staleCutoffMs = nowMs - 14 * 24 * 60 * 60 * 1000;
+      const staleCutoffMs = nowMs - 7 * 24 * 60 * 60 * 1000; // 7 dagar istället för 14
       return invitedAtMs > staleCutoffMs ? 'invited_new' : 'invited_stale';
     }
     return 'invited_stale';
   }
 
-  if (status === 'active') {
-    const conceptsPerWeek =
-      typeof input.concepts_per_week === 'number'
-        ? input.concepts_per_week
-        : null;
+  if (status === 'active' || status === 'agreed') {
+    const expected = input.expected_concepts_per_week ?? 2;
     const latestPlannedDateMs = input.latest_planned_publish_date
       ? Date.parse(input.latest_planned_publish_date)
       : Number.NaN;
+    
+    // Om vi inte har planerat koncept för de närmaste 1.5 veckorna (buffert-check)
+    const bufferCutoffMs = nowMs + (expected > 0 ? 10 : 0) * 24 * 60 * 60 * 1000;
+
     if (
-      conceptsPerWeek === null ||
       !Number.isFinite(latestPlannedDateMs) ||
-      latestPlannedDateMs < nowMs
+      latestPlannedDateMs < bufferCutoffMs
     ) {
       return 'live_underfilled';
     }

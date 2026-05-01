@@ -9,6 +9,9 @@ export type PendingInvoiceItem = {
   description: string;
   amount_ore: number;
   amount_sek: number;
+  unit_amount_ore?: number;
+  unit_amount_sek?: number;
+  quantity?: number;
   currency: string;
   created: string | null;
   metadata?: Record<string, string>;

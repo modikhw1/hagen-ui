@@ -4,7 +4,7 @@ import { formatDateOnly } from '@/lib/admin/billing-periods';
 import { overviewCopy } from '@/lib/admin/copy/overview';
 import { getLatestAdminAttentionSeenAt } from '@/lib/admin/events';
 import { formatSek } from '@/lib/admin/money';
-import { aggregateOverviewCosts } from '@/lib/admin/overview-costs';
+import { aggregateOverviewCosts, normalizeOverviewCostServiceLabel } from '@/lib/admin/overview-costs';
 import { 
   deriveOverview, 
   monthlyRevenueCard, 
@@ -16,6 +16,8 @@ import type { OverviewDerivedPayload, OverviewPayload } from '@/lib/admin/overvi
 import { isMissingRelationError } from '@/lib/admin/schema-guards';
 import { listScheduledAssignmentChanges } from '@/lib/admin/cm-assignments';
 import { listCmAbsences } from '@/lib/admin/cm-absences';
+import { getRapidApiQuotasCached } from '@/lib/admin/server/rapidapi-quota';
+import type { RapidApiQuota } from '@/lib/admin/server/rapidapi-quota';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { unstable_cache } from 'next/cache';
 
@@ -91,8 +93,18 @@ function formatSignedOre(deltaOre: number) {
 }
 
 async function loadServiceCostsFromSql(supabase = createSupabaseAdmin()): Promise<ServiceCostsResult> {
-  const viewResult = await (
-    ((supabase.from('v_admin_service_costs_30d' as never) as unknown) as {
+  // Quota fetching disabled for now per user request
+  const quotas: RapidApiQuota[] = [];
+  /*
+  try {
+    quotas = await getRapidApiQuotasCached(300);
+  } catch (e) {
+    console.error('[loadServiceCostsFromSql] Quota fetch failed:', e);
+  }
+  */
+
+  const [viewResult] = await Promise.all([
+    (((supabase.from('v_admin_service_costs_30d' as never) as unknown) as {
       select: (columns: string) => Promise<{
         data: Array<{
           service: string | null;
@@ -102,8 +114,10 @@ async function loadServiceCostsFromSql(supabase = createSupabaseAdmin()): Promis
         }> | null;
         error: { message?: string } | null;
       }>;
-    })
-  ).select('service, calls_30d, cost_30d, trend');
+    })).select('service, calls_30d, cost_30d, trend'),
+  ]);
+
+  let entries: ServiceCostsResult['entries'];
 
   if (viewResult.error) {
     if (!isMissingRelationError(viewResult.error.message)) {
@@ -119,89 +133,127 @@ async function loadServiceCostsFromSql(supabase = createSupabaseAdmin()): Promis
       throw new Error(fallbackResult.error.message || overviewCopy.loadCostsError);
     }
 
-    return aggregateOverviewCosts(fallbackResult.data ?? []);
+    const aggregated = aggregateOverviewCosts(fallbackResult.data ?? []);
+    entries = aggregated.entries;
+  } else {
+    // Even if we have data from the view, we must ensure all standard groups are present
+    // and that they are normalized correctly.
+    const sourceRows = (viewResult.data ?? []).map(row => ({
+      service: row.service,
+      calls: toSafeNumber(row.calls_30d),
+      cost_sek: toSafeNumber(row.cost_30d) / 100, // aggregateOverviewCosts expects SEK, view returns ore
+    }));
+    
+    const aggregated = aggregateOverviewCosts(sourceRows);
+    entries = aggregated.entries;
+    
+    // Re-inject trends from view if available (aggregateOverviewCosts doesn't handle trends)
+    entries = entries.map(entry => {
+      const original = (viewResult.data ?? []).find(r => 
+        normalizeOverviewCostServiceLabel(r.service ?? '') === entry.service
+      );
+      return {
+        ...entry,
+        trend: Array.isArray(original?.trend)
+          ? original.trend.map(item => toSafeNumber(item))
+          : [],
+      };
+    });
   }
 
-  const entries = (viewResult.data ?? []).map((row) => ({
-    service: row.service ?? overviewCopy.unknownName,
-    calls_30d: toSafeNumber(row.calls_30d),
-    cost_30d: toSafeNumber(row.cost_30d),
-    trend: Array.isArray(row.trend)
-      ? row.trend.map((item) => toSafeNumber(item))
-      : [],
-  }));
+  const mergedEntries = entries.map((entry) => {
+    const quota = quotas.find((q) => q.service === entry.service);
+    return {
+      ...entry,
+      quota: quota
+        ? {
+            used: quota.used,
+            limit: quota.limit,
+            reset_at: quota.reset_at,
+            debug_msg: quota.debug_msg,
+          }
+        : null,
+    };
+  });
 
   return {
-    entries,
-    totalOre: entries.reduce((sum, entry) => sum + entry.cost_30d, 0),
+    entries: mergedEntries,
+    totalOre: mergedEntries.reduce((sum, entry) => sum + entry.cost_30d, 0),
   };
 }
 
+
 async function loadSubscriptionSummary(supabase = createSupabaseAdmin()) {
-  const summaryResult = await (
-    ((supabase.from('v_admin_subscription_summary' as never) as unknown) as {
-      select: (columns: string) => {
-        limit: (count: number) => {
-          maybeSingle: () => Promise<{
-            data: SubscriptionSummaryRow | null;
-            error: { message?: string } | null;
-          }>;
-        };
-      };
-    })
-  )
-    .select('mrr_now_ore, mrr_30d_ago_ore')
-    .limit(1)
-    .maybeSingle();
+  return unstable_cache(
+    async () => {
+      const summaryResult = await (
+        ((supabase.from('v_admin_subscription_summary' as never) as unknown) as {
+          select: (columns: string) => {
+            limit: (count: number) => {
+              maybeSingle: () => Promise<{
+                data: SubscriptionSummaryRow | null;
+                error: { message?: string } | null;
+              }>;
+            };
+          };
+        })
+      )
+        .select('mrr_now_ore, mrr_30d_ago_ore')
+        .limit(1)
+        .maybeSingle();
 
-  if (summaryResult.error && !isMissingRelationError(summaryResult.error.message)) {
-    throw new Error(summaryResult.error.message || overviewCopy.loadSubscriptionsError);
-  }
-
-  if (summaryResult.data) {
-    return {
-      mrrNowOre: toSafeNumber(summaryResult.data.mrr_now_ore),
-      mrr30dAgoOre: toSafeNumber(summaryResult.data.mrr_30d_ago_ore),
-    };
-  }
-
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
-  const subscriptionsResult = await supabase
-    .from('v_admin_subscriptions')
-    .select('status, amount, created, canceled_at')
-    .order('created', { ascending: false })
-    .limit(200);
-
-  if (subscriptionsResult.error) {
-    throw new Error(subscriptionsResult.error.message || overviewCopy.loadSubscriptionsError);
-  }
-
-  const subscriptions = (subscriptionsResult.data ?? []) as SubscriptionRow[];
-  const mrrNowOre = subscriptions
-    .filter((subscription) =>
-      ['active', 'trialing', 'past_due'].includes(subscription.status ?? ''),
-    )
-    .filter((subscription) => {
-      const canceledAt = parseIsoDate(subscription.canceled_at);
-      return !canceledAt || canceledAt > now;
-    })
-    .reduce((sum, subscription) => sum + toSafeNumber(subscription.amount), 0);
-  const mrr30dAgoOre = subscriptions
-    .filter((subscription) =>
-      ['active', 'trialing', 'past_due'].includes(subscription.status ?? ''),
-    )
-    .filter((subscription) => {
-      const createdAt = parseIsoDate(subscription.created);
-      const canceledAt = parseIsoDate(subscription.canceled_at);
-      if (!createdAt || createdAt > thirtyDaysAgo) {
-        return false;
+      if (summaryResult.error && !isMissingRelationError(summaryResult.error.message)) {
+        throw new Error(summaryResult.error.message || overviewCopy.loadSubscriptionsError);
       }
-      return !canceledAt || canceledAt > thirtyDaysAgo;
-    })
-    .reduce((sum, subscription) => sum + toSafeNumber(subscription.amount), 0);
 
-  return { mrrNowOre, mrr30dAgoOre };
+      if (summaryResult.data) {
+        return {
+          mrrNowOre: toSafeNumber(summaryResult.data.mrr_now_ore),
+          mrr30dAgoOre: toSafeNumber(summaryResult.data.mrr_30d_ago_ore),
+        };
+      }
+
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 86_400_000);
+      const subscriptionsResult = await supabase
+        .from('v_admin_subscriptions')
+        .select('status, amount, created, canceled_at')
+        .order('created', { ascending: false })
+        .limit(200);
+
+      if (subscriptionsResult.error) {
+        throw new Error(subscriptionsResult.error.message || overviewCopy.loadSubscriptionsError);
+      }
+
+      const subscriptions = (subscriptionsResult.data ?? []) as SubscriptionRow[];
+      const mrrNowOre = subscriptions
+        .filter((subscription) =>
+          ['active', 'trialing', 'past_due'].includes(subscription.status ?? ''),
+        )
+        .filter((subscription) => {
+          const canceledAt = parseIsoDate(subscription.canceled_at);
+          return !canceledAt || canceledAt > now;
+        })
+        .reduce((sum, subscription) => sum + toSafeNumber(subscription.amount), 0);
+      const mrr30dAgoOre = subscriptions
+        .filter((subscription) =>
+          ['active', 'trialing', 'past_due'].includes(subscription.status ?? ''),
+        )
+        .filter((subscription) => {
+          const createdAt = parseIsoDate(subscription.created);
+          const canceledAt = parseIsoDate(subscription.canceled_at);
+          if (!createdAt || createdAt > thirtyDaysAgo) {
+            return false;
+          }
+          return !canceledAt || canceledAt > thirtyDaysAgo;
+        })
+        .reduce((sum, subscription) => sum + toSafeNumber(subscription.amount), 0);
+
+      return { mrrNowOre, mrr30dAgoOre };
+    },
+    ['admin-overview-subscription-summary'],
+    { revalidate: 300, tags: ['admin:overview:subscriptions'] }
+  )();
 }
 
 function mapCustomersForOverview(
@@ -217,6 +269,7 @@ function mapCustomersForOverview(
     last_upload_at: string | null;
     concepts_per_week: number | null;
     expected_concepts_per_week: number | null;
+    planned_concepts_count?: number | null;
     paused_until: string | null;
     onboarding_state: string | null;
     onboarding_state_changed_at: string | null;
@@ -236,6 +289,8 @@ function mapCustomersForOverview(
     upload_schedule: null,
     concepts_per_week: customer.concepts_per_week ?? null,
     expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
+    planned_concepts_count: customer.planned_concepts_count ?? 0,
+    overdue_7d_concepts_count: (customer as any).overdue_7d_concepts_count ?? 0,
     paused_until: customer.paused_until ?? null,
     onboarding_state: normalizeOnboardingState(customer.onboarding_state),
     onboarding_state_changed_at: customer.onboarding_state_changed_at ?? null,
@@ -251,7 +306,9 @@ export type BaseOverviewData = {
   absences: unknown[];
 };
 
-async function loadCmPulseBase(supabase = createSupabaseAdmin()): Promise<BaseOverviewData> {
+export async function loadCmPulseBase(
+  supabase = createSupabaseAdmin(),
+): Promise<BaseOverviewData> {
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
   
   // Consolidate customers and buffer into a single unified query
@@ -262,7 +319,7 @@ async function loadCmPulseBase(supabase = createSupabaseAdmin()): Promise<BaseOv
         .select('*'),
       supabase
         .from('team_members')
-        .select('id, name, email, color, profile_id, avatar_url')
+        .select('id, name, email, color, profile_id, avatar_url, created_at')
         .eq('is_active', true)
         .order('name'),
       supabase
@@ -289,6 +346,7 @@ async function loadCmPulseBase(supabase = createSupabaseAdmin()): Promise<BaseOv
       color: member.color ?? null,
       profile_id: member.profile_id ?? null,
       avatar_url: member.avatar_url ?? null,
+      created_at: member.created_at ?? null,
     })),
     interactions: (interactionsResult.data ?? []).map((interaction) => ({
       cm_id: interaction.cm_id ?? null,
@@ -310,8 +368,8 @@ async function loadCmPulseBase(supabase = createSupabaseAdmin()): Promise<BaseOv
 
 export const loadCmPulseBaseCached = () => unstable_cache(
   async () => loadCmPulseBase(),
-  ['admin-overview-pulse-base'],
-  { revalidate: 30, tags: ['admin:overview:base'] }
+  ['admin-overview-pulse-base-v4'],
+  { revalidate: 30, tags: ['admin:overview:base:v4'] }
 )();
 
 export async function loadAdminOverviewCosts(): Promise<ServiceCostsResult> {
@@ -475,8 +533,8 @@ export async function loadOverviewCmPulseSection(params: {
     attentionSnoozes: [],
     absences: base.absences as any,
     attentionFeedSeenAt: null,
-  };
-
+    creditNoteOperations: [],
+    };
   const derived = deriveOverview(payload, { sortMode: params.sortMode });
   return {
     cmPulse: derived.cmPulse,
@@ -499,6 +557,7 @@ export async function loadOverviewAttentionSection(params: {
     scheduledAssignmentChanges,
     demosResult,
     attentionFeedSeenAt,
+    creditNoteOperationsResult,
   ] = await Promise.all([
     params.baseData ? Promise.resolve(params.baseData) : loadCmPulseBaseCached(),
     supabase
@@ -523,8 +582,11 @@ export async function loadOverviewAttentionSection(params: {
       .order('responded_at', { ascending: false })
       .limit(200),
     getLatestAdminAttentionSeenAt(supabase, params.userId),
+    supabase
+      .from('credit_note_operations')
+      .select('*')
+      .or('status.eq.failed,requires_attention.eq.true'),
   ]);
-
   if (cmNotificationsResult.error) throw new Error(cmNotificationsResult.error.message || overviewCopy.loadNotificationsError);
   if (attentionSnoozesResult.error) throw new Error(attentionSnoozesResult.error.message || overviewCopy.loadSnoozesError);
   if (invoicesResult.error) throw new Error(invoicesResult.error.message || overviewCopy.loadInvoicesError);
@@ -582,8 +644,19 @@ export async function loadOverviewAttentionSection(params: {
     })),
     absences: base.absences as any,
     attentionFeedSeenAt,
-  };
-
+    creditNoteOperations: (creditNoteOperationsResult?.data ?? []).map((op: any) => ({
+      id: op.id,
+      operation_type: op.operation_type,
+      status: op.status,
+      requires_attention: op.requires_attention,
+      attention_reason: op.attention_reason,
+      error_message: op.error_message,
+      source_invoice_id: op.source_invoice_id,
+      customer_profile_id: op.customer_profile_id,
+      amount_ore: op.amount_ore ?? 0,
+      created_at: op.created_at,
+    })),
+    };
   const derived = deriveOverview(payload, { sortMode: params.sortMode });
   return {
     attentionItems: derived.attentionItems,
@@ -613,8 +686,9 @@ export async function loadAdminOverview(params: {
     invoicesResult,
     scheduledAssignmentChanges,
     demosResult,
-    attentionFeedSeenAt
-  ] = await Promise.all([
+    attentionFeedSeenAt,
+    creditNoteOperationsResult,
+    ] = await Promise.all([
     loadCmPulseBaseCached(),
     supabase
       .from('demos')
@@ -650,21 +724,24 @@ export async function loadAdminOverview(params: {
       .order('responded_at', { ascending: false })
       .limit(200),
     getLatestAdminAttentionSeenAt(supabase, params.userId),
-  ]);
-
+    supabase
+      .from('credit_note_operations')
+      .select('*')
+      .or('status.eq.failed,requires_attention.eq.true'),
+    ]);
   const metrics = processMetricsSection({ baseData, sentCountResult, convertedCountResult, costsResult, summary });
   const cmPulse = processCmPulseSection({ baseData, sortMode: params.sortMode });
   const attention = processAttentionSection({ 
     baseData, 
-    cmNotificationsResult, 
-    attentionSnoozesResult, 
-    invoicesResult, 
-    scheduledAssignmentChanges, 
-    demosResult, 
+    cmNotificationsResult,
+    attentionSnoozesResult,
+    invoicesResult,
+    scheduledAssignmentChanges,
+    demosResult,
     attentionFeedSeenAt,
-    sortMode: params.sortMode 
-  });
-
+    creditNoteOperationsResult,
+    sortMode: params.sortMode
+    });
   return {
     metrics,
     cmPulse,
@@ -757,8 +834,8 @@ function processCmPulseSection(params: {
     attentionSnoozes: [],
     absences: baseData.absences as any,
     attentionFeedSeenAt: null,
-  };
-  return deriveOverview(payload, { sortMode }).cmPulse;
+    creditNoteOperations: [],
+    };  return deriveOverview(payload, { sortMode }).cmPulse;
 }
 
 function processAttentionSection(params: {
@@ -769,9 +846,10 @@ function processAttentionSection(params: {
   scheduledAssignmentChanges: any;
   demosResult: any;
   attentionFeedSeenAt: string | null;
+  creditNoteOperationsResult: any;
   sortMode: SortMode;
 }): AttentionSection {
-  const { baseData, cmNotificationsResult, attentionSnoozesResult, invoicesResult, scheduledAssignmentChanges, demosResult, attentionFeedSeenAt, sortMode } = params;
+  const { baseData, cmNotificationsResult, attentionSnoozesResult, invoicesResult, scheduledAssignmentChanges, demosResult, attentionFeedSeenAt, creditNoteOperationsResult, sortMode } = params;
   const payload: OverviewPayload = {
     customers: baseData.customers,
     team: baseData.team,
@@ -824,8 +902,19 @@ function processAttentionSection(params: {
     })),
     absences: baseData.absences as any,
     attentionFeedSeenAt,
-  };
-
+    creditNoteOperations: (creditNoteOperationsResult?.data ?? []).map((op: any) => ({
+      id: op.id,
+      operation_type: op.operation_type,
+      status: op.status,
+      requires_attention: op.requires_attention,
+      attention_reason: op.attention_reason,
+      error_message: op.error_message,
+      source_invoice_id: op.source_invoice_id,
+      customer_profile_id: op.customer_profile_id,
+      amount_ore: op.amount_ore ?? 0,
+      created_at: op.created_at,
+    })),
+    };
   const derived = deriveOverview(payload, { sortMode });
   return {
     attentionItems: derived.attentionItems,

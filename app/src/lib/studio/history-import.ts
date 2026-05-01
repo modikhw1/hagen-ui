@@ -14,6 +14,10 @@ import type { NormalizedHistoryClip } from '@/lib/studio/tiktok-provider';
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
 const PAGE_SIZE = 1000;
+const HISTORY_SOURCE_PRIORITY = {
+  hagen_library: 1,
+  tiktok_profile: 2,
+} as const;
 
 // ── normalizeTikTokUrl ────────────────────────────────────────────────────────
 /**
@@ -38,6 +42,37 @@ export function normalizeTikTokUrl(url: string): string {
     // Fallback for malformed URLs
     return url.toLowerCase().replace(/[?#].*$/, '').replace(/\/+$/, '');
   }
+}
+
+type ExistingClipRow = {
+  id: string;
+  history_source: string | null;
+  first_observed_at: string | null;
+};
+
+type PartitionedHistoryClips = {
+  existingByUrl: Map<string, ExistingClipRow>;
+  newClips: NormalizedHistoryClip[];
+  skipped: number;
+};
+
+function getHistorySourcePriority(value: string | null | undefined): number {
+  if (value === 'tiktok_profile' || value === 'hagen_library') {
+    return HISTORY_SOURCE_PRIORITY[value];
+  }
+  return 0;
+}
+
+function shouldUpgradeHistorySource(params: {
+  incoming: NormalizedHistoryClip;
+  existing: ExistingClipRow;
+}): boolean {
+  return getHistorySourcePriority(params.incoming.history_source) >
+    getHistorySourcePriority(params.existing.history_source);
+}
+
+function getObservedAt(clip: NormalizedHistoryClip): string {
+  return clip.last_observed_at ?? clip.first_observed_at ?? new Date().toISOString();
 }
 
 // ── updateClipStats ───────────────────────────────────────────────────────────
@@ -65,13 +100,19 @@ export async function updateClipStats(
 
   await Promise.all(
     updates.map((clip) => {
-      const rowId = existingByUrl.get(normalizeTikTokUrl(clip.tiktok_url))!;
+      const existing = existingByUrl.get(normalizeTikTokUrl(clip.tiktok_url))!;
       const patch: {
         tiktok_views: number | null;
         tiktok_likes: number | null;
         tiktok_comments: number | null;
         tiktok_last_synced_at: string;
         tiktok_thumbnail_url?: string;
+        history_source?: 'tiktok_profile' | 'hagen_library' | null;
+        observed_profile_handle?: string | null;
+        provider_name?: string | null;
+        provider_video_id?: string | null;
+        first_observed_at?: string | null;
+        last_observed_at?: string | null;
       } = {
         tiktok_views: clip.tiktok_views,
         tiktok_likes: clip.tiktok_likes,
@@ -83,10 +124,22 @@ export async function updateClipStats(
         patch.tiktok_thumbnail_url = clip.tiktok_thumbnail_url;
       }
 
+      if (shouldUpgradeHistorySource({ incoming: clip, existing })) {
+        patch.history_source = clip.history_source ?? null;
+        patch.observed_profile_handle = clip.observed_profile_handle ?? null;
+        patch.provider_name = clip.provider_name ?? null;
+        patch.provider_video_id = clip.provider_video_id ?? null;
+      }
+
+      if (!existing.first_observed_at) {
+        patch.first_observed_at = getObservedAt(clip);
+      }
+      patch.last_observed_at = getObservedAt(clip);
+
       return supabase
         .from('customer_concepts')
         .update(patch)
-        .eq('id', rowId);
+        .eq('id', existing.id);
     })
   );
 
@@ -107,10 +160,7 @@ export async function importNewClips(
 ): Promise<{ imported: number; skipped: number; latestImportedPublishedAt: string | null }> {
   if (clips.length === 0) return { imported: 0, skipped: 0, latestImportedPublishedAt: null };
 
-  const existingByUrl = await fetchExistingClipUrlMap(supabase, customerId);
-
-  const newClips = clips.filter((c) => !existingByUrl.has(normalizeTikTokUrl(c.tiktok_url)));
-  const skipped = clips.length - newClips.length;
+  const { newClips, skipped } = await partitionHistoryClips(supabase, customerId, clips);
 
   if (newClips.length === 0) return { imported: 0, skipped, latestImportedPublishedAt: null };
 
@@ -147,6 +197,12 @@ export async function importNewClips(
     tiktok_likes: clip.tiktok_likes,
     tiktok_comments: clip.tiktok_comments,
     published_at: clip.published_at,
+    history_source: clip.history_source ?? null,
+    observed_profile_handle: clip.observed_profile_handle ?? null,
+    provider_name: clip.provider_name ?? null,
+    provider_video_id: clip.provider_video_id ?? null,
+    first_observed_at: getObservedAt(clip),
+    last_observed_at: getObservedAt(clip),
     tags: [] as string[],
     content_overrides: clip.description ? { script: clip.description } : {},
   }));
@@ -165,6 +221,21 @@ export async function importNewClips(
     imported: insertedRows?.length ?? 0,
     skipped,
     latestImportedPublishedAt: sortedNewClips[0]?.published_at ?? null,
+  };
+}
+
+export async function partitionHistoryClips(
+  supabase: SupabaseAdmin,
+  customerId: string,
+  clips: NormalizedHistoryClip[]
+): Promise<PartitionedHistoryClips> {
+  const existingByUrl = await fetchExistingClipUrlMap(supabase, customerId);
+  const newClips = clips.filter((clip) => !existingByUrl.has(normalizeTikTokUrl(clip.tiktok_url)));
+
+  return {
+    existingByUrl,
+    newClips,
+    skipped: clips.length - newClips.length,
   };
 }
 
@@ -221,25 +292,44 @@ export async function importClipsForCustomer(
 async function fetchExistingClipUrlMap(
   supabase: SupabaseAdmin,
   customerId: string
-): Promise<Map<string, string>> {
-  const allExisting: Array<{ id: string; tiktok_url: string }> = [];
+): Promise<Map<string, ExistingClipRow>> {
+  const allExisting: Array<{
+    id: string;
+    tiktok_url: string;
+    history_source: string | null;
+    first_observed_at: string | null;
+  }> = [];
   let page = 0;
 
   while (true) {
     const { data } = await supabase
       .from('customer_concepts')
-      .select('id, tiktok_url')
+      .select('id, tiktok_url, history_source, first_observed_at')
       .eq('customer_profile_id', customerId)
       .not('tiktok_url', 'is', null)
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
-    const rows = (data ?? []) as Array<{ id: string; tiktok_url: string }>;
+    const rows = (data ?? []) as Array<{
+      id: string;
+      tiktok_url: string;
+      history_source: string | null;
+      first_observed_at: string | null;
+    }>;
     allExisting.push(...rows);
     if (rows.length < PAGE_SIZE) break;
     page++;
   }
 
-  return new Map(allExisting.map((r) => [normalizeTikTokUrl(r.tiktok_url), r.id]));
+  return new Map(
+    allExisting.map((row) => [
+      normalizeTikTokUrl(row.tiktok_url),
+      {
+        id: row.id,
+        history_source: row.history_source,
+        first_observed_at: row.first_observed_at,
+      },
+    ]),
+  );
 }
 
 /**

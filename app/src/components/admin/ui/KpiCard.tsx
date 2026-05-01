@@ -26,17 +26,17 @@ export default function KpiCard({
 }: KpiCardProps) {
   const content = (
     <div className={cn(
-      "group relative flex flex-col rounded-lg border border-border bg-card transition-all hover:shadow-md",
+      "group relative flex h-full flex-col rounded-lg border border-border bg-card transition-all hover:shadow-md",
       className
     )}>
-      <div className="p-5 flex-1">
+      <div className="p-5 flex-1 flex flex-col justify-center">
         <div className="flex items-center gap-3 mb-2">
           <div className="text-muted-foreground">{icon}</div>
           <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
         </div>
-        
+
         <div className="text-xl font-bold text-foreground">{value}</div>
-        
+
         {delta && (
           <div className="mt-1 flex items-center gap-2 text-[10px] font-semibold">
             <span className={cn(
@@ -50,7 +50,7 @@ export default function KpiCard({
       </div>
 
       {trend && trend.length > 0 && (
-        <div className="h-10 px-1 pb-1 opacity-40 group-hover:opacity-100 transition-opacity">
+        <div className="h-10 px-1 pb-1 opacity-40 group-hover:opacity-100 transition-opacity mt-auto">
           <Sparkline data={trend} height={32} />
         </div>
       )}
@@ -58,7 +58,7 @@ export default function KpiCard({
   );
 
   if (href) {
-    return <Link href={href}>{content}</Link>;
+    return <Link href={href} className="block h-full">{content}</Link>;
   }
 
   return content;

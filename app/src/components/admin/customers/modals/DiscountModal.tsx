@@ -1,13 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
+import { useEffect, useState } from 'react';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { AdminField } from '@/components/admin/ui/form/AdminField';
 import { PriceInput } from '@/components/admin/ui/form/PriceInput';
-import { formatSek, sekToOre, oreToSek } from '@/lib/admin/money';
+import { oreToSek, sekToOre } from '@/lib/admin/money';
 import { todayDateInput } from '@/lib/admin/time';
 import { toast } from 'sonner';
+
+type DiscountModalCustomer = {
+  business_name?: string | null;
+  discount_type?: string | null;
+  discount_value?: number | null;
+  discount_end_date?: string | null;
+  discount_ends_at?: string | null;
+};
 
 export default function DiscountModal({
   open,
@@ -18,32 +25,78 @@ export default function DiscountModal({
   open: boolean;
   onClose: () => void;
   customerId: string;
-  customer: any;
+  customer: DiscountModalCustomer;
 }) {
   const [type, setType] = useState<string>(customer.discount_type || 'none');
-  const [valueOre, setValueOre] = useState<number>(customer.discount_value || 0);
+  const [valueOre, setValueOre] = useState<number>(
+    customer.discount_type === 'amount' ? sekToOre(customer.discount_value || 0) : 0,
+  );
   const [percentValue, setPercentValue] = useState<number>(type === 'percent' ? customer.discount_value || 0 : 0);
   const [monthsValue, setMonthsValue] = useState<number>(type === 'free_months' ? customer.discount_value || 0 : 0);
-  const [endsAt, setEndsAt] = useState<string>(customer.discount_ends_at || '');
+  const [endsAt, setEndsAt] = useState<string>(customer.discount_end_date || customer.discount_ends_at || '');
+  const [submitting, setSubmitting] = useState(false);
 
-  const mutation = useCustomerMutation(customerId, 'update_profile', {
-    onSuccess: () => {
-      toast.success('Rabatten har uppdaterats');
-      onClose();
-    },
-  });
+  useEffect(() => {
+    if (!open) return;
+    const nextType = customer.discount_type || 'none';
+    setType(nextType);
+    setValueOre(nextType === 'amount' ? sekToOre(customer.discount_value || 0) : 0);
+    setPercentValue(nextType === 'percent' ? customer.discount_value || 0 : 0);
+    setMonthsValue(nextType === 'free_months' ? customer.discount_value || 0 : 0);
+    setEndsAt(customer.discount_end_date || customer.discount_ends_at || '');
+  }, [customer, open]);
 
   const handleSave = async () => {
-    let finalValue = 0;
-    if (type === 'percent') finalValue = percentValue;
-    else if (type === 'amount') finalValue = oreToSek(valueOre); // API expects SEK for amount discount
-    else if (type === 'free_months') finalValue = monthsValue;
+    setSubmitting(true);
+    try {
+      if (type === 'none') {
+        const res = await fetch(`/api/admin/customers/${customerId}/discount`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Kunde inte ta bort rabatt');
+        }
+      } else {
+        const today = todayDateInput();
+        const payload =
+          type === 'free_months'
+            ? {
+                type,
+                duration_months: monthsValue,
+                start_date: null,
+                end_date: null,
+                idempotency_token: crypto.randomUUID(),
+              }
+            : {
+                type,
+                value: type === 'percent' ? percentValue : oreToSek(valueOre),
+                ongoing: !endsAt,
+                duration_months: null,
+                start_date: endsAt ? today : null,
+                end_date: endsAt || null,
+                idempotency_token: crypto.randomUUID(),
+              };
 
-    await mutation.mutateAsync({
-      discount_type: type,
-      discount_value: type === 'none' ? null : finalValue,
-      discount_ends_at: type === 'none' ? null : (endsAt || null),
-    });
+        const res = await fetch(`/api/admin/customers/${customerId}/discount`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Kunde inte spara rabatt');
+        }
+      }
+
+      toast.success('Rabatten har uppdaterats');
+      onClose();
+      window.location.reload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Kunde inte spara rabatt');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -60,10 +113,10 @@ export default function DiscountModal({
           </button>
           <button
             onClick={handleSave}
-            disabled={mutation.isPending}
+            disabled={submitting}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {mutation.isPending ? 'Sparar...' : 'Spara rabatt'}
+            {submitting ? 'Sparar...' : 'Spara rabatt'}
           </button>
         </>
       }

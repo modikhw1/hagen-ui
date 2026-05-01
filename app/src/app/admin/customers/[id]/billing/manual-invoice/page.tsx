@@ -1,17 +1,5 @@
-import CustomerBillingPage from '@/components/admin/customers/routes/CustomerBillingPage.server';
-import CustomerManualInvoiceModalRoute from '@/components/admin/customers/routes/CustomerManualInvoiceModalRoute';
-
-export default async function CustomerManualInvoicePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+import { redirect } from 'next/navigation';
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-
-  return (
-    <CustomerBillingPage
-      customerId={id}
-      modal={<CustomerManualInvoiceModalRoute customerId={id} />}
-    />
-  );
+  redirect(`/admin/customers/${id}/billing?manualInvoice=1`);
 }

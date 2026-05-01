@@ -46,7 +46,8 @@ export interface BillingDiscountInput {
 
 export interface PendingInvoiceItemInput {
   description: string;
-  amountSek: number;
+  unitAmountSek: number;
+  quantity?: number;
   currency?: string;
   metadata?: Record<string, string>;
 }
@@ -97,6 +98,7 @@ export interface CancelSubscriptionInput {
   invoiceId?: string | null;
   memo?: string | null;
   reason?: Stripe.CreditNoteCreateParams.Reason | null;
+  creditSettlementMode?: 'refund' | 'customer_balance' | 'outside_stripe' | null;
 }
 
 async function getProfileWithStripe(ctx: Ctx, profileId: string) {
@@ -282,7 +284,13 @@ async function resolveInvoiceRecord(
   const result = await supabaseAdmin
     .from('invoices')
     .select('id, stripe_invoice_id, status, amount_due, amount_paid, stripe_customer_id')
-    .eq('id', invoiceId)
+    .or(
+      `id.eq.${
+        invoiceId.length === 36
+          ? invoiceId
+          : '00000000-0000-0000-0000-000000000000'
+      },stripe_invoice_id.eq.${invoiceId}`,
+    )
     .maybeSingle();
 
   if (result.error || !result.data?.stripe_invoice_id) {
@@ -644,15 +652,25 @@ export async function listPendingInvoiceItems(args: Ctx & { profileId: string })
     limit: 50,
   });
 
-  return items.data.map((item) => ({
-    id: item.id,
-    description: item.description ?? '',
-    amount_ore: item.amount,
-    amount_sek: item.amount / 100,
-    currency: item.currency,
-    created: item.date ? new Date(item.date * 1000).toISOString() : null,
-    metadata: item.metadata,
-  }));
+  return items.data.map((item) => {
+    const quantity = Math.max(1, item.quantity || 1);
+    const unitAmountOre = item.pricing?.unit_amount_decimal
+      ? Math.round(Number(item.pricing.unit_amount_decimal))
+      : Math.round((item.amount || 0) / quantity);
+
+    return {
+      id: item.id,
+      description: item.description ?? '',
+      amount_ore: item.amount,
+      amount_sek: item.amount / 100,
+      unit_amount_ore: unitAmountOre,
+      unit_amount_sek: unitAmountOre / 100,
+      quantity,
+      currency: item.currency,
+      created: item.date ? new Date(item.date * 1000).toISOString() : null,
+      metadata: item.metadata,
+    };
+  });
 }
 
 export async function createPendingInvoiceItem(
@@ -667,9 +685,10 @@ export async function createPendingInvoiceItem(
 
   const item = await stripe.invoiceItems.create({
     customer: profile.stripe_customer_id,
-    amount: Math.round(args.input.amountSek * 100),
+    quantity: Math.max(1, Math.round(args.input.quantity ?? 1)),
     currency: (args.input.currency || DEFAULT_CURRENCY).toLowerCase(),
     description: args.input.description,
+    unit_amount_decimal: String(Math.round(args.input.unitAmountSek * 100)),
     metadata: args.input.metadata,
   });
 
@@ -685,6 +704,52 @@ export async function createPendingInvoiceItem(
     description: item.description ?? '',
     amount_ore: item.amount,
     amount_sek: item.amount / 100,
+    unit_amount_ore: item.pricing?.unit_amount_decimal
+      ? Math.round(Number(item.pricing.unit_amount_decimal))
+      : Math.round((item.amount || 0) / Math.max(1, item.quantity || 1)),
+    unit_amount_sek: item.pricing?.unit_amount_decimal
+      ? Number(item.pricing.unit_amount_decimal) / 100
+      : (item.amount || 0) / Math.max(1, item.quantity || 1) / 100,
+    quantity: Math.max(1, item.quantity || 1),
+    currency: item.currency,
+    created: item.date ? new Date(item.date * 1000).toISOString() : null,
+    metadata: item.metadata,
+  };
+}
+
+export async function updatePendingInvoiceItem(
+  args: Ctx & {
+    itemId: string;
+    input: PendingInvoiceItemInput;
+  }
+) {
+  const stripe = ensureStripe(args);
+  const item = await stripe.invoiceItems.update(args.itemId, {
+    description: args.input.description,
+    quantity: Math.max(1, Math.round(args.input.quantity ?? 1)),
+    unit_amount_decimal: String(Math.round(args.input.unitAmountSek * 100)),
+    metadata: args.input.metadata,
+  });
+
+  await logStripeAdminAction(args.supabaseAdmin, {
+    eventType: 'admin.invoice_item.updated',
+    objectType: 'invoice_item',
+    objectId: item.id,
+    status: 'success',
+  });
+
+  return {
+    id: item.id,
+    description: item.description ?? '',
+    amount_ore: item.amount,
+    amount_sek: item.amount / 100,
+    unit_amount_ore: item.pricing?.unit_amount_decimal
+      ? Math.round(Number(item.pricing.unit_amount_decimal))
+      : Math.round((item.amount || 0) / Math.max(1, item.quantity || 1)),
+    unit_amount_sek: item.pricing?.unit_amount_decimal
+      ? Number(item.pricing.unit_amount_decimal) / 100
+      : (item.amount || 0) / Math.max(1, item.quantity || 1) / 100,
+    quantity: Math.max(1, item.quantity || 1),
     currency: item.currency,
     created: item.date ? new Date(item.date * 1000).toISOString() : null,
     metadata: item.metadata,
@@ -717,48 +782,49 @@ export async function createManualInvoice(
   const profile = await getProfileWithStripe(args, args.profileId);
   if (!profile.stripe_customer_id) throw new Error('Kunden saknar Stripe customer');
 
-  for (const item of args.items) {
-    await stripe.invoiceItems.create({
-      customer: profile.stripe_customer_id,
-      amount: Math.round(item.amountSek * 100),
-      currency: DEFAULT_CURRENCY,
-      description: item.description,
-    });
-  }
-
   const invoice = await stripe.invoices.create({
     customer: profile.stripe_customer_id,
     collection_method: 'send_invoice',
     days_until_due: args.daysUntilDue ?? DEFAULT_DAYS_UNTIL_DUE,
-    pending_invoice_items_behavior: 'include',
+    pending_invoice_items_behavior: 'exclude',
     metadata: {
       customer_profile_id: profile.id,
       source: 'admin_manual_invoice',
     },
   });
 
+  for (const item of args.items) {
+    await stripe.invoiceItems.create({
+      customer: profile.stripe_customer_id,
+      invoice: invoice.id,
+      amount: Math.round(item.amountSek * 100),
+      currency: DEFAULT_CURRENCY,
+      description: item.description,
+    });
+  }
+
   const finalInvoice = args.autoFinalize
     ? await stripe.invoices.finalizeInvoice(invoice.id)
-    : invoice;
+    : await stripe.invoices.retrieve(invoice.id, { expand: ['lines.data'] });
 
-  if (args.autoFinalize) {
-    await stripe.invoices.sendInvoice(finalInvoice.id);
-  }
+  const persistedInvoice = args.autoFinalize
+    ? await stripe.invoices.sendInvoice(finalInvoice.id)
+    : finalInvoice;
 
   await upsertInvoiceMirror({
     supabaseAdmin: args.supabaseAdmin,
-    invoice: finalInvoice,
+    invoice: persistedInvoice,
     environment: stripeEnvironment,
   });
 
   await logStripeAdminAction(args.supabaseAdmin, {
     eventType: 'admin.invoice.created',
     objectType: 'invoice',
-    objectId: finalInvoice.id,
+    objectId: persistedInvoice.id,
     status: 'success',
   });
 
-  return finalInvoice;
+  return persistedInvoice;
 }
 
 export async function payInvoice(
@@ -820,7 +886,7 @@ export async function createInvoiceLineCreditNote(
   const stripe = ensureStripe(args);
   const invoiceRow = await resolveInvoiceRecord(args.supabaseAdmin, args.invoiceId);
 
-  let creditNoteParams: Stripe.CreditNoteCreateParams = {
+  const creditNoteParams: Stripe.CreditNoteCreateParams = {
     invoice: invoiceRow.stripe_invoice_id,
     memo: args.memo ?? undefined,
     reason: args.reason ?? 'order_change',
@@ -947,6 +1013,47 @@ export async function cancelCustomerSubscription(args: Ctx & CancelSubscriptionI
     return { subscription: sub, creditNote: null };
   }
 
+  let targetInvoice: Awaited<ReturnType<typeof resolveCancellationInvoice>> | null =
+    null;
+  let creditAmountOre = 0;
+  let settlementMode: 'refund' | 'customer_balance' | 'outside_stripe' | null =
+    null;
+  let liveInvoice: Stripe.Invoice | null = null;
+  let charge: Stripe.Charge | null = null;
+
+  if (args.mode === 'immediate_with_credit') {
+    targetInvoice = await resolveCancellationInvoice(
+      args.supabaseAdmin,
+      profile.id,
+      args.invoiceId,
+    );
+    liveInvoice = await stripe.invoices.retrieve(targetInvoice.stripe_invoice_id, {
+      expand: ['lines.data', 'charge'],
+    });
+    const effectiveInvoiceStatus = liveInvoice.status ?? targetInvoice.status;
+    const maxCreditOre =
+      effectiveInvoiceStatus === 'paid'
+        ? Number(liveInvoice.amount_paid) || 0
+        : Number(liveInvoice.amount_due) || 0;
+
+    creditAmountOre = Math.max(
+      0,
+      Math.min(Number(args.creditAmountOre) || 0, maxCreditOre),
+    );
+
+    if (creditAmountOre <= 0) {
+      throw new Error('Ange ett kreditbelopp som ar storre an 0');
+    }
+
+    settlementMode = args.creditSettlementMode ?? 'refund';
+    charge = await resolveChargeForInvoice(stripe, liveInvoice);
+    const canRefundPaymentMethod = Boolean(charge?.id);
+
+    if (effectiveInvoiceStatus === 'paid' && settlementMode === 'refund' && !canRefundPaymentMethod) {
+      throw new Error('Den betalade fakturan saknar refunderbar Stripe-charge');
+    }
+  }
+
   const canceledSubscription = await stripe.subscriptions.cancel(
     profile.stripe_subscription_id!,
     {
@@ -962,36 +1069,30 @@ export async function cancelCustomerSubscription(args: Ctx & CancelSubscriptionI
     environment: stripeEnvironment,
   });
 
-  if (args.mode !== 'immediate_with_credit') {
+  if (args.mode !== 'immediate_with_credit' || !targetInvoice || !settlementMode || !liveInvoice) {
     return { subscription: canceledSubscription, creditNote: null };
   }
 
-  const targetInvoice = await resolveCancellationInvoice(
-    args.supabaseAdmin,
-    profile.id,
-    args.invoiceId,
-  );
-  const creditAmountOre = Math.max(
-    0,
-    Math.min(
-      Number(args.creditAmountOre) || 0,
-      targetInvoice.status === 'paid'
-        ? Number(targetInvoice.amount_paid) || 0
-        : Number(targetInvoice.amount_due) || 0,
-    ),
-  );
+  const effectiveInvoiceStatus = liveInvoice.status ?? targetInvoice.status;
 
-  if (creditAmountOre <= 0) {
-    throw new Error('Ange ett kreditbelopp som ar storre an 0');
-  }
-
-  const creditNote = await stripe.creditNotes.create({
+  const creditNoteParams: Stripe.CreditNoteCreateParams = {
     invoice: targetInvoice.stripe_invoice_id,
     amount: creditAmountOre,
     memo: args.memo ?? undefined,
     reason: args.reason ?? 'order_change',
-    refund_amount: targetInvoice.status === 'paid' ? creditAmountOre : undefined,
-  });
+  };
+
+  if (effectiveInvoiceStatus === 'paid') {
+    if (settlementMode === 'refund') {
+      creditNoteParams.refund_amount = creditAmountOre;
+    } else if (settlementMode === 'customer_balance') {
+      creditNoteParams.credit_amount = creditAmountOre;
+    } else {
+      creditNoteParams.out_of_band_amount = creditAmountOre;
+    }
+  }
+
+  const creditNote = await stripe.creditNotes.create(creditNoteParams);
 
   await upsertCreditNoteMirror({
     supabaseAdmin: args.supabaseAdmin,
@@ -999,26 +1100,26 @@ export async function cancelCustomerSubscription(args: Ctx & CancelSubscriptionI
     environment: stripeEnvironment,
   });
 
-  const refreshedInvoice = await stripe.invoices.retrieve(targetInvoice.stripe_invoice_id, {
-    expand: ['lines.data'],
-  });
+  const refreshedInvoice = await stripe.invoices.retrieve(
+    targetInvoice.stripe_invoice_id,
+    {
+      expand: ['lines.data', 'charge'],
+    },
+  );
   await upsertInvoiceMirror({
     supabaseAdmin: args.supabaseAdmin,
     invoice: refreshedInvoice,
     environment: stripeEnvironment,
   });
 
-  if (targetInvoice.status === 'paid') {
-    const charge = await resolveChargeForInvoice(stripe, refreshedInvoice);
-    if (charge?.refunds?.data?.length) {
-      for (const refund of charge.refunds.data) {
-        await upsertRefundMirror({
-          supabaseAdmin: args.supabaseAdmin,
-          refund,
-          charge,
-          environment: stripeEnvironment,
-        });
-      }
+  if (charge?.refunds?.data?.length) {
+    for (const refund of charge.refunds.data) {
+      await upsertRefundMirror({
+        supabaseAdmin: args.supabaseAdmin,
+        refund,
+        charge,
+        environment: stripeEnvironment,
+      });
     }
   }
 
@@ -1031,6 +1132,7 @@ export async function cancelCustomerSubscription(args: Ctx & CancelSubscriptionI
       mode: args.mode,
       credit_note_id: creditNote.id,
       credit_amount_ore: creditAmountOre,
+      credit_settlement_mode: settlementMode,
     },
   });
 

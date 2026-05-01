@@ -1,10 +1,9 @@
-﻿'use client';
+'use client';
 
 import { ChevronDown, ChevronUp, Download } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { StatBlock } from '@/components/admin/shared/StatBlock';
-import { Button, buttonVariants } from '@/components/ui/button';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Button, Card, Text, Group, Stack } from '@mantine/core';
 import { usePayrollBreakdown } from '@/hooks/admin/usePayrollBreakdown';
 import { formatSek } from '@/lib/admin/money';
 import type { PayrollResponse } from '@/lib/admin/schemas/payroll';
@@ -69,12 +68,12 @@ export function PayrollMemberSection({ periodKey, row, expanded, onToggle }: Pro
   const loadTone = deriveLoadTone(row.assigned_customers);
 
   return (
-    <Card>
-      <CardHeader className="gap-4 p-5">
+    <Card withBorder padding="lg" radius="md">
+      <Stack gap="md">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className="text-base font-semibold text-foreground">{row.cm_name}</div>
-            <div className="text-xs text-muted-foreground">{row.cm_email || 'Ingen e-post'}</div>
+            <Text fw={600} size="md">{row.cm_name}</Text>
+            <Text size="xs" c="dimmed">{row.cm_email || 'Ingen e-post'}</Text>
             <StatusPill
               label={loadTone.label}
               tone={loadTone.tone}
@@ -89,31 +88,32 @@ export function PayrollMemberSection({ periodKey, row, expanded, onToggle }: Pro
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => onToggle(row.cm_id)}>
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        <Group gap="xs">
+          <Button variant="outline" size="sm" onClick={() => onToggle(row.cm_id)} leftSection={expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}>
             {expanded ? 'Dölj kundunderlag' : 'Visa kundunderlag'}
           </Button>
-          <a
+          <Button
+            component="a"
             href={exportHref}
-            className={buttonVariants({ variant: 'ghost', size: 'sm' })}
+            variant="ghost"
+            size="sm"
+            leftSection={<Download className="h-4 w-4" />}
           >
-            <Download className="h-4 w-4" />
             Exportera CM
-          </a>
-        </div>
-      </CardHeader>
+          </Button>
+        </Group>
 
-      {expanded ? (
-        <CardContent className="px-5 pb-5 pt-0">
-          <PayrollCustomerRows
-            customers={customers}
-            sort={sort}
-            onSortChange={setSort}
-            isLoading={breakdownQuery.isLoading && !breakdownQuery.data}
-          />
-        </CardContent>
-      ) : null}
+        {expanded ? (
+          <div className="pt-2">
+            <PayrollCustomerRows
+              customers={customers}
+              sort={sort}
+              onSortChange={setSort}
+              isLoading={breakdownQuery.isLoading && !breakdownQuery.data}
+            />
+          </div>
+        ) : null}
+      </Stack>
     </Card>
   );
 }

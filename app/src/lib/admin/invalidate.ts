@@ -14,13 +14,21 @@ export type AdminRefreshScope =
   | 'payroll'
   | 'team'
   | 'billing'
-  | 'overview';
+  | 'overview'
+  | {
+      type: 'global';
+      scope: 'overview' | 'billing' | 'team' | 'notifications' | 'payroll' | 'demos';
+    };
 
 export type CustomerMutationRefreshAction = CustomerAction['action'] | 'archive_customer';
 
 type CustomerScope = Extract<AdminRefreshScope, { type: 'customer' }>;
 
 function queryKeysForScope(scope: AdminRefreshScope): QueryKey[] {
+  if (typeof scope === 'object' && scope.type === 'global') {
+    return queryKeysForScope(scope.scope);
+  }
+
   if (scope === 'customers') {
     return [qk.customers.all()];
   }
@@ -77,10 +85,14 @@ function queryKeysForScope(scope: AdminRefreshScope): QueryKey[] {
     ];
   }
 
-  return [
-    qk.customers.pendingItems(scope.customerId),
-    qk.customers.invoices(scope.customerId),
-  ];
+  if (scope.type === 'pending-invoice-items') {
+    return [
+      qk.customers.pendingItems(scope.customerId),
+      qk.customers.invoices(scope.customerId),
+    ];
+  }
+
+  return [];
 }
 
 export function resolveAdminInvalidateQueryKeys(scopes: readonly AdminRefreshScope[]) {

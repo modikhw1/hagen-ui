@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { recordAdminAction } from '@/lib/admin/audit';
+import { revalidateTag } from 'next/cache';
+import { ADMIN_CUSTOMERS_LIST_TAG } from '@/lib/admin/cache-tags';
 import { formatDateOnly } from '@/lib/admin/billing-periods';
 import { convertDemoInputSchema } from '@/lib/admin/schemas/demos';
 import { requireScope, withAuth } from '@/lib/auth/api-auth';
@@ -188,9 +190,13 @@ export const POST = withAuth(async (request: NextRequest, user, { params }: Rout
       warning: inviteWarning,
       was_idempotent_replay: rpcResult.was_idempotent_replay,
       idempotency_key: idempotencyKey,
+      afterState: demo as Record<string, unknown>,
     },
-    afterState: demo as Record<string, unknown>,
   });
+
+  revalidateTag(ADMIN_CUSTOMERS_LIST_TAG, 'max');
+  revalidateTag(`admin:demos`, 'max');
+  revalidateTag(`admin:overview:metrics`, 'max');
 
   return NextResponse.json({
     customer,

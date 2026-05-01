@@ -1,12 +1,22 @@
 import { Suspense } from 'react';
+import { ErrorBoundary } from '@/components/admin/ui/feedback/ErrorBoundary';
 import CostsGrid from '@/components/admin/overview/CostsGrid';
 import CmPulseSection from '@/components/admin/overview/CmPulseSection';
 import KpiGrid from '@/components/admin/overview/KpiGrid';
 import AttentionList from '@/components/admin/AttentionList';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@mantine/core';
 import { getAdminActionSession } from '@/app/admin/_actions/shared';
 import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
-import { loadAdminOverview } from '@/lib/admin/server/overview';
+import { 
+  loadAdminOverviewCosts, 
+  loadOverviewMetricsSection,
+  loadOverviewCmPulseSection,
+  loadOverviewAttentionSection,
+  MetricsSection,
+  CmPulseSection as CmPulseSectionData,
+  AttentionSection,
+  ServiceCostsResult
+} from '@/lib/admin/server/overview';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -24,72 +34,91 @@ export default async function AdminOverviewPage({
     getStringValue(params.sort) === 'lowest_activity' ? 'lowest_activity' : 'standard';
   const { user } = await getAdminActionSession('overview.read');
 
-  const overviewPromise = loadAdminOverview({ sortMode, userId: user.id });
+  const attentionPromise = loadOverviewAttentionSection({ sortMode, userId: user.id });
+  const metricsPromise = loadOverviewMetricsSection();
+  const cmPulsePromise = loadOverviewCmPulseSection({ sortMode });
+  const costsPromise = loadAdminOverviewCosts();
 
   return (
     <div className="space-y-8">
       <PageHeader title="Översikt" subtitle="Operativt tillstånd" />
 
-      <Suspense fallback={null}>
-        <OverviewTopAttentionSection overviewPromise={overviewPromise} />
-      </Suspense>
+      <ErrorBoundary fallback={<SectionError title="Uppmärksamhet" />}>
+        <Suspense fallback={null}>
+          <OverviewTopAttentionSection attentionPromise={attentionPromise} />
+        </Suspense>
+      </ErrorBoundary>
 
-      <Suspense fallback={<KpiGridFallback />}>
-        <OverviewKpiSection overviewPromise={overviewPromise} />
-      </Suspense>
+      <ErrorBoundary fallback={<SectionError title="Nyckeltal" />}>
+        <Suspense fallback={<KpiGridFallback />}>
+          <OverviewKpiSection metricsPromise={metricsPromise} />
+        </Suspense>
+      </ErrorBoundary>
 
-      <Suspense fallback={<CmPulseFallback />}>
-        <OverviewCmPulseSection overviewPromise={overviewPromise} sortMode={sortMode} />
-      </Suspense>
+      <ErrorBoundary fallback={<SectionError title="CM Puls" />}>
+        <Suspense fallback={<CmPulseFallback />}>
+          <OverviewCmPulseSection cmPulsePromise={cmPulsePromise} sortMode={sortMode} />
+        </Suspense>
+      </ErrorBoundary>
 
-      <Suspense fallback={<CostsGridFallback />}>
-        <OverviewCostsSection overviewPromise={overviewPromise} />
-      </Suspense>
+      <ErrorBoundary fallback={<SectionError title="Kostnader" />}>
+        <Suspense fallback={<CostsGridFallback />}>
+          <OverviewCostsSection costsPromise={costsPromise} />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
+function SectionError({ title }: { title: string }) {
+  return (
+    <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+      Kunde inte ladda {title.toLowerCase()}. Prova att ladda om sidan.
     </div>
   );
 }
 
 async function OverviewKpiSection({
-  overviewPromise,
+  metricsPromise,
 }: {
-  overviewPromise: Promise<Awaited<ReturnType<typeof loadAdminOverview>>>;
+  metricsPromise: Promise<MetricsSection>;
 }) {
-  const data = await overviewPromise;
-  return <KpiGrid metrics={data.metrics} />;
+  const { metrics } = await metricsPromise;
+  return <KpiGrid metrics={metrics} />;
 }
 
 async function OverviewCmPulseSection({
-  overviewPromise,
+  cmPulsePromise,
   sortMode,
 }: {
-  overviewPromise: Promise<Awaited<ReturnType<typeof loadAdminOverview>>>;
+  cmPulsePromise: Promise<CmPulseSectionData>;
   sortMode: 'standard' | 'lowest_activity';
 }) {
-  const data = await overviewPromise;
-  return <CmPulseSection rows={data.cmPulse} sortMode={sortMode} />;
+  const { cmPulse } = await cmPulsePromise;
+  return <CmPulseSection rows={cmPulse} sortMode={sortMode} />;
 }
 
 async function OverviewTopAttentionSection({
-  overviewPromise,
+  attentionPromise,
 }: {
-  overviewPromise: Promise<Awaited<ReturnType<typeof loadAdminOverview>>>;
+  attentionPromise: Promise<AttentionSection>;
 }) {
-  const data = await overviewPromise;
+  const data = await attentionPromise;
   return (
     <AttentionList
-      items={data.attentionItems}
+      items={data.attentionItems.slice(0, 3)}
       surface="overview"
     />
   );
 }
 
 async function OverviewCostsSection({
-  overviewPromise,
+  costsPromise,
 }: {
-  overviewPromise: Promise<Awaited<ReturnType<typeof loadAdminOverview>>>;
+  costsPromise: Promise<ServiceCostsResult>;
 }) {
-  const data = await overviewPromise;
-  return <CostsGrid costs={data.costs} />;
+  const costs = await costsPromise;
+  return <CostsGrid costs={costs} />;
 }
 
 function KpiGridFallback() {
@@ -97,7 +126,7 @@ function KpiGridFallback() {
     <section>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} className="h-24 w-full rounded-lg" />
+          <Skeleton key={index} h={96} w="100%" radius="lg" />
         ))}
       </div>
     </section>
@@ -105,9 +134,9 @@ function KpiGridFallback() {
 }
 
 function CmPulseFallback() {
-  return <Skeleton className="h-64 w-full rounded-lg" />;
+  return <Skeleton h={256} w="100%" radius="lg" />;
 }
 
 function CostsGridFallback() {
-  return <Skeleton className="h-48 w-full rounded-lg" />;
+  return <Skeleton h={192} w="100%" radius="lg" />;
 }

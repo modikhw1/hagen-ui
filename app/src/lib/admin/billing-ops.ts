@@ -6,7 +6,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { EnvFilter } from '@/lib/admin/billing';
 import { addAdminBreadcrumb, captureAdminError } from '@/lib/admin/admin-telemetry';
 import { ApiError, apiClient } from '@/lib/admin/api-client';
-import { invalidateAdminScopes, type AdminRefreshScope } from '@/lib/admin/invalidate';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
+import type { AdminRefreshScope } from '@/lib/admin/invalidate';
 
 type BillingOpResult = {
   ok: boolean;
@@ -102,7 +103,7 @@ function useBillingOp(params: {
   action: string;
   refreshScopes: readonly AdminRefreshScope[];
 }) {
-  const queryClient = useQueryClient();
+  const refresh = useAdminRefresh();
   const [lastRunAt, setLastRunAt] = useState<string | null>(null);
   const [rateLimitedUntilMs, setRateLimitedUntilMs] = useState<number | null>(null);
   const [clockMs, setClockMs] = useState<number>(() => Date.now());
@@ -143,7 +144,7 @@ function useBillingOp(params: {
     onSuccess: async () => {
       setLastRunAt(new Date().toISOString());
       setRateLimitedUntilMs(null);
-      await invalidateAdminScopes(queryClient, params.refreshScopes);
+      await refresh(params.refreshScopes);
     },
     onError: (error) => {
       if (error instanceof BillingOpError && error.retryAfterSeconds > 0) {

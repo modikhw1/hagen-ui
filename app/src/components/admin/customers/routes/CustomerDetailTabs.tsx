@@ -5,18 +5,32 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const customerTabs = [
-  { suffix: '',           label: 'Pulse' },
-  { suffix: '/operations', label: 'Operations' },
-  { suffix: '/billing',   label: 'Billing' },
-  { suffix: '/activity',  label: 'Aktivitet' },
+  { suffix: '',              label: 'Översikt' },
+  { suffix: '/billing',      label: 'Fakturering' },
+  { suffix: '/pulse',        label: 'Puls' },
+  { suffix: '/organisation', label: 'Organisation' },
 ] as const;
 
-export default function CustomerDetailTabs({ customerId }: { customerId: string }) {
+export default function CustomerDetailTabs({ 
+  customerId, 
+  status 
+}: { 
+  customerId: string;
+  status?: string;
+}) {
   const pathname = usePathname() ?? `/admin/customers/${customerId}`;
 
   const tabs = useMemo(
-    () =>
-      customerTabs.map((tab) => {
+    () => {
+      // Filtrera flikar baserat på status
+      const visibleTabs = customerTabs.filter(tab => {
+        if (status === 'prospect') {
+          return tab.suffix === '' || tab.suffix === '/organisation';
+        }
+        return true;
+      });
+
+      return visibleTabs.map((tab) => {
         const href = `/admin/customers/${customerId}${tab.suffix}`;
         const isActive =
           tab.suffix === ''
@@ -28,8 +42,9 @@ export default function CustomerDetailTabs({ customerId }: { customerId: string 
           href,
           isActive,
         };
-      }),
-    [customerId, pathname],
+      });
+    },
+    [customerId, pathname, status],
   );
 
   return (

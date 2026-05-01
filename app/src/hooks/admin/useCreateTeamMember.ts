@@ -2,7 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/admin/api-client';
-import { invalidateAdminScopes } from '@/lib/admin/invalidate';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { qk } from '@/lib/admin/queryKeys';
 import type { TeamMemberView } from '@/lib/admin/dtos/team';
 
@@ -65,6 +65,22 @@ function buildOptimisticTeamMember(
     is_active: true,
     commission_rate: payload.commission_rate,
     active_absence: null,
+    pulse: {
+      status: 'ok',
+      fillPct: 0,
+      barLabel: '0/0 koncept',
+      plannedConceptsTotal: 0,
+      expectedConcepts7d: 0,
+      interactionCount7d: 0,
+      lastInteractionDays: 999,
+      counts: {
+        n_under: 0,
+        n_thin: 0,
+        n_blocked: 0,
+        n_ok: 0,
+        n_paused: 0,
+      },
+    },
     customers: [],
     assignmentHistory: [],
     customerCount: 0,
@@ -92,6 +108,7 @@ function buildOptimisticTeamMember(
 
 export function useCreateTeamMember() {
   const queryClient = useQueryClient();
+  const refresh = useAdminRefresh();
 
   return useMutation({
     mutationFn: async (payload: CreateTeamMemberPayload) =>
@@ -174,7 +191,7 @@ export function useCreateTeamMember() {
           ),
       );
 
-      await invalidateAdminScopes(queryClient, ['team', 'payroll']);
+      await refresh([{ type: 'global', scope: 'team' }, { type: 'global', scope: 'payroll' }]);
     },
   });
 }

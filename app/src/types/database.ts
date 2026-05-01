@@ -882,15 +882,20 @@ export type Database = {
           customer_profile_id: string
           feed_order: number | null
           feed_slot: number | null
+          first_observed_at: string | null
           filming_instructions: string | null
+          history_source: string | null
           id: string
           match_percentage: number | null
           notes: string | null
+          observed_profile_handle: string | null
           partner_name: string | null
           planned_publish_at: string | null
           produced_at: string | null
           profile_image_url: string | null
           profile_name: string | null
+          provider_name: string | null
+          provider_video_id: string | null
           published_at: string | null
           reconciled_at: string | null
           reconciled_by_cm_id: string | null
@@ -908,6 +913,7 @@ export type Database = {
           updated_at: string | null
           visual_variant: string | null
           why_it_fits: string | null
+          last_observed_at: string | null
         }
         Insert: {
           added_at?: string | null
@@ -930,15 +936,20 @@ export type Database = {
           customer_profile_id: string
           feed_order?: number | null
           feed_slot?: number | null
+          first_observed_at?: string | null
           filming_instructions?: string | null
+          history_source?: string | null
           id?: string
           match_percentage?: number | null
           notes?: string | null
+          observed_profile_handle?: string | null
           partner_name?: string | null
           planned_publish_at?: string | null
           produced_at?: string | null
           profile_image_url?: string | null
           profile_name?: string | null
+          provider_name?: string | null
+          provider_video_id?: string | null
           published_at?: string | null
           reconciled_at?: string | null
           reconciled_by_cm_id?: string | null
@@ -956,6 +967,7 @@ export type Database = {
           updated_at?: string | null
           visual_variant?: string | null
           why_it_fits?: string | null
+          last_observed_at?: string | null
         }
         Update: {
           added_at?: string | null
@@ -978,15 +990,20 @@ export type Database = {
           customer_profile_id?: string
           feed_order?: number | null
           feed_slot?: number | null
+          first_observed_at?: string | null
           filming_instructions?: string | null
+          history_source?: string | null
           id?: string
           match_percentage?: number | null
           notes?: string | null
+          observed_profile_handle?: string | null
           partner_name?: string | null
           planned_publish_at?: string | null
           produced_at?: string | null
           profile_image_url?: string | null
           profile_name?: string | null
+          provider_name?: string | null
+          provider_video_id?: string | null
           published_at?: string | null
           reconciled_at?: string | null
           reconciled_by_cm_id?: string | null
@@ -1004,6 +1021,7 @@ export type Database = {
           updated_at?: string | null
           visual_variant?: string | null
           why_it_fits?: string | null
+          last_observed_at?: string | null
         }
         Relationships: [
           {
@@ -1469,6 +1487,7 @@ export type Database = {
           company_name: string
           contact_email: string | null
           contact_name: string | null
+          converted_customer_id: string | null
           created_at: string
           id: string
           lost_reason: string | null
@@ -3319,8 +3338,97 @@ export type Database = {
         }
         Relationships: []
       }
+      credit_note_operations: {
+        Row: {
+          id: string
+          operation_type: string
+          customer_profile_id: string
+          source_invoice_id: string
+          status: string
+          requires_attention: boolean
+          attention_reason: string | null
+          stripe_credit_note_id: string | null
+          stripe_reissue_invoice_id: string | null
+          stripe_refund_id: string | null
+          amount_ore: number | null
+          idempotency_key: string
+          error_message: string | null
+          created_by: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          operation_type: string
+          customer_profile_id: string
+          source_invoice_id: string
+          status: string
+          requires_attention: boolean
+          attention_reason?: string | null
+          stripe_credit_note_id?: string | null
+          stripe_reissue_invoice_id?: string | null
+          stripe_refund_id?: string | null
+          amount_ore?: number | null
+          idempotency_key: string
+          error_message?: string | null
+          created_by?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          operation_type?: string
+          customer_profile_id?: string
+          source_invoice_id?: string
+          status?: string
+          requires_attention?: boolean
+          attention_reason?: string | null
+          stripe_credit_note_id?: string | null
+          stripe_reissue_invoice_id?: string | null
+          stripe_refund_id?: string | null
+          amount_ore?: number | null
+          idempotency_key?: string
+          error_message?: string | null
+          created_by?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_note_operations_customer_profile_id_fkey"
+            columns: ["customer_profile_id"]
+            isOneToOne: false
+            referencedRelation: "customer_profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
+      v_admin_team_overview: {
+        Row: {
+          id: string | null
+          name: string | null
+          email: string | null
+          phone: string | null
+          city: string | null
+          bio: string | null
+          avatar_url: string | null
+          role: string | null
+          is_active: boolean | null
+          commission_rate: number | null
+          customer_count: number | null
+          mrr_ore: number | null
+          customers: Json | null
+          assignment_history: Json | null
+          active_absence: Json | null
+          is_covering: boolean | null
+          customerLoadLevel: string | null
+          customerLoadLabel: string | null
+          overloaded: boolean | null
+        }
+        Relationships: []
+      }
       cm_temporary_coverage: {
         Row: {
           cm_id: string | null

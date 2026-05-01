@@ -68,6 +68,7 @@ export function deriveOverview(
         customer.onboarding_state === 'settled',
       pausedUntil: customer.paused_until ? new Date(customer.paused_until) : null,
       today,
+      overdue7dConceptsCount: customer.overdue_7d_concepts_count ?? 0,
     });
 
     const onboardingChecklist = {
@@ -124,15 +125,15 @@ export function deriveOverview(
     );
 
     const memberInteractions = payload.interactions
-      .filter((interaction) => interaction.cm_id === member.id && interaction.created_at)
+      .filter((interaction) => 
+        interaction.cm_id === member.id && 
+        interaction.created_at &&
+        interaction.type !== 'tiktok_upload_synced'
+      )
       .map((interaction) => ({
         type: interaction.type ?? 'unknown',
         created_at: new Date(interaction.created_at as string),
-      }))
-      .filter(
-        (interaction) =>
-          +interaction.created_at >= +(new Date(Date.now() - 7 * 86_400_000)),
-      );
+      }));
 
     return {
       member,
@@ -172,6 +173,7 @@ export function deriveOverview(
           onboardingState: customer.onboardingState,
           lastPublishedAt: customer.lastPublishedAt,
           plannedConceptsCount: customer.planned_concepts_count ?? 0,
+          overdue7dConceptsCount: customer.overdue_7d_concepts_count ?? 0,
         })),
         interactions7d: memberInteractions,
         lastInteractionAt: memberInteractions[0]?.created_at ?? null,
@@ -201,6 +203,21 @@ export function deriveOverview(
   };
 
   const allAttentionItems = sortAttention([
+    ...(payload.creditNoteOperations || [])
+      .map((op) => ({
+        kind: 'credit_note_failed' as const,
+        id: op.id,
+        subjectType: 'credit_note_operation' as const,
+        subjectId: op.id,
+        customerId: op.customer_profile_id,
+        customerName: customerById.get(op.customer_profile_id)?.business_name || 'Okänd',
+        operationType: op.operation_type,
+        amount_ore: op.amount_ore,
+        createdAt: new Date(op.created_at),
+        errorMessage: op.error_message,
+        attentionReason: op.attention_reason,
+        cmName: getCmNameForCustomer(op.customer_profile_id),
+      })),
     ...payload.cmNotifications.map((notification) => ({
       kind: 'cm_notification' as const,
       id: notification.id,

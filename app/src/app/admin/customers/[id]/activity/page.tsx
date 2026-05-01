@@ -1,10 +1,5 @@
-import CustomerActivityRoute from '@/components/admin/customers/routes/CustomerActivityRoute';
-
-export default async function CustomerActivityPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+import { redirect } from 'next/navigation';
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <CustomerActivityRoute customerId={id} />;
+  redirect(`/admin/customers/${id}/pulse`);
 }

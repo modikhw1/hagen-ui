@@ -21,6 +21,16 @@ export const stripe = SECRET
     })
   : null;
 
+export function createStripeClient(environment: 'test' | 'live') {
+  const { secretKey } = getStripeConfigEnvNames(environment);
+  const secret = process.env[secretKey];
+  if (!secret) return null;
+  return new Stripe(secret, {
+    apiVersion: STRIPE_API_VERSION,
+    typescript: true,
+  });
+}
+
 export const stripePublishableKey = process.env[publishableKey] ?? null;
 export const stripeWebhookSecret = process.env[webhookSecret] ?? null;
 

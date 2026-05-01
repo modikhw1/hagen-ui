@@ -15,14 +15,12 @@ export const GET = withAuth(async (_request, user, { params }: RouteParams) => {
     return jsonError('Kund-ID kravs', 400);
   }
 
-  const supabaseAdmin = createSupabaseAdmin();
-  const invoices = await loadCustomerInvoicesSnapshot({
-    supabaseAdmin,
+  const result = await loadCustomerInvoicesSnapshot({
     customerId: id,
   });
 
   return new Response(
-    JSON.stringify({ invoices }),
+    JSON.stringify(result),
     {
       status: 200,
       headers: {

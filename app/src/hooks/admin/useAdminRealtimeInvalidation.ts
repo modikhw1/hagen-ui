@@ -1,14 +1,13 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { invalidate, invalidateAdminScopes } from '@/lib/admin/invalidate';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { supabase } from '@/lib/supabase/client';
 
 const THROTTLE_MS = 500;
 
 export function useAdminRealtimeInvalidation() {
-  const queryClient = useQueryClient();
+  const refresh = useAdminRefresh();
   const lastRunRef = useRef(new Map<string, number>());
 
   useEffect(() => {
@@ -40,11 +39,11 @@ export function useAdminRealtimeInvalidation() {
       }, (payload) => {
         const customerId = ((payload.new ?? payload.old ?? {}) as { id?: string }).id;
         if (customerId) {
-          run(`customer:${customerId}`, () => invalidate.customer(queryClient, customerId));
+          run(`customer:${customerId}`, () => refresh([{ type: 'customer', customerId }]));
           return;
         }
 
-        run('customers', () => invalidateAdminScopes(queryClient, ['customers']));
+        run('overview', () => refresh([{ type: 'global', scope: 'overview' }]));
       })
       .on('postgres_changes', {
         event: '*',
@@ -53,13 +52,11 @@ export function useAdminRealtimeInvalidation() {
       }, (payload) => {
         const customerId = ((payload.new ?? payload.old ?? {}) as { customer_profile_id?: string }).customer_profile_id;
         if (customerId) {
-          run(`customer-billing:${customerId}`, () =>
-            invalidateAdminScopes(queryClient, [{ type: 'customer-billing', customerId }]),
-          );
+          run(`customer:${customerId}`, () => refresh([{ type: 'customer', customerId }]));
           return;
         }
 
-        run('billing', () => invalidateAdminScopes(queryClient, ['billing']));
+        run('billing', () => refresh([{ type: 'global', scope: 'billing' }]));
       })
       .on('postgres_changes', {
         event: '*',
@@ -68,13 +65,11 @@ export function useAdminRealtimeInvalidation() {
       }, (payload) => {
         const customerId = ((payload.new ?? payload.old ?? {}) as { customer_profile_id?: string }).customer_profile_id;
         if (customerId) {
-          run(`customer-billing:${customerId}`, () =>
-            invalidateAdminScopes(queryClient, [{ type: 'customer-billing', customerId }]),
-          );
+          run(`customer:${customerId}`, () => refresh([{ type: 'customer', customerId }]));
           return;
         }
 
-        run('billing', () => invalidateAdminScopes(queryClient, ['billing']));
+        run('billing', () => refresh([{ type: 'global', scope: 'billing' }]));
       })
       .on('postgres_changes', {
         event: '*',
@@ -83,20 +78,18 @@ export function useAdminRealtimeInvalidation() {
       }, (payload) => {
         const customerId = ((payload.new ?? payload.old ?? {}) as { customer_profile_id?: string }).customer_profile_id;
         if (customerId) {
-          run(`customer-assignment:${customerId}`, () =>
-            invalidateAdminScopes(queryClient, [{ type: 'customer-assignment', customerId }]),
-          );
+          run(`customer:${customerId}`, () => refresh([{ type: 'customer', customerId }]));
           return;
         }
 
-        run('team', () => invalidateAdminScopes(queryClient, ['team']));
+        run('team', () => refresh([{ type: 'global', scope: 'team' }]));
       })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'cm_coverages',
       }, () => {
-        run('team', () => invalidateAdminScopes(queryClient, ['team']));
+        run('team', () => refresh([{ type: 'global', scope: 'team' }]));
       })
       .on('postgres_changes', {
         event: '*',
@@ -105,25 +98,23 @@ export function useAdminRealtimeInvalidation() {
       }, (payload) => {
         const customerId = ((payload.new ?? payload.old ?? {}) as { customer_profile_id?: string }).customer_profile_id;
         if (customerId) {
-          run(`customer-assignment:${customerId}`, () =>
-            invalidateAdminScopes(queryClient, [{ type: 'customer-assignment', customerId }]),
-          );
+          run(`customer:${customerId}`, () => refresh([{ type: 'customer', customerId }]));
           return;
         }
 
-        run('team', () => invalidateAdminScopes(queryClient, ['team']));
+        run('team', () => refresh([{ type: 'global', scope: 'team' }]));
       })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'cm_notifications',
       }, () => {
-        run('notifications', () => invalidateAdminScopes(queryClient, ['notifications']));
+        run('notifications', () => refresh([{ type: 'global', scope: 'notifications' }]));
       })
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, [refresh]);
 }

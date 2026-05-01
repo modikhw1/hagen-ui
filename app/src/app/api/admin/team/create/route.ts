@@ -125,10 +125,10 @@ export const POST = withAuth(async (request: NextRequest, user) => {
       metadata: {
         invited: body.sendInvite,
         warning,
-      },
-      afterState: {
-        ...member,
-        commission_rate: commissionRate,
+        afterState: {
+          ...member,
+          commission_rate: commissionRate,
+        },
       },
     });
 
