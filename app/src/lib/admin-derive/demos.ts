@@ -3,6 +3,7 @@ export type DemoStatus =
   | 'sent'
   | 'opened'
   | 'responded'
+  | 'quoted'
   | 'won'
   | 'lost'
   | 'expired';
@@ -35,9 +36,13 @@ function nextStatusFor(status: DemoStatus): DemoStatus | null {
     case 'draft':
       return 'sent';
     case 'sent':
-      return 'opened';
+      return 'responded';
     case 'opened':
       return 'responded';
+    case 'responded':
+      return 'quoted';
+    case 'quoted':
+      return 'won';
     default:
       return null;
   }
@@ -46,13 +51,15 @@ function nextStatusFor(status: DemoStatus): DemoStatus | null {
 export function demoStatusLabel(status: DemoStatus) {
   switch (status) {
     case 'draft':
-      return 'Utkast';
+      return 'F\u00f6rberedd';
     case 'sent':
       return 'Skickad';
     case 'opened':
-      return '\u00d6ppnad';
+      return 'I dialog';
     case 'responded':
-      return 'Svar inkom';
+      return 'I dialog';
+    case 'quoted':
+      return 'Offert';
     case 'won':
       return 'Vunnen';
     case 'lost':

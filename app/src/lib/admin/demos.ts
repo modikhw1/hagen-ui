@@ -11,9 +11,13 @@ export function getNextDemoStatus(status: DemoStatus): DemoStatus | null {
     case 'draft':
       return 'sent';
     case 'sent':
-      return 'opened';
+      return 'responded';
     case 'opened':
       return 'responded';
+    case 'responded':
+      return 'quoted';
+    case 'quoted':
+      return 'won';
     default:
       return null;
   }
@@ -36,6 +40,9 @@ export function mapDemoRowToDto(
     lostReason: row.lost_reason,
     nextStatus: getNextDemoStatus(row.status),
     convertedCustomerId: row.converted_customer_id,
+    shareToken: (row as DemoRow & { share_token?: string | null }).share_token ?? null,
+    hasFeedplan: row.preliminary_feedplan != null,
+    createdAt: row.created_at,
   };
 }
 

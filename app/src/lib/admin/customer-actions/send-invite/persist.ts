@@ -32,11 +32,10 @@ function buildProfileUpdateData(
     previousProfileUrl: previousTikTokProfileUrl,
   });
 
-  return {
+  const update = {
     status: 'invited',
+    lifecycle_state: 'invited',
     invited_at: new Date().toISOString(),
-    stripe_customer_id: artifacts.customerId,
-    stripe_subscription_id: artifacts.subscriptionId,
     invoice_text: input.invoice_text || null,
     scope_items: input.scope_items || [],
     subscription_interval: input.subscription_interval,
@@ -50,7 +49,17 @@ function buildProfileUpdateData(
     account_manager: prepared.assignment.accountManager,
     account_manager_profile_id: prepared.assignment.accountManagerProfileId,
     ...(tiktokLinkPatch.ok ? tiktokLinkPatch.patch : {}),
-  };
+  } as TablesUpdate<'customer_profiles'> & { lifecycle_state?: string };
+
+  // Endast skriv stripe-id:n om de faktiskt skapades (legacy-kompatibilitet).
+  if (artifacts.customerId) {
+    update.stripe_customer_id = artifacts.customerId;
+  }
+  if (artifacts.subscriptionId) {
+    update.stripe_subscription_id = artifacts.subscriptionId;
+  }
+
+  return update;
 }
 
 export async function persistInviteProfile(

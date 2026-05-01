@@ -60,6 +60,9 @@ export type AdminCustomerListItem = {
   paused_until?: string | null;
   last_cm_action_at?: string | null;
   operational_signals?: any;
+  // Server-computed pulse so SSR matches client (no hydration flip).
+  pulse_status?: 'ok' | 'stagnant' | 'needs_action' | 'resting';
+  pulse_reason?: string;
 };
 
 export type AdminTeamOption = {

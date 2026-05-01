@@ -1,6 +1,7 @@
 export type DerivedCustomerStatus =
   | 'archived'
   | 'paused'
+  | 'draft'
   | 'prospect'
   | 'invited_new'
   | 'invited_stale'
@@ -10,6 +11,7 @@ export type DerivedCustomerStatus =
   | 'escalated';
 
 type DeriveCustomerStatusInput = {
+  lifecycle_state?: string | null;
   status?: string | null;
   archived_at?: string | null;
   paused_until?: string | null;
@@ -31,10 +33,13 @@ export function deriveCustomerStatus(
   input: DeriveCustomerStatusInput,
   now = new Date(),
 ): DerivedCustomerStatus | null {
+  const lifecycle = (input.lifecycle_state ?? '').toLowerCase();
   const status = (input.status ?? '').toLowerCase();
   const nowMs = now.getTime();
 
-  if (input.archived_at || status === 'archived') {
+  // Lifecycle state is the source of truth (post-migration).
+  // Fall back to legacy `status` and dates only when lifecycle is missing.
+  if (lifecycle === 'archived' || input.archived_at || status === 'archived') {
     return 'archived';
   }
 
@@ -42,29 +47,29 @@ export function deriveCustomerStatus(
     return 'escalated';
   }
 
+  if (lifecycle === 'paused' || isFutureDate(input.paused_until, nowMs)) {
+    return 'paused';
+  }
+
   if (status === 'prospect') {
     return 'prospect';
   }
 
-  if (isFutureDate(input.paused_until, nowMs)) {
-    return 'paused';
+  if (lifecycle === 'draft') {
+    return 'draft';
   }
 
-  if (status === 'invited' || status === 'pending') {
-    // Om kunden är inbjuden men saknar Stripe-koppling är det ett kritiskt fel
-    if (!input.stripe_customer_id) {
-      return 'stripe_error';
-    }
-
+  if (lifecycle === 'invited' || (!lifecycle && (status === 'invited' || status === 'pending'))) {
+    // Stripe är frikopplad från invite — skapas först vid checkout. Inget stripe_error här.
     const invitedAtMs = input.invited_at ? Date.parse(input.invited_at) : Number.NaN;
     if (Number.isFinite(invitedAtMs)) {
-      const staleCutoffMs = nowMs - 7 * 24 * 60 * 60 * 1000; // 7 dagar istället för 14
+      const staleCutoffMs = nowMs - 7 * 24 * 60 * 60 * 1000; // 7 dagar
       return invitedAtMs > staleCutoffMs ? 'invited_new' : 'invited_stale';
     }
     return 'invited_stale';
   }
 
-  if (status === 'active' || status === 'agreed') {
+  if (lifecycle === 'active' || status === 'active' || status === 'agreed') {
     const expected = input.expected_concepts_per_week ?? 2;
     const latestPlannedDateMs = input.latest_planned_publish_date
       ? Date.parse(input.latest_planned_publish_date)

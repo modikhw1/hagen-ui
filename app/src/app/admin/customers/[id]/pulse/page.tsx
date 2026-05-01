@@ -13,6 +13,7 @@ export default async function CustomerPulsePage({
     <CustomerPulseRoute
       customerId={id}
       initialData={data.pulse}
+      overview={data.overview}
     />
   );
 }

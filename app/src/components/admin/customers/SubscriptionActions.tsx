@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
+import { CancelPreviewPanel } from '@/components/admin/billing/subscriptions/CancelPreviewPanel';
+import { SubscriptionLifecycleSummary } from '@/components/admin/billing/subscriptions/SubscriptionLifecycleSummary';
 import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { useCustomerInvoices } from '@/hooks/admin/useCustomerInvoices';
 import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
@@ -117,17 +119,16 @@ export default function SubscriptionActions({
         ) : null}
 
         {showSafe && subscription ? (
-          <div className="rounded-md border border-border bg-secondary/40 px-3 py-2 text-xs text-muted-foreground">
-            <div className="font-semibold text-foreground">
-              Status: {statusLabel(subscription.status, subscription.cancel_at_period_end)}
-            </div>
-            {subscription.current_period_end ? (
-              <div>Nuvarande period slutar {shortDateSv(subscription.current_period_end)}</div>
-            ) : null}
-            {customer.paused_until ? (
-              <div>Automatisk återupptagning planerad till {shortDateSv(customer.paused_until)}</div>
-            ) : null}
-          </div>
+          <SubscriptionLifecycleSummary
+            status={subscription.status}
+            cancelAtPeriodEnd={subscription.cancel_at_period_end}
+            currentPeriodStart={subscription.current_period_start ?? null}
+            currentPeriodEnd={subscription.current_period_end ?? null}
+            pausedUntil={customer.paused_until ?? null}
+            monthlyPriceOre={
+              (customer as { monthly_price_ore?: number | null }).monthly_price_ore ?? null
+            }
+          />
         ) : null}
 
         {showSafe &&
@@ -229,6 +230,12 @@ export default function SubscriptionActions({
                 />
               </div>
             ) : null}
+
+            {(cancelMode === 'immediate' || cancelMode === 'immediate_with_credit') && (
+              <div className="mt-3">
+                <CancelPreviewPanel customerId={customerId} mode={cancelMode} />
+              </div>
+            )}
 
             <div className="mt-3">
               <ActionButton

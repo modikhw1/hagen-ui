@@ -255,6 +255,7 @@ export async function POST(req: NextRequest) {
   try {
     let resolvedCustomerProfileId: string | null = null;
     let didChangeBilling = false;
+    const appliedChanges: Record<string, unknown> = {};
 
     switch (event.type) {
       case 'invoice.created':
@@ -273,6 +274,7 @@ export async function POST(req: NextRequest) {
 
         if (event.type === 'invoice.payment_failed') {
           await releaseInvoiceSnoozeOnEscalation(invoice);
+          appliedChanges.released_attention_snooze = true;
         }
 
         // Skippa revalidation för 'invoice.updated' om inga UI-relevanta fält ändrats
@@ -288,7 +290,16 @@ export async function POST(req: NextRequest) {
             stripeInvoiceId: invoice.id,
           });
           didChangeBilling = true;
+        } else {
+          // För invoice.updated: koppla ändå till kund i loggen för cockpit-vyn.
+          resolvedCustomerProfileId = await resolveCustomerProfileId({
+            supabaseAdmin,
+            stripeCustomerId: readStripeCustomerId(invoice.customer),
+            stripeInvoiceId: invoice.id,
+          });
         }
+        appliedChanges.invoice_status = invoice.status;
+        appliedChanges.amount_due = invoice.amount_due;
         break;
       }
 
@@ -316,6 +327,28 @@ export async function POST(req: NextRequest) {
             customerProfileId: resolvedCustomerProfileId,
             subscription,
           });
+
+          // Sync lifecycle_state med subscription-status.
+          const subStatus = subscription.status;
+          let nextLifecycle: string | null = null;
+          if (event.type === 'customer.subscription.deleted' || subStatus === 'canceled') {
+            nextLifecycle = 'archived';
+          } else if (subStatus === 'paused') {
+            nextLifecycle = 'paused';
+          } else if (subStatus === 'active' || subStatus === 'trialing') {
+            nextLifecycle = 'active';
+          }
+          if (nextLifecycle) {
+            await supabaseAdmin
+              .from('customer_profiles')
+              .update({
+                lifecycle_state: nextLifecycle,
+                stripe_subscription_id: subscription.id,
+              } as never)
+              .eq('id', resolvedCustomerProfileId);
+            appliedChanges.lifecycle_state = nextLifecycle;
+          }
+          appliedChanges.subscription_status = subscription.status;
         }
 
         didChangeBilling = true;
@@ -334,6 +367,7 @@ export async function POST(req: NextRequest) {
           stripeCustomerId: readStripeCustomerId(schedule.customer),
           stripeSubscriptionId: readStripeSubscriptionId(schedule.subscription),
         });
+        appliedChanges.schedule_status = schedule.status;
         break;
       }
 
@@ -352,12 +386,15 @@ export async function POST(req: NextRequest) {
           stripeInvoiceId:
             typeof creditNote.invoice === 'string' ? creditNote.invoice : creditNote.invoice?.id,
         });
+        appliedChanges.credit_note_amount = creditNote.amount;
+        appliedChanges.credit_note_status = creditNote.status;
         didChangeBilling = true;
         break;
       }
 
       case 'charge.refunded': {
         const charge = event.data.object as Stripe.Charge;
+        let refundCount = 0;
         for (const refund of charge.refunds?.data ?? []) {
           await upsertRefundMirror({
             supabaseAdmin,
@@ -365,11 +402,14 @@ export async function POST(req: NextRequest) {
             charge,
             environment: stripeEnvironment,
           });
+          refundCount += 1;
         }
         resolvedCustomerProfileId = await resolveCustomerProfileId({
           supabaseAdmin,
           stripeCustomerId: readStripeCustomerId(charge.customer),
         });
+        appliedChanges.refund_count = refundCount;
+        appliedChanges.amount_refunded = charge.amount_refunded;
         didChangeBilling = true;
         break;
       }
@@ -385,6 +425,7 @@ export async function POST(req: NextRequest) {
           syncDirection: 'stripe_to_supabase',
           status: 'skipped',
           environment: stripeEnvironment,
+          source: 'webhook',
         });
         return NextResponse.json({ received: true, skipped: true });
       }
@@ -407,6 +448,9 @@ export async function POST(req: NextRequest) {
       status: 'success',
       environment: stripeEnvironment,
       payloadSummary: { livemode: event.livemode, environment: stripeEnvironment },
+      customerProfileId: resolvedCustomerProfileId,
+      source: 'webhook',
+      appliedChanges,
     });
 
     return NextResponse.json({ received: true });
@@ -422,6 +466,7 @@ export async function POST(req: NextRequest) {
       errorMessage: error instanceof Error ? error.message : 'Internal',
       environment: stripeEnvironment,
       payloadSummary: { livemode: event.livemode, environment: stripeEnvironment },
+      source: 'webhook',
     });
 
     return NextResponse.json(

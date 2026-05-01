@@ -47,7 +47,7 @@ export const PATCH = withAuth(async (request: NextRequest, user, { params }: Rou
   const { data: demo, error } = await supabase
     .from('demos')
     .update({
-      status: nextStatus,
+      status: nextStatus as 'draft' | 'sent' | 'opened' | 'responded' | 'won' | 'lost' | 'expired',
       status_changed_at: now,
       sent_at: sent ? (existingDemo.sent_at ?? now) : null,
       opened_at: opened ? (existingDemo.opened_at ?? now) : null,
