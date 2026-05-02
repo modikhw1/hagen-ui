@@ -1,26 +1,49 @@
-# Dependencies
-node_modules/
+# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# compiled output
+dist
+tmp
+out-tsc
+*.tsbuildinfo
+.expo
+.expo-shared
 
-# OS
+# dependencies
+node_modules
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# misc
+/.sass-cache
+/connect.lock
+/coverage
+/libpeerconnection.log
+npm-debug.log
+yarn-error.log
+testem.log
+/typings
+
+# System Files
 .DS_Store
 Thumbs.db
 
-# Misc
-nul
-*.log
-.gemini/
-.lovable-worktrees/
-docs/maestro/
-app/supabase/.temp/
-supabase/.temp/
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
 
-# Secrets
-Credentials.json
-.mcp.json
-.claude/settings.local.json
+# Replit
+.cache/
+.local/

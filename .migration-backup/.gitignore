@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+nul
+*.log
+.gemini/
+.lovable-worktrees/
+docs/maestro/
+app/supabase/.temp/
+supabase/.temp/
+
+# Secrets
+Credentials.json
+.mcp.json
+.claude/settings.local.json
