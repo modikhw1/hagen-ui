@@ -780,6 +780,8 @@ export type Database = {
           billing_day_of_month: number | null
           brief: Json | null
           business_name: string
+          cm_avatar_url: string | null
+          cm_initial_color: string | null
           concepts: Json | null
           contact_email: string | null
           contacts: Json | null
@@ -787,6 +789,7 @@ export type Database = {
           contract_start_date: string | null
           created_at: string | null
           customer_contact_name: string | null
+          derived_status: string | null
           discount_duration_months: number | null
           discount_end_date: string | null
           discount_start_date: string | null
@@ -797,6 +800,8 @@ export type Database = {
           id: string
           invited_at: string | null
           invoice_text: string | null
+          last_published_at: string | null
+          latest_planned_publish_date: string | null
           logo_url: string | null
           monthly_price: number | null
           price_end_date: string | null
@@ -809,6 +814,7 @@ export type Database = {
           stripe_subscription_id: string | null
           subscription_interval: string | null
           upcoming_monthly_price: number | null
+          upcoming_price_change: Json | null
           upcoming_price_effective_date: string | null
           updated_at: string | null
         }
@@ -819,6 +825,8 @@ export type Database = {
           billing_day_of_month?: number | null
           brief?: Json | null
           business_name: string
+          cm_avatar_url?: string | null
+          cm_initial_color?: string | null
           concepts?: Json | null
           contact_email?: string | null
           contacts?: Json | null
@@ -826,6 +834,7 @@ export type Database = {
           contract_start_date?: string | null
           created_at?: string | null
           customer_contact_name?: string | null
+          derived_status?: string | null
           discount_duration_months?: number | null
           discount_end_date?: string | null
           discount_start_date?: string | null
@@ -836,6 +845,8 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invoice_text?: string | null
+          last_published_at?: string | null
+          latest_planned_publish_date?: string | null
           logo_url?: string | null
           monthly_price?: number | null
           price_end_date?: string | null
@@ -848,6 +859,7 @@ export type Database = {
           stripe_subscription_id?: string | null
           subscription_interval?: string | null
           upcoming_monthly_price?: number | null
+          upcoming_price_change?: Json | null
           upcoming_price_effective_date?: string | null
           updated_at?: string | null
         }
@@ -858,6 +870,8 @@ export type Database = {
           billing_day_of_month?: number | null
           brief?: Json | null
           business_name?: string
+          cm_avatar_url?: string | null
+          cm_initial_color?: string | null
           concepts?: Json | null
           contact_email?: string | null
           contacts?: Json | null
@@ -865,6 +879,7 @@ export type Database = {
           contract_start_date?: string | null
           created_at?: string | null
           customer_contact_name?: string | null
+          derived_status?: string | null
           discount_duration_months?: number | null
           discount_end_date?: string | null
           discount_start_date?: string | null
@@ -875,6 +890,8 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invoice_text?: string | null
+          last_published_at?: string | null
+          latest_planned_publish_date?: string | null
           logo_url?: string | null
           monthly_price?: number | null
           price_end_date?: string | null
@@ -887,6 +904,7 @@ export type Database = {
           stripe_subscription_id?: string | null
           subscription_interval?: string | null
           upcoming_monthly_price?: number | null
+          upcoming_price_change?: Json | null
           upcoming_price_effective_date?: string | null
           updated_at?: string | null
         }

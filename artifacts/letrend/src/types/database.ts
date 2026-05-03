@@ -1268,6 +1268,8 @@ export type Database = {
           billing_day_of_month: number | null
           brief: Json | null
           business_name: string
+          cm_avatar_url: string | null
+          cm_initial_color: string | null
           concepts: Json | null
           concepts_per_week: number
           contact_email: string | null
@@ -1277,6 +1279,7 @@ export type Database = {
           created_at: string | null
           customer_contact_name: string | null
           declined_at: string | null
+          derived_status: string | null
           discount_duration_months: number | null
           discount_end_date: string | null
           discount_ends_at: string | null
@@ -1292,7 +1295,9 @@ export type Database = {
           invited_at: string | null
           invoice_text: string | null
           last_history_sync_at: string | null
+          last_published_at: string | null
           last_upload_at: string | null
+          latest_planned_publish_date: string | null
           logo_url: string | null
           monthly_price: number | null
           next_invoice_date: string | null
@@ -1317,6 +1322,7 @@ export type Database = {
           tiktok_profile_url: string | null
           tiktok_user_id: string | null
           upcoming_monthly_price: number | null
+          upcoming_price_change: Json | null
           upcoming_price_change_at: string | null
           upcoming_price_change_value: number | null
           upcoming_price_effective_date: string | null
@@ -1331,6 +1337,8 @@ export type Database = {
           billing_day_of_month?: number | null
           brief?: Json | null
           business_name: string
+          cm_avatar_url?: string | null
+          cm_initial_color?: string | null
           concepts?: Json | null
           concepts_per_week?: number
           contact_email?: string | null
@@ -1340,6 +1348,7 @@ export type Database = {
           created_at?: string | null
           customer_contact_name?: string | null
           declined_at?: string | null
+          derived_status?: string | null
           discount_duration_months?: number | null
           discount_end_date?: string | null
           discount_ends_at?: string | null
@@ -1355,7 +1364,9 @@ export type Database = {
           invited_at?: string | null
           invoice_text?: string | null
           last_history_sync_at?: string | null
+          last_published_at?: string | null
           last_upload_at?: string | null
+          latest_planned_publish_date?: string | null
           logo_url?: string | null
           monthly_price?: number | null
           next_invoice_date?: string | null
@@ -1380,6 +1391,7 @@ export type Database = {
           tiktok_profile_url?: string | null
           tiktok_user_id?: string | null
           upcoming_monthly_price?: number | null
+          upcoming_price_change?: Json | null
           upcoming_price_change_at?: string | null
           upcoming_price_change_value?: number | null
           upcoming_price_effective_date?: string | null
@@ -1394,6 +1406,8 @@ export type Database = {
           billing_day_of_month?: number | null
           brief?: Json | null
           business_name?: string
+          cm_avatar_url?: string | null
+          cm_initial_color?: string | null
           concepts?: Json | null
           concepts_per_week?: number
           contact_email?: string | null
@@ -1403,6 +1417,7 @@ export type Database = {
           created_at?: string | null
           customer_contact_name?: string | null
           declined_at?: string | null
+          derived_status?: string | null
           discount_duration_months?: number | null
           discount_end_date?: string | null
           discount_ends_at?: string | null
@@ -1418,7 +1433,9 @@ export type Database = {
           invited_at?: string | null
           invoice_text?: string | null
           last_history_sync_at?: string | null
+          last_published_at?: string | null
           last_upload_at?: string | null
+          latest_planned_publish_date?: string | null
           logo_url?: string | null
           monthly_price?: number | null
           next_invoice_date?: string | null
@@ -1443,6 +1460,7 @@ export type Database = {
           tiktok_profile_url?: string | null
           tiktok_user_id?: string | null
           upcoming_monthly_price?: number | null
+          upcoming_price_change?: Json | null
           upcoming_price_change_at?: string | null
           upcoming_price_change_value?: number | null
           upcoming_price_effective_date?: string | null
