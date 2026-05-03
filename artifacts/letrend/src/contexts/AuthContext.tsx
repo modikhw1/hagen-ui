@@ -6,6 +6,7 @@ import type { User, Session, AuthError } from '@supabase/supabase-js';
 import { resolveLegacyProfileRole } from '@/lib/auth/roles';
 import { clearOnboardingSession } from '@/lib/onboarding/session';
 import { logInteraction } from '@/lib/interactions';
+import { setAuthToken } from '@/lib/auth/token-store';
 
 const PROFILE_CACHE_TTL_MS = 5 * 60_000; // 5 min
 const QUERY_TIMEOUT_MS = 10_000;
@@ -211,6 +212,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (user) {
           // Get the session to extract the access token for the profile fetch
           const { data: { session } } = await supabase.auth.getSession();
+
+          // Store token globally so apiClient can attach it to every request
+          // without needing to call getSession() (avoids race conditions).
+          setAuthToken(session?.access_token ?? null);
           
           // Show authenticated immediately, then load profile
           setState(prev => ({
@@ -274,6 +279,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           case 'SIGNED_IN': {
             if (!session?.user) break;
 
+            // Keep token store current so apiClient has a valid Bearer token
+            setAuthToken(session.access_token);
+
             // Skip profile re-fetch if same user is already loaded
             setState(prev => {
               if (prev.user?.id === session.user.id && prev.profile && prev.status === 'authenticated') {
@@ -312,6 +320,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           case 'TOKEN_REFRESHED':
             if (session?.user) {
+              setAuthToken(session.access_token);
               setState(prev => ({
                 ...prev,
                 user: session.user,
@@ -325,6 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           case 'SIGNED_OUT':
             // Clear onboarding localStorage (covers cross-tab signout)
             clearOnboardingSession();
+            setAuthToken(null);
             setState({
               user: null,
               profile: null,
@@ -426,6 +436,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Sign out error:', err);
     } finally {
+      setAuthToken(null);
       setState({
         user: null,
         profile: null,

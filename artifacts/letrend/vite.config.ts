@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import { readFileSync } from "fs";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 const rawPort = process.env.PORT;
@@ -46,6 +47,37 @@ export default defineConfig({
         ]
       : []),
   ],
+  optimizeDeps: {
+    esbuildOptions: {
+      plugins: [
+        {
+          name: 'react-use-effect-event-polyfill',
+          setup(build) {
+            // React 19 does not export useEffectEvent publicly, but Mantine v9
+            // calls it. Inject a polyfill into React's CJS bundle so that
+            // __toESM() snapshots include the function before Mantine loads.
+            build.onLoad(
+              { filter: /react[\\/]cjs[\\/]react\.(development|production\.min)\.js$/ },
+              (args) => {
+                const source = readFileSync(args.path, 'utf8');
+                const polyfill = `
+if (!exports.useEffectEvent) {
+  exports.useEffectEvent = function useEffectEvent(fn) {
+    var ref = exports.useRef(fn);
+    exports.useInsertionEffect(function() { ref.current = fn; });
+    return exports.useCallback(function() {
+      return ref.current.apply(this, arguments);
+    }, []);
+  };
+}`;
+                return { contents: source + polyfill, loader: 'js' };
+              }
+            );
+          },
+        },
+      ],
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
