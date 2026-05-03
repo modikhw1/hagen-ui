@@ -72,7 +72,7 @@ router.get('/health', requireAuth, ADMIN_ONLY, async (_req, res) => {
         .or('status.eq.failed,requires_attention.eq.true')
         .order('created_at', { ascending: false })
         .limit(50)
-        .catch(() => ({ data: [], error: null })),
+,
       supabase
         .from('invoices')
         .select('id, customer_profile_id, amount_due, due_date, status')
@@ -244,7 +244,7 @@ router.get('/reconcile/:jobId', requireAuth, requireRole(['admin']), async (req,
       .select('*')
       .eq('id', jobId)
       .single()
-      .catch(() => ({ data: null, error: { message: 'Not found' } }));
+;
 
     if (error || !data) {
       res.status(404).json({ error: 'Reconcile job hittades inte' });

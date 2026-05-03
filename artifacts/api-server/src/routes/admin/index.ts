@@ -97,8 +97,7 @@ router.post('/attention/:subjectType/:subjectId/snooze', requireAuth, ADMIN_ONLY
         snoozed_until: snoozedUntil,
         snoozed_by: req.user?.id ?? null,
         updated_at: new Date().toISOString(),
-      }, { onConflict: 'subject_type,subject_id' })
-      .catch(() => ({ error: null }));
+      }, { onConflict: 'subject_type,subject_id' });
 
     if (error) {
       res.status(500).json({ error: (error as any).message });
@@ -122,7 +121,7 @@ router.get('/attention/:subjectType/:subjectId/snooze', requireAuth, ADMIN_ONLY,
       .eq('subject_type', subjectType)
       .eq('subject_id', subjectId)
       .maybeSingle()
-      .catch(() => ({ data: null }));
+;
 
     res.json({ snooze: data ?? null });
   } catch (err) {

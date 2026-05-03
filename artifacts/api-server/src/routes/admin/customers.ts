@@ -65,7 +65,7 @@ router.get('/buffer', requireAuth, ADMIN_ONLY, async (_req, res) => {
     const { data, error } = await (supabase as any)
       .from('v_customer_buffer')
       .select('customer_id, assigned_cm_id, concepts_per_week, paused_until, latest_planned_publish_date, last_published_at')
-      .catch(() => ({ data: [], error: null }));
+;
 
     if (error) {
       res.json({ bufferRows: [] });
@@ -500,7 +500,7 @@ router.get('/:id/activity-log', requireAuth, ADMIN_ONLY, async (req, res) => {
         .eq('customer_profile_id', id)
         .order('created_at', { ascending: false })
         .limit(50)
-        .catch(() => ({ data: [], error: null })),
+,
     ]);
 
     const activities: Array<Record<string, unknown>> = [];
@@ -1013,7 +1013,7 @@ router.get('/:id/coverage', requireAuth, ADMIN_ONLY, async (req, res) => {
       .eq('customer_id', id)
       .gte('ends_on', new Date().toISOString().slice(0, 10))
       .order('starts_on', { ascending: true })
-      .catch(() => ({ data: [], error: null }));
+;
 
     if (error) {
       res.json({ coverage_absences: [] });
@@ -1048,7 +1048,7 @@ router.post('/:id/coverage', requireAuth, requireRole(['admin']), async (req, re
       .insert(insert)
       .select()
       .single()
-      .catch(() => ({ data: null, error: { message: 'Insert failed or table missing' } }));
+;
 
     if (error) {
       logger.warn({ err: error }, 'coverage insert failed');
@@ -1203,7 +1203,7 @@ router.get('/:id/billing/sync-events', requireAuth, ADMIN_ONLY, async (req, res)
       .eq('customer_profile_id', id)
       .order('received_at', { ascending: false })
       .limit(limit)
-      .catch(() => ({ data: [], error: null }));
+;
 
     if (error) {
       res.json({ events: [] });

@@ -53,7 +53,7 @@ router.get('/customers', requireAuth, CM_ONLY, async (_req, res) => {
         .in('customer_id', customerIds)
         .order('sent_at', { ascending: false })
         .limit(customerIds.length * 5)
-        .catch(() => ({ data: [], error: null })),
+,
     ]);
 
     const conceptCountMap = new Map<string, number>();
@@ -482,7 +482,7 @@ router.get('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (r
       .eq('customer_id', customerId)
       .order('synced_at', { ascending: false })
       .limit(50)
-      .catch(() => ({ data: [], error: null }));
+;
 
     if (error) {
       res.json({ history: [] });
@@ -841,7 +841,7 @@ router.get('/email/jobs/:jobId', requireAuth, CM_ONLY, async (req, res) => {
       .select('*')
       .eq('id', req.params['jobId'])
       .single()
-      .catch(() => ({ data: null, error: { message: 'Not found' } }));
+;
 
     if (error || !data) {
       res.status(404).json({ error: 'E-postjobb hittades inte' });
@@ -870,7 +870,7 @@ router.patch('/email/jobs/:jobId', requireAuth, CM_ONLY, async (req, res) => {
       .eq('id', req.params['jobId'])
       .select()
       .single()
-      .catch(() => ({ data: null, error: { message: 'Update failed' } }));
+;
 
     if (error) {
       res.status(500).json({ error: error.message });
