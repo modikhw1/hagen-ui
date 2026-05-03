@@ -376,11 +376,11 @@ export async function syncCustomerHistory(
       .eq('id', customerId);
     if (stampErr) throw new Error(`stamp_update_failed: ${stampErr.message}`);
     if (syncRunId) {
-      await supabase.from('sync_runs').update({
+      await (supabase as any).from('sync_runs').update({
         finished_at: finishedAt, status: 'ok',
         fetched_count: totalFetched, imported_count: totalImported, stats_updated_count: totalStatsUpdated,
         calls_used: callsUsed, error: null,
-      } as Record<string, unknown>).eq('id', syncRunId);
+      }).eq('id', syncRunId);
     }
   } catch (err) {
     if (err instanceof RateLimitError) {
@@ -391,11 +391,11 @@ export async function syncCustomerHistory(
       errorMessage = err instanceof Error ? err.message : String(err);
     }
     if (syncRunId) {
-      await supabase.from('sync_runs').update({
+      await (supabase as any).from('sync_runs').update({
         finished_at: new Date().toISOString(), status: 'error',
         fetched_count: totalFetched, imported_count: totalImported, stats_updated_count: totalStatsUpdated,
         calls_used: callsUsed, error: errorMessage,
-      } as Record<string, unknown>).eq('id', syncRunId);
+      }).eq('id', syncRunId);
     }
     await supabase.from('customer_profiles').update({ last_sync_error: errorMessage }).eq('id', customerId);
   } finally {
@@ -533,9 +533,11 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
     budgetExceeded, staleLocksCleared,
   };
 
-  // Write a single aggregate cron-invocation row to a separate table for
-  // run-level observability ("/api/admin/cron-runs" reads from here).
-  await supabase.from('cron_run_log' as never).insert({
+  // Write a single aggregate cron-invocation row to cron_run_log so the
+  // /api/admin/cron-runs admin view can show one row per cron invocation.
+  // The api-server uses an untyped Supabase client, so a small `as any` cast
+  // matches the established pattern in this file's siblings.
+  const { error: cronLogError } = await (supabase as any).from('cron_run_log').insert({
     started_at: aggregateStart,
     finished_at: new Date().toISOString(),
     processed,
@@ -546,9 +548,10 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
     budget_exceeded: budgetExceeded,
     stale_locks_cleared: staleLocksCleared,
     errors: errors.length > 0 ? errors : null,
-  } as never).then(({ error }) => {
-    if (error) logger.warn({ err: error.message }, 'cron_run_log insert failed (non-fatal)');
   });
+  if (cronLogError) {
+    logger.warn({ err: cronLogError.message }, 'cron_run_log insert failed (non-fatal)');
+  }
 
   return result;
 }

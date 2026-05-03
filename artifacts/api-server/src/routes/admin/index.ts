@@ -45,12 +45,12 @@ router.get('/cron-runs', requireAuth, ADMIN_ONLY, async (_req, res) => {
   try {
     const supabase = createSupabaseAdmin();
     const [cronRunsResult, customerRunsResult, failedResult] = await Promise.all([
-      (supabase as never as { from: (t: string) => { select: (s: string) => { order: (c: string, o: { ascending: boolean }) => { limit: (n: number) => Promise<{ data: unknown; error: { message: string } | null }> } } } })
+      (supabase as any)
         .from('cron_run_log')
         .select('id, started_at, finished_at, processed, imported, stats_updated, calls_used, budget_remaining, budget_exceeded, stale_locks_cleared, errors')
         .order('started_at', { ascending: false })
         .limit(10),
-      supabase
+      (supabase as any)
         .from('sync_runs')
         .select('id, customer_id, mode, started_at, finished_at, status, fetched_count, imported_count, stats_updated_count, calls_used, error')
         .order('started_at', { ascending: false })
