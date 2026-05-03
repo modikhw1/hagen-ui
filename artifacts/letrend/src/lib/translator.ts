@@ -45,6 +45,161 @@ export interface BackendHumorAnalysis {
   why?: string
 }
 
+// σTaste v1.1 schema (mirrored from artifacts/hagen/src/lib/services/signals/types.ts)
+// Source of truth for the rich per-video signals hagen produces. We accept these
+// either nested under `sigma_taste` or flattened at the top level of BackendClip.
+export type SigmaActorCount = 'solo' | 'duo' | 'small_group' | 'crowd'
+export type SigmaSkillLevel = 'anyone' | 'comfortable_on_camera' | 'acting_required' | 'professional'
+export type SigmaSetupComplexity = 'point_and_shoot' | 'basic_tripod' | 'multi_location' | 'elaborate_staging'
+export type SigmaPropLevel = 'none' | 'common_items' | 'specific_props' | 'custom_fabrication'
+export type SigmaBackdrop = 'any_venue' | 'similar_venue_type' | 'specific_setting_needed'
+export type SigmaEditingSkill = 'basic_cuts' | 'timed_edits' | 'effects_required' | 'professional_post'
+export type SigmaEstimatedTime = 'under_15min' | 'under_1hr' | 'half_day' | 'full_day_plus'
+
+export interface BackendContentClassification {
+  content_type?:
+    | 'sketch_comedy'
+    | 'reaction_content'
+    | 'informational'
+    | 'interview_format'
+    | 'montage_visual'
+    | 'tutorial_how_to'
+    | 'testimonial'
+    | 'promotional_direct'
+    | 'trend_recreation'
+    | 'hybrid'
+  service_relevance?: 'in_scope' | 'out_of_scope' | 'edge_case'
+  classification_reasoning?: string
+  strata_id?:
+    | 'hospitality_sketch'
+    | 'workplace_relatable'
+    | 'customer_interaction'
+    | 'product_showcase'
+    | 'atmosphere_vibe'
+}
+
+export interface BackendReplicabilityDecomposed {
+  one_to_one_copy_feasibility?: {
+    score?: 1 | 2 | 3
+    reasoning?: string
+    required_adaptations?: string[]
+  }
+  actor_requirements?: {
+    count?: SigmaActorCount
+    skill_level?: SigmaSkillLevel
+    social_risk_required?: 'none' | 'mild' | 'significant' | 'extreme'
+    appearance_dependency?: 'none' | 'low' | 'moderate' | 'high'
+  }
+  environment_requirements?: {
+    backdrop_interchangeability?: SigmaBackdrop
+    prop_dependency?: {
+      level?: SigmaPropLevel
+      items?: string[]
+      substitutable?: boolean
+    }
+    setup_complexity?: SigmaSetupComplexity
+  }
+  production_requirements?: {
+    editing_skill?: SigmaEditingSkill
+    editing_as_punchline?: boolean
+    estimated_time?: SigmaEstimatedTime
+  }
+  concept_transferability?: {
+    product_swappable?: boolean
+    humor_travels?: boolean
+    audience_narrowing_factors?: string[]
+  }
+}
+
+export interface BackendNarrativeFlow {
+  story_direction?: 'linear_build' | 'escalating' | 'revelation_based' | 'circular' | 'fragmented'
+  beat_progression?: {
+    type?: 'incremental_heightening' | 'steady_examples' | 'dialogue_escalation' | 'visual_accumulation'
+    additive_per_beat?: boolean
+    filler_detected?: boolean
+  }
+  momentum_type?: 'building_to_climax' | 'steady_stream' | 'single_beat_payoff' | 'no_clear_structure'
+  coherence_score?: 1 | 2 | 3 | 4 | 5
+  coherence_notes?: string
+}
+
+export interface BackendPerformerExecution {
+  concept_selling?: {
+    score?: 1 | 2 | 3 | 4 | 5
+    persona_clarity?: 'clear_character' | 'ambiguous' | 'just_themselves'
+  }
+  tonal_match?: { matches_content?: boolean; mismatch_notes?: string }
+  commitment_signals?: {
+    facial_expressiveness?: 'minimal' | 'appropriate' | 'highly_animated'
+    physical_commitment?: 'static' | 'moderate_movement' | 'full_physical_comedy'
+    embarrassment_tolerance?: 'safe_performance' | 'mild_vulnerability' | 'full_commitment'
+  }
+  performance_dependency?: 'concept_carries_itself' | 'good_delivery_helps' | 'requires_strong_performer'
+}
+
+export interface BackendHookAnalysis {
+  hook_style?: 'relatable_situation' | 'question' | 'action' | 'visual_intrigue' | 'text_overlay' | 'sound_grab'
+  desperation_signals?: { detected?: boolean; signals?: string[] }
+  promise_quality?: { curiosity_generated?: 1 | 2 | 3 | 4 | 5; promise_fulfilled?: boolean; allows_slow_burn?: boolean }
+  emotional_undertone?: string[]
+}
+
+export interface BackendPayoffAnalysis {
+  payoff_type?: 'visual_reveal' | 'edit_cut' | 'dialogue_delivery' | 'twist' | 'callback' | 'escalation_peak'
+  closure_quality?: {
+    meaningful_ending?: boolean
+    feels_empty?: boolean
+    earned_vs_cheap?: 'fully_earned' | 'somewhat_earned' | 'cheap_shortcut' | 'no_real_payoff'
+  }
+  surprise_fit?: {
+    predictability?: 'completely_obvious' | 'somewhat_expected' | 'pleasant_surprise' | 'total_twist'
+    logical_in_hindsight?: boolean
+  }
+  trope_handling?: {
+    uses_known_trope?: boolean
+    trope_name?: string
+    trope_treatment?: 'subverted_cleverly' | 'played_straight_well' | 'lazy_execution'
+  }
+  substance_level?: {
+    content_type?: 'empty_calories' | 'moderate_substance' | 'genuinely_clever'
+    memorability?: 1 | 2 | 3 | 4 | 5
+  }
+}
+
+export interface BackendProductionPolish {
+  audio_intentionality?: {
+    purposeful?: boolean
+    elements_aligned?: boolean
+    comedic_audio_timing?: 'perfect' | 'good' | 'off' | 'none'
+  }
+  visual_intentionality?: {
+    purposeful_framing?: boolean
+    quality_consistency?: boolean
+    lighting_appropriate?: boolean
+  }
+  polish_composite?: {
+    score?: 1 | 2 | 3 | 4 | 5
+    elevating_factors?: string[]
+    detracting_factors?: string[]
+  }
+  cuts_per_minute?: number
+  pacing_feel?: 'rushed' | 'snappy' | 'comfortable' | 'slow' | 'dragging'
+}
+
+export interface BackendSigmaTaste {
+  schema_version?: string
+  content_classification?: BackendContentClassification
+  replicability_decomposed?: BackendReplicabilityDecomposed
+  narrative_flow?: BackendNarrativeFlow
+  performer_execution?: BackendPerformerExecution
+  hook_analysis?: BackendHookAnalysis
+  payoff_analysis?: BackendPayoffAnalysis
+  production_polish?: BackendProductionPolish
+  utility_score?: number
+  quality_score?: number
+  sigma_taste_final?: number
+}
+
 export interface BackendClip {
   id: string
   url: string
@@ -75,6 +230,47 @@ export interface BackendClip {
     title?: string | null
     thumbnail_url?: string | null
   }
+  // σTaste v1.1-sigma signals from hagen. May be supplied either nested under
+  // `sigma_taste` or flattened at top level — getSigma() normalises access.
+  sigma_taste?: BackendSigmaTaste
+  schema_version?: string
+  content_classification?: BackendContentClassification
+  replicability_decomposed?: BackendReplicabilityDecomposed
+  narrative_flow?: BackendNarrativeFlow
+  performer_execution?: BackendPerformerExecution
+  hook_analysis?: BackendHookAnalysis
+  payoff_analysis?: BackendPayoffAnalysis
+  production_polish?: BackendProductionPolish
+}
+
+export function getSigma(clip: BackendClip): BackendSigmaTaste {
+  const nested = clip.sigma_taste ?? {}
+  return {
+    schema_version: nested.schema_version ?? clip.schema_version,
+    content_classification: nested.content_classification ?? clip.content_classification,
+    replicability_decomposed: nested.replicability_decomposed ?? clip.replicability_decomposed,
+    narrative_flow: nested.narrative_flow ?? clip.narrative_flow,
+    performer_execution: nested.performer_execution ?? clip.performer_execution,
+    hook_analysis: nested.hook_analysis ?? clip.hook_analysis,
+    payoff_analysis: nested.payoff_analysis ?? clip.payoff_analysis,
+    production_polish: nested.production_polish ?? clip.production_polish,
+    utility_score: nested.utility_score,
+    quality_score: nested.quality_score,
+    sigma_taste_final: nested.sigma_taste_final,
+  }
+}
+
+export function hasSigmaSignals(clip: BackendClip): boolean {
+  const sigma = getSigma(clip)
+  return Boolean(
+    sigma.content_classification ||
+      sigma.replicability_decomposed ||
+      sigma.narrative_flow ||
+      sigma.performer_execution ||
+      sigma.hook_analysis ||
+      sigma.payoff_analysis ||
+      sigma.production_polish,
+  )
 }
 
 export interface TranslatedConcept {
@@ -226,7 +422,15 @@ function buildWhyItWorks(
   hasScript: boolean,
   businessTypes: BusinessType[],
 ) {
-  const why = firstNonEmpty(clip.humor_analysis?.why, clip.replicability_analysis)
+  // Prefer σTaste reasoning fields over legacy free-text when available
+  const sigma = getSigma(clip)
+  const why = firstNonEmpty(
+    sigma.content_classification?.classification_reasoning,
+    sigma.replicability_decomposed?.one_to_one_copy_feasibility?.reasoning,
+    sigma.narrative_flow?.coherence_notes,
+    clip.humor_analysis?.why,
+    clip.replicability_analysis,
+  )
   if (why) {
     return trimToSentence(why, 220)
   }
@@ -326,6 +530,20 @@ function buildProductionNotes(
 }
 
 function translateDifficulty(clip: BackendClip): Difficulty {
+  const sigma = getSigma(clip)
+  const copyScore = sigma.replicability_decomposed?.one_to_one_copy_feasibility?.score
+  if (copyScore === 3) return 'easy'
+  if (copyScore === 2) return 'medium'
+  if (copyScore === 1) return 'advanced'
+
+  const skillLevel = sigma.replicability_decomposed?.actor_requirements?.skill_level
+  if (skillLevel === 'anyone' || skillLevel === 'comfortable_on_camera') return 'easy'
+  if (skillLevel === 'acting_required') return 'medium'
+  if (skillLevel === 'professional') return 'advanced'
+
+  const editing = sigma.replicability_decomposed?.production_requirements?.editing_skill
+  if (editing === 'professional_post' || editing === 'effects_required') return 'advanced'
+
   if (clip.replicability_signals?.skill_requirements !== undefined) {
     const skill = clip.replicability_signals.skill_requirements
     if (skill >= 8) return 'easy'
@@ -349,6 +567,13 @@ function translateDifficulty(clip: BackendClip): Difficulty {
 }
 
 function translatePeopleNeeded(clip: BackendClip): PeopleNeeded {
+  const sigma = getSigma(clip)
+  const actorCount = sigma.replicability_decomposed?.actor_requirements?.count
+  if (actorCount === 'solo') return 'solo'
+  if (actorCount === 'duo') return 'duo'
+  if (actorCount === 'small_group') return 'small_team'
+  if (actorCount === 'crowd') return 'team'
+
   const combined = searchText(clip)
   const talentRequirement = clip.replicability?.talent_requirement
 
@@ -374,6 +599,13 @@ function translatePeopleNeeded(clip: BackendClip): PeopleNeeded {
 }
 
 function translateFilmTime(clip: BackendClip): FilmTime {
+  const sigma = getSigma(clip)
+  const estimated = sigma.replicability_decomposed?.production_requirements?.estimated_time
+  if (estimated === 'under_15min') return '10min'
+  if (estimated === 'under_1hr') return '30min'
+  if (estimated === 'half_day') return '1hr'
+  if (estimated === 'full_day_plus') return '1hr_plus'
+
   if (clip.replicability_signals?.time_investment !== undefined) {
     const time = clip.replicability_signals.time_investment
     if (time >= 9) return '5min'
@@ -399,6 +631,22 @@ function translateFilmTime(clip: BackendClip): FilmTime {
 }
 
 function translateMechanism(clip: BackendClip): HumorMechanism {
+  // Prefer σTaste-derived signals over legacy free-text humor fields when present
+  const sigma = getSigma(clip)
+  const payoff = sigma.payoff_analysis?.payoff_type
+  if (payoff === 'twist' || payoff === 'callback') return 'subversion'
+  if (payoff === 'escalation_peak') return 'escalation'
+  const beat = sigma.narrative_flow?.beat_progression?.type
+  if (beat === 'incremental_heightening' || beat === 'dialogue_escalation') return 'escalation'
+  const story = sigma.narrative_flow?.story_direction
+  if (story === 'escalating') return 'escalation'
+  if (story === 'revelation_based') return 'subversion'
+  const hookStyle = sigma.hook_analysis?.hook_style
+  if (hookStyle === 'relatable_situation') return 'recognition'
+  const strata = sigma.content_classification?.strata_id
+  if (strata === 'workplace_relatable' || strata === 'customer_interaction') return 'recognition'
+
+  // Legacy fallback: humor_analysis.mechanism free-text
   const mechanism = firstNonEmpty(clip.humor_analysis?.mechanism).toLowerCase()
   if (mechanism.includes('contrast')) return 'contrast'
   if (mechanism.includes('recognition') || mechanism.includes('relatable') || mechanism.includes('igenk')) return 'recognition'
@@ -406,6 +654,7 @@ function translateMechanism(clip: BackendClip): HumorMechanism {
   if (mechanism.includes('escalat')) return 'escalation'
   if (mechanism.includes('deadpan') || mechanism.includes('torr')) return 'deadpan'
   if (mechanism.includes('absurd')) return 'absurdism'
+
   return 'subversion'
 }
 
@@ -425,8 +674,17 @@ function translateMarket(clip: BackendClip): Market {
 }
 
 function translateBusinessTypes(clip: BackendClip): BusinessType[] {
+  const sigma = getSigma(clip)
+  const strata = sigma.content_classification?.strata_id
   const combined = searchText(clip)
   const result = new Set<BusinessType>()
+  if (strata === 'product_showcase' || strata === 'customer_interaction') {
+    result.add('restaurang')
+  }
+  if (strata === 'atmosphere_vibe') {
+    result.add('bar')
+    result.add('nattklubb')
+  }
 
   const matches = (patterns: string[]) => patterns.some((pattern) => combined.includes(pattern))
 
@@ -454,6 +712,14 @@ function translateBusinessTypes(clip: BackendClip): BusinessType[] {
 }
 
 function translateBudget(clip: BackendClip, difficulty: Difficulty, filmTime: FilmTime): EstimatedBudget {
+  const sigma = getSigma(clip)
+  const setup = sigma.replicability_decomposed?.environment_requirements?.setup_complexity
+  const propLevel = sigma.replicability_decomposed?.environment_requirements?.prop_dependency?.level
+  if (setup === 'elaborate_staging' || propLevel === 'custom_fabrication') return 'high'
+  if (setup === 'multi_location' || propLevel === 'specific_props') return 'medium'
+  if (setup === 'basic_tripod' || propLevel === 'common_items') return 'low'
+  if (setup === 'point_and_shoot' && (propLevel === 'none' || !propLevel)) return 'free'
+
   const budgetSignal = clip.replicability_signals?.budget_requirements
   if (typeof budgetSignal === 'number') {
     if (budgetSignal <= 2) return 'free'
@@ -484,7 +750,11 @@ function translateHasScript(clip: BackendClip) {
   if (firstNonEmpty(clip.script?.transcript, clip.script?.conceptCore)) {
     return true
   }
-  return Boolean(clip.scene_breakdown?.length)
+  if (Boolean(clip.scene_breakdown?.length)) return true
+  const sigma = getSigma(clip)
+  const beat = sigma.narrative_flow?.beat_progression?.type
+  if (beat === 'dialogue_escalation') return true
+  return false
 }
 
 function translateVibes(clip: BackendClip) {

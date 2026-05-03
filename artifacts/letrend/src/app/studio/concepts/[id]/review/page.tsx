@@ -14,11 +14,60 @@ import {
 } from '@/lib/concept-enrichment';
 import { categoryOptions, display } from '@/lib/display';
 import { supabase } from '@/lib/supabase/client';
-import { translateClipToConcept } from '@/lib/translator';
+import { getSigma, hasSigmaSignals, translateClipToConcept } from '@/lib/translator';
 import type { BackendClip, ClipOverride } from '@/lib/translator';
 import { conceptFieldConstraints } from '@/lib/concept-field-constraints';
 import { describeTranscriptLanguage, detectTranscriptLanguage } from '@/lib/transcript-language';
 import { RegenerateField } from '@/components/studio/RegenerateField';
+
+const SIGMA_LABEL: Record<string, string> = {
+  solo: 'Solo (1)',
+  duo: 'Duo (2)',
+  small_group: 'Litet team (3-4)',
+  crowd: 'Stort team (5+)',
+  anyone: 'Vem som helst',
+  comfortable_on_camera: 'Bekväm framför kamera',
+  acting_required: 'Skådespel krävs',
+  professional: 'Professionell skådespelare',
+  point_and_shoot: 'Point-and-shoot',
+  basic_tripod: 'Stativ + grundsetup',
+  multi_location: 'Flera platser',
+  elaborate_staging: 'Avancerad scenografi',
+  none: 'Inga rekvisita',
+  common_items: 'Vardagsföremål',
+  specific_props: 'Specifika rekvisita',
+  custom_fabrication: 'Specialbyggda rekvisita',
+  any_venue: 'Valfri lokal',
+  similar_venue_type: 'Liknande lokal',
+  specific_setting_needed: 'Specifik miljö krävs',
+  basic_cuts: 'Enkla klipp',
+  timed_edits: 'Timade klipp',
+  effects_required: 'Effekter krävs',
+  professional_post: 'Professionell post-prod',
+  under_15min: 'Under 15 min',
+  under_1hr: 'Under 1 timme',
+  half_day: 'Halvdag',
+  full_day_plus: 'Heldag eller mer',
+  hospitality_sketch: 'Hospitality-sketch',
+  workplace_relatable: 'Arbetsplats-relaterbar',
+  customer_interaction: 'Kundinteraktion',
+  product_showcase: 'Produktvisning',
+  atmosphere_vibe: 'Stämning/vibe',
+  in_scope: 'Relevant för hospitality',
+  out_of_scope: 'Utanför scope',
+  edge_case: 'Gränsfall',
+  sketch_comedy: 'Sketch-komedi',
+  reaction_content: 'Reaktion',
+  informational: 'Informativt',
+  interview_format: 'Intervju',
+  montage_visual: 'Montage',
+  tutorial_how_to: 'Tutorial',
+  testimonial: 'Testimonial',
+  promotional_direct: 'Direkt reklam',
+  trend_recreation: 'Trend-återskapning',
+  hybrid: 'Hybrid',
+};
+const sigmaLabel = (value?: string | null) => (value ? SIGMA_LABEL[value] ?? value : '—');
 
 const cardStyle = { background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' } as const;
 const fieldLabelStyle = { display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 } as const;
@@ -400,6 +449,58 @@ export default function ConceptReviewPage() {
         <div style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {(sourceUrl || gcsUri) ? <div><div style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#065f46' : '#92400e', marginBottom: 6 }}>Status: {lifecycleStage}</div><VideoPlayer videoUrl={sourceUrl ?? undefined} gcsUri={gcsUri ?? undefined} showLabel={false} /><div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between' }}>{sourceUrl ? <span style={{ fontSize: 11, color: '#9ca3af' }}>{detectPlatform(sourceUrl) ?? 'Kallvideo'}</span> : null}{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#4f46e5', textDecoration: 'none' }}>Oppna video →</a> : null}</div></div> : null}
           {replicabilityHint ? <div style={{ ...cardStyle, border: '1px solid #e5e4e1', boxShadow: 'none', overflow: 'hidden' }}><button type="button" onClick={() => setShowHint((current) => !current)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 12, fontWeight: 600 }}><span>Analysanteckning</span><span>{showHint ? '▲' : '▼'}</span></button>{showHint ? <div style={{ padding: '0 14px 14px', fontSize: 12, color: '#374151', lineHeight: 1.6 }}>{replicabilityHint}</div> : null}</div> : null}
+          {raw && hasSigmaSignals(raw.backend_data) ? (() => {
+            const sigma = getSigma(raw.backend_data);
+            const cc = sigma.content_classification;
+            const rd = sigma.replicability_decomposed;
+            const nf = sigma.narrative_flow;
+            const pe = sigma.performer_execution;
+            const ha = sigma.hook_analysis;
+            const pa = sigma.payoff_analysis;
+            const pp = sigma.production_polish;
+            const rows: Array<{ label: string; value: string }> = [];
+            if (cc?.content_type) rows.push({ label: 'Innehållstyp', value: sigmaLabel(cc.content_type) });
+            if (cc?.strata_id) rows.push({ label: 'Strata', value: sigmaLabel(cc.strata_id) });
+            if (cc?.service_relevance) rows.push({ label: 'Hospitality-relevans', value: sigmaLabel(cc.service_relevance) });
+            if (rd?.actor_requirements?.count) rows.push({ label: 'Skådespelare', value: sigmaLabel(rd.actor_requirements.count) });
+            if (rd?.actor_requirements?.skill_level) rows.push({ label: 'Skicklighet', value: sigmaLabel(rd.actor_requirements.skill_level) });
+            if (rd?.environment_requirements?.backdrop_interchangeability) rows.push({ label: 'Miljökrav', value: sigmaLabel(rd.environment_requirements.backdrop_interchangeability) });
+            if (rd?.environment_requirements?.setup_complexity) rows.push({ label: 'Setup', value: sigmaLabel(rd.environment_requirements.setup_complexity) });
+            if (rd?.environment_requirements?.prop_dependency?.level) rows.push({ label: 'Rekvisita', value: sigmaLabel(rd.environment_requirements.prop_dependency.level) });
+            if (rd?.production_requirements?.editing_skill) rows.push({ label: 'Redigering', value: sigmaLabel(rd.production_requirements.editing_skill) });
+            if (rd?.production_requirements?.estimated_time) rows.push({ label: 'Tidsåtgång', value: sigmaLabel(rd.production_requirements.estimated_time) });
+            if (rd?.one_to_one_copy_feasibility?.score) rows.push({ label: 'Kopierbarhet', value: `${rd.one_to_one_copy_feasibility.score}/3` });
+            if (nf?.story_direction) rows.push({ label: 'Berättelse', value: sigmaLabel(nf.story_direction) });
+            if (nf?.coherence_score) rows.push({ label: 'Koherens', value: `${nf.coherence_score}/5` });
+            if (ha?.hook_style) rows.push({ label: 'Hook-stil', value: sigmaLabel(ha.hook_style) });
+            if (pa?.payoff_type) rows.push({ label: 'Payoff-typ', value: sigmaLabel(pa.payoff_type) });
+            if (pa?.substance_level?.memorability) rows.push({ label: 'Minnesvärt', value: `${pa.substance_level.memorability}/5` });
+            if (pp?.polish_composite?.score) rows.push({ label: 'Polish', value: `${pp.polish_composite.score}/5` });
+            if (pp?.pacing_feel) rows.push({ label: 'Tempo', value: sigmaLabel(pp.pacing_feel) });
+            if (pe?.performance_dependency) rows.push({ label: 'Beroende av leverans', value: sigmaLabel(pe.performance_dependency) });
+            if (rows.length === 0) return null;
+            return (
+              <div style={{ ...cardStyle, padding: '12px 14px', border: '1px solid #e0e7ff' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>σTaste-signaler</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>{sigma.schema_version ?? 'v1.1-sigma'}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 4 }}>
+                  {rows.map((row) => (
+                    <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12 }}>
+                      <span style={{ color: '#6b7280' }}>{row.label}</span>
+                      <span style={{ color: '#111827', fontWeight: 600, textAlign: 'right' }}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+                {cc?.classification_reasoning ? (
+                  <div style={{ marginTop: 10, padding: '8px 10px', borderRadius: 8, background: '#eef2ff', fontSize: 11, color: '#4338ca', lineHeight: 1.5 }}>
+                    {cc.classification_reasoning}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })() : null}
         </div>
 
         <div>
