@@ -135,12 +135,20 @@ function RootPage() {
   const [, navigate] = useLocation();
 
   useEffect(() => {
+    // Wait until both auth and profile fetches are fully resolved
     if (loading) return;
     if (!user) {
       navigate("/login");
       return;
     }
-    const role = (profile as { role?: string } | null)?.role;
+    // loading=false + profile=null means the fetch completed with no row →
+    // send to onboarding/welcome so the user gets a profile created.
+    if (!profile) {
+      navigate("/welcome");
+      return;
+    }
+
+    const role = profile.role;
     if (role === "admin") {
       navigate("/admin");
     } else if (role === "content_manager") {

@@ -14,10 +14,21 @@ export default function AdminAuthShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const role = profile ? resolveAppRole(profile) : null;
   useEffect(() => {
-    if (!loading && (!user || (!profile?.is_admin && role !== 'admin'))) {
+    if (loading) return;
+    if (!user) {
+      router.replace('/login?redirect=/admin');
+      return;
+    }
+    // Profile still loading or fetch failed transiently — don't redirect yet
+    if (!profile) return;
+    if (role === 'content_manager') {
+      router.replace('/studio');
+      return;
+    }
+    if (role !== 'admin') {
       router.replace('/login?redirect=/admin');
     }
-  }, [loading, profile?.is_admin, role, router, user]);
+  }, [loading, profile, role, router, user]);
 
   const handleLogout = async () => {
     await signOut();

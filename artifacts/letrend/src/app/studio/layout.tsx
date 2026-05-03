@@ -188,21 +188,17 @@ function StudioLayoutContent({ children }: StudioLayoutProps) {
   const role = profile ? resolveAppRole(profile) : null;
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+    if (!user) {
       router.replace('/login?redirect=/studio/customers');
       return;
     }
+    // Profile still loading or fetch failed transiently — don't redirect yet
+    if (!profile) return;
 
-    if (!loading && user) {
-      const hasAccess = Boolean(
-        profile?.is_admin ||
-        role === 'admin' ||
-        role === 'content_manager'
-      );
-
-      if (!hasAccess) {
-        router.replace('/feed?error=studio_access_denied');
-      }
+    const hasAccess = role === 'admin' || role === 'content_manager';
+    if (!hasAccess) {
+      router.replace('/feed?error=studio_access_denied');
     }
   }, [loading, profile, role, router, user]);
 
