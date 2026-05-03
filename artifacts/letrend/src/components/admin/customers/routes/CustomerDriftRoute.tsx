@@ -103,6 +103,7 @@ export function CustomerDriftRoute({
 
   const expected = pulse.expected_concepts_per_week ?? 0;
   const planned = pulse.planned_concepts_this_week ?? 0;
+  const loadedNow = pulse.loaded_concepts_count ?? 0;
   const deliveryRate = expected > 0 ? Math.min(100, (planned / expected) * 100) : 0;
   const isOnTrack = deliveryRate >= 80;
 
@@ -190,8 +191,11 @@ export function CustomerDriftRoute({
             radius="xl"
             mt={6}
           />
+          <Text size="xs" c="dimmed" mt={4}>
+            {loadedNow} koncept inladdade nu
+          </Text>
           {scheduleLabels ? (
-            <Text size="xs" c="dimmed" mt={4}>
+            <Text size="xs" c="dimmed" mt={2}>
               {scheduleLabels}
             </Text>
           ) : null}

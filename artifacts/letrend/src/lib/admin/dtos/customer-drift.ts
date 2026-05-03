@@ -63,6 +63,7 @@ export interface CustomerPulseInitialData {
   planned_concepts_this_week: number;
   expected_concepts_per_week: number;
   delivered_concepts_this_week: number;
+  loaded_concepts_count?: number;
   recent_publications: Array<{
     id: string;
     title: string | null;

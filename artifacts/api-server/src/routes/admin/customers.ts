@@ -662,10 +662,10 @@ router.get('/:id/drift', requireAuth, ADMIN_ONLY, async (req, res) => {
     const { id } = req.params;
     const supabase = createSupabaseAdmin();
 
-    const [profileResult, cmActivitiesResult, conceptsResult, tiktokResult] = await Promise.all([
+    const [profileResult, cmActivitiesResult, conceptsResult, tiktokStatsResult, tiktokVideosResult] = await Promise.all([
       supabase
         .from('customer_profiles')
-        .select('id, business_name, status, derived_status, invited_at, paused_until, monthly_price, account_manager, account_manager_profile_id, cm_avatar_url, next_invoice_date, stripe_customer_id, tiktok_handle, expected_concepts_per_week, upload_schedule')
+        .select('id, business_name, status, invited_at, paused_until, monthly_price, account_manager, account_manager_profile_id, next_invoice_date, stripe_customer_id, tiktok_handle, expected_concepts_per_week, concepts_per_week, upload_schedule, last_upload_at')
         .eq('id', id)
         .maybeSingle(),
       supabase
@@ -676,18 +676,29 @@ router.get('/:id/drift', requireAuth, ADMIN_ONLY, async (req, res) => {
         .limit(1),
       supabase
         .from('customer_concepts')
-        .select('id, custom_headline, sent_at, published_at, planned_publish_date')
+        .select('id, custom_headline, status, sent_at, published_at, planned_publish_at, content_loaded_at')
         .eq('customer_profile_id', id)
         .order('updated_at', { ascending: false })
-        .limit(10),
+        .limit(200),
       supabase
-        .from('tiktok_history_snapshots')
+        .from('tiktok_stats')
         .select('snapshot_date, followers, total_videos, videos_last_24h, total_views_24h, engagement_rate')
         .eq('customer_profile_id', id)
         .order('snapshot_date', { ascending: false })
         .limit(30),
+      supabase
+        .from('tiktok_videos')
+        .select('video_id, uploaded_at, views, likes, comments, shares, share_url, cover_image_url')
+        .eq('customer_profile_id', id)
+        .order('uploaded_at', { ascending: false })
+        .limit(30),
     ]);
 
+    if (profileResult.error) {
+      logger.error({ err: profileResult.error }, 'customer drift profile query failed');
+      res.status(500).json({ error: 'Internt serverfel' });
+      return;
+    }
     const profile = profileResult.data;
     if (!profile) {
       res.status(404).json({ error: 'Kund hittades inte' });
@@ -695,38 +706,85 @@ router.get('/:id/drift', requireAuth, ADMIN_ONLY, async (req, res) => {
     }
 
     const latestCmActivity = cmActivitiesResult.data?.[0] ?? null;
-    const snapshots = tiktokResult.data ?? [];
+    const snapshots = tiktokStatsResult.data ?? [];
     const latest = snapshots[0];
-    const prev7 = snapshots[6];
+    const prev7 = snapshots.find((s: Record<string, unknown>) => {
+      const d = s['snapshot_date'];
+      return typeof d === 'string' && new Date(d).getTime() <= Date.now() - 7 * 24 * 3600 * 1000;
+    });
     const prev30 = snapshots[snapshots.length - 1];
+    const recentVideos = (tiktokVideosResult.data ?? []).map((v: Record<string, unknown>) => ({
+      video_id: v['video_id'],
+      uploaded_at: v['uploaded_at'],
+      views: Number(v['views'] ?? 0),
+      likes: Number(v['likes'] ?? 0),
+      comments: Number(v['comments'] ?? 0),
+      shares: Number(v['shares'] ?? 0),
+      share_url: v['share_url'] ?? null,
+      cover_image_url: v['cover_image_url'] ?? null,
+    }));
 
-    const tiktokStats = snapshots.length > 0 ? {
+    const tiktokStats = snapshots.length > 0 || recentVideos.length > 0 ? {
       history: snapshots.map((s: Record<string, unknown>) => ({
         snapshot_date: s['snapshot_date'],
-        followers: s['followers'],
-        total_videos: s['total_videos'],
-        videos_last_24h: s['videos_last_24h'],
-        total_views_24h: s['total_views_24h'],
-        engagement_rate: s['engagement_rate'],
+        followers: Number(s['followers'] ?? 0),
+        total_videos: Number(s['total_videos'] ?? 0),
+        videos_last_24h: Number(s['videos_last_24h'] ?? 0),
+        total_views_24h: Number(s['total_views_24h'] ?? 0),
+        engagement_rate: Number(s['engagement_rate'] ?? 0),
       })).reverse(),
-      current_followers: latest?.followers ?? 0,
-      follower_delta_7d: (latest?.followers ?? 0) - (prev7?.followers ?? latest?.followers ?? 0),
-      follower_delta_30d: (latest?.followers ?? 0) - (prev30?.followers ?? latest?.followers ?? 0),
-      avg_engagement: latest?.engagement_rate ?? 0,
-      recent_videos: [],
+      current_followers: Number(latest?.followers ?? 0),
+      follower_delta_7d: Number(latest?.followers ?? 0) - Number(prev7?.followers ?? latest?.followers ?? 0),
+      follower_delta_30d: Number(latest?.followers ?? 0) - Number(prev30?.followers ?? latest?.followers ?? 0),
+      avg_engagement: Number(latest?.engagement_rate ?? 0),
+      recent_videos: recentVideos,
     } : null;
 
     const now = new Date();
+    // ISO week (måndag-baserat) — Sverige använder måndag som veckans första dag.
+    const dow = now.getDay(); // 0 = Sunday
+    const daysSinceMonday = (dow + 6) % 7;
     const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setDate(now.getDate() - daysSinceMonday);
+    weekStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 3600 * 1000);
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
 
-    const plannedThisWeek = (conceptsResult.data ?? []).filter((c: Record<string, string | null>) => {
-      const date = c['planned_publish_date'];
-      return date && new Date(date) >= weekStart;
+    const concepts = conceptsResult.data ?? [];
+
+    const plannedThisWeek = concepts.filter((c: Record<string, string | null>) => {
+      const date = c['planned_publish_at'];
+      if (!date) return false;
+      const t = new Date(date);
+      return t >= weekStart && t < weekEnd;
     }).length;
 
-    const recentPublications = (conceptsResult.data ?? [])
+    const deliveredThisWeek = concepts.filter((c: Record<string, string | null>) => {
+      const date = c['published_at'];
+      return date && new Date(date) >= weekAgo;
+    }).length;
+
+    // "Inladdade nu" — koncept som finns i pipelinen och ännu inte publicerats.
+    // Innehåller sådant som redan laddats in (content_loaded_at satt) och/eller
+    // fortfarande är i utkast/utskickat-läge (status != published/archived).
+    const loadedNow = concepts.filter((c: Record<string, string | null>) => {
+      if (c['published_at']) return false;
+      const status = c['status'];
+      if (status === 'archived' || status === 'published') return false;
+      return Boolean(c['content_loaded_at']) || status === 'draft' || status === 'sent' || status === 'produced';
+    }).length;
+
+    const scheduleDays = Array.isArray(profile.upload_schedule) ? profile.upload_schedule.length : 0;
+    const expectedPerWeek =
+      profile.expected_concepts_per_week ??
+      profile.concepts_per_week ??
+      (scheduleDays > 0 ? scheduleDays : 0);
+
+    const recentPublications = concepts
       .filter((c: Record<string, string | null>) => c['published_at'])
+      .sort((a: Record<string, string | null>, b: Record<string, string | null>) =>
+        new Date(b['published_at'] ?? 0).getTime() - new Date(a['published_at'] ?? 0).getTime(),
+      )
       .slice(0, 5)
       .map((c: Record<string, string | null>) => ({
         id: c['id'],
@@ -740,14 +798,14 @@ router.get('/:id/drift', requireAuth, ADMIN_ONLY, async (req, res) => {
       overview: {
         business_name: profile.business_name ?? '',
         status: profile.status ?? 'active',
-        derived_status: profile.derived_status ?? null,
+        derived_status: null,
         invited_at: profile.invited_at ?? null,
         paused_until: profile.paused_until ?? null,
         monthly_price_ore: (profile.monthly_price ?? 0) * 100,
         account_manager_id: profile.account_manager_profile_id ?? null,
         account_manager_member_id: null,
         account_manager_name: profile.account_manager ?? null,
-        account_manager_avatar_url: profile.cm_avatar_url ?? null,
+        account_manager_avatar_url: null,
         account_manager_email: null,
         account_manager_city: null,
         account_manager_commission_rate: null,
@@ -766,8 +824,9 @@ router.get('/:id/drift', requireAuth, ADMIN_ONLY, async (req, res) => {
         last_cm_action_type: latestCmActivity?.activity_type ?? null,
         last_cm_action_by: latestCmActivity?.cm_email ?? null,
         planned_concepts_this_week: plannedThisWeek,
-        expected_concepts_per_week: profile.expected_concepts_per_week ?? 0,
-        delivered_concepts_this_week: 0,
+        expected_concepts_per_week: expectedPerWeek,
+        delivered_concepts_this_week: deliveredThisWeek,
+        loaded_concepts_count: loadedNow,
         recent_publications: recentPublications,
         tiktok_stats: tiktokStats,
         upload_schedule: profile.upload_schedule ?? null,
