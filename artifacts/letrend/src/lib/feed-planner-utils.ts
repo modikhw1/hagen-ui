@@ -6,7 +6,7 @@ function getTotalSlots(gridConfig: GridConfig): number {
 
 function getMeaningfulFloor(concepts: CustomerConcept[]): number {
   const feedOrders = concepts
-    .map((concept) => concept.placement.feed_order)
+    .map((concept) => concept.placement?.feed_order)
     .filter((value): value is number => typeof value === 'number');
 
   return feedOrders.length > 0 ? Math.min(...feedOrders, 0) : 0;

@@ -63,6 +63,28 @@ const reactUseEffectEventPolyfillRollupPlugin = {
   },
 };
 
+// Vite's prebundled `node_modules/.vite/deps/react.js` only does
+// `export default require_react()`. Mantine v9 uses *named* ESM imports
+// like `import { Activity, useEffectEvent } from "react"`, which resolve
+// to `undefined` even though we polyfilled them on the CJS module.
+// This plugin appends explicit named exports to the prebundled entry so
+// the named imports actually pick up the polyfilled functions.
+const REACT_DEPS_ENTRY_RE = /[\\/]\.vite[\\/]deps[\\/]react\.js$/;
+const reactDepsNamedExportsPlugin = {
+  name: "react-deps-named-exports",
+  enforce: "post" as const,
+  transform(code: string, id: string) {
+    if (!REACT_DEPS_ENTRY_RE.test(id)) return null;
+    if (code.includes("__react_named_exports_patched")) return null;
+    const append = `
+;const __react_named_exports_patched = require_react();
+export const Activity = __react_named_exports_patched.Activity;
+export const useEffectEvent = __react_named_exports_patched.useEffectEvent;
+`;
+    return { code: code + append, map: null };
+  },
+};
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -70,6 +92,7 @@ export default defineConfig({
     tailwindcss(),
     runtimeErrorOverlay(),
     reactUseEffectEventPolyfillRollupPlugin,
+    reactDepsNamedExportsPlugin,
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [

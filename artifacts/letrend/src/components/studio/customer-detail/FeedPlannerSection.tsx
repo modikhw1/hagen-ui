@@ -171,7 +171,7 @@ export function FeedPlannerSection({
   );
   const currentHistoryDefaultTarget = React.useMemo(
     () =>
-      historyReconciliationTargets.find((concept) => concept.placement.feed_order === 0) ?? null,
+      historyReconciliationTargets.find((concept) => concept.placement?.feed_order === 0) ?? null,
     [historyReconciliationTargets]
   );
   const pendingPlacementTitle = React.useMemo(() => {
@@ -202,7 +202,7 @@ export function FeedPlannerSection({
 
     // Deepest feed_order currently loaded (most-negative value, or 0 if none)
     const deepestLoadedOrder = concepts
-      .map(c => c.placement.feed_order)
+      .map(c => c.placement?.feed_order)
       .filter((v): v is number => typeof v === 'number' && v < 0)
       .reduce<number>((min, v) => Math.min(min, v), 0);
 
@@ -297,7 +297,7 @@ export function FeedPlannerSection({
         (concept) =>
           isStudioAssignedCustomerConcept(concept) &&
           concept.assignment.status === 'draft' &&
-          concept.placement.feed_order === null
+          concept.placement?.feed_order === null
       ),
     [concepts]
   );
@@ -323,7 +323,7 @@ export function FeedPlannerSection({
   // Bygg slot-map
   const slotMap = React.useMemo(() =>
     buildSlotMap(
-      concepts.filter((concept) => concept.placement.feed_order !== null),
+      concepts.filter((concept) => concept.placement?.feed_order !== null),
       gridConfig,
       historyOffset
     ),
@@ -345,7 +345,7 @@ export function FeedPlannerSection({
   // historical and would produce past projected dates for upcoming slots (E112).
   const tempoAnchor = React.useMemo(() => {
     const today = new Date();
-    const nowConcept = concepts.find((c) => c.placement.feed_order === 0);
+    const nowConcept = concepts.find((c) => c.placement?.feed_order === 0);
     if (nowConcept?.result?.planned_publish_at) {
       const d = new Date(nowConcept.result.planned_publish_at);
       return d > today ? d : today;
@@ -754,7 +754,7 @@ export function FeedPlannerSection({
 
   // True when there are no LeTrend concepts with a feed_order (empty feed state, Task 8)
   const hasNoConcepts = !concepts.some(
-    (c) => c.row_kind === 'assignment' && typeof c.placement.feed_order === 'number'
+    (c) => c.row_kind === 'assignment' && typeof c.placement?.feed_order === 'number'
   );
 
   // True when at least one LeTrend-managed concept is placed in nu (0) or kommande (>0).
@@ -762,8 +762,8 @@ export function FeedPlannerSection({
   const hasActivePlan = concepts.some(
     (c) =>
       c.row_kind === 'assignment' &&
-      typeof c.placement.feed_order === 'number' &&
-      c.placement.feed_order >= 0
+      typeof c.placement?.feed_order === 'number' &&
+      c.placement?.feed_order >= 0
   );
 
   // The LeTrend concept currently at nu (feed_order === 0), if any.
@@ -772,7 +772,7 @@ export function FeedPlannerSection({
   const nuConcept =
     effectiveCue?.kind === 'fresh_activity'
       ? (concepts.find(
-          (c) => c.row_kind === 'assignment' && c.placement.feed_order === 0
+          (c) => c.row_kind === 'assignment' && c.placement?.feed_order === 0
         ) ?? null)
       : null;
 
