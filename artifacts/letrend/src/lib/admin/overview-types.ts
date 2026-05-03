@@ -93,14 +93,23 @@ export type OverviewPayload = {
       calls_30d: number;
       // cost_30d is always expressed in ore.
       cost_30d: number;
+      // Forecasted cost for the current calendar month, in ore. Null when we
+      // have no measurements yet so the UI can show "Saknar data" instead of
+      // a dishonest 0 kr.
+      projected_month_ore?: number | null;
+      // Where the number comes from — drives the badge in CostCard.
+      data_source?: 'measured' | 'estimated' | 'missing';
       trend: number[];
       quota?: {
         used: number;
         limit: number;
         reset_at: string | null;
+        debug_msg?: string;
       } | null;
     }>;
     totalOre: number;
+    projectedMonthOre: number;
+    refreshedAt: string | null;
   };
   demos: {
     sent: number;
@@ -214,6 +223,8 @@ export type OverviewDerivedPayload = {
   costs: {
     entries: OverviewPayload['serviceCosts']['entries'];
     totalOre: number;
+    projectedMonthOre: number;
+    refreshedAt: string | null;
   };
   attentionFeedSeenAt: string | null;
 };

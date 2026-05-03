@@ -429,6 +429,8 @@ export function deriveOverview(
     costs: {
       entries: costEntries as any,
       totalOre: payload.serviceCosts.totalOre || 0,
+      projectedMonthOre: payload.serviceCosts.projectedMonthOre || 0,
+      refreshedAt: payload.serviceCosts.refreshedAt ?? null,
     },
     attentionFeedSeenAt: payload.attentionFeedSeenAt || null,
   };

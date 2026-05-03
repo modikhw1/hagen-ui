@@ -1,6 +1,69 @@
 import { Router, type Request, type Response } from 'express';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
+import { recordServiceUsage, getServicePricing } from '../lib/service-usage.js';
+
+/**
+ * Records the actual Stripe processing fee for a successful charge by
+ * reading the linked balance_transaction.fee. This is the authoritative
+ * source ("measured") for what Stripe takes per transaction.
+ *
+ * Falls back to the estimated formula (percent_basis + fixed_per_charge)
+ * only when the balance transaction is unavailable, and tags the row's
+ * metadata.source = 'estimate' so the UI badge stays honest.
+ */
+async function recordStripeFeeForCharge(eventData: Record<string, unknown>) {
+  try {
+    const chargeId = eventData['id'] as string | undefined;
+    if (!chargeId) return;
+
+    const stripe = getStripe() as unknown as {
+      charges: { retrieve: (id: string, opts: { expand: string[] }) => Promise<{ balance_transaction?: { fee?: number; currency?: string } | string | null; amount?: number; currency?: string }> };
+    } | null;
+
+    let feeOre: number | null = null;
+    let measured = false;
+    let bt: { fee?: number; currency?: string } | null = null;
+
+    if (stripe) {
+      try {
+        const charge = await stripe.charges.retrieve(chargeId, { expand: ['balance_transaction'] });
+        if (charge.balance_transaction && typeof charge.balance_transaction === 'object') {
+          bt = charge.balance_transaction as { fee?: number; currency?: string };
+          if (typeof bt.fee === 'number' && bt.fee > 0) {
+            feeOre = bt.fee;
+            measured = true;
+          }
+        }
+      } catch (err) {
+        logger.warn({ err, chargeId }, 'Stripe charges.retrieve failed; falling back to estimate');
+      }
+    }
+
+    if (feeOre === null) {
+      const amount = Number(eventData['amount'] ?? 0);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      const pricing = await getServicePricing();
+      const percentBasis = pricing.find((p) => p.service === 'stripe' && p.unit === 'percent_basis')?.price_ore ?? 150;
+      const fixed = pricing.find((p) => p.service === 'stripe' && p.unit === 'fixed_per_charge')?.price_ore ?? 180;
+      feeOre = Math.round((amount * percentBasis) / 10000) + fixed;
+    }
+
+    await recordServiceUsage({
+      service: 'Stripe',
+      calls: 1,
+      cost_ore: feeOre,
+      metadata: {
+        source: measured ? 'stripe-balance-transaction' : 'stripe-estimate',
+        data_source: measured ? 'measured' : 'estimate',
+        charge_id: chargeId,
+        balance_transaction_currency: bt?.currency ?? null,
+      },
+    });
+  } catch (err) {
+    logger.warn({ err }, 'recordStripeFeeForCharge failed');
+  }
+}
 
 const router = Router();
 
@@ -396,6 +459,9 @@ router.post('/', async (req: Request, res: Response) => {
         await syncInvoice(supabase, eventData, customerProfileId);
         appliedChanges['synced_invoice'] = objectId;
         appliedChanges['invoice_status'] = eventData['status'];
+        // Note: actual Stripe fees are recorded from `charge.succeeded`
+        // below, not from invoice events, to avoid double counting and
+        // to use the real balance_transaction.fee.
         break;
       }
 
@@ -442,6 +508,17 @@ router.post('/', async (req: Request, res: Response) => {
           await syncSubscription(supabase, sub as unknown as Record<string, unknown>, subProfileId);
           appliedChanges['synced_subscription'] = subscriptionId;
         }
+        break;
+      }
+
+      case 'charge.succeeded': {
+        // Real Stripe processing fee, read from balance_transaction.fee.
+        // We deliberately handle ONLY `charge.succeeded` (and skip
+        // `payment_intent.succeeded`) so a single payment can never be
+        // recorded twice. Stripe always emits charge.succeeded for any
+        // settled payment, so this is sufficient and avoids double-count.
+        await recordStripeFeeForCharge(eventData);
+        appliedChanges['recorded_stripe_fee_for'] = (eventData['id'] as string) ?? null;
         break;
       }
 

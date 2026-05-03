@@ -387,9 +387,6 @@ router.get('/cm-pulse', requireAuth, ADMIN_ONLY, async (req, res) => {
   }
 });
 
-// GET /api/admin/overview/costs
-router.get('/costs', requireAuth, ADMIN_ONLY, async (_req, res) => {
-  res.json({ entries: [], totalOre: 0 });
-});
+// /costs is now mounted from admin/costs.ts via the parent admin router.
 
 export default router;

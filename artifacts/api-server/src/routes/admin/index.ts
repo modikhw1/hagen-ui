@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import customersRouter from './customers.js';
 import overviewRouter from './overview.js';
+import costsRouter from './costs.js';
 import billingRouter from './billing.js';
 import teamRouter from './team.js';
 import auditRouter from './audit.js';
@@ -23,6 +24,8 @@ const ADMIN_ONLY = requireRole(['admin']);
 // Core resource routers
 router.use('/customers', customersRouter);
 router.use('/overview', overviewRouter);
+// /overview/costs and /costs/refresh — see admin/costs.ts
+router.use('/', costsRouter);
 router.use('/billing', billingRouter);
 router.use('/team', teamRouter);
 router.use('/audit-log', auditRouter);
@@ -200,10 +203,6 @@ function itemTimestampMs(item: any): number | null {
   }
 }
 
-// Service costs alias (used by some hooks)
-router.get('/service-costs', requireAuth, ADMIN_ONLY, (_req, res) => {
-  res.json({ entries: [], totalOre: 0 });
-});
 
 // POST /api/admin/attention/:subjectType/:subjectId/snooze
 router.post('/attention/:subjectType/:subjectId/snooze', requireAuth, ADMIN_ONLY, async (req, res) => {

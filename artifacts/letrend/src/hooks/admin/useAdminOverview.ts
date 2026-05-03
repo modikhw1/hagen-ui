@@ -40,7 +40,9 @@ export function useAdminOverview(sortMode: 'standard' | 'lowest_activity') {
           costsCard: { label: 'Kostnader', value: '–' },
         } as OverviewDerivedPayload['metrics']),
         cmPulse: (cmPulseData?.['cmPulse'] as OverviewDerivedPayload['cmPulse']) ?? [],
-        costs: (costsData as OverviewDerivedPayload['costs'] | null) ?? { entries: [], totalOre: 0 },
+        costs:
+          (costsData as OverviewDerivedPayload['costs'] | null) ??
+          ({ entries: [], totalOre: 0, projectedMonthOre: 0, refreshedAt: null } as OverviewDerivedPayload['costs']),
       };
     },
     staleTime: 30_000,

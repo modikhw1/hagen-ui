@@ -2,6 +2,21 @@ import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
+import { recordServiceUsage, getPriceOre } from '../lib/service-usage.js';
+
+async function recordHagenCall(unit: string, fallbackOre: number, extra?: Record<string, unknown>) {
+  try {
+    const priceOre = await getPriceOre('vertex', unit, fallbackOre);
+    await recordServiceUsage({
+      service: 'Google Cloud (Vertex + GCS)',
+      calls: 1,
+      cost_ore: priceOre,
+      metadata: { source: 'hagen-proxy', unit, ...(extra ?? {}) },
+    });
+  } catch {
+    /* best-effort */
+  }
+}
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -63,6 +78,7 @@ router.post('/concept/prepare', requireAuth, CM_ONLY, async (req, res) => {
       }
     }
 
+    void recordHagenCall('per_prepare', 10, { route: 'concept/prepare' });
     res.json(prepared);
   } catch (err) {
     logger.error(err, 'letrend concept prepare error');
@@ -108,6 +124,7 @@ router.post('/reprocess', requireAuth, CM_ONLY, async (req, res) => {
       signal: AbortSignal.timeout(20000),
     });
     const data = await upstream.json() as Record<string, unknown>;
+    if (upstream.ok) void recordHagenCall('per_prepare', 10, { route: 'reprocess' });
     res.status(upstream.status).json(data);
   } catch (err) {
     logger.error(err, 'letrend reprocess error');
@@ -242,6 +259,7 @@ router.post('/videos/analyze/deep', requireAuth, CM_ONLY, async (req, res) => {
       signal: AbortSignal.timeout(60000),
     });
     const data = await upstream.json() as Record<string, unknown>;
+    if (upstream.ok) void recordHagenCall('per_deep_analyze', 50, { route: 'videos/analyze/deep' });
     res.status(upstream.status).json(data);
   } catch (err) {
     logger.error(err, 'videos analyze deep error');
