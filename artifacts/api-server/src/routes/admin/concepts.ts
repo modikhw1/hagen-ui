@@ -1,9 +1,11 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import regenerateRouter from './concept-regenerate.js';
 
 const router = Router();
+router.use('/', regenerateRouter);
 const CM_ONLY = requireRole(['admin']);
 const ADMIN_ONLY = requireRole(['admin']);
 
@@ -94,8 +96,8 @@ router.get('/:id', requireAuth, CM_ONLY, async (req, res) => {
   }
 });
 
-// PATCH /api/admin/concepts/:id
-router.patch('/:id', requireAuth, CM_ONLY, async (req, res) => {
+// PATCH (and PUT alias) /api/admin/concepts/:id
+async function patchHandler(req: Request, res: Response) {
   try {
     const supabase = createSupabaseAdmin();
     const body = req.body as Record<string, unknown>;
@@ -103,6 +105,11 @@ router.patch('/:id', requireAuth, CM_ONLY, async (req, res) => {
     const allowed = ['backend_data', 'overrides', 'is_active', 'source'];
     for (const key of allowed) {
       if (key in body) patch[key] = body[key];
+    }
+
+    // Take-over: a CM can claim ownership of someone else's concept.
+    if (body['take_over'] === true) {
+      patch['created_by'] = req.user!.id;
     }
 
     const { data, error } = await supabase
@@ -121,7 +128,9 @@ router.patch('/:id', requireAuth, CM_ONLY, async (req, res) => {
     logger.error(err, 'admin concept PATCH error');
     res.status(500).json({ error: 'Internt serverfel' });
   }
-});
+}
+router.patch('/:id', requireAuth, CM_ONLY, patchHandler);
+router.put('/:id', requireAuth, CM_ONLY, patchHandler);
 
 // DELETE /api/admin/concepts/:id
 router.delete('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {

@@ -9,6 +9,16 @@ import {
   buttonStyle,
   inputStyle,
 } from '@/styles/letrend-design-system';
+import {
+  BUDGET_VALUES,
+  BUSINESS_TYPE_VALUES,
+  DIFFICULTY_VALUES,
+  FILM_TIME_VALUES,
+  PEOPLE_VALUES,
+} from '@/lib/concept-enrichment';
+import { categoryOptions, display } from '@/lib/display';
+import { translateClipToConcept } from '@/lib/translator';
+import type { BackendClip } from '@/lib/translator';
 
 interface UploadConceptModalProps {
   isOpen: boolean;
@@ -18,25 +28,30 @@ interface UploadConceptModalProps {
 
 type JsonRecord = Record<string, unknown>;
 
-type UploadStep = 'idle' | 'analyzing' | 'enriching' | 'saving';
+type UploadStep = 'idle' | 'analyzing' | 'enriching' | 'classifying' | 'saving';
 
 const STEPS: Array<{ key: Exclude<UploadStep, 'idle'>; label: string }> = [
-  { key: 'analyzing', label: 'Laddar upp och analyserar' },
+  { key: 'analyzing', label: 'Laddar upp & analyserar' },
   { key: 'enriching', label: 'Förädlar' },
+  { key: 'classifying', label: 'Klassificera' },
   { key: 'saving', label: 'Sparar' },
 ];
 
+const difficultyOptions = DIFFICULTY_VALUES.map((key) => ({ key, ...display.difficulty(key) }));
+const filmTimeGroups = FILM_TIME_VALUES.reduce<Array<{ key: string; label: string; value: string }>>((groups, value) => {
+  const range = display.filmTimeRange(value);
+  if (!groups.some((group) => group.key === range.key)) groups.push({ key: range.key, label: range.label, value });
+  return groups;
+}, []);
+const peopleOptions = PEOPLE_VALUES.map((key) => ({ key, label: display.peopleNeeded(key).label, shortLabel: display.peopleNeededShort(key) }));
+const budgetOptions = BUDGET_VALUES.map((key) => ({ key, label: display.budget(key).label }));
+const businessTypeOptions = BUSINESS_TYPE_VALUES.map((key) => ({ key, ...display.businessType(key) }));
+const marketOptions = categoryOptions.markets();
+
 function detectPlatform(url: string): { key: string; label: string; color: string } {
   const normalized = url.toLowerCase();
-
-  if (normalized.includes('instagram')) {
-    return { key: 'instagram', label: 'Instagram', color: '#C13584' };
-  }
-
-  if (normalized.includes('youtube') || normalized.includes('youtu.be')) {
-    return { key: 'youtube', label: 'YouTube', color: '#FF0000' };
-  }
-
+  if (normalized.includes('instagram')) return { key: 'instagram', label: 'Instagram', color: '#C13584' };
+  if (normalized.includes('youtube') || normalized.includes('youtu.be')) return { key: 'youtube', label: 'YouTube', color: '#FF0000' };
   return { key: 'tiktok', label: 'TikTok', color: '#1A1612' };
 }
 
@@ -53,22 +68,16 @@ async function readJsonResponse(response: Response) {
 
 function getNestedRecord(record: JsonRecord, path: string[]) {
   let current: unknown = record;
-
   for (const segment of path) {
-    if (!current || typeof current !== 'object' || !(segment in current)) {
-      return null;
-    }
-
+    if (!current || typeof current !== 'object' || !(segment in current)) return null;
     current = (current as JsonRecord)[segment];
   }
-
   return current && typeof current === 'object' ? (current as JsonRecord) : null;
 }
 
 function getFirstString(record: JsonRecord, paths: string[][]) {
   for (const path of paths) {
     let current: unknown = record;
-
     for (const segment of path) {
       if (!current || typeof current !== 'object' || !(segment in current)) {
         current = null;
@@ -76,12 +85,8 @@ function getFirstString(record: JsonRecord, paths: string[][]) {
       }
       current = (current as JsonRecord)[segment];
     }
-
-    if (typeof current === 'string' && current.trim()) {
-      return current.trim();
-    }
+    if (typeof current === 'string' && current.trim()) return current.trim();
   }
-
   return '';
 }
 
@@ -94,14 +99,29 @@ function slugFromVideo(videoUrl: string, fallback: string) {
   );
 }
 
+interface ClassificationDraft {
+  difficulty: string;
+  filmTime: string;
+  market: string;
+  peopleNeeded: string;
+  estimatedBudget: string;
+  businessTypes: string[];
+}
+
 export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConceptModalProps) {
   const [videoUrl, setVideoUrl] = useState('');
   const [step, setStep] = useState<UploadStep>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<'url' | 'classify'>('url');
 
-  if (!isOpen) {
-    return null;
-  }
+  // Held while the user finishes step-2 classification.
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [pendingHeadline, setPendingHeadline] = useState<string>('');
+  const [pendingBackend, setPendingBackend] = useState<BackendClip | null>(null);
+  const [pendingOverrides, setPendingOverrides] = useState<Record<string, unknown>>({});
+  const [classification, setClassification] = useState<ClassificationDraft | null>(null);
+
+  if (!isOpen) return null;
 
   const platform = videoUrl.trim() ? detectPlatform(videoUrl) : null;
   const busy = step !== 'idle';
@@ -111,44 +131,36 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
     setVideoUrl('');
     setStep('idle');
     setError(null);
+    setPhase('url');
+    setPendingId(null);
+    setPendingBackend(null);
+    setPendingOverrides({});
+    setClassification(null);
+    setPendingHeadline('');
   };
 
   const handleClose = () => {
-    if (busy) {
-      return;
-    }
-
+    if (busy) return;
     reset();
     onClose();
   };
 
-  const handleSubmit = async () => {
-    if (!videoUrl.trim() || busy) {
-      return;
-    }
-
+  const handleAnalyze = async () => {
+    if (!videoUrl.trim() || busy) return;
     setError(null);
 
     try {
       setStep('analyzing');
-
       const analyzeRes = await fetch('/api/studio/concepts/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          videoUrl,
-          platform: platform?.key,
-        }),
+        body: JSON.stringify({ videoUrl, platform: platform?.key }),
       });
       const analyzePayload = await readJsonResponse(analyzeRes);
-      if (!analyzeRes.ok) {
-        throw new Error(analyzePayload.error || 'Upload eller analys misslyckades');
-      }
+      if (!analyzeRes.ok) throw new Error(analyzePayload.error || 'Upload eller analys misslyckades');
 
       const analyzeEnvelope = analyzePayload.analysis;
-      if (!analyzeEnvelope) {
-        throw new Error('Analysen returnerade inget resultat.');
-      }
+      if (!analyzeEnvelope) throw new Error('Analysen returnerade inget resultat.');
 
       const analyzeData = getNestedRecord(analyzeEnvelope, ['analysis']) || analyzeEnvelope;
       const gcsUri =
@@ -165,20 +177,16 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         source_url: videoUrl,
         platform: platform?.key,
         ...(gcsUri ? { gcs_uri: gcsUri } : {}),
-      };
+      } as BackendClip;
 
       setStep('enriching');
       const enrichRes = await fetch('/api/studio/concepts/enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          backend_data: backendData,
-        }),
+        body: JSON.stringify({ backend_data: backendData }),
       });
       const enrichPayload = await readJsonResponse(enrichRes);
-      if (!enrichRes.ok) {
-        throw new Error(enrichPayload.error || 'Kunde inte förädla konceptet');
-      }
+      if (!enrichRes.ok) throw new Error(enrichPayload.error || 'Kunde inte förädla konceptet');
 
       const fallbackHeadline =
         getFirstString(analyzeData, [
@@ -195,281 +203,264 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         ...enrichPayload.overrides,
       };
 
-      setStep('saving');
-      const saveRes = await fetch('/api/admin/concepts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: conceptId,
-          backend_data: backendData,
-          overrides,
-        }),
+      // Translate so we can prefill classification step from heuristics
+      const translated = translateClipToConcept(backendData);
+      setPendingId(conceptId);
+      setPendingHeadline((overrides.headline_sv as string) || translated.headline_sv || 'Nytt koncept');
+      setPendingBackend(backendData);
+      setPendingOverrides(overrides);
+      setClassification({
+        difficulty: translated.difficulty,
+        filmTime: translated.filmTime,
+        market: translated.market === 'global' ? 'US' : translated.market,
+        peopleNeeded: translated.peopleNeeded,
+        estimatedBudget: translated.estimatedBudget,
+        businessTypes: translated.businessTypes.slice(0, 3),
       });
-      const saveData = await readJsonResponse(saveRes);
-      if (!saveRes.ok) {
-        throw new Error(saveData.error || 'Kunde inte spara konceptet');
-      }
-
-      reset();
-      onSuccess(saveData.concept?.id || conceptId);
+      setPhase('classify');
+      setStep('classifying');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Nagot gick fel';
       setError(
         message.toLowerCase().includes('tog for lang tid')
           ? `${message} Forsok igen med samma URL eller prova igen om en stund.`
-          : message
+          : message,
       );
       setStep('idle');
     }
   };
 
+  const handleSaveWithClassification = async () => {
+    if (!pendingId || !pendingBackend || !classification) return;
+    setError(null);
+    setStep('saving');
+    try {
+      const overrides = {
+        ...pendingOverrides,
+        difficulty: classification.difficulty,
+        filmTime: classification.filmTime,
+        market: classification.market,
+        peopleNeeded: classification.peopleNeeded,
+        estimatedBudget: classification.estimatedBudget,
+        businessTypes: classification.businessTypes,
+      };
+      const saveRes = await fetch('/api/admin/concepts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: pendingId, backend_data: pendingBackend, overrides }),
+      });
+      const saveData = await readJsonResponse(saveRes);
+      if (!saveRes.ok) throw new Error(saveData.error || 'Kunde inte spara konceptet');
+      const id = saveData.concept?.id || pendingId;
+      reset();
+      onSuccess(id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nagot gick fel';
+      setError(message);
+      setStep('classifying');
+    }
+  };
+
+  const selectedFilmTimeGroup = classification?.filmTime ? display.filmTimeRange(classification.filmTime).key : '';
+  const choiceButton = (active: boolean, baseColor = '#111827') => ({
+    padding: '8px 12px',
+    borderRadius: 10,
+    border: `1px solid ${active ? baseColor : '#e5e7eb'}`,
+    background: active ? `${baseColor}18` : '#fff',
+    color: active ? baseColor : '#374151',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+  });
+
   return (
     <div
       onClick={handleClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(15, 23, 42, 0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1100,
-        padding: 24,
-      }}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 24 }}
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        style={{
-          width: '100%',
-          maxWidth: 480,
-          background: '#fff',
-          borderRadius: LeTrendRadius.xl,
-          boxShadow: LeTrendShadows.xl,
-          padding: 28,
-          fontFamily: LeTrendTypography.fontFamily.body,
-        }}
+        style={{ width: '100%', maxWidth: phase === 'classify' ? 640 : 480, background: '#fff', borderRadius: LeTrendRadius.xl, boxShadow: LeTrendShadows.xl, padding: 28, fontFamily: LeTrendTypography.fontFamily.body, maxHeight: '90vh', overflowY: 'auto' }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 16,
-            marginBottom: 20,
-          }}
-        >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
           <div>
-            <h3
-              style={{
-                margin: 0,
-                fontSize: LeTrendTypography.fontSize['3xl'],
-                fontWeight: LeTrendTypography.fontWeight.bold,
-                color: LeTrendColors.textPrimary,
-                fontFamily: LeTrendTypography.fontFamily.heading,
-              }}
-            >
-              Nytt koncept
+            <h3 style={{ margin: 0, fontSize: LeTrendTypography.fontSize['3xl'], fontWeight: LeTrendTypography.fontWeight.bold, color: LeTrendColors.textPrimary, fontFamily: LeTrendTypography.fontFamily.heading }}>
+              {phase === 'classify' ? 'Klassificera koncept' : 'Nytt koncept'}
             </h3>
-            <p
-              style={{
-                margin: '6px 0 0',
-                color: LeTrendColors.textMuted,
-                fontSize: LeTrendTypography.fontSize.sm,
-              }}
-            >
-              Klistra in en video-URL for att ladda upp, analysera och skapa ett granskningsklart koncept.
+            <p style={{ margin: '6px 0 0', color: LeTrendColors.textMuted, fontSize: LeTrendTypography.fontSize.sm }}>
+              {phase === 'classify'
+                ? `Slutför klassificeringen av "${pendingHeadline}" innan du sparar.`
+                : 'Klistra in en video-URL för att ladda upp och analysera.'}
             </p>
           </div>
-          <button
-            onClick={handleClose}
-            disabled={busy}
-            aria-label="Stang"
-            style={{
-              border: 'none',
-              background: 'none',
-              color: LeTrendColors.textMuted,
-              cursor: busy ? 'not-allowed' : 'pointer',
-              fontSize: 20,
-              lineHeight: 1,
-              padding: 4,
-            }}
-          >
+          <button onClick={handleClose} disabled={busy && phase !== 'classify'} aria-label="Stang" style={{ border: 'none', background: 'none', color: LeTrendColors.textMuted, cursor: (busy && phase !== 'classify') ? 'not-allowed' : 'pointer', fontSize: 20, lineHeight: 1, padding: 4 }}>
             x
           </button>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ position: 'relative' }}>
-            <input
-              type="url"
-              placeholder="Klistra in video-URL..."
-              value={videoUrl}
-              onChange={(event) => setVideoUrl(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  void handleSubmit();
-                }
-              }}
-              disabled={busy}
-              style={{
-                ...inputStyle(),
-                width: '100%',
-                paddingRight: platform ? 110 : undefined,
-              }}
-            />
-            {platform ? (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: '50%',
-                  right: 10,
-                  transform: 'translateY(-50%)',
-                  background: platform.color,
-                  color: '#fff',
-                  borderRadius: LeTrendRadius.full,
-                  padding: '4px 10px',
-                  fontSize: LeTrendTypography.fontSize.xs,
-                  fontWeight: LeTrendTypography.fontWeight.bold,
-                }}
-              >
-                {platform.label}
-              </span>
-            ) : null}
-          </div>
-          <p
-            style={{
-              margin: '6px 0 0',
-              color: LeTrendColors.textMuted,
-              fontSize: LeTrendTypography.fontSize.xs,
-            }}
-          >
-            TikTok, Instagram eller YouTube.
-          </p>
+        {/* Step indicator */}
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+          {STEPS.map((currentStep, index) => {
+            const isActive = currentStep.key === step;
+            const isDone = stepIndex > index;
+            return (
+              <div key={currentStep.key} style={{ flex: 1 }}>
+                <div style={{ height: 4, borderRadius: 999, background: isDone ? LeTrendColors.success : isActive ? LeTrendColors.brownLight : LeTrendColors.surfaceLight, marginBottom: 6 }} />
+                <div style={{ textAlign: 'center', fontSize: 11, color: isActive ? LeTrendColors.brownDark : isDone ? LeTrendColors.success : LeTrendColors.textMuted, fontWeight: isActive || isDone ? 700 : 500 }}>
+                  {currentStep.label}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
-        {busy ? (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-              {STEPS.map((currentStep, index) => {
-                const isActive = currentStep.key === step;
-                const isDone = stepIndex > index;
-
-                return (
-                  <div key={currentStep.key} style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        height: 4,
-                        borderRadius: 999,
-                        background: isDone
-                          ? LeTrendColors.success
-                          : isActive
-                            ? LeTrendColors.brownLight
-                            : LeTrendColors.surfaceLight,
-                        marginBottom: 6,
-                        position: 'relative',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      {isActive ? (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            inset: 0,
-                            background: `linear-gradient(90deg, transparent, ${LeTrendColors.cream}, transparent)`,
-                            animation: 'uploadShimmer 1.4s infinite',
-                            opacity: 0.45,
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                    <div
-                      style={{
-                        textAlign: 'center',
-                        fontSize: LeTrendTypography.fontSize.xs,
-                        color: isActive
-                          ? LeTrendColors.brownDark
-                          : isDone
-                            ? LeTrendColors.success
-                            : LeTrendColors.textMuted,
-                        fontWeight: isActive
-                          ? LeTrendTypography.fontWeight.bold
-                          : LeTrendTypography.fontWeight.medium,
-                      }}
-                    >
-                      {currentStep.label}
-                    </div>
-                  </div>
-                );
-              })}
+        {phase === 'url' ? (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type="url"
+                  placeholder="Klistra in video-URL..."
+                  value={videoUrl}
+                  onChange={(event) => setVideoUrl(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void handleAnalyze(); }}
+                  disabled={busy}
+                  style={{ ...inputStyle(), width: '100%', paddingRight: platform ? 110 : undefined }}
+                />
+                {platform ? (
+                  <span style={{ position: 'absolute', top: '50%', right: 10, transform: 'translateY(-50%)', background: platform.color, color: '#fff', borderRadius: LeTrendRadius.full, padding: '4px 10px', fontSize: LeTrendTypography.fontSize.xs, fontWeight: LeTrendTypography.fontWeight.bold }}>
+                    {platform.label}
+                  </span>
+                ) : null}
+              </div>
+              <p style={{ margin: '6px 0 0', color: LeTrendColors.textMuted, fontSize: LeTrendTypography.fontSize.xs }}>TikTok, Instagram eller YouTube.</p>
             </div>
-            <div
-              style={{
-                padding: '10px 12px',
-                borderRadius: LeTrendRadius.md,
-                background: LeTrendColors.surface,
-                color: LeTrendColors.textSecondary,
-                fontSize: LeTrendTypography.fontSize.xs,
-              }}
-            >
-              Analys tar vanligtvis 15-30 sekunder. Lat fonstret vara oppet medan videon behandlas.
-            </div>
-          </div>
-        ) : null}
 
-        {error ? (
-          <div
-            style={{
-              marginBottom: 16,
-              background: '#FEF2F2',
-              border: `1px solid ${LeTrendColors.error}33`,
-              borderRadius: LeTrendRadius.md,
-              color: LeTrendColors.error,
-              padding: '12px 16px',
-              fontSize: LeTrendTypography.fontSize.sm,
-            }}
-          >
-            <div>{error}</div>
+            {busy ? (
+              <div style={{ marginBottom: 16, padding: '10px 12px', borderRadius: LeTrendRadius.md, background: LeTrendColors.surface, color: LeTrendColors.textSecondary, fontSize: LeTrendTypography.fontSize.xs }}>
+                Analys tar vanligtvis 15-30 sekunder. Lat fonstret vara oppet medan videon behandlas.
+              </div>
+            ) : null}
+
+            {error ? (
+              <div style={{ marginBottom: 16, background: '#FEF2F2', border: `1px solid ${LeTrendColors.error}33`, borderRadius: LeTrendRadius.md, color: LeTrendColors.error, padding: '12px 16px', fontSize: LeTrendTypography.fontSize.sm }}>
+                {error}
+              </div>
+            ) : null}
+
             <button
-              type="button"
-              onClick={() => {
-                void handleSubmit();
-              }}
-              disabled={busy || !videoUrl.trim()}
-              style={{
-                marginTop: 10,
-                border: 'none',
-                background: 'none',
-                color: LeTrendColors.error,
-                cursor: busy || !videoUrl.trim() ? 'not-allowed' : 'pointer',
-                fontSize: LeTrendTypography.fontSize.xs,
-                fontWeight: LeTrendTypography.fontWeight.bold,
-                padding: 0,
-                textDecoration: 'underline',
-              }}
+              onClick={() => void handleAnalyze()}
+              disabled={!videoUrl.trim() || busy}
+              style={{ ...buttonStyle('primary'), width: '100%', opacity: !videoUrl.trim() || busy ? 0.55 : 1, cursor: !videoUrl.trim() || busy ? 'not-allowed' : 'pointer' }}
             >
-              Forsok igen
+              {busy ? 'Arbetar...' : 'Analysera och fortsätt →'}
             </button>
-          </div>
+          </>
         ) : null}
 
-        <button
-          onClick={() => {
-            void handleSubmit();
-          }}
-          disabled={!videoUrl.trim() || busy}
-          style={{
-            ...buttonStyle('primary'),
-            width: '100%',
-            opacity: !videoUrl.trim() || busy ? 0.55 : 1,
-            cursor: !videoUrl.trim() || busy ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {busy ? 'Arbetar...' : 'Ladda upp och analysera'}
-        </button>
+        {phase === 'classify' && classification ? (
+          <>
+            <div style={{ display: 'grid', gap: 14, marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Svårighet</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {difficultyOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setClassification((c) => c ? { ...c, difficulty: option.key } : c)} style={choiceButton(classification.difficulty === option.key, option.color)}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-        <style>{'@keyframes uploadShimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }'}</style>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Inspelningstid</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {filmTimeGroups.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setClassification((c) => c ? { ...c, filmTime: option.value } : c)} style={choiceButton(selectedFilmTimeGroup === option.key, '#6366f1')}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Antal personer</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {peopleOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setClassification((c) => c ? { ...c, peopleNeeded: option.key } : c)} style={{ ...choiceButton(classification.peopleNeeded === option.key, '#111827'), minWidth: 90 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>{option.shortLabel}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Marknad</div>
+                  <select value={classification.market} onChange={(e) => setClassification((c) => c ? { ...c, market: e.target.value } : c)} style={{ ...inputStyle(), fontSize: 13, padding: '8px 12px' }}>
+                    {marketOptions.map((opt) => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Budget</div>
+                  <select value={classification.estimatedBudget} onChange={(e) => setClassification((c) => c ? { ...c, estimatedBudget: e.target.value } : c)} style={{ ...inputStyle(), fontSize: 13, padding: '8px 12px' }}>
+                    {budgetOptions.map((opt) => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Branschtyper (max 3)</div>
+                  <div style={{ fontSize: 11, color: classification.businessTypes.length >= 3 ? '#92400e' : '#6b7280', fontWeight: 700 }}>{classification.businessTypes.length} av 3</div>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {businessTypeOptions.map((type) => {
+                    const checked = classification.businessTypes.includes(type.key);
+                    const limitReached = classification.businessTypes.length >= 3 && !checked;
+                    return (
+                      <button
+                        key={type.key}
+                        type="button"
+                        disabled={limitReached}
+                        onClick={() => setClassification((c) => {
+                          if (!c) return c;
+                          const next = checked
+                            ? c.businessTypes.filter((v) => v !== type.key)
+                            : c.businessTypes.length >= 3 ? c.businessTypes : [...c.businessTypes, type.key];
+                          return { ...c, businessTypes: next };
+                        })}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 999, border: `1px solid ${checked ? type.color : '#e5e7eb'}`, background: checked ? `${type.color}14` : '#fff', cursor: limitReached ? 'not-allowed' : 'pointer', fontSize: 12, color: checked ? type.color : '#374151', opacity: limitReached ? 0.45 : 1 }}
+                      >
+                        <span>{type.icon}</span>
+                        <span>{type.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {error ? (
+              <div style={{ marginBottom: 16, background: '#FEF2F2', border: `1px solid ${LeTrendColors.error}33`, borderRadius: LeTrendRadius.md, color: LeTrendColors.error, padding: '12px 16px', fontSize: LeTrendTypography.fontSize.sm }}>
+                {error}
+              </div>
+            ) : null}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => { setPhase('url'); setStep('idle'); }} style={{ ...buttonStyle('primary'), background: '#fff', color: LeTrendColors.textPrimary, border: '1px solid #e5e7eb' }}>
+                ← Tillbaka
+              </button>
+              <button
+                onClick={() => void handleSaveWithClassification()}
+                disabled={step === 'saving' || classification.businessTypes.length === 0}
+                style={{ ...buttonStyle('primary'), opacity: step === 'saving' ? 0.55 : 1, cursor: step === 'saving' ? 'not-allowed' : 'pointer' }}
+              >
+                {step === 'saving' ? 'Sparar...' : 'Spara koncept som utkast'}
+              </button>
+            </div>
+          </>
+        ) : null}
       </div>
     </div>
   );

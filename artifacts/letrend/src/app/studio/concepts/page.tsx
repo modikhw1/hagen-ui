@@ -1088,8 +1088,9 @@ export default function StudioConceptsPage() {
     });
   }, [customerLastAssignedAt, customerSearch, customers, user?.id]);
 
-  const unreviewedPendingConcepts = pendingConcepts.filter((concept) => !concept.reviewed_at);
-  const reviewedPendingConcepts = pendingConcepts.filter((concept) => concept.reviewed_at);
+  // Lifecycle simplified to draft → published. Anything not is_active is a draft;
+  // the previous reviewed_at intermediate state is no longer surfaced.
+  const draftPendingConcepts = pendingConcepts;
 
   const handleAssignToCustomer = async () => {
     if (!selectedConcept || !selectedCustomer) return;
@@ -1205,16 +1206,10 @@ export default function StudioConceptsPage() {
             {concepts.length} koncept
             {' '}
             i {libraryScope === 'mine' ? 'mitt arbetsbibliotek' : 'hela biblioteket'}
-            {unreviewedPendingConcepts.length > 0 ? (
+            {draftPendingConcepts.length > 0 ? (
               <>
                 {' '}
-                · <span style={{ color: LeTrendColors.warning }}>{unreviewedPendingConcepts.length} ej granskade</span>
-              </>
-            ) : null}
-            {reviewedPendingConcepts.length > 0 ? (
-              <>
-                {' '}
-                · <span style={{ color: '#2563eb' }}>{reviewedPendingConcepts.length} review-klara</span>
+                · <span style={{ color: LeTrendColors.warning }}>{draftPendingConcepts.length} utkast</span>
               </>
             ) : null}
           </p>
