@@ -1,0 +1,39 @@
+name: Sync customer TikTok history
+
+# Calls the internal sync-history-all route four times per weekday during
+# Stockholm business hours. Each customer is gated by SYNC_STALENESS_HOURS
+# (default 4h) and a daily RAPIDAPI_DAILY_BUDGET (default 800 calls), so
+# extra invocations are cheap.
+#
+# Required GitHub configuration:
+#   Repository secret:   CRON_SECRET   — must match the deployed CRON_SECRET env var
+#   Repository variable: APP_URL       — deployed API base URL, e.g. https://api.letrend.se
+#
+# The route returns:
+#   { processed, imported, statsUpdated, errors, callsUsed, budgetRemaining,
+#     budgetExceeded, staleLocksCleared }
+on:
+  schedule:
+    - cron: '0 6,9,12,15 * * 1-5'  # 06/09/12/15 UTC, Mon-Fri
+  workflow_dispatch:
+
+jobs:
+  sync:
+    name: sync-history-all
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: POST /api/studio-v2/internal/sync-history-all
+        run: |
+          http_status=$(curl -s \
+            -o /tmp/sync_response.json \
+            -w "%{http_code}" \
+            -X POST "${{ vars.APP_URL }}/api/studio-v2/internal/sync-history-all" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json")
+          echo "HTTP status: $http_status"
+          jq '.' /tmp/sync_response.json 2>/dev/null || cat /tmp/sync_response.json
+          if [ "$http_status" != "200" ]; then
+            echo "Sync failed — expected 200, got $http_status"
+            exit 1
+          fi

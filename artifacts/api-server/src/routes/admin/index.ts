@@ -39,6 +39,40 @@ router.use('/account-managers', teamRouter);
 // Concepts library (admin/CM)
 router.use('/concepts', conceptsRouter);
 
+// GET /api/admin/cron-runs — TikTok sync health: last 10 sync_runs + customers
+// whose latest sync errored. Read-only.
+router.get('/cron-runs', requireAuth, ADMIN_ONLY, async (_req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const [runsResult, failedResult] = await Promise.all([
+      supabase
+        .from('sync_runs')
+        .select('id, customer_id, mode, started_at, finished_at, status, fetched_count, imported_count, stats_updated_count, error')
+        .order('started_at', { ascending: false })
+        .limit(20),
+      supabase
+        .from('customer_profiles')
+        .select('id, business_name, tiktok_handle, last_history_sync_at, last_sync_error')
+        .not('last_sync_error', 'is', null)
+        .order('last_history_sync_at', { ascending: false })
+        .limit(50),
+    ]);
+    if (runsResult.error || failedResult.error) {
+      res.status(500).json({
+        error: runsResult.error?.message || failedResult.error?.message || 'cron_runs_query_failed',
+      });
+      return;
+    }
+    res.json({
+      recent_runs: runsResult.data ?? [],
+      failed_customers: failedResult.data ?? [],
+    });
+  } catch (err) {
+    logger.error(err, 'admin cron-runs error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
 // Notifications — driven by the shared attention derive so /admin overview
 // and /admin/notifications stay in sync. The bell badge counts open items
 // newer than the per-admin "last seen" timestamp for the notifications surface.

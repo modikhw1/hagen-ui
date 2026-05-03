@@ -244,6 +244,23 @@ router.patch('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
       if (key in body) patch[key] = body[key];
     }
 
+    // Detect TikTok handle change so we can re-trigger initial backfill below.
+    const { data: prev } = await supabase
+      .from('customer_profiles')
+      .select('tiktok_handle')
+      .eq('id', id)
+      .maybeSingle();
+    const prevHandle = typeof prev?.tiktok_handle === 'string' ? prev.tiktok_handle.trim().replace(/^@/, '') : '';
+    const nextHandleRaw = typeof patch.tiktok_handle === 'string' ? patch.tiktok_handle : undefined;
+    const nextHandle = typeof nextHandleRaw === 'string' ? nextHandleRaw.trim().replace(/^@/, '') : '';
+    const handleChanged = nextHandleRaw !== undefined && nextHandle !== prevHandle && nextHandle !== '';
+
+    if (handleChanged) {
+      // Reset sync stamps so the new handle gets a fresh full backfill.
+      patch['last_history_sync_at'] = null;
+      patch['last_upload_at'] = null;
+    }
+
     const { error } = await supabase
       .from('customer_profiles')
       .update(patch)
@@ -253,6 +270,14 @@ router.patch('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
       res.status(500).json({ error: error.message });
       return;
     }
+
+    if (handleChanged && typeof id === 'string') {
+      // Fire-and-forget: kick off a fresh TikTok backfill for the new handle.
+      const customerId = id;
+      const { triggerInitialTikTokSyncBackground } = await import('../../lib/studio/tiktok-sync.js');
+      triggerInitialTikTokSyncBackground({ customerId, tiktokHandle: nextHandle, source: 'profile_link' });
+    }
+
     res.json({ success: true });
   } catch (err) {
     logger.error(err, 'customer patch error');

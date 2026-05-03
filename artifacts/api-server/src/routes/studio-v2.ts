@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
+import { runHistorySyncBatch, syncCustomerHistory } from '../lib/studio/tiktok-sync.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -485,6 +486,80 @@ router.get('/customers/:customerId/import-history', requireAuth, CM_ONLY, async 
   } catch (err) {
     logger.error(err, 'studio-v2 import-history error');
     res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/studio-v2/internal/sync-history-all
+// Bearer-token-only cron route. Triggered by the GitHub Actions workflow.
+router.post('/internal/sync-history-all', async (req, res) => {
+  try {
+    const cronSecret = process.env['CRON_SECRET'];
+    if (!cronSecret) {
+      res.status(500).json({ error: 'CRON_SECRET not configured' });
+      return;
+    }
+    const auth = req.headers['authorization'] ?? '';
+    if (auth !== `Bearer ${cronSecret}`) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const rapidApiKey = process.env['RAPIDAPI_KEY'];
+    if (!rapidApiKey) {
+      res.status(500).json({ error: 'RAPIDAPI_KEY not configured' });
+      return;
+    }
+    const result = await runHistorySyncBatch(rapidApiKey);
+    res.json(result);
+  } catch (err) {
+    logger.error(err, 'sync-history-all cron error');
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
+  }
+});
+
+// POST /api/studio-v2/customers/:customerId/fetch-profile-history
+// Manual "Hämta historik"-knapp i Studio-UI. Hämtar fler sidor än cron-batchen.
+router.post('/customers/:customerId/fetch-profile-history', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const customerId = String(req.params['customerId'] ?? '');
+    if (!customerId) {
+      res.status(400).json({ error: 'customerId krävs' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
+    const rapidApiKey = process.env['RAPIDAPI_KEY'];
+    if (!rapidApiKey) {
+      res.status(500).json({ error: 'RAPIDAPI_KEY not configured' });
+      return;
+    }
+    const supabase = createSupabaseAdmin();
+    const { data: customer, error: customerError } = await supabase
+      .from('customer_profiles')
+      .select('tiktok_handle')
+      .eq('id', customerId)
+      .maybeSingle();
+    if (customerError || !customer) {
+      res.status(404).json({ error: 'Kunden hittades inte' });
+      return;
+    }
+    const handleRaw = customer.tiktok_handle as unknown;
+    const handle = typeof handleRaw === 'string' ? handleRaw.trim().replace(/^@/, '') : '';
+    if (!handle) {
+      res.status(400).json({ error: 'Kunden saknar TikTok-handle' });
+      return;
+    }
+    // Validate pages: bounded 1..10, default 5.
+    const requested = Math.floor(Number(req.body?.pages));
+    const fallback = Math.floor(Number(process.env['SYNC_FULL_HISTORY_PAGES'])) || 5;
+    const pages = Number.isFinite(requested) && requested >= 1
+      ? Math.min(10, requested)
+      : Math.min(10, Math.max(1, fallback));
+    const result = await syncCustomerHistory(supabase, customerId, handle, rapidApiKey, {
+      mode: 'manual', pages, pageSize: 50,
+    });
+    res.json(result);
+  } catch (err) {
+    logger.error(err, 'fetch-profile-history error');
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
   }
 });
 
