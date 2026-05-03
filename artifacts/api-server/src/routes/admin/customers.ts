@@ -11,7 +11,7 @@ const CUSTOMER_LIST_SELECT =
   'id, business_name, contact_email, customer_contact_name, phone, account_manager, account_manager_profile_id, monthly_price, subscription_interval, pricing_status, status, lifecycle_state, created_at, agreed_at, invited_at, concepts_per_week, expected_concepts_per_week, paused_until, onboarding_state, onboarding_state_changed_at, tiktok_handle, next_invoice_date, stripe_customer_id, stripe_subscription_id';
 
 const CUSTOMER_DETAIL_SELECT =
-  'id, business_name, contact_email, customer_contact_name, phone, account_manager, account_manager_profile_id, monthly_price, subscription_interval, pricing_status, status, lifecycle_state, created_at, agreed_at, invited_at, contract_start_date, billing_day_of_month, concepts_per_week, expected_concepts_per_week, paused_until, onboarding_state, onboarding_state_changed_at, tiktok_handle, tiktok_profile_url, tiktok_user_id, next_invoice_date, stripe_customer_id, stripe_subscription_id, discount_type, discount_value, discount_duration_months, discount_ends_at, upload_schedule, last_upload_at, last_history_sync_at, upcoming_monthly_price, upcoming_price_effective_date, invoice_text, scope_items';
+  'id, business_name, contact_email, customer_contact_name, phone, account_manager, account_manager_profile_id, monthly_price, subscription_interval, pricing_status, status, lifecycle_state, created_at, agreed_at, invited_at, contract_start_date, billing_day_of_month, concepts_per_week, expected_concepts_per_week, paused_until, onboarding_state, onboarding_state_changed_at, tiktok_handle, tiktok_profile_url, tiktok_user_id, next_invoice_date, stripe_customer_id, stripe_subscription_id, discount_type, discount_value, discount_duration_months, discount_ends_at, upload_schedule, last_upload_at, last_history_sync_at, pending_history_advance_at, upcoming_monthly_price, upcoming_price_effective_date, invoice_text, scope_items, logo_url';
 
 function escapeLike(value: string) {
   return value.replaceAll('%', '\\%').replaceAll(',', ' ');
@@ -131,23 +131,95 @@ router.get('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
       return;
     }
 
+    const cmId = (profile as any).account_manager_profile_id as string | null;
+
     const [snoozesResult, absencesResult] = await Promise.all([
       supabase
         .from('attention_snoozes')
-        .select('subject_type, subject_id, snoozed_until, released_at')
+        .select('subject_type, subject_id, snoozed_until, released_at, note')
         .eq('subject_id', id),
-      supabase
-        .from('cm_absences')
-        .select('cm_id, starts_on, ends_on')
-        .order('starts_on', { ascending: false })
-        .limit(10),
+      cmId
+        ? supabase
+            .from('cm_absences')
+            .select('id, cm_id, backup_cm_id, absence_type, compensation_mode, starts_on, ends_on, note')
+            .eq('cm_id', cmId)
+            .order('starts_on', { ascending: false })
+            .limit(10)
+        : Promise.resolve({ data: [], error: null } as any),
     ]);
+
+    // Look up CM names for absences
+    const cmIds = new Set<string>();
+    for (const a of (absencesResult.data ?? []) as any[]) {
+      if (a.cm_id) cmIds.add(a.cm_id);
+      if (a.backup_cm_id) cmIds.add(a.backup_cm_id);
+    }
+    const cmNameById = new Map<string, string>();
+    if (cmIds.size > 0) {
+      const { data: members } = await (supabase as any)
+        .from('team_members')
+        .select('id, name')
+        .in('id', Array.from(cmIds));
+      for (const m of members ?? []) cmNameById.set(m.id as string, (m.name as string) ?? '');
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const coverage_absences = ((absencesResult.data ?? []) as any[]).map((a) => {
+      const isActive = a.starts_on <= today && a.ends_on >= today;
+      const isUpcoming = !isActive && a.starts_on > today;
+      return {
+        id: String(a.id),
+        cm_id: String(a.cm_id),
+        cm_name: a.cm_id ? cmNameById.get(a.cm_id) ?? null : null,
+        backup_cm_id: a.backup_cm_id ?? null,
+        backup_cm_name: a.backup_cm_id ? cmNameById.get(a.backup_cm_id) ?? null : null,
+        absence_type: String(a.absence_type ?? 'other'),
+        compensation_mode: (a.compensation_mode === 'covering_cm' ? 'covering_cm' : 'primary_cm'),
+        starts_on: String(a.starts_on),
+        ends_on: String(a.ends_on),
+        note: a.note ?? null,
+        is_active: isActive,
+        is_upcoming: isUpcoming,
+      };
+    });
+
+    const attention_snoozes = ((snoozesResult.data ?? []) as any[]).map((s) => ({
+      subject_type: s.subject_type,
+      subject_id: s.subject_id,
+      snoozed_until: s.snoozed_until ?? null,
+      released_at: s.released_at ?? null,
+      note: s.note ?? null,
+    }));
+
+    const upcomingPriceOre = (profile as any).upcoming_monthly_price;
+    const upcomingPriceDate = (profile as any).upcoming_price_effective_date;
+    const upcoming_price_change =
+      upcomingPriceOre != null && upcomingPriceDate
+        ? { effective_date: String(upcomingPriceDate), price_ore: Number(upcomingPriceOre) }
+        : null;
+
+    // Normalize subscription_interval / pricing_status which the DTO requires non-null
+    const subscription_interval =
+      (profile as any).subscription_interval === 'quarter' ||
+      (profile as any).subscription_interval === 'year'
+        ? (profile as any).subscription_interval
+        : 'month';
+    const pricing_status =
+      (profile as any).pricing_status === 'fixed' ? 'fixed' : 'unknown';
 
     res.json({
       customer: {
         ...profile,
-        attention_snoozes: snoozesResult.data ?? [],
-        coverage_absences: absencesResult.data ?? [],
+        subscription_interval,
+        pricing_status,
+        cm_avatar_url: null,
+        cm_initial_color: null,
+        preview_image_url: null,
+        last_published_at: null,
+        latest_planned_publish_date: null,
+        upcoming_price_change,
+        attention_snoozes,
+        coverage_absences,
       },
     });
   } catch (err) {
