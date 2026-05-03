@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
 
       let analysis: any
       let schemaV1Signals: any = null
+      let mergedCallUsed = false
       
       // Build video metadata for learning context retrieval
       // Include as much context as possible for better RAG matching
@@ -148,52 +149,72 @@ export async function POST(request: NextRequest) {
         hasTranscript: !!videoMetadata.transcript
       })
       
-      // Always run legacy analyzer for display data (visual summary, humor type, scores)
-      console.log('🤖 Analyzing with Gemini (for display data)...')
       const legacyAnalyzer = new GeminiVideoAnalyzer()
-      analysis = await legacyAnalyzer.analyzeVideo(cloudUrl, {
-        detailLevel,
-        useLearning: true,
-        videoMetadata
-      })
-      
-      // If Schema v1.1 requested, also run BrandAnalyzer for structured signals
+
       if (useSchemaV1) {
-        console.log('🤖 Also extracting Schema v1.1 signals via BrandAnalyzer...')
-        const brandAnalyzer = new BrandAnalyzer()
-        
-        // BrandAnalyzer can use GCS URI (for Vertex) or Gemini File API URI
-        const isGcsUri = cloudUrl.startsWith('gs://')
-        console.log('🔍 BrandAnalyzer config:', {
-          isConfigured: brandAnalyzer.isConfigured(),
-          isGcsUri,
-          cloudUrlPrefix: cloudUrl.substring(0, 50)
-        })
-        
+        // MERGED PATH — one Gemini round-trip produces both the display
+        // analysis AND the Schema v1.1 σTaste signals via tagged sentinels
+        // in the prompt. This halves Gemini cost vs the previous
+        // analyzeVideo + BrandAnalyzer fan-out.
+        console.log('🤖 Analyzing with Gemini (merged display + σTaste, single call)...')
         try {
-          // Pass both URI options - BrandAnalyzer will choose the best one
+          const merged = await legacyAnalyzer.analyzeVideoCombined(cloudUrl, {
+            detailLevel,
+            useLearning: true,
+            videoMetadata
+          })
+          analysis = merged.analysis
+          mergedCallUsed = true
+          if (merged.schemaV1) {
+            analysis.schema_v1_signals = merged.schemaV1.signals
+            analysis.schema_version = 1
+            console.log('✅ Merged σTaste signals extracted:', {
+              hasReplicability: !!merged.schemaV1.signals?.replicability,
+              hasEnvironment: !!merged.schemaV1.signals?.environment_requirements,
+              hasRisk: !!merged.schemaV1.signals?.risk_level,
+              confidenceOverall: merged.schemaV1.confidence?.overall_0_1 ?? null
+            })
+          } else {
+            console.warn('⚠️ Merged call returned no σTaste block:', merged.schemaV1ParseError)
+            // Fall back to a separate BrandAnalyzer call so we don't lose
+            // signals when sentinels are missing — still cheaper on average
+            // because it only triggers on parse failure.
+            await runBrandAnalyzerFallback()
+          }
+        } catch (mergedErr: any) {
+          console.error('❌ Merged Gemini call failed, falling back to two-call path:', {
+            errorMessage: mergedErr?.message || String(mergedErr)
+          })
+          analysis = await legacyAnalyzer.analyzeVideo(cloudUrl, {
+            detailLevel, useLearning: true, videoMetadata
+          })
+          await runBrandAnalyzerFallback()
+        }
+      } else {
+        // No Schema v1 requested — single legacy call as before.
+        console.log('🤖 Analyzing with Gemini (display only)...')
+        analysis = await legacyAnalyzer.analyzeVideo(cloudUrl, {
+          detailLevel,
+          useLearning: true,
+          videoMetadata
+        })
+      }
+
+      async function runBrandAnalyzerFallback() {
+        const brandAnalyzer = new BrandAnalyzer()
+        const isGcsUri = cloudUrl!.startsWith('gs://')
+        try {
           schemaV1Signals = await brandAnalyzer.analyze({
             videoUrl: video.video_url,
             videoId: video.video_id || videoId,
             gcsUri: isGcsUri ? cloudUrl : undefined,
             geminiFileUri: !isGcsUri ? cloudUrl : undefined
           })
-          console.log('✅ Schema v1.1 signals extracted:', {
-            hasRawOutput: !!schemaV1Signals.raw_output,
-            hasSignals: !!schemaV1Signals.signals,
-            rawOutputKeys: schemaV1Signals.raw_output ? Object.keys(schemaV1Signals.raw_output) : [],
-            confidenceOverall: schemaV1Signals.confidence?.overall || null,
-            hasReplicability: !!(schemaV1Signals.raw_output?.signals?.replicability || schemaV1Signals.signals?.replicability)
-          })
-          
-          // Merge Schema v1.1 signals into the analysis object
-          // This allows the UI to access both legacy fields AND v1.1 signals
           analysis.schema_v1_signals = schemaV1Signals.raw_output?.signals || schemaV1Signals.signals
           analysis.schema_version = 1
         } catch (v1Error: any) {
-          console.error('❌ Schema v1.1 extraction failed:', {
-            errorMessage: v1Error?.message || String(v1Error),
-            errorStack: v1Error?.stack?.substring(0, 500)
+          console.error('❌ Schema v1.1 fallback extraction failed:', {
+            errorMessage: v1Error?.message || String(v1Error)
           })
         }
       }
@@ -244,7 +265,7 @@ export async function POST(request: NextRequest) {
         .update({ content_embedding: embedding })
         .eq('id', videoId)
 
-      console.log('✅ Deep analysis complete!')
+      console.log('✅ Deep analysis complete!', { mergedCallUsed })
       console.log('🔍 Final analysis object keys:', Object.keys(analysis))
       console.log('🔍 schema_v1_signals present:', !!analysis.schema_v1_signals)
       if (analysis.schema_v1_signals) {

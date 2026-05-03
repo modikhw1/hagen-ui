@@ -4,6 +4,7 @@ import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
 import { runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
+import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -617,27 +618,18 @@ router.get('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (r
 
 // GET /api/studio-v2/customers/:customerId/hagen-clips
 router.get('/customers/:customerId/hagen-clips', requireAuth, CM_ONLY, async (req, res) => {
-  try {
-    const { customerId } = req.params;
-    if (!(await ensureCustomerAccess(req, res, customerId))) return;
-    const hagenBase = process.env['HAGEN_BASE_URL']?.trim();
-    if (!hagenBase) {
-      res.json({ clips: [] });
-      return;
-    }
-    const upstream = await fetch(`${hagenBase}/api/studio-v2/customers/${customerId}/hagen-clips`, {
-      signal: AbortSignal.timeout(8000),
-    }).catch(() => null);
-    if (!upstream) {
-      res.json({ clips: [] });
-      return;
-    }
-    const payload = await upstream.json() as Record<string, unknown>;
-    res.status(upstream.status).json(payload);
-  } catch (err) {
-    logger.error(err, 'studio-v2 hagen-clips error');
+  const { customerId } = req.params;
+  if (!(await ensureCustomerAccess(req, res, customerId))) return;
+  if (!getHagenBase()) {
     res.json({ clips: [] });
+    return;
   }
+  await proxyHagenJson(res, {
+    method: 'GET',
+    path: `/api/studio-v2/customers/${customerId}/hagen-clips`,
+    timeoutMs: 8000,
+    routeTag: 'studio-v2.hagen-clips',
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

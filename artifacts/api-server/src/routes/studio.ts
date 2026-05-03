@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
+import { proxyHagenJson } from '../lib/upstream-proxy.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -10,63 +11,35 @@ const CM_ONLY = requireRole(['admin', 'content_manager']);
 // POST /api/studio/concepts/analyze
 // Proxies to Hagen analyze service
 router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
-  try {
-    const hagenBase = process.env['HAGEN_BASE_URL']?.trim();
-    if (!hagenBase) {
-      res.status(503).json({ error: 'Analystjänsten är inte konfigurerad. Sätt HAGEN_BASE_URL.' });
-      return;
-    }
-
-    const body = req.body as Record<string, unknown>;
-    const videoUrl = typeof body.videoUrl === 'string' ? body.videoUrl.trim() : '';
-    if (!videoUrl) {
-      res.status(400).json({ error: 'videoUrl is required' });
-      return;
-    }
-
-    const upstream = await fetch(`${hagenBase}/api/studio/concepts/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ videoUrl }),
-      signal: AbortSignal.timeout(30000),
-    });
-
-    const payload = await upstream.json() as Record<string, unknown>;
-    res.status(upstream.status).json(payload);
-  } catch (err) {
-    logger.error(err, 'studio concepts analyze error');
-    res.status(500).json({ error: 'Analys misslyckades' });
+  const body = req.body as Record<string, unknown>;
+  const videoUrl = typeof body.videoUrl === 'string' ? body.videoUrl.trim() : '';
+  if (!videoUrl) {
+    res.status(400).json({ error: 'videoUrl is required' });
+    return;
   }
+  await proxyHagenJson(res, {
+    method: 'POST',
+    path: '/api/studio/concepts/analyze',
+    body: { videoUrl },
+    timeoutMs: 30000,
+    routeTag: 'studio.concepts.analyze',
+  });
 });
 
 // POST /api/studio/concepts/enrich
 router.post('/concepts/enrich', requireAuth, CM_ONLY, async (req, res) => {
-  try {
-    const hagenBase = process.env['HAGEN_BASE_URL']?.trim();
-    if (!hagenBase) {
-      res.status(503).json({ error: 'Analystjänsten är inte konfigurerad. Sätt HAGEN_BASE_URL.' });
-      return;
-    }
-
-    const body = req.body as Record<string, unknown>;
-    if (!body.backend_data || typeof body.backend_data !== 'object') {
-      res.status(400).json({ error: 'backend_data is required' });
-      return;
-    }
-
-    const upstream = await fetch(`${hagenBase}/api/studio/concepts/enrich`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ backend_data: body.backend_data }),
-      signal: AbortSignal.timeout(30000),
-    });
-
-    const payload = await upstream.json() as Record<string, unknown>;
-    res.status(upstream.status).json(payload);
-  } catch (err) {
-    logger.error(err, 'studio concepts enrich error');
-    res.status(500).json({ error: 'Berikning misslyckades' });
+  const body = req.body as Record<string, unknown>;
+  if (!body.backend_data || typeof body.backend_data !== 'object') {
+    res.status(400).json({ error: 'backend_data is required' });
+    return;
   }
+  await proxyHagenJson(res, {
+    method: 'POST',
+    path: '/api/studio/concepts/enrich',
+    body: { backend_data: body.backend_data },
+    timeoutMs: 30000,
+    routeTag: 'studio.concepts.enrich',
+  });
 });
 
 // GET /api/studio/email/schedules

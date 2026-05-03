@@ -2,6 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import { proxyHagenJson } from '../../lib/upstream-proxy.js';
 import regenerateRouter from './concept-regenerate.js';
 
 const router = Router();
@@ -211,25 +212,13 @@ router.delete('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
 
 // POST /api/admin/concepts/translate-vertex
 router.post('/translate-vertex', requireAuth, CM_ONLY, async (req, res) => {
-  try {
-    const hagenBase = process.env['HAGEN_BASE_URL']?.trim();
-    if (!hagenBase) {
-      res.status(503).json({ error: 'HAGEN_BASE_URL not configured' });
-      return;
-    }
-    const body = req.body as Record<string, unknown>;
-    const upstream = await fetch(`${hagenBase}/api/admin/concepts/translate-vertex`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(20000),
-    });
-    const data = await upstream.json() as Record<string, unknown>;
-    res.status(upstream.status).json(data);
-  } catch (err) {
-    logger.error(err, 'admin concepts translate-vertex error');
-    res.status(500).json({ error: 'Internt serverfel' });
-  }
+  await proxyHagenJson(res, {
+    method: 'POST',
+    path: '/api/admin/concepts/translate-vertex',
+    body: req.body,
+    timeoutMs: 20000,
+    routeTag: 'admin.concepts.translate-vertex',
+  });
 });
 
 export default router;

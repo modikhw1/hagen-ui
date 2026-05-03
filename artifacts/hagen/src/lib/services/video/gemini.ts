@@ -6,6 +6,30 @@ import type {
 } from '../types'
 import { getLearningContext } from './learning'
 import { evaluateAnalysisQuality, type QualityScore } from './quality-judge'
+import { parseVideoBrandObservationV1, type VideoBrandObservationV1 } from '../brand/schema-v1'
+
+// Sentinels for the merged "deep + σTaste" prompt. Gemini wraps each JSON
+// block between these markers so we can split a single response cleanly
+// instead of paying for two round-trips.
+const DISPLAY_OPEN = '<<<DISPLAY_JSON>>>'
+const DISPLAY_CLOSE = '<<<END_DISPLAY_JSON>>>'
+const SCHEMA_V1_OPEN = '<<<SCHEMA_V1_JSON>>>'
+const SCHEMA_V1_CLOSE = '<<<END_SCHEMA_V1_JSON>>>'
+
+function extractBetween(text: string, open: string, close: string): string | null {
+  const start = text.indexOf(open)
+  if (start === -1) return null
+  const end = text.indexOf(close, start + open.length)
+  if (end === -1) return null
+  return text.slice(start + open.length, end).trim()
+}
+
+function stripCodeFences(s: string): string {
+  return s
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim()
+}
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY!
 
@@ -331,6 +355,111 @@ IMPORTANT:
 Provide detailed, actionable analysis. Rate everything on 1-10 scales. Be specific about what works and what doesn't.`
   }
 
+  /**
+   * Run the legacy display analysis AND the σTaste / Schema v1 brand
+   * observation in a SINGLE Gemini call. Halves per-video Gemini cost
+   * compared to calling analyzeVideo() and BrandAnalyzer separately on
+   * the same File API URI by issuing one tagged-section prompt and
+   * splitting the response on sentinels.
+   */
+  async analyzeVideoCombined(
+    videoUrl: string,
+    options: VideoAnalysisOptions = {}
+  ): Promise<CombinedDeepResult> {
+    const detailLevel = options.detailLevel || 'comprehensive'
+    const useLearning = options.useLearning !== false
+
+    console.log(`🎬 Merged deep+σTaste Gemini call (${detailLevel})`)
+
+    let learningContext = options.learningContext || ''
+    if (useLearning && !learningContext) {
+      const existingAnalysis = options.videoMetadata?.existingAnalysis as
+        | { script?: { transcript?: string } }
+        | undefined
+      const hasContext =
+        options.videoMetadata?.transcript ||
+        options.videoMetadata?.title ||
+        options.videoMetadata?.description ||
+        existingAnalysis?.script?.transcript
+
+      if (!hasContext) {
+        const quickTranscript = await this.extractQuickTranscript(videoUrl)
+        if (quickTranscript) {
+          learningContext = await getLearningContext({
+            ...options.videoMetadata,
+            transcript: quickTranscript,
+          })
+        }
+      } else if (options.videoMetadata) {
+        learningContext = await getLearningContext(options.videoMetadata)
+      }
+    }
+
+    const displayPrompt = this.buildAnalysisPrompt(detailLevel)
+    const schemaV1Prompt = buildSchemaV1Prompt()
+
+    const combinedPrompt = [
+      learningContext ? `${learningContext}\n` : '',
+      'You will produce TWO JSON outputs in a single response.',
+      'Wrap each output between the exact sentinels shown — no markdown, no commentary outside the sentinels.',
+      '',
+      DISPLAY_OPEN,
+      '<the JSON for SECTION A goes here>',
+      DISPLAY_CLOSE,
+      '',
+      SCHEMA_V1_OPEN,
+      '<the JSON for SECTION B goes here>',
+      SCHEMA_V1_CLOSE,
+      '',
+      '════════════════════════════════════════════════════════════',
+      'SECTION A — Deep display analysis (legacy):',
+      '════════════════════════════════════════════════════════════',
+      displayPrompt,
+      '',
+      '════════════════════════════════════════════════════════════',
+      'SECTION B — σTaste / Schema v1.1 brand observation:',
+      '════════════════════════════════════════════════════════════',
+      schemaV1Prompt,
+      '',
+      'REMEMBER: Two JSON blocks, each wrapped in its sentinel pair, nothing else.',
+    ].join('\n')
+
+    const model = this.client.getGenerativeModel({ model: this.model })
+    const result = await model.generateContent([
+      { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+      { text: combinedPrompt },
+    ])
+    const text = result.response.text()
+
+    const displayBlock = extractBetween(text, DISPLAY_OPEN, DISPLAY_CLOSE)
+    const schemaBlock = extractBetween(text, SCHEMA_V1_OPEN, SCHEMA_V1_CLOSE)
+
+    if (!displayBlock) {
+      console.error('❌ Merged response missing DISPLAY block; preview:', text.slice(0, 500))
+      throw new Error('Merged Gemini response missing display section')
+    }
+
+    const analysis = this.parseAnalysisResponse(displayBlock, detailLevel)
+
+    let schemaV1: VideoBrandObservationV1 | null = null
+    let schemaV1ParseError: string | undefined
+    if (schemaBlock) {
+      try {
+        const cleaned = stripCodeFences(schemaBlock)
+        const parsed = JSON.parse(cleaned)
+        schemaV1 = parseVideoBrandObservationV1(parsed)
+      } catch (err) {
+        schemaV1ParseError = err instanceof Error ? err.message : String(err)
+        console.warn('⚠️ Merged σTaste block failed to parse:', schemaV1ParseError)
+      }
+    } else {
+      schemaV1ParseError = 'no SCHEMA_V1 sentinel block in response'
+      console.warn('⚠️ Merged response missing SCHEMA_V1 block')
+    }
+
+    return { analysis, schemaV1, schemaV1ParseError }
+  }
+
   private parseAnalysisResponse(text: string, detailLevel: string): VideoAnalysis {
     try {
       // Extract JSON from markdown code blocks if present
@@ -469,4 +598,49 @@ Provide detailed, actionable analysis. Rate everything on 1-10 scales. Be specif
 // Factory function for service registry
 export function createGeminiAnalyzer(): VideoAnalysisProvider {
   return new GeminiVideoAnalyzer()
+}
+
+/**
+ * Result of GeminiVideoAnalyzer.analyzeVideoCombined() — the merged
+ * single-call path that produces both the legacy display analysis AND
+ * the σTaste / Schema v1 brand observation.
+ */
+export interface CombinedDeepResult {
+  analysis: VideoAnalysis
+  schemaV1: VideoBrandObservationV1 | null
+  schemaV1ParseError?: string
+}
+
+function buildSchemaV1Prompt(): string {
+  // Trimmed copy of BrandAnalyzer.buildPrompt() — schema text only, no
+  // duplicate "JSON only" / "evidence required" framing because the outer
+  // combined prompt already establishes the contract.
+  return [
+    'Produce a Schema v1.1 brand observation for the same video.',
+    'Unknown keys forbidden. At least 2 evidence items with timestamps when possible.',
+    'Use null when uncertain and add an entry to "uncertainties".',
+    '',
+    'SCHEMA v1.1 (return EXACTLY this structure):',
+    '{',
+    '  "schema_version": 1,',
+    '  "video": { "video_id": "...", "platform": "tiktok", "video_url": "...", "gcs_uri": "...", "detected_language": "en" },',
+    '  "signals": {',
+    '    "personality": { "energy_1_10": 1-10|null, "formality_1_10": 1-10|null, "warmth_1_10": 1-10|null, "confidence_1_10": 1-10|null, "traits_observed": ["..."], "social_positioning": { "accessibility": "everyman|aspirational|exclusive|elite"|null, "authority_claims": true|false|null, "peer_relationship": true|false|null } },',
+    '    "statement": { "primary_intent": "inspire|entertain|inform|challenge|comfort|provoke|connect|sell"|null, "subtext": ["..."], "apparent_audience": "..."|null, "self_seriousness_1_10": 1-10|null, "opinion_stance": { "makes_opinions": true|false|null, "edginess": "safe|mild|moderate|edgy|provocative"|null, "defended": true|false|null } },',
+    '    "execution": { "intentionality_1_10": 1-10|null, "production_investment_1_10": 1-10|null, "effortlessness_1_10": 1-10|null, "social_permission_1_10": 1-10|null, "has_repeatable_format": true|false|null, "format_name_if_any": "..."|null },',
+    '    "replicability": { "actor_count": "solo|duo|small_team|large_team"|null, "setup_complexity": "phone_only|basic_tripod|lighting_setup|full_studio"|null, "skill_required": "anyone|basic_editing|intermediate|professional"|null, "environment_dependency": "anywhere|specific_indoor|specific_outdoor|venue_required"|null, "equipment_needed": ["..."], "estimated_time": "under_1hr|1_4hrs|half_day|full_day"|null },',
+    '    "risk_level": { "content_edge": "brand_safe|mildly_edgy|edgy|provocative"|null, "humor_risk": "safe_humor|playful|sarcastic|dark_humor"|null, "trend_reliance": "evergreen|light_trends|trend_dependent"|null, "controversy_potential": "none|low|moderate|high"|null },',
+    '    "hospitality": { "business_type": "restaurant|cafe|bar|hotel|other"|null, "vibe": ["..."], "occasion": ["..."], "price_tier": "budget|mid|premium|luxury|unknown"|null, "service_ethos": ["..."], "signature_items_or_offers": ["..."], "locality_markers": ["..."], "tourist_orientation": "locals|tourists|mixed|unknown"|null },',
+    '    "environment_requirements": { "setting_type": "indoor|outdoor|kitchen|bar|storefront|dining_room|mixed"|null, "space_requirements": "minimal|moderate|spacious"|null, "lighting_conditions": "natural|artificial|low_light|flexible"|null, "noise_tolerance": "quiet_needed|moderate_ok|noisy_ok"|null, "customer_visibility": "no_customers|background|featured"|null },',
+    '    "target_audience": { "age_range": { "primary": "gen_z|millennial|gen_x|boomer|broad"|null, "secondary": "gen_z|millennial|gen_x|boomer|none"|null }, "income_level": "budget|mid_range|upscale|luxury|broad"|null, "lifestyle_tags": ["..."], "primary_occasion": "quick_meal|casual_dining|special_occasion|takeout|delivery|bar_drinks|coffee_cafe|brunch"|null, "vibe_alignment": "trendy|classic|family_friendly|upscale_casual|dive_authentic|instagram_worthy|neighborhood_gem|hidden_gem"|null },',
+    '    "humor": { "present": true|false|null, "humor_types": ["..."], "target": "self|customer|employee|industry|competitor|situation|product|none"|null, "age_code": "younger|older|balanced|unknown"|null, "meanness_risk": "low|medium|high|unknown"|null },',
+    '    "conversion": { "cta_types": ["..."], "visit_intent_strength_0_1": 0-1|null },',
+    '    "coherence": { "personality_message_alignment_0_1": 0-1|null, "contradictions": ["..."] }',
+    '  },',
+    '  "scores": { "brand_intent_signal_0_1": 0-1|null, "execution_coherence_0_1": 0-1|null, "distinctiveness_0_1": 0-1|null, "trust_signals_0_1": 0-1|null },',
+    '  "evidence": [ { "type": "quote|ocr|visual|audio|caption|thumbnail|bio|other", "start_s": 0, "end_s": 1, "text": "...", "supports": ["signals.humor.present"] } ],',
+    '  "confidence": { "overall_0_1": 0-1|null, "notes": "..." },',
+    '  "uncertainties": ["..."]',
+    '}',
+  ].join('\n')
 }
