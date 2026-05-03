@@ -204,7 +204,13 @@ router.get('/:id/lines', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
     const id = String(req.params['id'] ?? '');
     const supabase = createSupabaseAdmin();
-    const lines = await findLineItems(supabase, id);
+    const raw = await findLineItems(supabase, id);
+    const lines = raw.map((l) => ({
+      id: String(l.id ?? ''),
+      description: String(l.description ?? ''),
+      amount: Number(l.amount ?? 0),
+      quantity: Number(l.quantity ?? 1),
+    }));
     res.json({ lines });
   } catch (err) {
     logger.error(err, 'invoice lines GET error');
