@@ -191,6 +191,66 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
       }
     }
 
+    // Collect all displayed member ids so interaction stats cover every CM card,
+    // regardless of whether they currently have active customer assignments.
+    const allMemberIds = (membersResult.data ?? []).map((m: any) => m['id'] as string).filter(Boolean);
+
+    // Batch-fetch cm_interactions — two parallel queries, no N+1:
+    //   1. Last-7-days window  → interactionCount7d per CM
+    //   2. All-time (no limit) → lastInteractionDays per CM.
+    //      We intentionally omit a row limit here so that high-activity CMs
+    //      cannot crowd out lower-activity CMs from the result set.
+    //      The query is bounded to the displayed CM id set which is small.
+    type InteractionStats = { count7d: number; lastAt: Date | null };
+    const interactionStatsByCm = new Map<string, InteractionStats>();
+    if (allMemberIds.length > 0) {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      const [recent7dResult, allTimeResult] = await Promise.all([
+        (supabase as any)
+          .from('cm_interactions')
+          .select('cm_id, created_at')
+          .in('cm_id', allMemberIds)
+          .gte('created_at', sevenDaysAgo.toISOString()),
+        // No limit — fetches all interactions for these CMs so every CM is
+        // guaranteed a row; team pages typically have < 20 CMs.
+        (supabase as any)
+          .from('cm_interactions')
+          .select('cm_id, created_at')
+          .in('cm_id', allMemberIds),
+      ]);
+
+      // Count 7-day interactions per CM.
+      if (!recent7dResult.error) {
+        for (const row of recent7dResult.data ?? []) {
+          const cmId = row.cm_id as string;
+          if (!cmId) continue;
+          let s = interactionStatsByCm.get(cmId);
+          if (!s) {
+            s = { count7d: 0, lastAt: null };
+            interactionStatsByCm.set(cmId, s);
+          }
+          s.count7d += 1;
+        }
+      }
+
+      // Track the all-time latest interaction per CM.
+      if (!allTimeResult.error) {
+        for (const row of allTimeResult.data ?? []) {
+          const cmId = row.cm_id as string;
+          if (!cmId) continue;
+          const at = new Date(row.created_at as string);
+          let s = interactionStatsByCm.get(cmId);
+          if (!s) {
+            s = { count7d: 0, lastAt: null };
+            interactionStatsByCm.set(cmId, s);
+          }
+          if (!s.lastAt || at > s.lastAt) s.lastAt = at;
+        }
+      }
+    }
+
     const includeInactive = req.query['includeInactive'] === '1';
     const sort = (req.query['sort'] as string | undefined) ?? 'standard';
 
@@ -305,6 +365,8 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
         let n_under = 0;
         let n_ok = 0;
         let mrrSekTotal = 0;
+        let plannedConceptsTotal = 0;
+        let expectedConcepts7d = 0;
         for (const c of customers) {
           mrrSekTotal += c.monthly_price ?? 0;
           const isPaused =
@@ -317,6 +379,8 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
           // Use the same this-week-planned count as the per-row flöde dots
           // so the CM-card aggregate counts and the per-customer dots line up.
           const planned = c.planned_concepts_this_week ?? c.planned_concepts_count ?? 0;
+          plannedConceptsTotal += planned;
+          expectedConcepts7d += expected;
           if (c.overdue_7d_concepts_count > 0 || (expected > 0 && planned < expected)) {
             n_under += 1;
           } else {
@@ -364,10 +428,14 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
             status: isActiveAbsence ? 'absent' : overloaded ? 'overloaded' : 'standard',
             fillPct: Math.min(1, customerCount / 12),
             barLabel: `${customerCount} kunder`,
-            plannedConceptsTotal: 0,
-            expectedConcepts7d: 0,
-            interactionCount7d: 0,
-            lastInteractionDays: 0,
+            plannedConceptsTotal,
+            expectedConcepts7d,
+            interactionCount7d: interactionStatsByCm.get(memberId)?.count7d ?? 0,
+            lastInteractionDays: (() => {
+              const lastAt = interactionStatsByCm.get(memberId)?.lastAt ?? null;
+              if (!lastAt) return 999;
+              return Math.floor((Date.now() - lastAt.getTime()) / 86_400_000);
+            })(),
             counts: { n_under, n_thin: 0, n_blocked: 0, n_ok, n_paused },
           },
           customers,

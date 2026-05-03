@@ -87,10 +87,21 @@ export default function TeamMemberKpiCluster({
           </div>
         </div>
         <div className="mt-2 text-center text-sm font-semibold text-foreground tabular-nums">
-          {pulse.barLabel}
+          {pulse.expectedConcepts7d > 0
+            ? `${pulse.plannedConceptsTotal} / ${pulse.expectedConcepts7d} koncept`
+            : pulse.barLabel}
         </div>
         <div className="mt-1 min-h-[16px] text-center text-[11px] text-muted-foreground">
-          {pulseSummary || 'Ingen plan aktiv ännu'}
+          {pulse.expectedConcepts7d > 0
+            ? pulseSummary || 'Alla i fas'
+            : pulseSummary || 'Ingen plan aktiv ännu'}
+        </div>
+        <div className="mt-1 text-center text-[10px] text-muted-foreground/70">
+          {pulse.lastInteractionDays >= 999
+            ? 'Ingen aktivitet ännu'
+            : pulse.lastInteractionDays === 0
+              ? 'Aktiv idag'
+              : `Senast aktiv för ${pulse.lastInteractionDays} dag${pulse.lastInteractionDays === 1 ? '' : 'ar'} sedan`}
         </div>
       </div>
     </div>
