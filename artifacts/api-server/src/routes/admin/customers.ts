@@ -8,10 +8,10 @@ const router = Router();
 const ADMIN_ONLY = requireRole(['admin', 'content_manager']);
 
 const CUSTOMER_LIST_SELECT =
-  'id, business_name, contact_email, customer_contact_name, phone, account_manager, account_manager_profile_id, monthly_price, subscription_interval, pricing_status, status, created_at, agreed_at, invited_at, concepts_per_week, expected_concepts_per_week, paused_until, onboarding_state, onboarding_state_changed_at, tiktok_handle, next_invoice_date, stripe_customer_id, stripe_subscription_id, cm_avatar_url, cm_initial_color';
+  'id, business_name, contact_email, customer_contact_name, phone, account_manager, account_manager_profile_id, monthly_price, subscription_interval, pricing_status, status, lifecycle_state, created_at, agreed_at, invited_at, concepts_per_week, expected_concepts_per_week, paused_until, onboarding_state, onboarding_state_changed_at, tiktok_handle, next_invoice_date, stripe_customer_id, stripe_subscription_id';
 
 const CUSTOMER_DETAIL_SELECT =
-  'id, business_name, contact_email, customer_contact_name, phone, account_manager, account_manager_profile_id, monthly_price, subscription_interval, pricing_status, status, derived_status, created_at, agreed_at, invited_at, contract_start_date, billing_day_of_month, concepts_per_week, expected_concepts_per_week, paused_until, onboarding_state, onboarding_state_changed_at, tiktok_handle, tiktok_profile_url, tiktok_user_id, next_invoice_date, stripe_customer_id, stripe_subscription_id, discount_type, discount_value, discount_duration_months, discount_ends_at, upload_schedule, last_upload_at, latest_planned_publish_date, last_published_at, last_history_sync_at, cm_avatar_url, cm_initial_color, upcoming_price_change, invoice_text, scope_items';
+  'id, business_name, contact_email, customer_contact_name, phone, account_manager, account_manager_profile_id, monthly_price, subscription_interval, pricing_status, status, lifecycle_state, created_at, agreed_at, invited_at, contract_start_date, billing_day_of_month, concepts_per_week, expected_concepts_per_week, paused_until, onboarding_state, onboarding_state_changed_at, tiktok_handle, tiktok_profile_url, tiktok_user_id, next_invoice_date, stripe_customer_id, stripe_subscription_id, discount_type, discount_value, discount_duration_months, discount_ends_at, upload_schedule, last_upload_at, last_history_sync_at, upcoming_monthly_price, upcoming_price_effective_date, invoice_text, scope_items';
 
 function escapeLike(value: string) {
   return value.replaceAll('%', '\\%').replaceAll(',', ' ');

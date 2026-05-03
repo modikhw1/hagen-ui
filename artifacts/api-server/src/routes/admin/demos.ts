@@ -101,7 +101,7 @@ router.get('/', requireAuth, ADMIN_OR_CM, async (req, res) => {
     const { data: rows, error } = await supabase
       .from('demos')
       .select(
-        'id, company_name, contact_email, tiktok_handle, proposed_concepts_per_week, proposed_price_ore, status, status_changed_at, owner_admin_id, lost_reason, converted_customer_id, share_token, preliminary_feedplan, created_at, updated_at',
+        'id, company_name, contact_email, tiktok_handle, proposed_concepts_per_week, proposed_price_ore, status, status_changed_at, owner_admin_id, lost_reason, converted_customer_id, share_token, preliminary_feedplan, created_at',
       )
       .or(`status.not.in.(won,lost,expired),created_at.gte.${since}`)
       .order('created_at', { ascending: false })

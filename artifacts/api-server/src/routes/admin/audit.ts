@@ -21,9 +21,9 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
     const billingOnly = req.query['billingOnly'] === '1' || req.query['billingOnly'] === 'true';
 
     let query = (supabase as any)
-      .from('admin_audit_log')
+      .from('audit_log')
       .select(
-        'id, actor_email, actor_role, action, entity_type, entity_id, entity_label, before_state, after_state, metadata, created_at',
+        'id, actor_email, actor_role, action, entity_type, entity_id, before_state, after_state, metadata, created_at',
       )
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -51,7 +51,7 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
     if (error) {
       const msg = String(error.message ?? '').toLowerCase();
       if (msg.includes('does not exist') || msg.includes('relation')) {
-        res.json({ entries: [], nextCursor: null, facets: { actors: [], actions: [], entities: [] }, schemaWarnings: ['Tabellen admin_audit_log saknas'] });
+        res.json({ entries: [], nextCursor: null, facets: { actors: [], actions: [], entities: [] }, schemaWarnings: ['Tabellen audit_log saknas'] });
         return;
       }
       res.status(500).json({ error: error.message });

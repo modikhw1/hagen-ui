@@ -20,17 +20,17 @@ router.get('/', requireAuth, ADMIN_ONLY, async (_req, res) => {
     const supabase = createSupabaseAdmin();
 
     const { data, error } = await (supabase as any)
-      .from('admin_settings')
+      .from('settings')
       .select(
         'default_billing_interval, default_payment_terms_days, default_currency, default_commission_rate, updated_at',
       )
-      .limit(1)
+      .eq('id', true)
       .maybeSingle();
 
     if (error) {
       const msg = String(error.message ?? '').toLowerCase();
       if (msg.includes('does not exist')) {
-        res.json({ settings: DEFAULT_SETTINGS, schemaWarnings: ['Tabellen admin_settings saknas'] });
+        res.json({ settings: DEFAULT_SETTINGS, schemaWarnings: ['Tabellen settings saknas'] });
         return;
       }
       res.status(500).json({ error: error.message });
@@ -69,8 +69,8 @@ router.patch('/', requireAuth, ADMIN_ONLY, async (req, res) => {
 
     // Upsert since there may be only one row
     const { data, error } = await (supabase as any)
-      .from('admin_settings')
-      .upsert({ id: 1, ...updates })
+      .from('settings')
+      .upsert({ id: true, ...updates })
       .select(
         'default_billing_interval, default_payment_terms_days, default_currency, default_commission_rate, updated_at',
       )
@@ -79,7 +79,7 @@ router.patch('/', requireAuth, ADMIN_ONLY, async (req, res) => {
     if (error) {
       const msg = String(error.message ?? '').toLowerCase();
       if (msg.includes('does not exist')) {
-        res.json({ settings: { ...DEFAULT_SETTINGS, ...updates }, schemaWarnings: ['Tabellen admin_settings saknas'] });
+        res.json({ settings: { ...DEFAULT_SETTINGS, ...updates }, schemaWarnings: ['Tabellen settings saknas'] });
         return;
       }
       res.status(500).json({ error: error.message });

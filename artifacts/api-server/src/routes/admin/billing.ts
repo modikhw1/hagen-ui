@@ -225,8 +225,8 @@ router.get('/invoices/:invoiceId/lines', requireAuth, ADMIN_ONLY, async (req, re
     try {
       const result = await supabase
         .from('invoice_line_items')
-        .select('id, description, amount, quantity, unit_amount, period_start, period_end')
-        .eq('invoice_id', invoiceId);
+        .select('id, description, amount, quantity, period_start, period_end, stripe_invoice_id')
+        .eq('stripe_invoice_id', invoiceId);
       data = result.data ?? null;
       error = result.error;
     } catch {

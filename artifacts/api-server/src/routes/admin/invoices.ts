@@ -26,7 +26,7 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
     let query = supabase
       .from('invoices')
       .select(
-        'id, stripe_invoice_id, customer_profile_id, amount_due, amount_paid, status, created_at, due_date, hosted_invoice_url, invoice_number, description, currency',
+        'id, stripe_invoice_id, customer_profile_id, amount_due, amount_paid, status, created_at, due_date, hosted_invoice_url, currency',
         { count: 'exact' },
       )
       .order('created_at', { ascending: false })

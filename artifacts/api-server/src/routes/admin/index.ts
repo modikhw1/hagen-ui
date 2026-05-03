@@ -44,7 +44,7 @@ router.get('/notifications', requireAuth, ADMIN_ONLY, async (req, res) => {
     const limit = Math.min(Number(req.query['limit'] ?? 20), 100);
 
     const { data, error } = await (supabase as any)
-      .from('admin_audit_log')
+      .from('audit_log')
       .select('id, actor_email, action, entity_type, entity_id, created_at, metadata')
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -90,13 +90,13 @@ router.post('/attention/:subjectType/:subjectId/snooze', requireAuth, ADMIN_ONLY
     const snoozedUntil = typeof body.snoozed_until === 'string' ? body.snoozed_until : null;
 
     const { error } = await (supabase as any)
-      .from('admin_attention_snoozes')
+      .from('attention_snoozes')
       .upsert({
         subject_type: subjectType,
         subject_id: subjectId,
         snoozed_until: snoozedUntil,
-        snoozed_by: req.user?.id ?? null,
-        updated_at: new Date().toISOString(),
+        snoozed_by_admin_id: req.user?.id ?? null,
+        snoozed_at: new Date().toISOString(),
       }, { onConflict: 'subject_type,subject_id' });
 
     if (error) {
@@ -116,8 +116,8 @@ router.get('/attention/:subjectType/:subjectId/snooze', requireAuth, ADMIN_ONLY,
     const { subjectType, subjectId } = req.params;
     const supabase = createSupabaseAdmin();
     const { data } = await (supabase as any)
-      .from('admin_attention_snoozes')
-      .select('subject_type, subject_id, snoozed_until, snoozed_by, updated_at')
+      .from('attention_snoozes')
+      .select('subject_type, subject_id, snoozed_until, snoozed_by_admin_id, snoozed_at')
       .eq('subject_type', subjectType)
       .eq('subject_id', subjectId)
       .maybeSingle()
@@ -136,7 +136,7 @@ router.delete('/attention/:subjectType/:subjectId/snooze', requireAuth, ADMIN_ON
     const { subjectType, subjectId } = req.params;
     const supabase = createSupabaseAdmin();
     await (supabase as any)
-      .from('admin_attention_snoozes')
+      .from('attention_snoozes')
       .delete()
       .eq('subject_type', subjectType)
       .eq('subject_id', subjectId)
