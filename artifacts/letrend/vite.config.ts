@@ -40,6 +40,17 @@ const useEffectEventPolyfillSource = `
     }, []);
   };
 }
+;if (typeof exports !== 'undefined' && !exports.Activity) {
+  // Polyfill for React 19.2 <Activity mode="visible|hidden"> used by
+  // Mantine v9 Transition. In React 19.1 we fall back to a plain
+  // conditional render: visible (or undefined mode) → render children,
+  // hidden → render nothing. We keep children mounted when visible so
+  // state is preserved for the typical Mantine "keepMounted" path.
+  exports.Activity = function Activity(props) {
+    if (props && props.mode === 'hidden') return null;
+    return props ? props.children : null;
+  };
+}
 `;
 
 // Rollup transform plugin so production builds also get the polyfill
