@@ -97,6 +97,9 @@ export function GamePlanSection({
   formatDateTime,
   cmDisplayNames,
 }: GamePlanSectionProps) {
+  // Defensive: API may return null/undefined/non-string in some legacy rows,
+  // so always treat the value as a string before calling string methods.
+  const safeGamePlanHtml = typeof gamePlanHtml === 'string' ? gamePlanHtml : '';
   const [showAiSheet, setShowAiSheet] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState('');
@@ -170,14 +173,14 @@ export function GamePlanSection({
               <button
                 type="button"
                 onClick={() => {
-                  if (!gamePlanHtml.trim()) {
+                  if (!safeGamePlanHtml.trim()) {
                     setGamePlanHtml(GAME_PLAN_STARTER_TEMPLATE);
                   }
                   setEditingGamePlan(true);
                 }}
                 style={buttonBase(LeTrendColors.brownLight, '#fff')}
               >
-                {gamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
+                {safeGamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
               </button>
             ) : null}
           </div>
@@ -273,7 +276,11 @@ export function GamePlanSection({
 
         {editingGamePlan ? (
           <div>
-            <GamePlanEditor initialHtml={gamePlanHtml} onChange={setGamePlanHtml} isFullscreen={false} />
+            <GamePlanEditor
+              initialHtml={safeGamePlanHtml}
+              onChange={(html) => setGamePlanHtml(typeof html === 'string' ? html : '')}
+              isFullscreen={false}
+            />
             <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -304,8 +311,8 @@ export function GamePlanSection({
           </div>
         ) : (
           <div style={{ minHeight: 100 }}>
-            {gamePlanHtml.trim() ? (
-              <GamePlanDisplay html={gamePlanHtml} />
+            {safeGamePlanHtml.trim() ? (
+              <GamePlanDisplay html={safeGamePlanHtml} />
             ) : (
               <div
                 style={{
