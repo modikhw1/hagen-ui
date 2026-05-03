@@ -807,17 +807,28 @@ router.get('/:id/drift', requireAuth, ADMIN_ONLY, async (req, res) => {
     // ISO week (måndag-baserat) — Sverige använder måndag som veckans första dag.
     const dow = now.getDay(); // 0 = Sunday
     const daysSinceMonday = (dow + 6) % 7;
+    // Calendar-based boundary so DST transitions don't shift the window
+    // by ±1h. Mirrors the team API so the planned/expected numerator is
+    // identical between the team page flöde and the customer pulse.
     const weekStart = new Date(now);
     weekStart.setDate(now.getDate() - daysSinceMonday);
     weekStart.setHours(0, 0, 0, 0);
-    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 3600 * 1000);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 7);
+    weekEnd.setHours(0, 0, 0, 0);
     const weekAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
 
     const concepts = conceptsResult.data ?? [];
 
+    // Same predicate as artifacts/api-server/src/routes/admin/team.ts
+    // plannedThisWeekByCustomer: planned_publish_at in current ISO week,
+    // not yet published, status not in ('published','archived').
     const plannedThisWeek = concepts.filter((c: Record<string, string | null>) => {
       const date = c['planned_publish_at'];
       if (!date) return false;
+      if (c['published_at']) return false;
+      const status = c['status'];
+      if (status === 'published' || status === 'archived') return false;
       const t = new Date(date);
       return t >= weekStart && t < weekEnd;
     }).length;
