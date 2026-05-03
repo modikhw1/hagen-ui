@@ -80,11 +80,18 @@ export async function requireAuth(
     const profile = profileResult.data;
     const adminRoles = (adminRolesResult.data ?? []).map((r: { role: string }) => r.role);
 
+    const ADMIN_ROLE_ALIASES = new Set(['admin', 'super_admin', 'superadmin', 'operations_admin']);
+    const rawRole = (profile?.role as string) ?? 'user';
+    const hasAdminAlias = ADMIN_ROLE_ALIASES.has(rawRole)
+      || adminRoles.some((r) => ADMIN_ROLE_ALIASES.has(r));
+    const isAdmin = Boolean(profile?.is_admin) || hasAdminAlias;
+    const normalizedRole = isAdmin ? 'admin' : rawRole;
+
     req.user = {
       id: authUser.id,
       email: profile?.email ?? authUser.email ?? null,
-      role: (profile?.role as string) ?? 'user',
-      is_admin: Boolean(profile?.is_admin),
+      role: normalizedRole,
+      is_admin: isAdmin,
       admin_roles: adminRoles,
     };
 

@@ -6,6 +6,50 @@ import { logger } from '../lib/logger.js';
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
 
+/**
+ * For content managers (non-admin), enforce that the customer is assigned to them
+ * via customer_profiles.account_manager_profile_id. Admins bypass the check.
+ * Returns true when access is allowed; otherwise writes a 403/404 response and returns false.
+ */
+async function ensureCustomerAccess(
+  req: import('express').Request,
+  res: import('express').Response,
+  customerIdInput: string | string[] | undefined,
+): Promise<boolean> {
+  const customerId = typeof customerIdInput === 'string' ? customerIdInput : '';
+  if (!customerId) {
+    res.status(400).json({ error: 'customer_id is required' });
+    return false;
+  }
+  if (!req.user) {
+    res.status(401).json({ error: 'Inte autentiserad' });
+    return false;
+  }
+  if (req.user.is_admin || req.user.role === 'admin') return true;
+
+  const supabase = createSupabaseAdmin();
+  const { data, error } = await supabase
+    .from('customer_profiles')
+    .select('id, account_manager_profile_id')
+    .eq('id', customerId)
+    .maybeSingle();
+
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return false;
+  }
+  // For non-admin callers, return 403 for both "not found" and "not assigned to me"
+  // to avoid leaking whether a customer ID exists.
+  if (
+    !data
+    || (data as { account_manager_profile_id: string | null }).account_manager_profile_id !== req.user.id
+  ) {
+    res.status(403).json({ error: 'Du har inte åtkomst till denna kund.' });
+    return false;
+  }
+  return true;
+}
+
 const STUDIO_CONCEPT_SELECT = `
   id, customer_profile_id, customer_id, concept_id, status,
   content_overrides, cm_id, cm_note, match_percentage, feed_order,
@@ -22,13 +66,18 @@ const STUDIO_CONCEPT_SELECT = `
 // ─────────────────────────────────────────────────────────────────────────────
 
 // GET /api/studio-v2/customers
-router.get('/customers', requireAuth, CM_ONLY, async (_req, res) => {
+router.get('/customers', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
-    const { data: profiles, error } = await supabase
+    const isAdmin = Boolean(req.user?.is_admin || req.user?.role === 'admin');
+    let query = supabase
       .from('customer_profiles')
       .select('id, business_name, contact_email, customer_contact_name, account_manager, account_manager_profile_id, monthly_price, status, created_at, game_plan, tiktok_handle, last_history_sync_at')
       .order('created_at', { ascending: false });
+    if (!isAdmin && req.user?.id) {
+      query = query.eq('account_manager_profile_id', req.user.id);
+    }
+    const { data: profiles, error } = await query;
 
     if (error) {
       res.status(500).json({ error: error.message });
@@ -85,6 +134,7 @@ router.get('/customers', requireAuth, CM_ONLY, async (_req, res) => {
 router.get('/customers/:customerId/profile', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
     const { data, error } = await supabase
       .from('customer_profiles')
@@ -109,6 +159,7 @@ router.get('/customers/:customerId/profile', requireAuth, CM_ONLY, async (req, r
 router.patch('/customers/:customerId/profile', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const body = req.body as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
     const allowed = [
@@ -144,6 +195,7 @@ router.patch('/customers/:customerId/profile', requireAuth, CM_ONLY, async (req,
 router.get('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
     const { data, error } = await supabase
       .from('customer_concepts')
@@ -196,6 +248,7 @@ router.get('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, 
 router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const body = req.body as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
     const conceptId = typeof body.concept_id === 'string' ? body.concept_id.trim() : '';
@@ -239,6 +292,7 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
 router.get('/customers/:customerId/game-plan', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
 
     const { data: cp, error: cpError } = await supabase
@@ -278,6 +332,7 @@ router.get('/customers/:customerId/game-plan', requireAuth, CM_ONLY, async (req,
 router.put('/customers/:customerId/game-plan', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const body = req.body as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
     const html = typeof body.html === 'string' ? body.html : '';
@@ -318,6 +373,7 @@ router.put('/customers/:customerId/game-plan', requireAuth, CM_ONLY, async (req,
 router.get('/customers/:customerId/notes', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
     const { data, error } = await supabase
       .from('customer_notes')
@@ -340,6 +396,7 @@ router.get('/customers/:customerId/notes', requireAuth, CM_ONLY, async (req, res
 router.post('/customers/:customerId/notes', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const body = req.body as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
     const content = typeof body.content === 'string' ? body.content.trim() : '';
@@ -378,6 +435,7 @@ router.post('/customers/:customerId/notes', requireAuth, CM_ONLY, async (req, re
 router.get('/customers/:customerId/brief', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
     const { data, error } = await supabase
       .from('customer_profiles')
@@ -400,6 +458,7 @@ router.get('/customers/:customerId/brief', requireAuth, CM_ONLY, async (req, res
 router.put('/customers/:customerId/brief', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const body = req.body as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
 
@@ -452,6 +511,7 @@ router.post('/customers/:customerId/advance-plan', requireAuth, CM_ONLY, (_req, 
 router.get('/customers/:customerId/import-history', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
     const { data, error } = await supabase
       .from('customer_concepts')
@@ -475,6 +535,7 @@ router.get('/customers/:customerId/import-history', requireAuth, CM_ONLY, async 
 router.get('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
     const { data, error } = await (supabase as any)
       .from('tiktok_sync_history')
@@ -498,8 +559,9 @@ router.get('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (r
 // GET /api/studio-v2/customers/:customerId/hagen-clips
 router.get('/customers/:customerId/hagen-clips', requireAuth, CM_ONLY, async (req, res) => {
   try {
-    const hagenBase = process.env['HAGEN_BASE_URL']?.trim();
     const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
+    const hagenBase = process.env['HAGEN_BASE_URL']?.trim();
     if (!hagenBase) {
       res.json({ clips: [] });
       return;
@@ -531,6 +593,7 @@ router.get('/feed-spans', requireAuth, CM_ONLY, async (req, res) => {
       res.status(400).json({ error: 'customer_id is required' });
       return;
     }
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const historyOffset = Number(req.query['history_offset'] ?? 0);
     const supabase = createSupabaseAdmin();
     const { data, error } = await supabase
@@ -559,6 +622,7 @@ router.post('/feed-spans', requireAuth, CM_ONLY, async (req, res) => {
       res.status(400).json({ error: 'customer_id is required' });
       return;
     }
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
     const insert = {
       customer_id: customerId,
@@ -653,6 +717,7 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
       res.status(400).json({ error: 'customer_id is required' });
       return;
     }
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
 
     const supabase = createSupabaseAdmin();
 

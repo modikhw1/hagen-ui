@@ -75,38 +75,23 @@ export default function StudioDashboard() {
   );
   const isContentManager = !isAdmin && (profile as { role?: string } | null)?.role === 'content_manager';
 
-  const actionableCustomersHaveAssignmentIds = [...orgWideWithDrafts, ...orgWideWithSent].every(
-    (customer) => Boolean(customer.account_manager_profile_id),
-  );
-  const canScopeToAssignedCustomers = Boolean(
-    isContentManager && user?.id && actionableCustomersHaveAssignmentIds,
-  );
+  // Server-side filtering already restricts CMs to their own customers via
+  // /api/studio-v2/customers. We only adjust the UI copy for CMs.
+  const isScoped = isContentManager;
 
-  const withDrafts = canScopeToAssignedCustomers
-    ? orgWideWithDrafts.filter((customer) => customer.account_manager_profile_id === user?.id)
-    : orgWideWithDrafts;
-  const withSent = canScopeToAssignedCustomers
-    ? orgWideWithSent.filter((customer) => customer.account_manager_profile_id === user?.id)
-    : orgWideWithSent;
+  const withDrafts = orgWideWithDrafts;
+  const withSent = orgWideWithSent;
 
-  const actionListHeading = canScopeToAssignedCustomers
-    ? 'Dina kunder - väntar på åtgärd'
-    : 'Väntar på åtgärd';
-  const actionListMeta = canScopeToAssignedCustomers
+  const actionListHeading = isScoped ? 'Dina kunder - väntar på åtgärd' : 'Väntar på åtgärd';
+  const actionListMeta = isScoped
     ? 'Visar kunder som är tilldelade till dig via account manager-ID.'
     : null;
-  const showAssignmentFallbackNote = Boolean(
-    isContentManager &&
-      !canScopeToAssignedCustomers &&
-      !actionableCustomersHaveAssignmentIds &&
-      (orgWideWithDrafts.length > 0 || orgWideWithSent.length > 0),
-  );
-  const assignmentFallbackNote =
-    'Visar hela översikten just nu eftersom tilldelning inte är entydig för alla kunder i listan.';
-  const sentListHeading = canScopeToAssignedCustomers
+  const showAssignmentFallbackNote = false;
+  const assignmentFallbackNote = '';
+  const sentListHeading = isScoped
     ? 'Dina skickade - väntar på produktion'
     : 'Skickade - väntar på produktion';
-  const emptyStateText = canScopeToAssignedCustomers
+  const emptyStateText = isScoped
     ? 'Inga av dina tilldelade kunder har koncept som väntar på åtgärd just nu.'
     : 'Inga koncept väntar på åtgärd just nu.';
 

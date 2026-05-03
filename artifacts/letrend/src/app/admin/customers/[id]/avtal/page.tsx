@@ -29,7 +29,12 @@ export default function CustomerAvtalPage() {
     );
   }
 
-  const isSuperAdmin = profile?.role === 'admin' && profile?.is_admin === true;
+  const isSuperAdmin =
+    profile?.is_admin === true
+    || profile?.role === 'admin'
+    || profile?.role === 'super_admin'
+    || profile?.role === 'superadmin'
+    || profile?.role === 'operations_admin';
 
   const organisation = {
     business_name: customer.business_name,

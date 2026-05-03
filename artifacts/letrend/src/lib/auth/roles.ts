@@ -45,10 +45,16 @@ type LegacyRoleInput = {
 } | null | undefined;
 
 /**
+ * Legacy/aliased role names that should be treated as full admin in routing.
+ */
+const ADMIN_ROLE_ALIASES = new Set(['admin', 'super_admin', 'superadmin', 'operations_admin']);
+
+/**
  * Resolve role from legacy profile format (is_admin boolean + role string)
  */
 export function resolveLegacyProfileRole(profile: LegacyRoleInput): AppRole {
   if (profile?.is_admin) return 'admin';
   const legacyRole = typeof profile?.role === 'string' ? profile.role : null;
+  if (legacyRole && ADMIN_ROLE_ALIASES.has(legacyRole)) return 'admin';
   return isAppRole(legacyRole || '') ? legacyRole as AppRole : 'customer';
 }
