@@ -64,6 +64,7 @@ import {
 } from '@/lib/studio/navigation';
 import {
   isStudioAssignedCustomerConcept,
+  normalizeStudioCustomerConcept,
 } from '@/lib/studio/customer-concepts';
 import { extractGamePlanEmailData, type GamePlanGenerateInput } from '@/lib/game-plan';
 import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle';
@@ -593,7 +594,10 @@ function CustomerWorkspacePageContent() {
 
   const customerCacheKey = `studio-v2:workspace:${customerId}:customer`;
   const gamePlanCacheKey = `studio-v2:workspace:${customerId}:game-plan`;
-  const conceptsCacheKey = `studio-v2:workspace:${customerId}:concepts`;
+  // v2 suffix busts stale pre-normalization cache entries (Task #44):
+  // older entries stored raw DB rows without the boundary `placement`,
+  // `assignment`, `result` shape that FeedPlannerSection requires.
+  const conceptsCacheKey = `studio-v2:workspace:${customerId}:concepts:v2`;
   const notesCacheKey = `studio-v2:workspace:${customerId}:notes`;
   const emailLogCacheKey = `studio-v2:workspace:${customerId}:email-log`;
   const emailJobsCacheKey = `studio-v2:workspace:${customerId}:email-jobs`;
@@ -1043,7 +1047,14 @@ function CustomerWorkspacePageContent() {
             throw new Error(data.error || `Failed to fetch concepts (${response.status})`);
           }
 
-          return Array.isArray(data.concepts) ? data.concepts as CustomerConcept[] : [];
+          // Normalize raw DB rows into the deeply-nested boundary shape
+          // (placement.feed_order, assignment.status, result.tiktok_views, …)
+          // that every consumer — especially FeedPlannerSection — expects.
+          // Without this the 3×3 feed planner shows empty slots because
+          // concept.placement is undefined on every row.
+          return Array.isArray(data.concepts)
+            ? (data.concepts as Array<Record<string, unknown>>).map(normalizeStudioCustomerConcept)
+            : [];
         },
         WORKSPACE_CACHE_TTL_MS,
         { force }
