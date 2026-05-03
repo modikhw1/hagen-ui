@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import { fetchSubscription } from '../../lib/stripe-client.js';
 
 const router = Router();
 
@@ -207,10 +208,17 @@ router.get('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
     const pricing_status =
       (profile as any).pricing_status === 'fixed' ? 'fixed' : 'unknown';
 
-    // Derive a coarse subscription_status purely from the columns we have.
-    // We don't poll Stripe here; this is enough for the admin avtal view to
-    // show the correct badge and pause/resume button.
+    // Subscription status:
+    // 1. Local "paused" / "canceled" derivations always win (admin can pause
+    //    a customer locally even if Stripe still shows active until the end
+    //    of the period; archived rows should always read as cancelled).
+    // 2. Otherwise, when we have a Stripe subscription id we ask Stripe for
+    //    the real status so the badge can show past_due / unpaid / trialing
+    //    / incomplete instead of a coarse "active".
+    // 3. If Stripe is unreachable we fall back to the previous derivation
+    //    so the admin UI keeps working.
     const rawStatus = String((profile as any).status ?? '').toLowerCase();
+    const stripeSubId = (profile as any).stripe_subscription_id as string | null | undefined;
     let subscription_status: string | null = null;
     if (rawStatus === 'paused' || (profile as any).paused_until) {
       subscription_status = 'paused';
@@ -223,8 +231,16 @@ router.get('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
       (profile as any).archived_at
     ) {
       subscription_status = 'canceled';
-    } else if ((profile as any).stripe_subscription_id) {
-      subscription_status = 'active';
+    } else if (stripeSubId) {
+      const fetched = await fetchSubscription(stripeSubId);
+      if (fetched) {
+        // Map Stripe's `paused` (collection paused) to our local "paused"
+        // so the badge / pause UI stays consistent with the manual pause
+        // path. Other statuses pass through verbatim.
+        subscription_status = fetched.status === 'paused' ? 'paused' : String(fetched.status);
+      } else {
+        subscription_status = 'active';
+      }
     }
 
     res.json({

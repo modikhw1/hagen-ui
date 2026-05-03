@@ -2,6 +2,11 @@ export type CustomerContractState =
   | 'onboarding_no_price'
   | 'onboarding_priced'
   | 'active'
+  | 'trialing'
+  | 'past_due'
+  | 'unpaid'
+  | 'incomplete'
+  | 'incomplete_expired'
   | 'paused'
   | 'cancelled'
   | 'no_billing_env';
@@ -23,6 +28,11 @@ export function deriveCustomerContractState(
   const sub = (input.subscription_status ?? '').toLowerCase();
   if (sub === 'paused') return 'paused';
   if (sub === 'canceled' || sub === 'cancelled') return 'cancelled';
+  if (sub === 'trialing') return 'trialing';
+  if (sub === 'past_due') return 'past_due';
+  if (sub === 'unpaid') return 'unpaid';
+  if (sub === 'incomplete') return 'incomplete';
+  if (sub === 'incomplete_expired') return 'incomplete_expired';
 
   const hasSubscription = Boolean(input.stripe_subscription_id);
   if (hasSubscription) return 'active';
@@ -43,6 +53,16 @@ export function describeContractState(state: CustomerContractState): {
       return { label: 'Onboarding – väntar aktivering', tone: 'blue' };
     case 'active':
       return { label: 'Aktivt', tone: 'blue' };
+    case 'trialing':
+      return { label: 'Provperiod', tone: 'blue' };
+    case 'past_due':
+      return { label: 'Förfallen betalning', tone: 'orange' };
+    case 'unpaid':
+      return { label: 'Obetald', tone: 'red' };
+    case 'incomplete':
+      return { label: 'Ofullständig (väntar betalning)', tone: 'yellow' };
+    case 'incomplete_expired':
+      return { label: 'Ofullständig (löpt ut)', tone: 'red' };
     case 'paused':
       return { label: 'Pausat', tone: 'orange' };
     case 'cancelled':
