@@ -98,7 +98,7 @@ export async function logInteraction(input: {
     const activityMap: Record<InteractionType, string> = {
       'concept_added': 'concept_added',
       'note_added': 'customer_updated',
-      'feedplan_edit': 'concept_reordered',
+      'feedplan_edit': 'customer_updated',
       'tiktok_upload_synced': 'customer_updated',
       'customer_updated': 'customer_updated',
       'login': 'customer_updated',
