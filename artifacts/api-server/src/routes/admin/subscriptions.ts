@@ -44,10 +44,34 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
 
     const total = count ?? 0;
 
+    // Compute MRR summary from active subscriptions.
+    let summary = { mrrOre: 0, activeCount: 0, mrr30dAgoOre: 0 };
+    try {
+      let summaryQuery = supabase
+        .from('subscriptions')
+        .select('status, amount, created');
+      if (environment && environment !== 'all') summaryQuery = (summaryQuery as any).eq('environment', environment);
+      const { data: allRows } = await summaryQuery;
+      const thirtyDaysAgo = Date.now() - 30 * 86_400_000;
+      for (const row of (allRows ?? []) as Array<{ status: string | null; amount: number | null; created: string | null }>) {
+        if ((row.status ?? '').toLowerCase() === 'active') {
+          const amount = Number(row.amount ?? 0);
+          summary.mrrOre += amount;
+          summary.activeCount += 1;
+          const createdMs = row.created ? Date.parse(row.created) : NaN;
+          if (Number.isFinite(createdMs) && createdMs < thirtyDaysAgo) {
+            summary.mrr30dAgoOre += amount;
+          }
+        }
+      }
+    } catch (e) {
+      logger.warn(e, 'subscriptions summary derivation failed');
+    }
+
     res.json({
       subscriptions: data ?? [],
       environment: environment ?? 'all',
-      summary: null,
+      summary,
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
     });
   } catch (err) {

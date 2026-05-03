@@ -52,11 +52,36 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
 
     const total = count ?? 0;
 
+    // Compute summary across all invoices (not just current page).
+    let summary = { openOre: 0, paidOre: 0, invoicesNeedingActionCount: 0 };
+    try {
+      let summaryQuery = supabase
+        .from('invoices')
+        .select('amount_due, amount_paid, status');
+      if (customerProfileId) summaryQuery = (summaryQuery as any).eq('customer_profile_id', customerProfileId);
+      if (environment && environment !== 'all') summaryQuery = (summaryQuery as any).eq('environment', environment);
+      const { data: allRows } = await summaryQuery;
+      for (const row of (allRows ?? []) as Array<{ amount_due: number | null; amount_paid: number | null; status: string | null }>) {
+        const status = (row.status ?? '').toLowerCase();
+        if (status === 'open' || status === 'past_due') {
+          summary.openOre += Number(row.amount_due ?? 0);
+        }
+        if (status === 'paid') {
+          summary.paidOre += Number(row.amount_paid ?? row.amount_due ?? 0);
+        }
+        if (status === 'open' || status === 'past_due' || status === 'uncollectible') {
+          summary.invoicesNeedingActionCount += 1;
+        }
+      }
+    } catch (e) {
+      logger.warn(e, 'invoices summary derivation failed');
+    }
+
     res.json({
       invoices: data ?? [],
       environment: environment ?? 'all',
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) },
-      summary: null,
+      summary,
     });
   } catch (err) {
     logger.error(err, 'invoices list error');

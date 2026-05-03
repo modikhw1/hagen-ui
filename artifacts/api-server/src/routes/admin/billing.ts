@@ -101,37 +101,107 @@ router.get('/drift', requireAuth, ADMIN_ONLY, async (_req, res) => {
 router.get('/recent-events', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
-    const limit = Math.min(Number(req.query['limit'] ?? 50), 200);
+    const limit = Math.min(Number(req.query['limit'] ?? 15), 100);
 
-    let data: unknown[] | null = null;
-    let error: { message: string } | null = null;
-    try {
-      const result = await supabase
-        .from('stripe_events')
-        .select('id, type, data, created_at')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      data = result.data ?? null;
-      error = result.error;
-    } catch {
-      error = { message: 'stripe_events table missing' };
-    }
+    // Pull billing-related actions from audit_log and join customer name.
+    const { data: auditRows, error } = await supabase
+      .from('audit_log')
+      .select('id, action, entity_type, entity_id, actor_email, actor_role, metadata, created_at')
+      .like('action', 'admin.invoice%')
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
     if (error) {
       res.json({ events: [] });
       return;
     }
 
-    res.json({ events: data ?? [] });
+    const labels: Record<string, string> = {
+      'admin.invoice.created': 'Faktura skapad',
+      'admin.invoice.paid': 'Faktura betald',
+      'admin.invoice.voided': 'Faktura makulerad',
+      'admin.invoice.payment_failed': 'Betalning misslyckades',
+      'admin.invoice.payment_succeeded': 'Betalning lyckades',
+      'admin.invoice.reissued': 'Faktura återutfärdad',
+    };
+
+    // Resolve customer business names referenced by metadata.customer_profile_id.
+    const customerIds = new Set<string>();
+    for (const row of (auditRows ?? []) as any[]) {
+      const cid = row.metadata?.customer_profile_id;
+      if (typeof cid === 'string') customerIds.add(cid);
+    }
+    let customerNames: Record<string, string> = {};
+    if (customerIds.size > 0) {
+      const { data: customers } = await supabase
+        .from('customer_profiles')
+        .select('id, business_name')
+        .in('id', Array.from(customerIds));
+      for (const c of (customers ?? []) as Array<{ id: string; business_name: string | null }>) {
+        if (c.business_name) customerNames[c.id] = c.business_name;
+      }
+    }
+
+    const events = (auditRows ?? []).map((row: any) => {
+      const cid = typeof row.metadata?.customer_profile_id === 'string' ? row.metadata.customer_profile_id : null;
+      const amount = typeof row.metadata?.amount_ore === 'number' ? row.metadata.amount_ore : null;
+      return {
+        id: row.id,
+        at: row.created_at,
+        action: row.action,
+        title: labels[row.action] ?? row.action,
+        entity_type: row.entity_type ?? null,
+        entity_id: row.entity_id ?? null,
+        actor_label: row.actor_email ?? null,
+        actor_role: row.actor_role ?? null,
+        customer_profile_id: cid,
+        business_name: cid ? (customerNames[cid] ?? null) : null,
+        amount_ore: amount,
+      };
+    });
+
+    res.json({ events });
   } catch (err) {
     logger.error(err, 'billing recent-events error');
-    res.status(500).json({ error: 'Internt serverfel' });
+    res.json({ events: [] });
   }
 });
 
 // GET /api/admin/billing/upcoming
-router.get('/upcoming', requireAuth, ADMIN_ONLY, async (_req, res) => {
-  res.json({ items: [] });
+router.get('/upcoming', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const days = Math.min(Math.max(Number(req.query['days'] ?? 30), 1), 365);
+    const today = new Date();
+    const horizon = new Date(today.getTime() + days * 86_400_000);
+
+    const { data, error } = await supabase
+      .from('customer_profiles')
+      .select('id, business_name, monthly_price, next_invoice_date, stripe_subscription_id')
+      .not('next_invoice_date', 'is', null)
+      .gte('next_invoice_date', today.toISOString().slice(0, 10))
+      .lte('next_invoice_date', horizon.toISOString().slice(0, 10))
+      .order('next_invoice_date', { ascending: true });
+
+    if (error) {
+      res.json({ upcoming: [], summary: { totalOre: 0, count: 0 } });
+      return;
+    }
+
+    const upcoming = (data ?? []).map((row: any) => ({
+      customer_id: row.id,
+      business_name: row.business_name ?? '',
+      amount_ore: Number(row.monthly_price ?? 0) * 100,
+      invoice_date: row.next_invoice_date,
+      has_stripe_subscription: Boolean(row.stripe_subscription_id),
+    }));
+    const totalOre = upcoming.reduce((sum, r) => sum + r.amount_ore, 0);
+
+    res.json({ upcoming, summary: { totalOre, count: upcoming.length } });
+  } catch (err) {
+    logger.error(err, 'billing upcoming error');
+    res.json({ upcoming: [], summary: { totalOre: 0, count: 0 } });
+  }
 });
 
 // GET /api/admin/billing/reconcile/list
