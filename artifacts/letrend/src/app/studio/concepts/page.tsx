@@ -1220,7 +1220,7 @@ export default function StudioConceptsPage() {
         </button>
       </div>
 
-      {unreviewedPendingConcepts.length > 0 ? (
+      {draftPendingConcepts.length > 0 ? (
         <div
           style={{
             marginBottom: 18,
@@ -1233,10 +1233,10 @@ export default function StudioConceptsPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: LeTrendTypography.fontSize.lg, fontWeight: LeTrendTypography.fontWeight.bold, color: '#7c5221' }}>
-                Vantar pa granskning ({unreviewedPendingConcepts.length} st)
+                Utkast ({draftPendingConcepts.length} st)
               </div>
               <div style={{ fontSize: LeTrendTypography.fontSize.sm, color: '#9a6b3a' }}>
-                Mini-kort for nya draft-koncept som behover review.
+                Koncept som inte är publicerade än. Granska och tryck Publicera när de är klara.
               </div>
             </div>
             <span
@@ -1251,7 +1251,7 @@ export default function StudioConceptsPage() {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-            {unreviewedPendingConcepts.map((pendingConcept) => (
+            {draftPendingConcepts.map((pendingConcept) => (
               <div
                 key={pendingConcept.id}
                 style={{
@@ -1287,71 +1287,6 @@ export default function StudioConceptsPage() {
                   }}
                 >
                   Granska
-                </Link>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {reviewedPendingConcepts.length > 0 ? (
-        <div
-          style={{
-            marginBottom: 18,
-            padding: 16,
-            borderRadius: LeTrendRadius.xl,
-            background: '#eff6ff',
-            border: '1px solid #bfdbfe',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: LeTrendTypography.fontSize.lg, fontWeight: LeTrendTypography.fontWeight.bold, color: '#1d4ed8' }}>
-                Review-klara, ej publicerade ({reviewedPendingConcepts.length} st)
-              </div>
-              <div style={{ fontSize: LeTrendTypography.fontSize.sm, color: '#4767a6' }}>
-                Koncept som ar klara att publiceras men fortfarande ligger utanfor biblioteket.
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-            {reviewedPendingConcepts.map((pendingConcept) => (
-              <div
-                key={pendingConcept.id}
-                style={{
-                  padding: 12,
-                  borderRadius: LeTrendRadius.lg,
-                  background: '#fff',
-                  border: '1px solid #bfdbfe',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  gap: 12,
-                }}
-              >
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: LeTrendTypography.fontSize.sm, fontWeight: LeTrendTypography.fontWeight.semibold, color: LeTrendColors.textPrimary }}>
-                    {pendingConcept.headline}
-                  </div>
-                  <div style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted, marginTop: 4 }}>
-                    Review-klar {formatRelativeDate(pendingConcept.reviewed_at) || 'nyss'}
-                  </div>
-                </div>
-                <Link
-                  href={`/studio/concepts/${pendingConcept.id}/review`}
-                  style={{
-                    flexShrink: 0,
-                    textDecoration: 'none',
-                    padding: '7px 10px',
-                    borderRadius: LeTrendRadius.md,
-                    background: '#2563eb',
-                    color: '#fff',
-                    fontSize: LeTrendTypography.fontSize.xs,
-                    fontWeight: LeTrendTypography.fontWeight.semibold,
-                  }}
-                >
-                  Oppna
                 </Link>
               </div>
             ))}
