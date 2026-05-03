@@ -21,8 +21,29 @@ billing gating, or pill rendering.
   - `POST /api/admin/customers/:id/subscription-price/preview`
   - Body: `{ monthly_price_sek: number, mode: 'now' | 'next_period' }`
   - Returns `{ preview: { ..., line_items, invoice_total_ore, ... } }`.
-- **Apply**: `POST /api/admin/customers/:id/subscription-price`
-  with the same body. (See `apiClient` "change_subscription_price" branch.)
+- **Apply**: **known broken / out of scope for task #32.** The picture today:
+  - `apiClient.change_subscription_price` does
+    `POST /api/admin/customers/:id/subscription-price` with body
+    `{ monthly_price, mode }` (note: `monthly_price`, not `monthly_price_sek`).
+  - `routes/admin/customers.ts` exposes only `GET` and `PUT` on that path,
+    not `POST` — so the call as wired today 404s on the api-server.
+  - The *canonical* server-side handler is
+    `handleChangeSubscriptionPrice` in
+    `letrend/src/lib/admin/customer-actions/change-subscription-price.ts`,
+    which calls `applySubscriptionPriceChange` (real Stripe + proration +
+    schedule + DB persist + audit log). It is part of the Next-style
+    customer-actions dispatcher and may not yet be wired to Express in
+    this monorepo migration.
+  - The PUT handler that *does* exist in Express is a naive
+    `customer_profiles.update({ monthly_price })` with no Stripe call,
+    so silently rerouting POST → PUT would *appear* to work while
+    skipping the Stripe sync entirely. **Do not** redirect the client
+    until the Express side is wired to the real action dispatcher.
+  - Recommended follow-up (separate task): port
+    `handleChangeSubscriptionPrice` (and the rest of the customer-action
+    dispatcher) into the api-server as
+    `POST /api/admin/customers/:id/actions/change_subscription_price`,
+    matching the `change_account_manager` precedent already in apiClient.
 - **Legacy / removed paths** (do NOT call):
   - `POST /api/admin/customers/:id/subscription-preview` — does not exist (a
     GET sibling does, but it is not the preview endpoint).

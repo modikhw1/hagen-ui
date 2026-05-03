@@ -31,7 +31,10 @@ function CustomerHeader({ id }: { id: string }) {
   // a settled lifecycle status (active / paused / cancelled / archived). For
   // those customers the main status pill already conveys the truth and the
   // legacy onboarding_state column is just stale metadata.
-  const settledStatuses = ['active', 'paused', 'cancelled', 'archived'];
+  // Note: include both Brittish ('cancelled') and American ('canceled')
+  // spellings — the rest of the codebase handles both because Stripe uses
+  // the American spelling and the local DB uses the British one.
+  const settledStatuses = ['active', 'paused', 'cancelled', 'canceled', 'archived'];
   const showOnboarding =
     customer.onboarding_state &&
     customer.onboarding_state !== 'live' &&
