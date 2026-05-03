@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health.js";
+import meRouter from "./me.js";
 import adminRouter from "./admin/index.js";
 import customerRouter from "./customer.js";
 import stripeRouter from "./stripe.js";
@@ -11,6 +12,7 @@ import onboardingRouter from "./onboarding.js";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use("/me", meRouter);
 router.use("/admin", adminRouter);
 
 // Customer-facing routes (requires auth, served to logged-in customers)

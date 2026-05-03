@@ -80,19 +80,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const promise = (async (): Promise<Profile | null> => {
       try {
-        const { data, error } = await Promise.race([
-          supabase.from('profiles').select('*').eq('id', userId).single(),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Profile query timeout')), QUERY_TIMEOUT_MS)
-          ),
-        ]);
+        // Use the API server's /api/me endpoint which uses the service-role key
+        // to bypass RLS — required for admin/content_manager profiles which the
+        // anon key cannot read due to RLS policies on the profiles table.
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) return null;
 
-        if (error) {
-          console.error('Error fetching profile:', error);
-          if (error.code === 'PGRST116') {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
+
+        let data: unknown;
+        try {
+          const response = await fetch('/api/me', {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (response.status === 404) {
             console.log('Profile does not exist yet for user:', userId);
+            return null;
           }
-          return null;
+          if (!response.ok) {
+            console.error('Error fetching profile, status:', response.status);
+            return null;
+          }
+          data = await response.json();
+        } catch (fetchErr) {
+          clearTimeout(timeoutId);
+          throw fetchErr;
         }
 
         // Resolve role from profiles fields (canonical source)
