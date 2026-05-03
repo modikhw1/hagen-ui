@@ -1,18 +1,13 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { Database } from '@/types/database'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
-// Create client using @supabase/ssr for proper cookie handling
-const createSupabaseClient = () => {
-  if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase env vars not set - using placeholder client')
-    // Fallback for build time
-    return createBrowserClient('https://placeholder.supabase.co', 'placeholder-key')
-  }
-
-  return createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing Supabase configuration: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set as environment variables.'
+  )
 }
 
-export const supabase = createSupabaseClient()
+export const supabase = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey)

@@ -33,13 +33,13 @@ interface AuthState {
   session: Session | null;
   authLoading: boolean;
   profileLoading: boolean;
+  profileNotFound: boolean;
   status: 'initializing' | 'authenticated' | 'unauthenticated' | 'signing_in' | 'signing_up' | 'signing_out' | 'error';
   error: AuthError | null;
 }
 
 interface AuthContextType extends AuthState {
   loading: boolean; // backward-compat: authLoading || profileLoading
-  profileNotFound: boolean; // true only when /api/me returned 404 (no profile row exists)
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, businessName: string) => Promise<{ error: Error | null; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
@@ -56,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session: null,
     authLoading: true,
     profileLoading: false,
+    profileNotFound: false,
     status: 'initializing',
     error: null,
   });
@@ -63,18 +64,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Profile cache to avoid redundant fetches
   const profileCacheRef = useRef<{ userId: string; profile: Profile | null; ts: number } | null>(null);
   // Inflight dedup: only one fetch per userId at a time
-  const inflightRef = useRef<Map<string, Promise<Profile | null>>>(new Map());
-  // Track whether the last profile fetch returned 404 (no row) vs. a real error
-  const profileNotFoundRef = useRef<boolean>(false);
+  const inflightRef = useRef<Map<string, Promise<{ profile: Profile | null; notFound: boolean }>>>(new Map());
 
-  const fetchProfile = useCallback(async (userId: string, opts?: { force?: boolean; token?: string }): Promise<Profile | null> => {
+  const fetchProfile = useCallback(async (userId: string, opts?: { force?: boolean; token?: string }): Promise<{ profile: Profile | null; notFound: boolean }> => {
     const force = opts?.force ?? false;
 
     // Return cached profile if fresh
     if (!force && profileCacheRef.current) {
       const { userId: cachedId, profile: cachedProfile, ts } = profileCacheRef.current;
       if (cachedId === userId && Date.now() - ts < PROFILE_CACHE_TTL_MS) {
-        return cachedProfile;
+        return { profile: cachedProfile, notFound: cachedProfile === null };
       }
     }
 
@@ -82,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const existing = inflightRef.current.get(userId);
     if (existing) return existing;
 
-    const promise = (async (): Promise<Profile | null> => {
+    const promise = (async (): Promise<{ profile: Profile | null; notFound: boolean }> => {
       try {
         // Use the API server's /api/me endpoint which uses the service-role key
         // to bypass RLS — required for admin/content_manager profiles which the
@@ -90,10 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Prefer the token passed in directly (avoids a second getSession() call
         // that might race against the session being written to storage).
         const accessToken = opts?.token ?? (await supabase.auth.getSession()).data.session?.access_token;
-        if (!accessToken) {
-          profileNotFoundRef.current = false;
-          return null;
-        }
+        if (!accessToken) return { profile: null, notFound: false };
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
@@ -109,20 +105,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (response.status === 404) {
             // No profile row — genuine new user
             console.log('Profile does not exist yet for user:', userId);
-            profileNotFoundRef.current = true;
-            return null;
+            return { profile: null, notFound: true };
           }
           if (!response.ok) {
             // Server/network error — profile may exist but couldn't be fetched
             console.error('Error fetching profile, status:', response.status);
-            profileNotFoundRef.current = false;
-            return null;
+            return { profile: null, notFound: false };
           }
-          profileNotFoundRef.current = false;
           data = await response.json();
         } catch (fetchErr) {
           clearTimeout(timeoutId);
-          profileNotFoundRef.current = false;
           throw fetchErr;
         }
 
@@ -141,10 +133,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         profileCacheRef.current = { userId, profile, ts: Date.now() };
         console.log('Profile fetched:', { email: profile.email, role: profile.role });
-        return profile;
+        return { profile, notFound: false };
       } catch (err) {
         console.error('Profile fetch error:', err);
-        return null;
+        return { profile: null, notFound: false };
       } finally {
         inflightRef.current.delete(userId);
       }
@@ -157,8 +149,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async () => {
     if (state.user) {
       setState(prev => ({ ...prev, profileLoading: true }));
-      const profileData = await fetchProfile(state.user.id, { force: true });
-      setState(prev => ({ ...prev, profile: profileData, profileLoading: false }));
+      const { profile: profileData, notFound } = await fetchProfile(state.user.id, { force: true });
+      setState(prev => ({ ...prev, profile: profileData, profileNotFound: notFound, profileLoading: false }));
     }
   }, [state.user, fetchProfile]);
 
@@ -216,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Store token globally so apiClient can attach it to every request
           // without needing to call getSession() (avoids race conditions).
           setAuthToken(session?.access_token ?? null);
-          
+
           // Show authenticated immediately, then load profile
           setState(prev => ({
             ...prev,
@@ -229,12 +221,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }));
 
           // Pass the token directly so fetchProfile doesn't re-read session storage
-          const profileData = await fetchProfile(user.id, { token: session?.access_token });
+          const { profile: profileData, notFound: profileNotFound } = await fetchProfile(user.id, { token: session?.access_token });
           if (!isMounted) return;
 
           setState({
             user: user,
             profile: profileData,
+            profileNotFound,
             session,
             authLoading: false,
             profileLoading: false,
@@ -304,11 +297,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Pass token directly — avoids a race between SIGNED_IN firing and
             // the session being written to localStorage/cookies.
-            const profileData = await fetchProfile(session.user.id, { token: session.access_token });
+            const { profile: profileData, notFound: profileNotFound } = await fetchProfile(session.user.id, { token: session.access_token });
             if (!isMounted) return;
             setState({
               user: session.user,
               profile: profileData,
+              profileNotFound,
               session,
               authLoading: false,
               profileLoading: false,
@@ -338,6 +332,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setState({
               user: null,
               profile: null,
+              profileNotFound: false,
               session: null,
               authLoading: false,
               profileLoading: false,
@@ -349,12 +344,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           case 'USER_UPDATED':
             if (session?.user) {
               setState(prev => ({ ...prev, user: session.user, session, profileLoading: true }));
-              const profileData = await fetchProfile(session.user.id, { force: true, token: session.access_token });
+              const { profile: profileData, notFound: profileNotFound } = await fetchProfile(session.user.id, { force: true, token: session.access_token });
               if (!isMounted) return;
               setState(prev => ({
                 ...prev,
                 user: session.user,
                 profile: profileData,
+                profileNotFound,
                 session,
                 authLoading: false,
                 profileLoading: false,
@@ -440,6 +436,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({
         user: null,
         profile: null,
+        profileNotFound: false,
         session: null,
         authLoading: false,
         profileLoading: false,
@@ -456,7 +453,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         ...state,
         loading,
-        profileNotFound: profileNotFoundRef.current,
         signIn,
         signUp,
         signOut,
