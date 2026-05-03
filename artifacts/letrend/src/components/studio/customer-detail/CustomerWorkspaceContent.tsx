@@ -2527,6 +2527,14 @@ function CustomerWorkspacePageContent() {
   //   return concepts.find(c => c.feed_slot === slotNumber) || null;
   // };
 
+  useAdminPageHeader(
+    {
+      title: customer?.business_name || 'Kund',
+      eyebrow: 'Kundarbete',
+    },
+    [customer?.business_name],
+  );
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 60, color: LeTrendColors.textMuted }}>
@@ -2561,13 +2569,6 @@ function CustomerWorkspacePageContent() {
   }
 
   const draftCount = getDraftConcepts().length;
-  useAdminPageHeader(
-    {
-      title: customer?.business_name || 'Kund',
-      eyebrow: 'Kundarbete',
-    },
-    [customer?.business_name],
-  );
   const editingConcept = editingConceptId ? concepts.find((concept) => concept.id === editingConceptId) ?? null : null;
   const editingConceptDetails = getWorkspaceConceptDetails(editingConcept, getConceptDetails);
   const latestEmailJob = emailJobs[0] || null;
