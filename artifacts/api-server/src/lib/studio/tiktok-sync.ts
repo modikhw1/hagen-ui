@@ -111,16 +111,32 @@ class RateLimitError extends Error {
 }
 
 async function rapidApiFetch(url: string, apiKey: string, timeoutMs = 15000): Promise<Response> {
-  const res = await fetch(url, {
-    headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': RAPIDAPI_HOST },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (res.status === 429) {
-    const retryAfter = Number(res.headers.get('retry-after'));
-    const ms = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 30_000;
-    throw new RateLimitError(ms, `tiktok-scraper7 429 (retry-after=${ms}ms)`);
+  // Bounded exponential backoff with jitter on 429. Respects Retry-After when
+  // present, otherwise uses 1s, 2s, 4s + jitter. Gives up after 3 attempts and
+  // surfaces a RateLimitError so the caller can stop the batch.
+  const maxAttempts = 3;
+  let lastRetryAfter = 0;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const res = await fetch(url, {
+      headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': RAPIDAPI_HOST },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (res.status !== 429) return res;
+
+    const retryAfterHeader = Number(res.headers.get('retry-after'));
+    const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+      ? retryAfterHeader * 1000
+      : Math.floor((1000 * Math.pow(2, attempt - 1)) + (Math.random() * 500));
+    lastRetryAfter = retryAfterMs;
+
+    if (attempt === maxAttempts) {
+      throw new RateLimitError(retryAfterMs, `tiktok-scraper7 429 after ${maxAttempts} attempts (retry-after=${retryAfterMs}ms)`);
+    }
+    // Cap a single backoff sleep at 60s so we never block too long.
+    await new Promise((r) => setTimeout(r, Math.min(retryAfterMs, 60_000)));
   }
-  return res;
+  // Unreachable, but keeps TypeScript happy.
+  throw new RateLimitError(lastRetryAfter, 'tiktok-scraper7 429 (exhausted retries)');
 }
 
 interface FetchVideosResult {
@@ -471,6 +487,12 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
   const priorCallsToday = ((recentRuns ?? []) as Array<{ calls_used: number | null }>)
     .reduce((sum, r) => sum + (Number(r.calls_used) || 0), 0);
 
+  // Open an aggregate row for this entire cron invocation. customer_id NULL
+  // would violate FK, so we use the synthetic batch UUID convention: write
+  // an aggregate row using the first eligible customer's id (or the first we
+  // touch). If no customers are eligible we just return early below.
+  const aggregateStart = new Date().toISOString();
+
   let callsUsed = 0;
   let imported = 0;
   let statsUpdated = 0;
@@ -505,11 +527,30 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
     await new Promise((r) => setTimeout(r, 300));
   }
 
-  return {
+  const result = {
     processed, imported, statsUpdated, errors, callsUsed,
     budgetRemaining: Math.max(0, dailyBudget - priorCallsToday - callsUsed),
     budgetExceeded, staleLocksCleared,
   };
+
+  // Write a single aggregate cron-invocation row to a separate table for
+  // run-level observability ("/api/admin/cron-runs" reads from here).
+  await supabase.from('cron_run_log' as never).insert({
+    started_at: aggregateStart,
+    finished_at: new Date().toISOString(),
+    processed,
+    imported,
+    stats_updated: statsUpdated,
+    calls_used: callsUsed,
+    budget_remaining: result.budgetRemaining,
+    budget_exceeded: budgetExceeded,
+    stale_locks_cleared: staleLocksCleared,
+    errors: errors.length > 0 ? errors : null,
+  } as never).then(({ error }) => {
+    if (error) logger.warn({ err: error.message }, 'cron_run_log insert failed (non-fatal)');
+  });
+
+  return result;
 }
 
 // ── helper: background fire-and-forget initial backfill on linkage ───────────

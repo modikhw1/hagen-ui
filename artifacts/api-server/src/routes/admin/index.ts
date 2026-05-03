@@ -44,10 +44,15 @@ router.use('/concepts', conceptsRouter);
 router.get('/cron-runs', requireAuth, ADMIN_ONLY, async (_req, res) => {
   try {
     const supabase = createSupabaseAdmin();
-    const [runsResult, failedResult] = await Promise.all([
+    const [cronRunsResult, customerRunsResult, failedResult] = await Promise.all([
+      (supabase as never as { from: (t: string) => { select: (s: string) => { order: (c: string, o: { ascending: boolean }) => { limit: (n: number) => Promise<{ data: unknown; error: { message: string } | null }> } } } })
+        .from('cron_run_log')
+        .select('id, started_at, finished_at, processed, imported, stats_updated, calls_used, budget_remaining, budget_exceeded, stale_locks_cleared, errors')
+        .order('started_at', { ascending: false })
+        .limit(10),
       supabase
         .from('sync_runs')
-        .select('id, customer_id, mode, started_at, finished_at, status, fetched_count, imported_count, stats_updated_count, error')
+        .select('id, customer_id, mode, started_at, finished_at, status, fetched_count, imported_count, stats_updated_count, calls_used, error')
         .order('started_at', { ascending: false })
         .limit(20),
       supabase
@@ -57,14 +62,15 @@ router.get('/cron-runs', requireAuth, ADMIN_ONLY, async (_req, res) => {
         .order('last_history_sync_at', { ascending: false })
         .limit(50),
     ]);
-    if (runsResult.error || failedResult.error) {
+    if (cronRunsResult.error || customerRunsResult.error || failedResult.error) {
       res.status(500).json({
-        error: runsResult.error?.message || failedResult.error?.message || 'cron_runs_query_failed',
+        error: cronRunsResult.error?.message || customerRunsResult.error?.message || failedResult.error?.message || 'cron_runs_query_failed',
       });
       return;
     }
     res.json({
-      recent_runs: runsResult.data ?? [],
+      recent_cron_invocations: cronRunsResult.data ?? [],
+      recent_customer_runs: customerRunsResult.data ?? [],
       failed_customers: failedResult.data ?? [],
     });
   } catch (err) {

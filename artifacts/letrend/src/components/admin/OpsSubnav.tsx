@@ -16,6 +16,7 @@ const opsItems: OpsItem[] = [
   { href: '/admin/settings', label: 'Settings', exact: true },
   { href: '/admin/payroll', label: 'Payroll' },
   { href: '/admin/audit-log', label: 'Audit-logg', matchers: ['/admin/audit-log'] },
+  { href: '/admin/cron-health', label: 'TikTok-sync', matchers: ['/admin/cron-health'] },
 ];
 
 export function OpsSubnav() {

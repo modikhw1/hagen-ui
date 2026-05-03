@@ -50,6 +50,7 @@ function AdminRoutes() {
         <Route path="/admin/billing/invoices" component={lazy(() => import("@/app/admin/billing/invoices/page"))} />
         <Route path="/admin/billing/subscriptions" component={lazy(() => import("@/app/admin/billing/subscriptions/page"))} />
         <Route path="/admin/audit-log" component={lazy(() => import("@/app/admin/(ops)/audit-log/page"))} />
+        <Route path="/admin/cron-health" component={lazy(() => import("@/app/admin/(ops)/cron-health/page"))} />
         <Route path="/admin/payroll" component={lazy(() => import("@/app/admin/(ops)/payroll/page"))} />
         <Route path="/admin/settings" component={lazy(() => import("@/app/admin/(ops)/settings/page"))} />
         <Route path="/admin/demos" component={lazy(() => import("@/app/admin/demos/page"))} />
