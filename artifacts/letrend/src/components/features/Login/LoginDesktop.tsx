@@ -1,6 +1,7 @@
+'use client'
 
-
-
+// @ts-ignore
+import Image from 'next/image'
 import { useLoginForm } from '@/hooks/useLoginForm'
 import { getAuthCallbackUrl } from '@/lib/url/public'
 
@@ -33,7 +34,7 @@ export function LoginDesktop() {
         {/* Logo & Title */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <div style={{ margin: '0 auto 24px', width: '120px', height: '120px' }}>
-            <img
+            <Image
               src="/transparent.png"
               alt="LeTrend"
               width={120}

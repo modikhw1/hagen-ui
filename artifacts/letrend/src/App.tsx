@@ -30,6 +30,7 @@ function AdminRoutes() {
         <Route path="/admin/customers/:id/pulse" component={lazy(() => import("@/app/admin/customers/[id]/pulse/page"))} />
         <Route path="/admin/customers/:id/subscription" component={lazy(() => import("@/app/admin/customers/[id]/subscription/page"))} />
         <Route path="/admin/customers/:id/subscription/price" component={lazy(() => import("@/app/admin/customers/[id]/subscription/price/page"))} />
+        <Route path="/admin/customers/:id/avtal" component={lazy(() => import("@/app/admin/customers/[id]/avtal/page"))} />
         <Route path="/admin/customers/:id/team" component={lazy(() => import("@/app/admin/customers/[id]/team/page"))} />
         <Route path="/admin/customers/:id/team/change" component={lazy(() => import("@/app/admin/customers/[id]/team/change/page"))} />
         <Route path="/admin/billing" component={lazy(() => import("@/app/admin/billing/page"))} />
@@ -163,7 +164,7 @@ function NotFound() {
   );
 }
 
-function lazy(importFn: () => Promise<{ default: React.ComponentType<unknown> }>) {
+function lazy(importFn: () => Promise<any>) {
   const LazyComponent = (props: object) => {
     const [Component, setComponent] = useState<React.ComponentType<unknown> | null>(null);
     const [error, setError] = useState<string | null>(null);

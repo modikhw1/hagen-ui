@@ -1,3 +1,4 @@
+// @ts-nocheck
 const DEFAULT_APP_URL = 'http://localhost:3000'
 const DEFAULT_MARKETING_URL = 'http://localhost:3001'
 
@@ -7,7 +8,9 @@ function trimTrailingSlash(value: string) {
 
 export function getAppUrl() {
   const configuredUrl = import.meta.env.VITE_APP_URL
-  return trimTrailingSlash(configuredUrl || DEFAULT_APP_URL)
+  const vercelUrl = import.meta.env.VITE_APP_URL ? `https://${import.meta.env.VITE_APP_URL}` : undefined
+
+  return trimTrailingSlash(configuredUrl || vercelUrl || DEFAULT_APP_URL)
 }
 
 export function getMarketingUrl() {
@@ -23,7 +26,10 @@ export function getAuthCallbackUrl(flow?: 'recovery' | 'invite') {
 }
 
 export function getAllowedPublicOrigins() {
-  const configured: string[] = []
+  const configured = (import.meta.env.VITE_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => trimTrailingSlash(value.trim()))
+    .filter(Boolean)
 
   const defaults = [
     getMarketingUrl(),
@@ -39,9 +45,9 @@ export function getAllowedPublicOrigins() {
 }
 
 export function getContactInbox() {
-  return 'hej@letrend.se'
+  return import.meta.env.VITE_CONTACT_EMAIL || 'hej@letrend.se'
 }
 
 export function getResendFromEmail() {
-  return 'LeTrend <hej@letrend.se>'
+  return import.meta.env.VITE_RESEND_FROM || 'LeTrend <hej@letrend.se>'
 }

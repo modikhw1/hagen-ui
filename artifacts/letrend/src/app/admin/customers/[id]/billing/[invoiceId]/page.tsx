@@ -1,8 +1,6 @@
-import { useEffect } from 'react';
-import { useParams, useLocation } from 'wouter';
-export default function Page() {
-  const { id, invoiceId } = useParams<{ id: string; invoiceId: string }>();
-  const [, navigate] = useLocation();
-  useEffect(() => { if (id && invoiceId) navigate(`/admin/customers/${id}/billing?invoice=${invoiceId}`); }, [id, invoiceId, navigate]);
-  return null;
+// @ts-nocheck
+import { redirect } from '@/lib/navigation-compat';
+export default async function Page({ params }: { params: Promise<{ id: string, invoiceId: string }> }) {
+  const { id, invoiceId } = await params;
+  redirect(`/admin/customers/${id}/avtal?invoice=${invoiceId}`);
 }

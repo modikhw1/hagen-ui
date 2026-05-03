@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
 import { runStripeOrphanReconcile } from '@/jobs/stripe-orphan-reconcile';

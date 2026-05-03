@@ -141,7 +141,7 @@ function CustomerNoteCard({
 
         {note.concept_context && conceptHref && (
           <Link
-            to={conceptHref}
+            href={conceptHref}
             style={{
               textDecoration: 'none',
               color: '#4F46E5',

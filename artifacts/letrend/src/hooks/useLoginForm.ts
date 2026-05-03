@@ -2,9 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from '@/lib/navigation-compat'
-import { useSearchParams } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname, useSearchParams } from '@/lib/navigation-compat'
 import { useAuth } from '@/contexts/AuthContext'
 import { getPrimaryRouteForRole, getRoleAuthorizedRedirect, normalizeRedirectCandidate } from '@/lib/auth/navigation'
 import { supabase } from '@/lib/supabase/client'

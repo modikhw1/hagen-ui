@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
+// @ts-ignore
+import Image from 'next/image';
 import { Trash2 } from 'lucide-react';
 import type { TikTokProfilePreview } from '@/lib/tiktok/profile';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
@@ -243,11 +244,12 @@ export default function TikTokProfileSection({ customerId }: { customerId: strin
                 <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
                   <div className="flex items-center gap-3">
                     {preview.cover_image_url && (
-                      <img
+                      <Image
                         src={preview.cover_image_url}
                         alt=""
                         width={40}
                         height={40}
+                        unoptimized
                         className="h-10 w-10 rounded-full object-cover"
                       />
                     )}

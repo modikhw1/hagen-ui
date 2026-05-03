@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'wouter';
+import { useParams } from '@/lib/navigation-compat';
 import { loadConceptById, type TranslatedConcept } from '@/lib/conceptLoader';
 
 interface ConceptFormData {

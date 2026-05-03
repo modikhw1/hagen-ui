@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { actionFailure } from './shared';

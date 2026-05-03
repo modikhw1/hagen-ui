@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname, useRouter, useSearchParams } from '@/lib/navigation-compat';
 import CmPulseRow from '@/components/admin/CmPulseRow';
 import { CM_PREVIEW_COUNT } from '@/lib/admin-derive/constants';
 import { sortCmRows } from '@/lib/admin-derive/cm-pulse';

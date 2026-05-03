@@ -1,8 +1,7 @@
 'use client';
 
 import { Link } from 'wouter';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname } from '@/lib/navigation-compat';
 import { Bell } from 'lucide-react';
 import { useNotificationsUnreadCount } from '@/hooks/admin/useNotifications';
 import { SHELL_COPY } from '@/lib/admin/copy/shell-strings';
@@ -16,7 +15,7 @@ export default function NotificationBell() {
 
   return (
     <Link
-      to="/admin/notifications"
+      href="/admin/notifications"
       className={`relative inline-flex items-center justify-center rounded-full border p-2.5 transition-colors ${
         isActive
           ? 'border-primary/30 bg-primary/5 text-primary'

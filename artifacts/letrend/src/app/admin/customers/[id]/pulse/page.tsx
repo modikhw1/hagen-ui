@@ -1,7 +1,11 @@
-import { useParams } from 'wouter';
-import { CustomerPulseRoute } from '@/components/admin/customers/routes/CustomerPulseRoute';
-export default function CustomerPulsePage() {
-  const { id } = useParams<{ id: string }>();
-  if (!id) return null;
-  return <CustomerPulseRoute customerId={id} initialData={null} overview={null} />;
+// @ts-nocheck
+import { redirect } from '@/lib/navigation-compat';
+
+export default async function CustomerPulsePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  redirect(`/admin/customers/${id}`);
 }

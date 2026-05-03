@@ -288,7 +288,7 @@ function AuditLogRow({
           </span>
           {entry.entity_link ? (
             <Link
-              to={entry.entity_link}
+              href={entry.entity_link}
               className="inline-flex items-center gap-1 text-sm font-semibold text-foreground underline-offset-4 hover:underline"
             >
               {entityLabel(entry)}

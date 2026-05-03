@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { attentionTimestamp } from '@/lib/admin-derive/attention';
 import { requireScope, withAuth } from '@/lib/auth/api-auth';
 import { jsonError } from '@/lib/server/api-response';
@@ -42,8 +41,9 @@ export const GET = withAuth(async (_request, user) => {
     return jsonError(
       error instanceof Error
         ? error.message
-        : 'Kunde inte hamta antalet olasta notifikationer',
+        : 'Kunde inte hämta antalet olästa notifikationer',
       500,
     );
   }
 }, ['admin']);
+

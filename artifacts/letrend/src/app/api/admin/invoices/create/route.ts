@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { createManualInvoiceSchema } from '@/lib/admin/schemas/invoice-create';

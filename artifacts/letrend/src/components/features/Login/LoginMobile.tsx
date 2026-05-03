@@ -1,6 +1,7 @@
+'use client'
 
-
-
+// @ts-ignore
+import Image from 'next/image'
 import { useLoginForm } from '@/hooks/useLoginForm'
 import { colors, fontFamily, pageContainer, scrollContainer, buttonBase, primaryButton } from '@/styles/mobile-design'
 import { getAuthCallbackUrl } from '@/lib/url/public'
@@ -55,7 +56,7 @@ export function LoginMobile() {
       }}>
         {/* Logo */}
         <div style={{ marginBottom: 24, width: 80, height: 80 }}>
-          <img
+          <Image
             src="/transparent.png"
             alt="LeTrend"
             width={80}

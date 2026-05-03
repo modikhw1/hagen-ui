@@ -2,9 +2,7 @@
 
 import { Link } from 'wouter';
 import { useEffect, useState } from 'react';
-import { useRouter } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname, useRouter } from '@/lib/navigation-compat';
 import { isRouteActive, type RouteMatcherItem } from '@/lib/admin/navigation/active';
 import { prefetchSection } from '@/lib/admin/navigation/prefetch';
 import { StatusPill } from '@/components/admin/ui/StatusPill';
@@ -43,7 +41,8 @@ export function OpsSubnav() {
         return (
           <Link
             key={item.href}
-            to={item.href} onMouseEnter={() => prefetchSection(item.href, router)}
+            to={item.href}
+            onMouseEnter={() => prefetchSection(item.href, router)}
             aria-current={isActive ? 'page' : undefined}
             className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
               isActive

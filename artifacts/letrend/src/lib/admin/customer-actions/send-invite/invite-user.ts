@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { getAppUrl } from '@/lib/url/public';
 import type { CreatedStripeArtifacts } from '../send-invite-support';

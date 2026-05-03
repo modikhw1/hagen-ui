@@ -18,7 +18,7 @@
 
 import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { Link } from 'wouter';
-import { useParams } from 'wouter'; import { useRouter, useSearchParams } from '@/lib/navigation-compat';
+import { useParams, useRouter, useSearchParams } from '@/lib/navigation-compat';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { loadConcepts as loadConceptsFromDB } from '@/lib/conceptLoaderDB';
@@ -2505,7 +2505,7 @@ function CustomerWorkspacePageContent() {
       {/* Back button */}
       <div style={{ marginBottom: 16 }}>
         <Link
-          to="/studio/customers"
+          href="/studio/customers"
           style={{
             color: LeTrendColors.textSecondary,
             fontSize: 14,

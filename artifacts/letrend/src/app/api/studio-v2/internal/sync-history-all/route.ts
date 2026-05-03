@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { runHistorySyncBatch } from '@/lib/studio/run-history-sync-batch';
 

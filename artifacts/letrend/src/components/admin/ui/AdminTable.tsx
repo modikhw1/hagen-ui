@@ -128,7 +128,7 @@ export default function AdminTable<T>({
 
                   return (
                     <Link
-                      to={href}
+                      href={href}
                       className={cn(cellClassName(column), 'transition-colors hover:text-foreground')}
                     >
                       {column.render(row)}

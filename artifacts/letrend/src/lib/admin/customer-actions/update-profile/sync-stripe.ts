@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { applyPriceToSubscription } from '@/lib/stripe/subscription-pricing';

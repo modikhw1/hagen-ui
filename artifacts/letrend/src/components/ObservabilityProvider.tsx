@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname } from '@/lib/navigation-compat';
 import * as Sentry from '@sentry/browser';
 import posthog from 'posthog-js';
 import { useAuth } from '@/contexts/AuthContext';

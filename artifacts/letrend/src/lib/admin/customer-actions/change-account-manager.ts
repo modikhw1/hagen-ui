@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { changeCustomerAssignment } from '@/lib/admin/cm-assignments';

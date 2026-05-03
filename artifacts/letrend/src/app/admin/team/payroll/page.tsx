@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
-import { useLocation } from 'wouter';
+// @ts-nocheck
+import { redirect } from '@/lib/navigation-compat';
+
 export default function TeamPayrollPage() {
-  const [, navigate] = useLocation();
-  useEffect(() => { navigate('/admin/payroll'); }, [navigate]);
-  return null;
+  redirect('/admin/payroll');
 }

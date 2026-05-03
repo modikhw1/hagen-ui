@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import { requireAdminScope } from '@/lib/auth/api-auth';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';

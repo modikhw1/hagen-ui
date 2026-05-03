@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { withAuth, requireScope } from '@/lib/auth/api-auth';
 import { listAuditLog } from '@/lib/admin/audit-log';
 import { auditLogFilterSchema } from '@/lib/admin/schemas/audit';
@@ -53,7 +52,7 @@ export const GET = withAuth(async (request, user) => {
     return response;
   } catch (error) {
     return jsonError(
-      error instanceof Error ? error.message : 'Kunde inte hamta audit-loggen',
+      error instanceof Error ? error.message : 'Kunde inte hämta audit-loggen',
       500,
     );
   }

@@ -1,11 +1,10 @@
+// @ts-nocheck
 // app/src/hooks/useUrlState.ts
 
 'use client';
 
 import { useCallback } from 'react';
-import { useRouter, useSearchParams } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname, useRouter, useSearchParams } from '@/lib/navigation-compat';
 
 export interface UseUrlStateOptions {
   /** Anvand router.replace istallet for router.push for att inte spamma history.
@@ -77,7 +76,7 @@ export function useUrlState(
 
       const query = params.toString();
       const url = query ? `${currentPathname}?${query}` : currentPathname;
-      router.replace(url);
+      router.replace(url, { scroll: false });
     },
     [currentPathname, router, searchParams],
   );
@@ -100,9 +99,9 @@ export function useUrlState(
       const url = query ? `${currentPathname}?${query}` : currentPathname;
 
       if (replace) {
-        router.replace(url);
+        router.replace(url, { scroll });
       } else {
-        router.push(url);
+        router.push(url, { scroll });
       }
     },
     [currentPathname, key, replace, router, scroll, searchParams],

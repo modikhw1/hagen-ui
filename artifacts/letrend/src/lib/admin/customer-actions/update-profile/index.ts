@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { syncCustomerAssignmentFromProfile } from '@/lib/admin/cm-assignments';

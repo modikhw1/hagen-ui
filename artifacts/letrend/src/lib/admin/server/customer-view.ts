@@ -15,13 +15,11 @@ import {
 } from '@/lib/tiktok/customer-runtime';
 import type {
   CustomerOverviewInitialData,
-} from '@/components/admin/customers/routes/CustomerOverviewRoute';
+  CustomerPulseInitialData,
+} from '@/lib/admin/dtos/customer-drift';
 import type {
   CustomerBillingInitialData, CustomerBillingInvoice,
 } from '@/components/admin/customers/routes/CustomerBillingRoute';
-import type {
-  CustomerPulseInitialData,
-} from '@/components/admin/customers/routes/CustomerPulseRoute';
 
 export interface CustomerViewData {
   overview: CustomerOverviewInitialData;

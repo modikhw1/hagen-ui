@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import { requireAdminScope } from '@/lib/auth/api-auth';
 import { recordAuditLog } from '@/lib/admin/audit-log';

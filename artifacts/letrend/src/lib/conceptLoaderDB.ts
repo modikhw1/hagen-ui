@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Concept Loader (Database Version)
  *

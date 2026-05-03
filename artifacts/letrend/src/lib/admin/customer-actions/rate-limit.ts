@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { recordAuditLog } from '@/lib/admin/audit-log';

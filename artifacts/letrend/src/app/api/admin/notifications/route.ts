@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { z } from 'zod';
 import { attentionTimestamp } from '@/lib/admin-derive/attention';
 import { loadOverviewAttentionSection } from '@/lib/admin/server/overview';

@@ -588,7 +588,7 @@ function ConceptCard({
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <Link
-                to={`/studio/concepts/${concept.id}/review`}
+                href={`/studio/concepts/${concept.id}/review`}
                 onClick={(event) => event.stopPropagation()}
                 style={{
                   flex: 1,
@@ -1277,7 +1277,7 @@ export default function StudioConceptsPage() {
                   </div>
                 </div>
                 <Link
-                  to={`/studio/concepts/${pendingConcept.id}/review`}
+                  href={`/studio/concepts/${pendingConcept.id}/review`}
                   style={{
                     flexShrink: 0,
                     textDecoration: 'none',
@@ -1342,7 +1342,7 @@ export default function StudioConceptsPage() {
                   </div>
                 </div>
                 <Link
-                  to={`/studio/concepts/${pendingConcept.id}/review`}
+                  href={`/studio/concepts/${pendingConcept.id}/review`}
                   style={{
                     flexShrink: 0,
                     textDecoration: 'none',

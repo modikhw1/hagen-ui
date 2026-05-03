@@ -1,10 +1,19 @@
-import { useParams } from 'wouter';
-import { useSearchParams } from '@/lib/navigation-compat';
-import { CustomerBillingRoute } from '@/components/admin/customers/routes/CustomerBillingRoute';
-export default function CustomerBillingPage() {
-  const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
-  const invoice = searchParams.get('invoice') ?? undefined;
-  if (!id) return null;
-  return <CustomerBillingRoute customerId={id} initialData={null} initialInvoiceId={invoice} />;
+// @ts-nocheck
+import { redirect } from '@/lib/navigation-compat';
+
+export default async function CustomerBillingPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ invoice?: string; manualInvoice?: string }>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const invoice = query?.invoice;
+  const manualInvoice = query?.manualInvoice === '1' ? '?manualInvoice=1' : '';
+  if (invoice) {
+    redirect(`/admin/customers/${id}/avtal?invoice=${invoice}`);
+  }
+  redirect(`/admin/customers/${id}/avtal${manualInvoice}`);
 }

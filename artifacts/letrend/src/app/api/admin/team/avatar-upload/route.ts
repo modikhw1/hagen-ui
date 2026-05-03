@@ -1,4 +1,3 @@
-// @ts-nocheck
 import sharp from 'sharp';
 import { NextResponse } from 'next/server';
 import { requireScope, withAuth } from '@/lib/auth/api-auth';

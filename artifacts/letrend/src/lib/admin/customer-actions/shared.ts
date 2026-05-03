@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import type { z } from 'zod';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';

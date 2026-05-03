@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import type { TablesUpdate } from '@/types/database';
 import { withAuth } from '@/lib/auth/api-auth';
@@ -48,7 +47,7 @@ export const GET = withAuth(async () => {
 
     return jsonOk({ profiles: profilesWithCustomer });
   } catch (error) {
-    console.error('[ADMIN_PROFILES] Kunde inte hamta profiler:', error);
+    console.error('[ADMIN_PROFILES] Kunde inte hämta profiler:', error);
     return jsonError('Internt serverfel', 500);
   }
 }, ['admin']);
@@ -67,7 +66,7 @@ export const PATCH = withAuth(async (request: NextRequest) => {
     } = body;
 
     if (!id) {
-      return jsonError('Profil-ID kravs', 400);
+      return jsonError('Profil-ID krävs', 400);
     }
 
     const supabaseAdmin = createSupabaseAdmin();

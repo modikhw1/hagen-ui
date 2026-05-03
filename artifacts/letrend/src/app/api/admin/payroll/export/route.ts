@@ -1,4 +1,3 @@
-// @ts-nocheck
 ﻿import { z } from 'zod';
 import { recordAdminAction } from '@/lib/admin/audit';
 import { withRequestContext } from '@/lib/admin/customer-actions/with-request-context';

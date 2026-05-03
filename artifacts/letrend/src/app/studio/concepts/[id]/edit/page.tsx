@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'wouter';
+import { useParams } from '@/lib/navigation-compat';
 import { loadConcepts } from '@/lib/conceptLoader';
 
 // Full concept data from JSON

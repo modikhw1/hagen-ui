@@ -4,9 +4,7 @@
 import { Link } from 'wouter';
 import { Users } from 'lucide-react';
 import { useCallback, useState } from 'react';
-import { useRouter, useSearchParams } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname, useRouter, useSearchParams } from '@/lib/navigation-compat';
 import EmptyState from '@/components/admin/EmptyState';
 import { AddCMDialog } from '@/components/admin/team/AddCMDialog';
 import CMAbsenceModal from '@/components/admin/team/CMAbsenceModal';

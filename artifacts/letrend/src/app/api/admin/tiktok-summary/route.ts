@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { withAuth } from '@/lib/auth/api-auth';
 import { jsonError, jsonOk } from '@/lib/server/api-response';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';

@@ -1,10 +1,9 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getAppUrl } from '@/lib/url/public';
 
 // Admin client for creating users
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 interface InviteRequestBody {

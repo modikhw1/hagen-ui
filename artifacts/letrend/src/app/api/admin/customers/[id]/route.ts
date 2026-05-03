@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import {

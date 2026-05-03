@@ -2,9 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'wouter';
-import { useRouter } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname, useRouter } from '@/lib/navigation-compat';
 import {
   Bell,
   CreditCard,

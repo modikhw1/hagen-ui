@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { logCustomerInvited } from '@/lib/activity/logger';
 import { recordAuditLog } from '@/lib/admin/audit-log';

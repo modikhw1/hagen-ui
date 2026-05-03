@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use client';
 
 import { useRouter } from '@/lib/navigation-compat';
@@ -11,7 +12,7 @@ export default function CustomerInvoiceModalRoute({
   invoiceId: string;
 }) {
   const router = useRouter();
-  const onClose = () => router.push(`/admin/customers/${customerId}/billing`);
+  const onClose = () => router.push(`/admin/customers/${customerId}/avtal`, { scroll: false });
 
   return (
     <InvoiceDetailModal

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { unstable_cache } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';

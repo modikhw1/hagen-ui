@@ -21,6 +21,7 @@ export type OverviewPayload = {
     onboarding_state: 'invited' | 'cm_ready' | 'live' | 'settled' | null;
     onboarding_state_changed_at: string | null;
     tiktok_handle: string | null;
+    brief?: any | null;
   }>;
   team: Array<{
     id: string;

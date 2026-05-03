@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextResponse } from 'next/server';
 import type { TablesUpdate } from '@/types/database';
 import { withAuth } from '@/lib/auth/api-auth';

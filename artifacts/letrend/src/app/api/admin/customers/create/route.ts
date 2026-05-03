@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { revalidateTag } from 'next/cache';
 import { ADMIN_CUSTOMERS_LIST_TAG } from '@/lib/admin/cache-tags';

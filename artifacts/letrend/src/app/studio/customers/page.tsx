@@ -451,7 +451,7 @@ function formatSyncRecency(isoString: string | null | undefined): string {
 function WorkspaceLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
-      to={href}
+      href={href}
       style={{
         padding: '8px 12px',
         borderRadius: '999px',

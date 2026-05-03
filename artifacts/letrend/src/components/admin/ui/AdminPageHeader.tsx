@@ -93,7 +93,7 @@ export function AdminPageHeaderSlot({
           {breadcrumb.map((item, index) => (
             <li key={`${item.label}-${index}`} className="inline-flex items-center gap-1">
               {item.href ? (
-                <Link className="hover:text-foreground hover:underline" to={item.href}>
+                <Link className="hover:text-foreground hover:underline" href={item.href}>
                   {item.label}
                 </Link>
               ) : (

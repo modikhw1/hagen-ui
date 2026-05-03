@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { z } from 'zod';
 import { loadAdminTeamOverview } from '@/lib/admin/server/team';
 import { requireScope, withAuth } from '@/lib/auth/api-auth';

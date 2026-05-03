@@ -1,10 +1,9 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { withAuth } from '@/lib/auth/api-auth';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
 // POST - Update user profile with Stripe info
 export const POST = withAuth(async (request: NextRequest, user) => {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { formatDateOnly } from '@/lib/admin/billing-periods';
 import { withAdmin } from '@/lib/admin/with-admin';
 import { customerListParamsInputSchema } from '@/lib/admin/customers/list.schemas';

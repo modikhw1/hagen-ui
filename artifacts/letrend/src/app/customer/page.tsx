@@ -1,7 +1,6 @@
-import { useEffect } from 'react';
-import { useLocation } from 'wouter';
+// @ts-nocheck
+import { redirect } from '@/lib/navigation-compat';
+
 export default function CustomerRootPage() {
-  const [, navigate] = useLocation();
-  useEffect(() => { navigate('/feed'); }, [navigate]);
-  return null;
+  redirect('/feed');
 }

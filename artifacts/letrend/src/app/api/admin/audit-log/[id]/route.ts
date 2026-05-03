@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { getAuditLogEntryById } from '@/lib/admin/audit-log';
 import { requireScope, withAuth } from '@/lib/auth/api-auth';
 import { jsonError, jsonOk } from '@/lib/server/api-response';

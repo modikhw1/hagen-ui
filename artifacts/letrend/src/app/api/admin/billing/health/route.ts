@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { requireScope, withAuth } from '@/lib/auth/api-auth';
 import { isEnvFilter, resolveConcreteBillingEnv } from '@/lib/admin/billing';
 import { getBillingHealthSnapshot } from '@/lib/admin/billing-service';

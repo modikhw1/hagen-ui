@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { createClient } from '@supabase/supabase-js';
@@ -115,8 +114,8 @@ export async function GET(req: NextRequest) {
     // Authenticate the request
     const cookieStore = await cookies();
     const authClient = createServerClient(
-      import.meta.env.VITE_SUPABASE_URL!,
-      import.meta.env.VITE_SUPABASE_ANON_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll: () => cookieStore.getAll(),
@@ -153,7 +152,7 @@ export async function GET(req: NextRequest) {
 
     if (!ownsSession && profileId) {
       const supabaseCheck = createClient(
-        import.meta.env.VITE_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       );
       const { data: profileLink } = await supabaseCheck
@@ -174,7 +173,7 @@ export async function GET(req: NextRequest) {
     }
 
     const supabase = createClient(
-      import.meta.env.VITE_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 

@@ -1,13 +1,23 @@
 'use client';
 
-import { useEffect, useReducer, useState } from 'react';
+import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Check, Copy, UserPlus, ShieldAlert, FileText, Send } from 'lucide-react';
+import {
+  FileText,
+  Send,
+  Building2,
+  AtSign,
+  Music2,
+  Wallet,
+  CalendarDays,
+  UserRound,
+  CheckCircle2,
+  Loader2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { inviteCustomer } from '@/app/admin/_actions/billing';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { AdminField } from '@/components/admin/ui/form/AdminField';
-import { PricingPicker, Section } from '@/components/admin/_primitives';
 import { apiClient } from '@/lib/admin/api-client';
 import { calculateFirstInvoice } from '@/lib/billing/first-invoice';
 import { createCustomerSchema, type CreateCustomerPayload } from '@/lib/schemas/customer';
@@ -21,6 +31,15 @@ type Team = Array<{
 }>;
 
 type InviteState = CreateCustomerPayload;
+type InviteCustomerResult = {
+  customerId: string;
+  inviteSent: boolean;
+  profileUrl: string;
+  warnings: string[];
+};
+type TikTokPreviewResponse = {
+  preview: TikTokProfilePreview & { canonical_url: string };
+};
 
 const todayYmd = () => new Date().toISOString().split('T')[0];
 
@@ -56,6 +75,9 @@ const initial = (): InviteState => ({
   concepts: [],
 });
 
+const inputCls =
+  'w-full rounded-md border border-border bg-background px-3 py-2 text-sm transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';
+
 export default function InviteCustomerModal({
   open,
   team,
@@ -65,20 +87,29 @@ export default function InviteCustomerModal({
   open: boolean;
   team: Team;
   onClose: () => void;
-  onCreated: (cid: string, meta?: any) => void;
+  onCreated: (cid: string, meta?: unknown) => void;
 }) {
   const [state, setState] = useState<InviteState>(initial);
   const [tiktokPreview, setTiktokPreview] = useState<TikTokProfilePreview | null>(null);
-  
-  const setField = (field: keyof InviteState, value: any) => {
-    setState(prev => ({ ...prev, [field]: value }));
+
+  const setField = <K extends keyof InviteState>(field: K, value: InviteState[K]) => {
+    setState((prev) => ({ ...prev, [field]: value }));
   };
 
   const validation = createCustomerSchema.safeParse(state);
-  const canSubmit = validation.success && (!state.tiktok_profile_url?.trim() || Boolean(tiktokPreview));
+  const businessNameError = validation.success
+    ? undefined
+    : validation.error.flatten().fieldErrors.business_name?.[0];
+  const invalidFixedPrice =
+    state.pricing_status === 'fixed' && (!state.monthly_price || state.monthly_price <= 0);
+  const canSubmit =
+    validation.success
+    && (!state.tiktok_profile_url?.trim() || Boolean(tiktokPreview))
+    && !invalidFixedPrice;
 
   const verifyTikTok = useMutation({
-    mutationFn: async (input: string) => apiClient.get<any>('/api/admin/tiktok/profile-preview', { query: { input } }),
+    mutationFn: async (input: string) =>
+      apiClient.get<TikTokPreviewResponse>('/api/admin/tiktok/profile-preview', { query: { input } }),
     onSuccess: (data) => {
       setTiktokPreview(data.preview);
       setField('tiktok_profile_url', data.preview.canonical_url);
@@ -91,13 +122,44 @@ export default function InviteCustomerModal({
       if ('error' in result) throw new Error(result.error.message);
       return result.data;
     },
-    onSuccess: (payload: any) => {
-      toast.success(state.send_invite_now ? 'Kunden inbjuden' : 'Utkast skapat');
+    onSuccess: (payload: InviteCustomerResult) => {
+      const recipient = state.contact_email;
+      const warnings = Array.isArray(payload.warnings) ? payload.warnings : [];
+
+      if (state.send_invite_now) {
+        if (payload.inviteSent) {
+          toast.success(`Inbjudan skickad till ${recipient}`);
+        } else {
+          toast.warning(`Kund skapad, men inbjudan kunde inte skickas till ${recipient}`, {
+            description:
+              warnings.length > 0
+                ? warnings.join(' · ')
+                : 'Försök "Skicka inbjudan igen" från kundprofilen.',
+            duration: 8000,
+          });
+        }
+      } else {
+        toast.success('Utkast skapat — ingen e-post skickades');
+      }
+
+      warnings
+        .filter((warning) => !warning.toLowerCase().includes('inbjudan kunde inte skickas'))
+        .forEach((warning) => toast.warning(warning, { duration: 6000 }));
+
       onCreated(payload.customerId, payload);
       onClose();
       setState(initial());
-    }
+    },
+    onError: (error: unknown) => {
+      const message = error instanceof Error ? error.message : 'Kunde inte skapa kund';
+      toast.error(message, { duration: 6000 });
+    },
   });
+
+  const handleSubmit = () => {
+    if (createMutation.isPending || !canSubmit) return;
+    createMutation.mutate();
+  };
 
   const preview = calculateFirstInvoice({
     pricingStatus: state.pricing_status,
@@ -116,219 +178,250 @@ export default function InviteCustomerModal({
       size="lg"
       footer={
         <>
-          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent">
+          <button
+            onClick={onClose}
+            disabled={createMutation.isPending}
+            className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             Avbryt
           </button>
           <button
-            onClick={() => createMutation.mutate()}
+            onClick={handleSubmit}
             disabled={!canSubmit || createMutation.isPending}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            aria-busy={createMutation.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {state.send_invite_now ? <Send className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-            {createMutation.isPending
-              ? 'Skapar...'
-              : state.send_invite_now
-                ? 'Skapa & skicka inbjudan'
-                : 'Skapa utkast (ingen e-post)'}
+            {createMutation.isPending ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                {state.send_invite_now ? 'Skickar inbjudan…' : 'Skapar utkast…'}
+              </>
+            ) : (
+              <>
+                {state.send_invite_now ? <Send className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                {state.send_invite_now ? 'Skapa & skicka inbjudan' : 'Skapa utkast'}
+              </>
+            )}
           </button>
         </>
       }
     >
-      <div className="space-y-8">
-        {/* Lifecycle val överst */}
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Hur vill du skapa kunden?</label>
+      <div className="space-y-6">
+        <Section index={1} title="Hur vill du skapa kunden?">
           <div className="grid gap-3 sm:grid-cols-2">
-            <button
-              type="button"
+            <ChoiceCard
+              active={!state.send_invite_now}
               onClick={() => setField('send_invite_now', false)}
-              className={cn(
-                "rounded-lg border p-4 text-left transition-colors",
-                !state.send_invite_now ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
-              )}
-            >
-              <div className="flex items-center gap-2 font-bold text-sm">
-                <FileText className="h-3.5 w-3.5" /> Utkast
+              icon={<FileText className="h-4 w-4" />}
+              title="Utkast"
+              description="Skapa profil utan inbjudan. Bjud in senare när avtalet är klart."
+            />
+            <ChoiceCard
+              active={state.send_invite_now}
+              onClick={() => setField('send_invite_now', true)}
+              icon={<Send className="h-4 w-4" />}
+              title="Skicka inbjudan nu"
+              description="Kunden får e-post och kan logga in. Stripe aktiveras vid checkout."
+            />
+          </div>
+        </Section>
+
+        <Section index={2} title="Företag & kontakt" icon={<Building2 className="h-3.5 w-3.5" />}>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <AdminField label="Företagsnamn" required error={businessNameError}>
+              <input
+                value={state.business_name}
+                onChange={(e) => setField('business_name', e.target.value)}
+                className={inputCls}
+                placeholder="Företaget AB"
+              />
+            </AdminField>
+            <AdminField label="Kontaktperson">
+              <input
+                value={state.customer_contact_name ?? ''}
+                onChange={(e) => setField('customer_contact_name', e.target.value)}
+                className={inputCls}
+                placeholder="Maria Holm"
+              />
+            </AdminField>
+            <AdminField label="E-post" required>
+              <div className="relative">
+                <AtSign className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="email"
+                  value={state.contact_email}
+                  onChange={(e) => setField('contact_email', e.target.value)}
+                  className={cn(inputCls, 'pl-9')}
+                  placeholder="maria@foretaget.se"
+                />
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">Skapa profil utan inbjudan. Bjud in senare när avtalet är klart.</div>
-            </button>
+            </AdminField>
+            <AdminField label="Telefon">
+              <input
+                value={state.phone ?? ''}
+                onChange={(e) => setField('phone', e.target.value)}
+                className={inputCls}
+                placeholder="+46 70 123 45 67"
+              />
+            </AdminField>
+          </div>
+        </Section>
+
+        <Section index={3} title="TikTok-profil" icon={<Music2 className="h-3.5 w-3.5" />} optional>
+          <div className="flex gap-2">
+            <input
+              value={state.tiktok_profile_url ?? ''}
+              onChange={(e) => {
+                setField('tiktok_profile_url', e.target.value);
+                setTiktokPreview(null);
+              }}
+              className={cn(inputCls, 'flex-1')}
+              placeholder="https://tiktok.com/@handle"
+            />
             <button
               type="button"
-              onClick={() => setField('send_invite_now', true)}
-              className={cn(
-                "rounded-lg border p-4 text-left transition-colors",
-                state.send_invite_now ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
-              )}
+              onClick={() => verifyTikTok.mutate(state.tiktok_profile_url!)}
+              disabled={verifyTikTok.isPending || !state.tiktok_profile_url?.trim()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-semibold hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <div className="flex items-center gap-2 font-bold text-sm">
-                <Send className="h-3.5 w-3.5" /> Skicka inbjudan nu
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">Kunden får e-post och kan logga in. Stripe aktiveras vid checkout.</div>
+              {verifyTikTok.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+              Verifiera
             </button>
           </div>
-        </div>
-
-        <div className="grid gap-6 sm:grid-cols-2">
-          <AdminField label="Företagsnamn" required error={validation.success ? undefined : (validation.error.format() as any).business_name?._errors[0]}>
-            <input
-              value={state.business_name}
-              onChange={e => setField('business_name', e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              placeholder="Företaget AB"
-            />
-          </AdminField>
-          <AdminField label="Kontaktperson">
-            <input
-              value={state.customer_contact_name ?? ''}
-              onChange={e => setField('customer_contact_name', e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              placeholder="Maria Holm"
-            />
-          </AdminField>
-          <AdminField label="E-post" required>
-            <input
-              type="email"
-              value={state.contact_email}
-              onChange={e => setField('contact_email', e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              placeholder="maria@foretaget.se"
-            />
-          </AdminField>
-          <AdminField label="Telefon">
-            <input
-              value={state.phone ?? ''}
-              onChange={e => setField('phone', e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-          </AdminField>
-        </div>
-
-        <div className="rounded-xl border border-border bg-secondary/10 p-4">
-          <AdminField label="TikTok-profil" hint="Valfritt, men rekommenderas">
-            <div className="flex gap-2">
-              <input
-                value={state.tiktok_profile_url ?? ''}
-                onChange={e => {
-                  setField('tiktok_profile_url', e.target.value);
-                  setTiktokPreview(null);
-                }}
-                className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
-                placeholder="https://..."
-              />
-              <button
-                type="button"
-                onClick={() => verifyTikTok.mutate(state.tiktok_profile_url!)}
-                disabled={verifyTikTok.isPending || !state.tiktok_profile_url?.trim()}
-                className="rounded-md border border-border bg-background px-3 py-2 text-xs font-semibold hover:bg-accent"
-              >
-                Verifiera
-              </button>
+          {tiktokPreview && (
+            <div className="mt-3 flex items-center gap-3 rounded-lg border border-status-success-fg/30 bg-status-success-bg/20 p-3 animate-in fade-in slide-in-from-top-1">
+              <div className="h-9 w-9 shrink-0 rounded-full bg-secondary overflow-hidden">
+                {tiktokPreview.cover_image_url && (
+                  <img src={tiktokPreview.cover_image_url} alt="" className="h-full w-full object-cover" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1 text-xs">
+                <div className="font-bold text-foreground truncate">@{tiktokPreview.handle}</div>
+                <div className="text-muted-foreground truncate">{tiktokPreview.title}</div>
+              </div>
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-status-success-fg" />
             </div>
-            {tiktokPreview && (
-              <div className="mt-3 flex items-center gap-3 rounded-lg border border-status-success-fg/20 bg-status-success-bg/10 p-3">
-                <div className="h-8 w-8 rounded-full bg-secondary overflow-hidden">
-                  {tiktokPreview.cover_image_url && <img src={tiktokPreview.cover_image_url} alt="" />}
+          )}
+        </Section>
+
+        <Section index={4} title="Prissättning" icon={<Wallet className="h-3.5 w-3.5" />}>
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <ChoiceCard
+                active={state.pricing_status === 'fixed'}
+                onClick={() => setField('pricing_status', 'fixed')}
+                title="Fast pris"
+                description="Sätt månadskostnad direkt"
+              />
+              <ChoiceCard
+                active={state.pricing_status === 'unknown'}
+                onClick={() => setField('pricing_status', 'unknown')}
+                title="Ej satt än"
+                description="Skapa kunden nu, pris senare"
+              />
+            </div>
+
+            {state.pricing_status === 'fixed' && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <AdminField label="Månadspris (SEK)" required>
+                    <input
+                      type="number"
+                      min={1}
+                      value={state.monthly_price}
+                      onChange={(e) => setField('monthly_price', Number(e.target.value))}
+                      className={cn(
+                        inputCls,
+                        invalidFixedPrice && 'border-status-danger-fg/60 focus:border-status-danger-fg focus:ring-status-danger-fg',
+                      )}
+                    />
+                  </AdminField>
+                  <AdminField label="Intervall">
+                    <select
+                      value={state.subscription_interval}
+                      onChange={(e) =>
+                        setField(
+                          'subscription_interval',
+                          e.target.value as InviteState['subscription_interval'],
+                        )
+                      }
+                      className={inputCls}
+                    >
+                      <option value="month">Månad</option>
+                      <option value="quarter">Kvartal</option>
+                      <option value="year">År</option>
+                    </select>
+                  </AdminField>
                 </div>
-                <div className="text-xs">
-                  <div className="font-bold text-foreground">@{tiktokPreview.handle}</div>
-                  <div className="text-muted-foreground">{tiktokPreview.title}</div>
-                </div>
+                {invalidFixedPrice && (
+                  <div className="rounded-md border border-status-danger-fg/30 bg-status-danger-bg/40 px-3 py-2 text-xs text-status-danger-fg">
+                    Med fast pris måste månadspriset vara större än 0 kr, annars skapas ingen Stripe-prenumeration.
+                    Välj <span className="font-bold">Ej satt än</span> om priset ska bestämmas senare.
+                  </div>
+                )}
               </div>
             )}
-          </AdminField>
-        </div>
-
-        <div className="space-y-4">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Prissättning</label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <button
-              onClick={() => setField('pricing_status', 'fixed')}
-              className={cn(
-                "rounded-lg border p-4 text-left transition-colors",
-                state.pricing_status === 'fixed' ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
-              )}
-            >
-              <div className="font-bold text-sm">Fast pris</div>
-              <div className="text-xs text-muted-foreground">Sätt månadskostnad direkt</div>
-            </button>
-            <button
-              onClick={() => setField('pricing_status', 'unknown')}
-              className={cn(
-                "rounded-lg border p-4 text-left transition-colors",
-                state.pricing_status === 'unknown' ? "border-primary bg-primary/5" : "border-border hover:bg-accent"
-              )}
-            >
-              <div className="font-bold text-sm">Ej satt än</div>
-              <div className="text-xs text-muted-foreground">Skapa kunden nu, pris senare</div>
-            </button>
           </div>
+        </Section>
 
-          {state.pricing_status === 'fixed' && (
-            <div className="grid gap-4 sm:grid-cols-2 animate-in fade-in">
-              <AdminField label="Månadspris (SEK)">
+        <Section index={5} title="Fakturering" icon={<CalendarDays className="h-3.5 w-3.5" />}>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <AdminField label="Startdatum">
                 <input
-                  type="number"
-                  value={state.monthly_price}
-                  onChange={e => setField('monthly_price', Number(e.target.value))}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  type="date"
+                  value={state.contract_start_date ?? ''}
+                  onChange={(e) => setField('contract_start_date', e.target.value)}
+                  className={inputCls}
                 />
               </AdminField>
-              <AdminField label="Intervall">
-                <select
-                  value={state.subscription_interval}
-                  onChange={e => setField('subscription_interval', e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-                >
-                  <option value="month">Månad</option>
-                  <option value="quarter">Kvartal</option>
-                  <option value="year">År</option>
-                </select>
+              <AdminField label="Faktureringsdag (1–28)">
+                <input
+                  type="number"
+                  min={1}
+                  max={28}
+                  value={state.billing_day_of_month}
+                  onChange={(e) => setField('billing_day_of_month', Number(e.target.value))}
+                  className={inputCls}
+                />
               </AdminField>
             </div>
-          )}
-        </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 border-t border-border pt-6">
-          <AdminField label="Startdatum">
-            <input
-              type="date"
-              value={state.contract_start_date ?? ''}
-              onChange={e => setField('contract_start_date', e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-          </AdminField>
-          <AdminField label="Faktureringsdag (1-28)">
-            <input
-              type="number"
-              min={1}
-              max={28}
-              value={state.billing_day_of_month}
-              onChange={e => setField('billing_day_of_month', Number(e.target.value))}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-          </AdminField>
-        </div>
+            {state.pricing_status === 'fixed' && (
+              <div className="rounded-lg border border-status-warning-fg/20 bg-status-warning-bg/60 p-4">
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-status-warning-fg">
+                  Förhandsvisning · första fakturan
+                </div>
+                <div className="text-sm text-status-warning-fg">{preview.explanation}</div>
+                {preview.amountSek !== null && (
+                  <div className="mt-1.5 text-lg font-bold text-status-warning-fg tabular-nums">
+                    {preview.amountSek.toLocaleString('sv-SE')} kr
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </Section>
 
-        <div className="rounded-lg border border-status-warning-fg/20 bg-status-warning-bg p-4 shadow-sm">
-          <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-status-warning-fg">Förhandsvisning första fakturan</div>
-          <div className="text-sm font-medium text-status-warning-fg">{preview.explanation}</div>
-          {preview.amountSek !== null && (
-            <div className="mt-1 text-lg font-bold text-status-warning-fg">
-              Belopp: {preview.amountSek.toLocaleString('sv-SE')} kr
-            </div>
-          )}
-        </div>
-
-        <AdminField label="Ansvarig CM">
+        <Section index={6} title="Ansvarig CM" icon={<UserRound className="h-3.5 w-3.5" />}>
           <select
             value={state.account_manager ?? ''}
-            onChange={e => setField('account_manager', e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+            onChange={(e) => setField('account_manager', e.target.value)}
+            className={inputCls}
           >
             <option value="">Ingen CM än</option>
-            {team.map(m => <option key={m.id} value={m.email || m.name}>{m.name}</option>)}
+            {team.map((member) => (
+              <option key={member.id} value={member.email || member.name}>
+                {member.name}
+              </option>
+            ))}
           </select>
-        </AdminField>
+          {team.length === 0 && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Inga aktiva content managers hittades. Lägg till en i Team-vyn först.
+            </p>
+          )}
+        </Section>
 
         {createMutation.isError && (
           <div className="rounded-md border border-status-danger-fg/30 bg-status-danger-bg px-3 py-2 text-sm text-status-danger-fg">
@@ -337,5 +430,72 @@ export default function InviteCustomerModal({
         )}
       </div>
     </AdminFormDialog>
+  );
+}
+
+function Section({
+  index,
+  title,
+  icon,
+  optional,
+  children,
+}: {
+  index: number;
+  title: string;
+  icon?: React.ReactNode;
+  optional?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-center gap-2 border-b border-border/60 pb-2">
+        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+          {index}
+        </span>
+        {icon && <span className="text-muted-foreground">{icon}</span>}
+        <span className="text-xs font-bold uppercase tracking-wider text-foreground">{title}</span>
+        {optional && (
+          <span className="ml-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            · Valfritt
+          </span>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ChoiceCard({
+  active,
+  onClick,
+  icon,
+  title,
+  description,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'group relative rounded-lg border p-4 text-left transition-all',
+        active
+          ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
+          : 'border-border hover:bg-accent hover:border-border/80',
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+        {icon}
+        {title}
+      </div>
+      <div className="mt-1 text-xs text-muted-foreground">{description}</div>
+      {active && <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-primary" />}
+    </button>
   );
 }

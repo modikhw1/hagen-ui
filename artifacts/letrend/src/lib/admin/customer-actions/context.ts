@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import type { NextRequest } from 'next/server';
 import { validateApiRequest } from '@/lib/auth/api-auth';

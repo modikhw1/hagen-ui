@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { buildGamePlanDocumentResponse, resolveGamePlanDocument } from '@/lib/game-plan';

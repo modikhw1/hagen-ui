@@ -1,4 +1,3 @@
-// @ts-nocheck
 /**
  * PHASE 4: Invoice Synchronization Endpoint
  *
@@ -18,7 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe/dynamic-config';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 function getSupabaseAdmin() {

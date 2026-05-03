@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import type { NextRequest } from 'next/server';
 import { z } from 'zod';

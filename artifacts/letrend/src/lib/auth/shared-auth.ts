@@ -19,7 +19,7 @@ export const getAuthenticatedUser = cache(async (): Promise<AuthenticatedUser> =
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (!supabaseUrl || !supabaseAnonKey || !import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY) {
     throw new AuthError(500, 'Servermiljön är inte korrekt konfigurerad');
   }
 

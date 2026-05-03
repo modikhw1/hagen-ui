@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { withAuth } from '@/lib/auth/api-auth';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { fetchStudioCustomerList } from '@/lib/studio/customer-list';

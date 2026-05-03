@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { proxySupabaseFunction } from '@/lib/server/cron';
 

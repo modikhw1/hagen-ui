@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { recordAdminAction } from '@/lib/admin/audit';
 import { revalidateAdminTeamViews } from '@/lib/admin/cache-tags';

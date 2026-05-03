@@ -71,4 +71,5 @@ export type AdminTeamOption = {
   email: string | null;
   color: string | null;
   avatar_url?: string | null;
+  profile_id?: string | null;
 };

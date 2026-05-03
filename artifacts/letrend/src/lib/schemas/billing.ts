@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { differenceInCalendarMonths, format, parseISO } from 'date-fns';
 import { z } from 'zod';
 
@@ -114,8 +115,7 @@ export const subscriptionPriceChangeSchema = z
   })
   .strict();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const billingDiscountSchema = z.union([
+export const billingDiscountSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('percent'),

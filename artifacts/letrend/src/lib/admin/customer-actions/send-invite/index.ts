@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { buildCustomerPayload } from '@/lib/admin/customer-detail/load';
 import type { CreatedStripeArtifacts } from '../send-invite-support';

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/lib/auth/api-auth';
 import { EMAIL_TEMPLATE_DEFINITIONS } from '@/lib/email/service';

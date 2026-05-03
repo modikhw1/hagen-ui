@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use server';
 
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';

@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { recordCustomerInviteToken } from '@/lib/admin/customer-billing-store';

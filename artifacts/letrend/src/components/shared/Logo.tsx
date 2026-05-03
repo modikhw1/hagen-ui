@@ -1,8 +1,9 @@
-
+// @ts-ignore
+import Image from 'next/image';
 
 export function Logo({ size = 32 }: { size?: number }) {
   return (
-    <img
+    <Image
       src="/transparent.png"
       alt="LeTrend"
       width={size}

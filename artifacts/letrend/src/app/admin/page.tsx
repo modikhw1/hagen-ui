@@ -5,9 +5,70 @@ import CmPulseSection from '@/components/admin/overview/CmPulseSection';
 import KpiGrid from '@/components/admin/overview/KpiGrid';
 import AttentionList from '@/components/admin/AttentionList';
 import { Skeleton } from '@mantine/core';
+import { getAdminActionSession } from '@/app/admin/_actions/shared';
 import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
-import { useSearchParams } from '@/lib/navigation-compat';
-import { useAdminOverview } from '@/hooks/admin/useAdminOverview';
+import { 
+  loadAdminOverviewCosts, 
+  loadOverviewMetricsSection,
+  loadOverviewCmPulseSection,
+  loadOverviewAttentionSection,
+  MetricsSection,
+  CmPulseSection as CmPulseSectionData,
+  AttentionSection,
+  ServiceCostsResult
+} from '@/lib/admin/server/overview';
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function getStringValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function AdminOverviewPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
+  const sortMode =
+    getStringValue(params.sort) === 'lowest_activity' ? 'lowest_activity' : 'standard';
+  const { user } = await getAdminActionSession('overview.read');
+
+  const attentionPromise = loadOverviewAttentionSection({ sortMode, userId: user.id });
+  const metricsPromise = loadOverviewMetricsSection();
+  const cmPulsePromise = loadOverviewCmPulseSection({ sortMode });
+  const costsPromise = loadAdminOverviewCosts();
+
+  return (
+    <div className="space-y-8">
+      <PageHeader title="Översikt" subtitle="Operativt tillstånd" />
+
+      <ErrorBoundary fallback={<SectionError title="Uppmärksamhet" />}>
+        <Suspense fallback={null}>
+          <OverviewTopAttentionSection attentionPromise={attentionPromise} />
+        </Suspense>
+      </ErrorBoundary>
+
+      <ErrorBoundary fallback={<SectionError title="Nyckeltal" />}>
+        <Suspense fallback={<KpiGridFallback />}>
+          <OverviewKpiSection metricsPromise={metricsPromise} />
+        </Suspense>
+      </ErrorBoundary>
+
+      <ErrorBoundary fallback={<SectionError title="CM Puls" />}>
+        <Suspense fallback={<CmPulseFallback />}>
+          <OverviewCmPulseSection cmPulsePromise={cmPulsePromise} sortMode={sortMode} />
+        </Suspense>
+      </ErrorBoundary>
+
+      <ErrorBoundary fallback={<SectionError title="Kostnader" />}>
+        <Suspense fallback={<CostsGridFallback />}>
+          <OverviewCostsSection costsPromise={costsPromise} />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
+  );
+}
 
 function SectionError({ title }: { title: string }) {
   return (
@@ -15,6 +76,49 @@ function SectionError({ title }: { title: string }) {
       Kunde inte ladda {title.toLowerCase()}. Prova att ladda om sidan.
     </div>
   );
+}
+
+async function OverviewKpiSection({
+  metricsPromise,
+}: {
+  metricsPromise: Promise<MetricsSection>;
+}) {
+  const { metrics } = await metricsPromise;
+  return <KpiGrid metrics={metrics} />;
+}
+
+async function OverviewCmPulseSection({
+  cmPulsePromise,
+  sortMode,
+}: {
+  cmPulsePromise: Promise<CmPulseSectionData>;
+  sortMode: 'standard' | 'lowest_activity';
+}) {
+  const { cmPulse } = await cmPulsePromise;
+  return <CmPulseSection rows={cmPulse} sortMode={sortMode} />;
+}
+
+async function OverviewTopAttentionSection({
+  attentionPromise,
+}: {
+  attentionPromise: Promise<AttentionSection>;
+}) {
+  const data = await attentionPromise;
+  return (
+    <AttentionList
+      items={data.attentionItems.slice(0, 3)}
+      surface="overview"
+    />
+  );
+}
+
+async function OverviewCostsSection({
+  costsPromise,
+}: {
+  costsPromise: Promise<ServiceCostsResult>;
+}) {
+  const costs = await costsPromise;
+  return <CostsGrid costs={costs} />;
 }
 
 function KpiGridFallback() {
@@ -35,42 +139,4 @@ function CmPulseFallback() {
 
 function CostsGridFallback() {
   return <Skeleton h={192} w="100%" radius="lg" />;
-}
-
-export default function AdminOverviewPage() {
-  const [searchParams] = useSearchParams();
-  const sortMode = searchParams.get('sort') === 'lowest_activity' ? 'lowest_activity' : 'standard';
-  const { data, isLoading } = useAdminOverview(sortMode);
-
-  return (
-    <div className="space-y-8">
-      <PageHeader title="Översikt" subtitle="Operativt tillstånd" />
-
-      <ErrorBoundary fallback={<SectionError title="Uppmärksamhet" />}>
-        <Suspense fallback={null}>
-          {isLoading || !data ? null : (
-            <AttentionList items={data.attentionItems.slice(0, 3)} surface="overview" />
-          )}
-        </Suspense>
-      </ErrorBoundary>
-
-      <ErrorBoundary fallback={<SectionError title="Nyckeltal" />}>
-        <Suspense fallback={<KpiGridFallback />}>
-          {isLoading || !data ? <KpiGridFallback /> : <KpiGrid metrics={data.metrics} />}
-        </Suspense>
-      </ErrorBoundary>
-
-      <ErrorBoundary fallback={<SectionError title="CM Puls" />}>
-        <Suspense fallback={<CmPulseFallback />}>
-          {isLoading || !data ? <CmPulseFallback /> : <CmPulseSection rows={data.cmPulse} sortMode={sortMode} />}
-        </Suspense>
-      </ErrorBoundary>
-
-      <ErrorBoundary fallback={<SectionError title="Kostnader" />}>
-        <Suspense fallback={<CostsGridFallback />}>
-          {isLoading || !data ? <CostsGridFallback /> : <CostsGrid costs={data.costs} />}
-        </Suspense>
-      </ErrorBoundary>
-    </div>
-  );
 }

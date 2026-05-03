@@ -1,4 +1,4 @@
-import { useLocation } from 'wouter';
+import { useLocation, useParams as useWouterParams } from 'wouter';
 
 export function useRouter() {
   const [, navigate] = useLocation();
@@ -15,9 +15,31 @@ export function useRouter() {
 export function useSearchParams(): [URLSearchParams, (params: URLSearchParams) => void] {
   const params = new URLSearchParams(window.location.search);
   const setParams = (newParams: URLSearchParams) => {
-    const [, navigate] = [null, (path: string) => window.history.pushState({}, '', path)] as const;
     const url = `${window.location.pathname}?${newParams.toString()}`;
     window.history.pushState({}, '', url);
   };
   return [params, setParams];
+}
+
+export function usePathname(): string {
+  const [location] = useLocation();
+  return location;
+}
+
+export function useParams<T extends Record<string, string>>(): T {
+  return useWouterParams() as T;
+}
+
+export function redirect(path: string): never {
+  window.location.href = path;
+  throw new Error('redirect');
+}
+
+export function permanentRedirect(path: string): never {
+  window.location.replace(path);
+  throw new Error('permanentRedirect');
+}
+
+export function notFound(): never {
+  throw new Error('notFound');
 }

@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { buildCustomerPayload } from '@/lib/admin/customer-detail/load';

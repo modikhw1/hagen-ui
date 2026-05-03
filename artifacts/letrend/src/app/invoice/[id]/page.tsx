@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'wouter';
-import { useRouter } from '@/lib/navigation-compat';
+import { useParams, useRouter } from '@/lib/navigation-compat';
 
 interface LineItem {
   description: string;

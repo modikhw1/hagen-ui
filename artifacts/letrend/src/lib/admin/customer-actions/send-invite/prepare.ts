@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { normalizeTikTokProfileIdentityInput } from '@/lib/tiktok/customer-profile-link';

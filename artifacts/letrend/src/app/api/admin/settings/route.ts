@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { withAuth, requireScope } from '@/lib/auth/api-auth';
 import {
   getAdminSettings,

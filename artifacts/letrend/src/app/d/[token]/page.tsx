@@ -1,22 +1,44 @@
-import { useParams } from 'wouter';
+// @ts-nocheck
+import { notFound } from '@/lib/navigation-compat';
+import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { DemoLandingView } from './DemoLandingView';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
 
-export default function DemoLandingPage() {
-  const { token } = useParams<{ token: string }>();
-  const { data: demo, isLoading } = useQuery({
-    queryKey: ['demo', token],
-    enabled: !!token,
-    queryFn: async () => {
-      const { data } = await supabase.from('demos')
-        .select('id, company_name, contact_name, tiktok_handle, tiktok_profile_pic_url, proposed_concepts_per_week, preliminary_feedplan, status')
-        .eq('share_token', token!)
-        .maybeSingle();
-      return data;
-    },
-  });
-  if (isLoading) return <div style={{ padding: 40 }}>Laddar...</div>;
-  if (!demo) return <div style={{ padding: 40 }}>Demo hittades inte.</div>;
+export const dynamic = 'force-dynamic';
+
+type PageProps = {
+  params: Promise<{ token: string }>;
+};
+
+export async function generateMetadata({ params }: PageProps) {
+  const { token } = await params;
+  const supabase = createSupabaseAdmin();
+  const { data } = await supabase
+    .from('demos')
+    .select('company_name')
+    .eq('share_token', token)
+    .maybeSingle();
+  const name = data?.company_name ?? 'Demo';
+  return {
+    title: `${name} · LeTrend demo`,
+    description: `Förslag på en kurerad innehållsplan för ${name}.`,
+  };
+}
+
+export default async function DemoLandingPage({ params }: PageProps) {
+  const { token } = await params;
+  const supabase = createSupabaseAdmin();
+
+  const { data: demo } = await supabase
+    .from('demos')
+    .select(
+      'id, company_name, contact_name, tiktok_handle, tiktok_profile_pic_url, proposed_concepts_per_week, preliminary_feedplan, status',
+    )
+    .eq('share_token', token)
+    .maybeSingle();
+
+  if (!demo) {
+    notFound();
+  }
+
   return <DemoLandingView demo={demo} />;
 }

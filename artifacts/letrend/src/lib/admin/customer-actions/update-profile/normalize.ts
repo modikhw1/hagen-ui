@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { customerPatchSchema } from '@/lib/schemas/customer';
 import { resolveAccountManagerAssignment } from '@/lib/studio/account-manager';

@@ -1,9 +1,7 @@
 'use client';
 
 import { Link } from 'wouter';
-import { useRouter, useSearchParams } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { usePathname, useRouter, useSearchParams } from '@/lib/navigation-compat';
 import { cn } from '@/lib/utils';
 import { FilterChips } from '@/components/admin/ui/FilterChips';
 
@@ -44,7 +42,7 @@ export default function BillingShellTabs({
           return (
             <Link
               key={tab.href}
-              to={tab.href}
+              href={tab.href}
               className={cn(
                 "border-b-2 px-4 py-2 text-sm font-medium transition-colors",
                 isActive

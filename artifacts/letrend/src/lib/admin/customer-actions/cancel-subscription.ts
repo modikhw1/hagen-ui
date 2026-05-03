@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
@@ -74,7 +73,7 @@ export async function handleCancelSubscription(
       try {
         const portalSession = await ctx.stripeClient.billingPortal.sessions.create({
           customer: ctx.beforeProfile.stripe_customer_id,
-          return_url: `${getAppUrl()}/admin/customers/${ctx.id}/billing`,
+          return_url: `${getAppUrl()}/admin/customers/${ctx.id}/avtal`,
           ...(typeof ctx.beforeProfile?.stripe_subscription_id === 'string' &&
           ctx.beforeProfile.stripe_subscription_id
             ? {

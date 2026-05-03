@@ -1,5 +1,7 @@
 'use client';
 
+import React from 'react';
+
 type AdminAvatarProps = {
   name: string;
   avatarUrl?: string | null;
@@ -20,6 +22,9 @@ export default function AdminAvatar({
   fallbackColor,
 }: AdminAvatarProps) {
   const initial = name.trim().charAt(0).toUpperCase() || '?';
+  const [imgError, setImgError] = React.useState(false);
+
+  const hasImage = Boolean(avatarUrl && avatarUrl.trim().length > 0 && !imgError);
 
   // Always render the initial as a stable, fixed-size box so the row never
   // shifts. If an avatar URL is present, layer the image on top — when it
@@ -34,13 +39,14 @@ export default function AdminAvatar({
       aria-label={name}
     >
       <span aria-hidden="true">{initial}</span>
-      {avatarUrl ? (
+      {hasImage ? (
         <img
-          src={avatarUrl}
+          src={avatarUrl!}
           alt=""
           loading="eager"
           decoding="async"
           className="absolute inset-0 h-full w-full rounded-full object-cover"
+          onError={() => setImgError(true)}
         />
       ) : null}
     </div>

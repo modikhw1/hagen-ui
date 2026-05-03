@@ -11,9 +11,7 @@ import {
   useState,
   useTransition,
 } from 'react';
-import { useRouter, useSearchParams } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { useRouter, useSearchParams, usePathname } from '@/lib/navigation-compat';
 import type { 
   CustomerListParams, 
   CustomerListFilter, 
@@ -188,7 +186,7 @@ export function useCustomerListParamsState(): UseCustomerListParamsStateResult {
     if (newUrlSearch === lastUrlRef.current) return;
     lastUrlRef.current = newUrlSearch;
     const newUrl = buildCustomerListUrl(params, pathname || '/admin/customers');
-    router.replace(newUrl);
+    router.replace(newUrl, { scroll: false });
   }, [params, router, pathname]);
 
   // Sync URL → params (för back/forward-navigation).

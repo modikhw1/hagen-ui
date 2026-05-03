@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+import 'server-only';
 
 import type Stripe from 'stripe';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';

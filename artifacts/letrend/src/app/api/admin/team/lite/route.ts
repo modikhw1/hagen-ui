@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { fetchTeamMembersLite } from '@/lib/admin/team-members';
 import { requireScope, withAuth } from '@/lib/auth/api-auth';

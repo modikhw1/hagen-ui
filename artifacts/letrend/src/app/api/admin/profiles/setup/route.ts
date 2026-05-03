@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
@@ -37,11 +36,11 @@ async function activateLinkedCustomerProfile(params: {
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = await cookies();
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      return jsonError('Supabase-miljon ar inte korrekt konfigurerad', 500);
+      return jsonError('Supabase-miljön är inte korrekt konfigurerad', 500);
     }
 
     const supabase = createServerClient(
@@ -67,7 +66,7 @@ export async function POST(request: NextRequest) {
     const { userId, userEmail, businessName, customerProfileId } = await request.json();
 
     if (!userId) {
-      return jsonError('userId kravs', 400);
+      return jsonError('userId krävs', 400);
     }
 
     if (userId !== authUser.id) {

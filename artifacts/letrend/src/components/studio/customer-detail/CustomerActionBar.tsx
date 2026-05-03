@@ -18,7 +18,7 @@ export function CustomerActionBar({
       {showBackLink && (
         <div style={{ marginBottom: 16 }}>
           <Link
-            to="/studio/customers"
+            href="/studio/customers"
             style={{
               color: LeTrendColors.textSecondary,
               fontSize: 14,

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { requireScope, withAuth } from '@/lib/auth/api-auth';
 import { getPayrollSnapshot } from '@/lib/admin/payroll';

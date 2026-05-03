@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import type { AdminActionContext } from '../types';
 import { createStripeArtifacts } from '../send-invite-support';

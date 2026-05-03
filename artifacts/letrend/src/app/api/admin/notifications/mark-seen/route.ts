@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { recordAdminAttentionSeenEvent } from '@/lib/admin/events';
 import { requireScope, withAuth } from '@/lib/auth/api-auth';

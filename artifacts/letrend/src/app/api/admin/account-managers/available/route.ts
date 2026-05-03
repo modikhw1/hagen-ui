@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 
 import { withAuth, requireScope } from '@/lib/auth/api-auth';

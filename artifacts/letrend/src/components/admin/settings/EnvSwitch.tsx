@@ -1,8 +1,6 @@
 'use client';
 
-import { useRouter, useSearchParams } from '@/lib/navigation-compat';
-import { useLocation as _useLocation } from 'wouter';
-const usePathname = () => _useLocation()[0];
+import { useRouter, usePathname, useSearchParams } from '@/lib/navigation-compat';
 import { OPERATOR_COPY } from '@/lib/admin/copy/operator-glossary';
 import { cn } from '@/lib/utils';
 

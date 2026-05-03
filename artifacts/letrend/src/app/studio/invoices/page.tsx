@@ -62,7 +62,7 @@ export default function StudioInvoicesPage() {
         För att hålla betalningsdata separerad från Studio har fakturalistan flyttats till adminytan.
       </p>
       <Link
-        to="/admin/invoices"
+        href="/admin/invoices"
         style={{
           display: 'inline-flex',
           alignItems: 'center',

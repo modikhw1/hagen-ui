@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { recordAdminAction } from '@/lib/admin/audit';
 import { updateDemoStatusInputSchema } from '@/lib/admin/schemas/demos';

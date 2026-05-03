@@ -38,7 +38,7 @@ export function deriveCustomerHeaderAlert(
   if (customer.status === 'past_due' && !activeSnooze) {
      return {
        label: 'Obetald faktura',
-       href: `/admin/customers/${customer.id}/billing`,
+       href: `/admin/customers/${customer.id}/avtal`,
        tone: 'danger',
      };
   }
@@ -60,7 +60,7 @@ export function deriveCustomerHeaderAlert(
     if (pauseDate.toDateString() === today.toDateString()) {
       return {
         label: 'Paus slutar idag',
-        href: `/admin/customers/${customer.id}/operations`,
+        href: `/admin/customers/${customer.id}/avtal`,
         tone: 'warning',
       };
     }

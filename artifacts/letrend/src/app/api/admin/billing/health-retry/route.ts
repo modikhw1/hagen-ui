@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import { recordAuditLog } from '@/lib/admin/audit-log';
 import { buildBillingIdempotencyKey } from '@/lib/admin/billing';

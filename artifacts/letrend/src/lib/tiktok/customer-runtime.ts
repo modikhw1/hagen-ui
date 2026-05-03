@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { tikTokStatsSchema, type TikTokStats } from '@/lib/admin/dtos/customer';
 import { isMissingRelationError } from '@/lib/admin/schema-guards';

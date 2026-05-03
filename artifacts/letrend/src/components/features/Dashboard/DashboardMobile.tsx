@@ -1,8 +1,9 @@
-
+'use client'
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from '@/lib/navigation-compat'
-
+// @ts-ignore
+import Image from 'next/image'
 import {
   useDashboardData,
   DashboardConceptCardViewModel,
@@ -186,7 +187,7 @@ function LoadingScreen() {
     <div style={{ ...pageContainer, background: colors.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ width: 50, height: 50, margin: '0 auto 16px' }}>
-          <img src="/transparent.png" alt="LeTrend" width={50} height={50} style={{ objectFit: "contain" }} />
+          <Image src="/transparent.png" alt="LeTrend" width={50} height={50} style={{ objectFit: 'contain' }} />
         </div>
         <p style={{ color: colors.textMuted, fontFamily }}>Laddar...</p>
       </div>
@@ -266,7 +267,7 @@ function DashboardMobileContent() {
         <div style={headerStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ width: 36, height: 36 }}>
-              <img
+              <Image
                 src="/transparent.png"
                 alt="LeTrend"
                 width={36}

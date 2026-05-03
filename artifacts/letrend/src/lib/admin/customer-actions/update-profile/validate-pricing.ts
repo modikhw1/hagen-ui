@@ -1,4 +1,4 @@
-
+import 'server-only';
 
 import { formatDateOnly } from '@/lib/admin/billing-periods';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';

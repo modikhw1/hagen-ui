@@ -1,3 +1,4 @@
+// @ts-nocheck
 export interface TikTokProfilePreview {
   handle: string;
   canonical_url: string;

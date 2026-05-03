@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { z } from 'zod';
 import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { withRequestContext } from '@/lib/admin/customer-actions/with-request-context';

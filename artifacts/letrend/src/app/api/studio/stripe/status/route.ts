@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { NextRequest } from 'next/server';
 import Stripe from 'stripe';
 import { withAuth } from '@/lib/auth/api-auth';

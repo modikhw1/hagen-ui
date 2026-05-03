@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { z } from 'zod';
 import { formatAuditMetadata } from '@/lib/admin-derive/audit';
 import { listAuditLog } from '@/lib/admin/audit-log';

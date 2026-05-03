@@ -6,12 +6,10 @@ import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import {
   Modal,
   Accordion,
-  Button,
   Badge,
   Alert,
   Divider,
@@ -21,6 +19,8 @@ import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { InvoicePreview } from './InvoicePreview';
 import { CreditReissueWizard } from './CreditReissueWizard';
 import { InvoiceLineEditor } from './InvoiceLineEditor';
+import { InvoiceActionRow } from './InvoiceActionRow';
+import { InvoiceStatusTimeline } from './InvoiceStatusTimeline';
 
 interface InvoiceDetail {
   stripe_invoice_id: string;
@@ -147,21 +147,6 @@ export function InvoiceDetailModal({
     ]);
   };
 
-  const handleInvoiceAction = async (
-    action: 'void' | 'mark_uncollectible',
-  ) => {
-    const res = await fetch(`/api/admin/invoices/${invoiceId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action }),
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(payload.error ?? `HTTP ${res.status}`);
-    }
-    await handleRefresh();
-  };
-
   return (
     <Modal
       opened={open}
@@ -271,82 +256,33 @@ export function InvoiceDetailModal({
             lines={invoiceLines}
           />
 
-          <div className="flex gap-2">
-            {data.hosted_invoice_url && (
-              <Button
-                variant="outline"
-                size="sm"
-                component="a"
-                href={data.hosted_invoice_url}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Öppna i Stripe
-                <ExternalLink className="ml-2 h-3 w-3" />
-              </Button>
-            )}
-            {data.invoice_pdf && (
-              <Button
-                variant="outline"
-                size="sm"
-                component="a"
-                href={data.invoice_pdf}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Ladda ner PDF
-              </Button>
-            )}
-          </div>
+          <InvoiceActionRow
+            invoiceId={invoiceId}
+            status={data.status}
+            hostedInvoiceUrl={data.hosted_invoice_url}
+            invoicePdf={data.invoice_pdf}
+            canManage={canManageAdjustments}
+            onChanged={handleRefresh}
+          />
 
-          {canManageAdjustments && data.status === 'open' && (
-            <div className="flex gap-2">
-              <Button
-                variant="light"
-                color="red"
-                size="sm"
-                onClick={() =>
-                  handleInvoiceAction('void')
-                    .then(() => toast.success('Fakturan annullerades.'))
-                    .catch((error) =>
-                      toast.error(
-                        error instanceof Error ? error.message : 'Kunde inte annullera fakturan',
-                      ),
-                    )
-                }
-              >
-                Annullera faktura
-              </Button>
-              <Button
-                variant="light"
-                color="yellow"
-                size="sm"
-                onClick={() =>
-                  handleInvoiceAction('mark_uncollectible')
-                    .then(() =>
-                      toast.success('Fakturan markerades som svårindrivbar.'),
-                    )
-                    .catch((error) =>
-                      toast.error(
-                        error instanceof Error
-                          ? error.message
-                          : 'Kunde inte markera fakturan',
-                      ),
-                    )
-                }
-              >
-                Markera som svårindrivbar
-              </Button>
-            </div>
-          )}
+          <Accordion defaultValue="timeline" variant="separated">
+            <Accordion.Item value="timeline">
+              <Accordion.Control>Statushistorik & händelser</Accordion.Control>
+              <Accordion.Panel>
+                <InvoiceStatusTimeline invoiceId={invoiceId} />
+              </Accordion.Panel>
+            </Accordion.Item>
+          </Accordion>
 
           <Divider />
 
           {canManageAdjustments &&
             (data.status === 'paid' || data.status === 'open') && (
-              <Accordion>
+              <Accordion defaultValue={data.status === 'paid' ? 'adjust' : undefined}>
                 <Accordion.Item value="adjust">
-                  <Accordion.Control>Justera / Kreditera</Accordion.Control>
+                  <Accordion.Control>
+                    {data.status === 'paid' ? 'Aterbetala / Kreditera' : 'Justera / Kreditera'}
+                  </Accordion.Control>
                   <Accordion.Panel>
                      <CreditReissueWizard
                        invoiceId={invoiceId}
