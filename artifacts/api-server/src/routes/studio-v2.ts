@@ -820,7 +820,7 @@ router.get('/email/jobs', requireAuth, CM_ONLY, async (req, res) => {
 
     if (customerId) query = query.eq('customer_id', customerId);
 
-    const { data, error } = await query.catch(() => ({ data: [], error: null }));
+    const { data, error } = await query;
     if (error) {
       res.json({ jobs: [] });
       return;

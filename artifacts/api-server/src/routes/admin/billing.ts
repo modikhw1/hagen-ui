@@ -190,7 +190,7 @@ router.get('/sync-events', requireAuth, ADMIN_ONLY, async (req, res) => {
 
     if (status) query = query.eq('status', status);
 
-    const { data, error } = await query.catch(() => ({ data: [], error: null }));
+    const { data, error } = await query;
     if (error) {
       res.json({ events: [] });
       return;
