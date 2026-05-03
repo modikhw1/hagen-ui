@@ -3,87 +3,25 @@ import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 import { getStripe } from '../../lib/stripe-client.js';
+import {
+  findInvoice,
+  findLineItems,
+  findCreditNoteOps,
+  findCustomerProfile,
+  findStripeSyncEvents,
+  updateInvoice,
+  insertLineItem,
+  type InvoiceRow,
+  type LineItemRow,
+  type CreditNoteOpRow,
+} from '../../lib/invoice-db.js';
 
 const router = Router();
 const ADMIN_ONLY = requireRole(['admin']);
 
-// ── Typed row interfaces ───────────────────────────────────────────────────
+// ── Shape builder ──────────────────────────────────────────────────────────
 
-interface InvoiceRow {
-  id: string;
-  stripe_invoice_id: string | null;
-  stripe_subscription_id: string | null;
-  customer_profile_id: string | null;
-  amount_due: number | null;
-  amount_paid: number | null;
-  currency: string | null;
-  invoice_number: string | null;
-  status: string | null;
-  hosted_invoice_url: string | null;
-  invoice_pdf: string | null;
-  due_date: string | null;
-  paid_at: string | null;
-  environment: string | null;
-  created_at: string | null;
-}
-
-interface LineItemRow {
-  id: string;
-  description: string | null;
-  amount: number | null;
-  quantity: number | null;
-}
-
-interface CreditNoteOpRow {
-  id: string;
-  operation_type: string;
-  status: string;
-  requires_attention: boolean;
-  attention_reason: string | null;
-  stripe_credit_note_id: string | null;
-  stripe_reissue_invoice_id: string | null;
-  error_message: string | null;
-  idempotency_key: string;
-  created_at: string;
-}
-
-interface CustomerProfileRow {
-  business_name: string | null;
-  stripe_subscription_id: string | null;
-}
-
-interface StripeSyncEventRow {
-  id: string;
-  event_type: string;
-  received_at: string;
-  status: string;
-  error_message: string | null;
-}
-
-type Supabase = ReturnType<typeof createSupabaseAdmin>;
-
-// ── Helper ─────────────────────────────────────────────────────────────────
-
-/** Fetch a single invoice row by stripe_invoice_id or UUID primary key. */
-async function findInvoice(
-  supabase: Supabase,
-  invoiceId: string,
-): Promise<{ row: InvoiceRow | null; error: { message: string } | null }> {
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(invoiceId);
-
-  const base = supabase
-    .from('invoices')
-    .select(
-      'id, stripe_invoice_id, stripe_subscription_id, customer_profile_id, amount_due, amount_paid, currency, invoice_number, status, hosted_invoice_url, invoice_pdf, due_date, paid_at, environment, created_at',
-    );
-
-  const { data, error } = await (isUuid ? base.eq('id', invoiceId) : base.eq('stripe_invoice_id', invoiceId)).maybeSingle();
-
-  return { row: data as unknown as InvoiceRow | null, error };
-}
-
-/** Build the full invoice detail response shape from a DB row + associated data. */
+/** Assemble the full InvoiceDetail response shape. */
 function buildInvoiceDetail(
   inv: InvoiceRow,
   lines: LineItemRow[],
@@ -245,32 +183,14 @@ router.get('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
     const stripeInvoiceId = String(inv.stripe_invoice_id ?? id);
     const customerProfileId = String(inv.customer_profile_id ?? '');
 
-    const [customerResult, linesResult, opsResult] = await Promise.all([
-      supabase
-        .from('customer_profiles')
-        .select('business_name, stripe_subscription_id')
-        .eq('id', customerProfileId)
-        .maybeSingle(),
-      supabase
-        .from('invoice_line_items')
-        .select('id, description, amount, quantity')
-        .eq('stripe_invoice_id', stripeInvoiceId),
-      (supabase as any)
-        .from('credit_note_operations')
-        .select(
-          'id, operation_type, status, requires_attention, attention_reason, stripe_credit_note_id, stripe_reissue_invoice_id, error_message, idempotency_key, created_at',
-        )
-        .eq('source_invoice_id', stripeInvoiceId)
-        .order('created_at', { ascending: false })
-        .limit(20),
+    const [lines, operations, customerRow] = await Promise.all([
+      findLineItems(supabase, stripeInvoiceId),
+      findCreditNoteOps(supabase, stripeInvoiceId),
+      findCustomerProfile(supabase, customerProfileId),
     ]);
 
-    const customerRow = customerResult.data as unknown as CustomerProfileRow | null;
     const customerName = customerRow?.business_name ?? 'Okänd kund';
-    const lines = (linesResult.data ?? []) as unknown as LineItemRow[];
-    const operations = (opsResult.data ?? []) as CreditNoteOpRow[];
-    const stripeSubId =
-      customerRow?.stripe_subscription_id ?? inv.stripe_subscription_id ?? null;
+    const stripeSubId = customerRow?.stripe_subscription_id ?? inv.stripe_subscription_id ?? null;
 
     res.json(buildInvoiceDetail(inv, lines, operations, customerName, stripeSubId));
   } catch (err) {
@@ -284,20 +204,11 @@ router.get('/:id/lines', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
     const id = String(req.params['id'] ?? '');
     const supabase = createSupabaseAdmin();
-
-    const { data, error } = await supabase
-      .from('invoice_line_items')
-      .select('id, description, amount, quantity')
-      .eq('stripe_invoice_id', id);
-
-    if (error) {
-      res.json({ lines: [] });
-      return;
-    }
-    res.json({ lines: (data ?? []) as unknown as LineItemRow[] });
+    const lines = await findLineItems(supabase, id);
+    res.json({ lines });
   } catch (err) {
     logger.error(err, 'invoice lines GET error');
-    res.status(500).json({ error: 'Internt serverfel' });
+    res.json({ lines: [] });
   }
 });
 
@@ -315,7 +226,6 @@ router.get('/:id/timeline', requireAuth, ADMIN_ONLY, async (req, res) => {
       kind: string;
       title: string;
       description?: string | null;
-      actor?: string | null;
       source: 'stripe_webhook' | 'admin' | 'system' | 'milestone';
       status: 'success' | 'warning' | 'error' | 'info';
     }> = [];
@@ -327,96 +237,40 @@ router.get('/:id/timeline', requireAuth, ADMIN_ONLY, async (req, res) => {
       const dueDate = inv.due_date ?? null;
 
       if (createdAt) {
-        events.push({
-          id: 'created',
-          at: createdAt,
-          kind: 'created',
-          title: 'Faktura skapad',
-          source: 'milestone',
-          status: 'info',
-        });
+        events.push({ id: 'created', at: createdAt, kind: 'created', title: 'Faktura skapad', source: 'milestone', status: 'info' });
       }
-
       if (dueDate) {
-        const dueDateMs = new Date(dueDate).getTime();
-        events.push({
-          id: 'due',
-          at: dueDate,
-          kind: 'finalized',
-          title: 'Förfallodatum',
-          source: 'milestone',
-          status: dueDateMs < Date.now() && invoiceStatus !== 'paid' ? 'warning' : 'info',
-        });
+        const overdue = new Date(dueDate).getTime() < Date.now() && invoiceStatus !== 'paid';
+        events.push({ id: 'due', at: dueDate, kind: 'finalized', title: 'Förfallodatum', source: 'milestone', status: overdue ? 'warning' : 'info' });
       }
-
       if (paidAt) {
-        events.push({
-          id: 'paid',
-          at: paidAt,
-          kind: 'paid',
-          title: 'Faktura betald',
-          source: 'milestone',
-          status: 'success',
-        });
+        events.push({ id: 'paid', at: paidAt, kind: 'paid', title: 'Faktura betald', source: 'milestone', status: 'success' });
       }
-
       if (invoiceStatus === 'void') {
-        events.push({
-          id: 'voided',
-          at: paidAt ?? createdAt,
-          kind: 'voided',
-          title: 'Faktura annullerad',
-          source: 'admin',
-          status: 'error',
-        });
+        events.push({ id: 'voided', at: paidAt ?? createdAt, kind: 'voided', title: 'Faktura annullerad', source: 'admin', status: 'error' });
       }
-
       if (invoiceStatus === 'uncollectible') {
-        events.push({
-          id: 'uncollectible',
-          at: createdAt,
-          kind: 'uncollectible',
-          title: 'Markerad som svårindrivbar',
-          source: 'admin',
-          status: 'warning',
-        });
+        events.push({ id: 'uncollectible', at: createdAt, kind: 'uncollectible', title: 'Markerad som svårindrivbar', source: 'admin', status: 'warning' });
       }
 
-      // Try to pull real webhook events if the table exists.
-      try {
-        const stripeInvoiceId = String(inv.stripe_invoice_id ?? id);
-        const { data: webhookEvents } = await (supabase as any)
-          .from('stripe_sync_events')
-          .select('id, event_type, received_at, status, error_message')
-          .eq('object_id', stripeInvoiceId)
-          .order('received_at', { ascending: true })
-          .limit(50);
-
-        for (const ev of (webhookEvents ?? []) as StripeSyncEventRow[]) {
-          const kind = ev.event_type.replace('invoice.', '');
-          events.push({
-            id: String(ev.id ?? ev.event_type),
-            at: String(ev.received_at ?? createdAt),
-            kind: kind || 'webhook',
-            title: ev.event_type,
-            description: ev.error_message ?? null,
-            source: 'stripe_webhook',
-            status: ev.status === 'failed' ? 'error' : 'info',
-          });
-        }
-      } catch {
-        // stripe_sync_events table may not exist — fall back to synthesised events.
+      const stripeInvoiceId = String(inv.stripe_invoice_id ?? id);
+      const webhookEvents = await findStripeSyncEvents(supabase, stripeInvoiceId);
+      for (const ev of webhookEvents) {
+        events.push({
+          id: String(ev.id ?? ev.event_type),
+          at: String(ev.received_at ?? createdAt),
+          kind: ev.event_type.replace('invoice.', '') || 'webhook',
+          title: ev.event_type,
+          description: ev.error_message ?? null,
+          source: 'stripe_webhook',
+          status: ev.status === 'failed' ? 'error' : 'info',
+        });
       }
     }
 
     events.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-
     const seen = new Set<string>();
-    const dedupedEvents = events.filter((e) => {
-      if (seen.has(e.id)) return false;
-      seen.add(e.id);
-      return true;
-    });
+    const dedupedEvents = events.filter((e) => !seen.has(e.id) && seen.add(e.id));
 
     res.json({ events: dedupedEvents });
   } catch (err) {
@@ -446,10 +300,11 @@ router.post('/:id/actions', requireAuth, ADMIN_ONLY, async (req, res) => {
     switch (action) {
       case 'mark_paid': {
         const amountDue = Number(inv.amount_due ?? 0);
-        const { error } = await (supabase as any)
-          .from('invoices')
-          .update({ status: 'paid', amount_paid: amountDue, paid_at: new Date().toISOString() })
-          .eq('stripe_invoice_id', stripeInvoiceId);
+        const { error } = await updateInvoice(supabase, stripeInvoiceId, {
+          status: 'paid',
+          amount_paid: amountDue,
+          paid_at: new Date().toISOString(),
+        });
         if (error) {
           res.status(500).json({ error: error.message });
           return;
@@ -466,18 +321,12 @@ router.post('/:id/actions', requireAuth, ADMIN_ONLY, async (req, res) => {
             logger.info({ invoiceId: stripeInvoiceId, actor: adminEmail }, 'stripe resend succeeded');
           } catch (stripeErr) {
             logger.warn(
-              {
-                err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
-                invoiceId: stripeInvoiceId,
-              },
-              'stripe resend failed; operation logged but not blocking',
+              { err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr), invoiceId: stripeInvoiceId },
+              'stripe resend failed; not blocking',
             );
           }
         }
-        res.json({
-          success: true,
-          warning: stripe ? undefined : 'Stripe ej konfigurerat — ingen e-post skickades',
-        });
+        res.json({ success: true, warning: stripe ? undefined : 'Stripe ej konfigurerat — ingen e-post skickades' });
         return;
       }
 
@@ -485,68 +334,53 @@ router.post('/:id/actions', requireAuth, ADMIN_ONLY, async (req, res) => {
         if (stripe) {
           try {
             const stripeInv = await stripe.invoices.retrieve(stripeInvoiceId);
-            const updatePayload: Record<string, unknown> = {
-              status: stripeInv.status ?? inv.status,
-              amount_due: stripeInv.amount_due ?? inv.amount_due,
-              amount_paid: stripeInv.amount_paid ?? inv.amount_paid,
-              hosted_invoice_url: stripeInv.hosted_invoice_url ?? inv.hosted_invoice_url,
-              invoice_pdf: stripeInv.invoice_pdf ?? inv.invoice_pdf,
+            const patch: import('../../lib/invoice-db.js').InvoicePatch = {
+              status: stripeInv.status ?? (inv.status ?? undefined),
+              amount_due: stripeInv.amount_due,
+              amount_paid: stripeInv.amount_paid,
+              hosted_invoice_url: stripeInv.hosted_invoice_url ?? undefined,
+              invoice_pdf: stripeInv.invoice_pdf ?? undefined,
             };
             if (stripeInv.status === 'paid' && stripeInv.status_transitions?.paid_at) {
-              updatePayload['paid_at'] = new Date(
-                stripeInv.status_transitions.paid_at * 1000,
-              ).toISOString();
+              patch.paid_at = new Date(stripeInv.status_transitions.paid_at * 1000).toISOString();
             }
-            await (supabase as any)
-              .from('invoices')
-              .update(updatePayload)
-              .eq('stripe_invoice_id', stripeInvoiceId);
+            await updateInvoice(supabase, stripeInvoiceId, patch);
             logger.info({ invoiceId: stripeInvoiceId }, 'invoice resynced from Stripe');
           } catch (stripeErr) {
             logger.warn(
-              {
-                err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
-                invoiceId: stripeInvoiceId,
-              },
-              'stripe resync retrieve failed; returning local data',
+              { err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr), invoiceId: stripeInvoiceId },
+              'stripe resync failed; returning local data',
             );
           }
         }
-        res.json({
-          success: true,
-          warning: stripe ? undefined : 'Stripe ej konfigurerat — lokal data visas',
-        });
+        res.json({ success: true, warning: stripe ? undefined : 'Stripe ej konfigurerat — lokal data visas' });
         return;
       }
 
       case 'pay_now': {
-        let payNowWarning: string | undefined;
+        let warning: string | undefined;
         if (stripe) {
           try {
             const paid = await stripe.invoices.pay(stripeInvoiceId);
             logger.info({ invoiceId: stripeInvoiceId, actor: adminEmail }, 'stripe pay_now succeeded');
-            // Reconcile local DB with payment outcome.
             const paidAt =
               paid.status_transitions?.paid_at != null
                 ? new Date(paid.status_transitions.paid_at * 1000).toISOString()
                 : new Date().toISOString();
-            await (supabase as any)
-              .from('invoices')
-              .update({
-                status: 'paid',
-                amount_paid: paid.amount_paid ?? Number(inv.amount_due ?? 0),
-                paid_at: paidAt,
-              })
-              .eq('stripe_invoice_id', stripeInvoiceId);
+            await updateInvoice(supabase, stripeInvoiceId, {
+              status: 'paid',
+              amount_paid: paid.amount_paid ?? Number(inv.amount_due ?? 0),
+              paid_at: paidAt,
+            });
           } catch (stripeErr) {
             const msg = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
-            logger.warn({ err: msg, invoiceId: stripeInvoiceId }, 'stripe pay_now failed; returning graceful response');
-            payNowWarning = `Stripe-betalning misslyckades: ${msg}`;
+            logger.warn({ err: msg, invoiceId: stripeInvoiceId }, 'stripe pay_now failed; graceful');
+            warning = `Stripe-betalning misslyckades: ${msg}`;
           }
         } else {
-          payNowWarning = 'Stripe ej konfigurerat — ingen betalning initierades';
+          warning = 'Stripe ej konfigurerat — ingen betalning initierades';
         }
-        res.json({ success: true, warning: payNowWarning });
+        res.json({ success: true, warning });
         return;
       }
 
@@ -589,21 +423,13 @@ router.patch('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
           }
         } catch (stripeErr) {
           logger.warn(
-            {
-              err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr),
-              invoiceId: stripeInvoiceId,
-              action,
-            },
+            { err: stripeErr instanceof Error ? stripeErr.message : String(stripeErr), invoiceId: stripeInvoiceId, action },
             'stripe invoice mutation failed; updating local only',
           );
         }
       }
 
-      const { error: updateErr } = await (supabase as any)
-        .from('invoices')
-        .update({ status: newStatus })
-        .eq('stripe_invoice_id', stripeInvoiceId);
-
+      const { error: updateErr } = await updateInvoice(supabase, stripeInvoiceId, { status: newStatus });
       if (updateErr) {
         res.status(500).json({ error: updateErr.message });
         return;
@@ -611,40 +437,28 @@ router.patch('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
 
       logger.info({ invoiceId: stripeInvoiceId, actor: adminEmail, action }, 'admin invoice PATCH');
 
-      // Re-fetch the updated invoice and return the full detail shape.
+      // Re-fetch and return the full updated invoice shape.
       const { row: updated } = await findInvoice(supabase, stripeInvoiceId);
       if (!updated) {
         res.json({ success: true, status: newStatus });
         return;
       }
 
-      const [linesResult, opsResult, customerResult] = await Promise.all([
-        supabase
-          .from('invoice_line_items')
-          .select('id, description, amount, quantity')
-          .eq('stripe_invoice_id', stripeInvoiceId),
-        (supabase as any)
-          .from('credit_note_operations')
-          .select(
-            'id, operation_type, status, requires_attention, attention_reason, stripe_credit_note_id, stripe_reissue_invoice_id, error_message, idempotency_key, created_at',
-          )
-          .eq('source_invoice_id', stripeInvoiceId)
-          .order('created_at', { ascending: false })
-          .limit(20),
-        supabase
-          .from('customer_profiles')
-          .select('business_name, stripe_subscription_id')
-          .eq('id', String(updated.customer_profile_id ?? ''))
-          .maybeSingle(),
+      const [lines, operations, customerRow] = await Promise.all([
+        findLineItems(supabase, stripeInvoiceId),
+        findCreditNoteOps(supabase, stripeInvoiceId),
+        findCustomerProfile(supabase, String(updated.customer_profile_id ?? '')),
       ]);
 
-      const customerRow = customerResult.data as unknown as CustomerProfileRow | null;
-      const lines = (linesResult.data ?? []) as unknown as LineItemRow[];
-      const operations = (opsResult.data ?? []) as CreditNoteOpRow[];
-      const stripeSubId =
-        customerRow?.stripe_subscription_id ?? updated.stripe_subscription_id ?? null;
-
-      res.json(buildInvoiceDetail(updated, lines, operations, customerRow?.business_name ?? 'Okänd kund', stripeSubId));
+      res.json(
+        buildInvoiceDetail(
+          updated,
+          lines,
+          operations,
+          customerRow?.business_name ?? 'Okänd kund',
+          customerRow?.stripe_subscription_id ?? updated.stripe_subscription_id ?? null,
+        ),
+      );
       return;
     }
 
@@ -656,7 +470,6 @@ router.patch('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
 });
 
 // ── PATCH /api/admin/invoices/:id/lines ───────────────────────────────────
-// Used by InvoiceLineEditor for update_memo and add_line actions.
 router.patch('/:id/lines', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
     const id = String(req.params['id'] ?? '');
@@ -693,15 +506,13 @@ router.patch('/:id/lines', requireAuth, ADMIN_ONLY, async (req, res) => {
         return;
       }
 
-      const { error } = await (supabase as any)
-        .from('invoice_line_items')
-        .insert({
-          stripe_line_item_id: `manual_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          stripe_invoice_id: stripeInvoiceId,
-          description,
-          amount: amountOre,
-          quantity,
-        });
+      const { error } = await insertLineItem(supabase, {
+        stripe_line_item_id: `manual_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        stripe_invoice_id: stripeInvoiceId,
+        description,
+        amount: amountOre,
+        quantity,
+      });
 
       if (error) {
         logger.warn({ err: error.message }, 'invoice_line_items insert failed');
