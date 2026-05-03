@@ -214,7 +214,14 @@ router.get('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
     let subscription_status: string | null = null;
     if (rawStatus === 'paused' || (profile as any).paused_until) {
       subscription_status = 'paused';
-    } else if (rawStatus === 'canceled' || rawStatus === 'cancelled') {
+    } else if (
+      rawStatus === 'canceled' ||
+      rawStatus === 'cancelled' ||
+      rawStatus === 'archived' ||
+      rawStatus === 'churned' ||
+      rawStatus === 'ended' ||
+      (profile as any).archived_at
+    ) {
       subscription_status = 'canceled';
     } else if ((profile as any).stripe_subscription_id) {
       subscription_status = 'active';

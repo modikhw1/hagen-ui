@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import {
@@ -169,6 +169,13 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
   } = props;
 
   const [data, setData] = useState(initialData);
+  // Sync local mirror whenever the parent passes new initialData (e.g.
+  // after useAdminRefresh invalidates customer-billing). Without this,
+  // the badge / price / contract state would stay stale until a full
+  // remount.
+  useEffect(() => {
+    setData(initialData);
+  }, [initialData]);
   const { data: customer } = useCustomerDetail(customerId);
   const canManageBilling = permissions?.canManageBilling === true;
   const hasStripeCustomer = Boolean(data.stripe_customer_id);

@@ -1,15 +1,22 @@
-import * as React from 'react';
+// React 19.1 does not export `useEffectEvent`, but Mantine v9 calls
+// `React.useEffectEvent` from inside Transition. The reliable fix is to
+// patch React's CJS bundle (which is what Mantine sees through __toESM
+// / require) BEFORE Mantine ever imports it.
+//
+// We do not mutate the ESM namespace object here, because module
+// namespace objects are non-extensible when the property is missing
+// (assigning would throw "Cannot add property useEffectEvent, object is
+// not extensible"). Instead we patch the CJS exports object, which is
+// the actual source of truth that __toESM copies from.
+//
+// The patch happens at build time:
+//   - dev:   via the `optimizeDeps.esbuildOptions` plugin in vite.config
+//   - build: via the `react-use-effect-event-polyfill` rollup plugin in
+//            vite.config (transform hook on react.{development,
+//            production}{.min}?.js)
+//
+// This file remains as a no-op marker that is imported first from
+// main.tsx so anyone reading the entry point sees the cross-reference
+// to vite.config.
 
-const ReactNS = React as unknown as Record<string, unknown>;
-
-if (typeof ReactNS.useEffectEvent !== 'function') {
-  ReactNS.useEffectEvent = function useEffectEvent<TArgs extends unknown[], TResult>(
-    fn: (...args: TArgs) => TResult,
-  ): (...args: TArgs) => TResult {
-    const ref = React.useRef(fn);
-    React.useInsertionEffect(() => {
-      ref.current = fn;
-    });
-    return React.useCallback((...args: TArgs) => ref.current(...args), []);
-  };
-}
+export {};

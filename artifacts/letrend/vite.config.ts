@@ -27,12 +27,38 @@ if (!basePath) {
   );
 }
 
+const REACT_CJS_FILE_RE =
+  /react[\\/]cjs[\\/]react\.(development|production)(\.min)?\.js$/;
+
+const useEffectEventPolyfillSource = `
+;if (typeof exports !== 'undefined' && !exports.useEffectEvent) {
+  exports.useEffectEvent = function useEffectEvent(fn) {
+    var ref = exports.useRef(fn);
+    exports.useInsertionEffect(function () { ref.current = fn; });
+    return exports.useCallback(function () {
+      return ref.current.apply(this, arguments);
+    }, []);
+  };
+}
+`;
+
+// Rollup transform plugin so production builds also get the polyfill
+// (esbuild prebundle only runs in dev).
+const reactUseEffectEventPolyfillRollupPlugin = {
+  name: "react-use-effect-event-polyfill-rollup",
+  transform(code: string, id: string) {
+    if (!REACT_CJS_FILE_RE.test(id)) return null;
+    return { code: code + useEffectEventPolyfillSource, map: null };
+  },
+};
+
 export default defineConfig({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
     runtimeErrorOverlay(),
+    reactUseEffectEventPolyfillRollupPlugin,
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
@@ -51,28 +77,20 @@ export default defineConfig({
     esbuildOptions: {
       plugins: [
         {
-          name: 'react-use-effect-event-polyfill',
+          name: "react-use-effect-event-polyfill",
           setup(build) {
-            // React 19 does not export useEffectEvent publicly, but Mantine v9
-            // calls it. Inject a polyfill into React's CJS bundle so that
-            // __toESM() snapshots include the function before Mantine loads.
-            build.onLoad(
-              { filter: /react[\\/]cjs[\\/]react\.(development|production)(\.min)?\.js$/ },
-              (args) => {
-                const source = readFileSync(args.path, 'utf8');
-                const polyfill = `
-if (!exports.useEffectEvent) {
-  exports.useEffectEvent = function useEffectEvent(fn) {
-    var ref = exports.useRef(fn);
-    exports.useInsertionEffect(function() { ref.current = fn; });
-    return exports.useCallback(function() {
-      return ref.current.apply(this, arguments);
-    }, []);
-  };
-}`;
-                return { contents: source + polyfill, loader: 'js' };
-              }
-            );
+            // React 19 does not export useEffectEvent publicly, but
+            // Mantine v9 calls it. Inject a polyfill into React's CJS
+            // bundle so that __toESM() snapshots include the function
+            // before Mantine loads. The same patch is applied at
+            // production build time by the rollup plugin above.
+            build.onLoad({ filter: REACT_CJS_FILE_RE }, (args) => {
+              const source = readFileSync(args.path, "utf8");
+              return {
+                contents: source + useEffectEventPolyfillSource,
+                loader: "js",
+              };
+            });
           },
         },
       ],
