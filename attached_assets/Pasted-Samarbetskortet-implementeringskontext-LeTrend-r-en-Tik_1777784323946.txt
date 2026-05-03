@@ -1,0 +1,17 @@
+Samarbetskortet — implementeringskontext
+LeTrend är en TikTok-strategi och innehållshanteringsplattform där content managers (CMs) kurerar och planerar videoklipp för restauranger, kaféer och barer i Sverige. Det primära arbetsflödet bygger på att CMs väljer ut befintliga virala sketch-koncept som kunden sedan återskapar (bricolage-modellen) — kunden filmar och laddar upp själv, LeTrend ansvarar inte för produktion.
+Samarbetskortet introducerar ett undantagsfall från det normala arbetsflödet: ett externt samarbete med en känd profil eller extern aktör. Det klassiska scenariot är att en känd kreatör på TikTok kliver in i kundens lokal, skriver sin egna sketch, medverkar i videon och producerar innehåll som publiceras på kundens kanal. Det är ett event snarare än ett enskilt klipp — en inspelningsdag som kan generera flera framtida klipp.
+Varför kortet behöver finnas i flödet:
+Feed plannern är en kronologisk vy över kundens kommande och historiska innehåll. Samarbeten påverkar direkt tidslinjens planering — de tar upp en slot i flödet, har ett datum, och kan innebära ett ekonomiskt åtagande. En CM behöver kunna logga att ett samarbete är på gång eller bekräftat, se det i relation till övriga planerade klipp, och dokumentera vad som är avtalat utan att behöva hantera det i ett externt system.
+Vad kortet är — och inte är:
+Det är ett planerings- och dokumentationsverktyg för CM-intern användning. Det är inte ett produktionsverktyg, inte kopplat till ett specifikt klipp i databasen, och genererar inte automatiskt historik-kort när samarbetet är genomfört (det är markerat som framtida utveckling). Kortet lever i customer_concepts-tabellen med en egen typ-flagga, t.ex. type: "collaboration", skild från vanliga konceptkort.
+Datamodellen kortet behöver:
+Utöver standardfälten i customer_concepts behöver samarbetskortet:
+
+collaborator_name — namn på profilen
+collaborator_reach — följarantal som kontextsignal för CM
+collaborator_avatar_url — valfri bild
+scope — array av strängar: ["medverka", "skriva", "producera", "skriva_medverka"]
+price — nullable integer i kronor
+confirmed — boolean
+collaboration_note — fritext, CM:s interna anteckning om vad som är överenskommet

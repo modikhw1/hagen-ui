@@ -7,7 +7,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { EnvBand } from '@/components/admin/ui/EnvBand';
 import { useAuth } from '@/contexts/AuthContext';
 import { SHELL_COPY } from '@/lib/admin/copy/shell-strings';
-import { resolveAppRole } from '@/lib/auth/navigation';
+import { getPrimaryRouteForRole, resolveAppRole } from '@/lib/auth/navigation';
 
 export default function AdminAuthShell({ children }: { children: ReactNode }) {
   const { user, profile, loading, signOut } = useAuth();
@@ -21,12 +21,8 @@ export default function AdminAuthShell({ children }: { children: ReactNode }) {
     }
     // Profile still loading or fetch failed transiently — don't redirect yet
     if (!profile) return;
-    if (role === 'content_manager') {
-      router.replace('/studio');
-      return;
-    }
     if (role !== 'admin') {
-      router.replace('/login?redirect=/admin');
+      router.replace(getPrimaryRouteForRole(role ?? profile));
     }
   }, [loading, profile, role, router, user]);
 

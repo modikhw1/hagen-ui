@@ -5,7 +5,7 @@ import { Link } from 'wouter';
 import { ShieldCheck } from 'lucide-react';
 import { useRouter } from '@/lib/navigation-compat';
 import { useAuth } from '@/contexts/AuthContext';
-import { resolveAppRole } from '@/lib/auth/navigation';
+import { getPrimaryRouteForRole, resolveAppRole } from '@/lib/auth/navigation';
 import { AppShell, type AppShellNavItem } from '@/components/admin/AdminLayout';
 import { STUDIO_SHELL_NAV_ITEMS } from '@/lib/studio/navigation';
 
@@ -43,14 +43,17 @@ function StudioLayoutContent({ children }: StudioLayoutProps) {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.replace('/login?redirect=/studio/customers');
+      router.replace('/login?redirect=/studio');
       return;
     }
     if (!profile) return;
 
     const hasAccess = role === 'admin' || role === 'content_manager';
     if (!hasAccess) {
-      router.replace('/feed?error=studio_access_denied');
+      const isMobileCustomer = typeof window !== 'undefined' && window.innerWidth < 768;
+      router.replace(getPrimaryRouteForRole(role ?? profile, {
+        surface: isMobileCustomer ? 'mobile' : 'desktop',
+      }));
     }
   }, [loading, profile, role, router, user]);
 

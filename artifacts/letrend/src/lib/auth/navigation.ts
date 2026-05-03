@@ -43,7 +43,7 @@ export function getPrimaryRouteForRole(
     case 'admin':
       return '/admin';
     case 'content_manager':
-      return '/studio/customers';
+      return '/studio';
     case 'customer':
       return surface === 'mobile' ? '/m/feed' : '/feed';
     default:
