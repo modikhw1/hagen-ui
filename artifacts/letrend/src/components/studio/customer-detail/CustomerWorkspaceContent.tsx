@@ -1433,7 +1433,17 @@ function CustomerWorkspacePageContent() {
       const data = await response.json();
       if (data?.concept) {
         setConcepts(prev =>
-          prev.map(concept => (concept.id === conceptId ? { ...concept, ...data.concept } : concept))
+          prev.map(concept => {
+            if (concept.id !== conceptId) return concept;
+            // Re-normalize the merged record so the boundary shape
+            // (placement / assignment / result / markers) stays in sync
+            // with any flat fields the PATCH response updated. Without
+            // this, a server response that returns flat columns would
+            // leave the nested fields stale (Task #46 / Task #44 root
+            // cause).
+            const mergedRow = { ...concept, ...data.concept } as Record<string, unknown>;
+            return normalizeStudioCustomerConcept(mergedRow);
+          })
         );
       }
 
