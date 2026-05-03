@@ -4,7 +4,7 @@ import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 
 const router = Router();
-const ADMIN_ONLY = requireRole(['admin', 'content_manager']);
+const ADMIN_ONLY = requireRole(['admin']);
 
 // GET /api/admin/subscriptions
 router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {

@@ -4,7 +4,7 @@ import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 
 const router = Router();
-const ADMIN_OR_CM = requireRole(['admin', 'content_manager']);
+const ADMIN_OR_CM = requireRole(['admin']);
 const ADMIN_ONLY = requireRole(['admin']);
 
 function mapRow(row: Record<string, any>, ownerNameById: Map<string, string>) {

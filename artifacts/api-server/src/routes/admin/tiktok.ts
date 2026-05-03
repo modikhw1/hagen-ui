@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { logger } from '../../lib/logger.js';
 
 const router = Router();
-const ADMIN_ONLY = requireRole(['admin', 'content_manager']);
+const ADMIN_ONLY = requireRole(['admin']);
 
 function deriveTikTokHandle(input: string): string | null {
   const trimmed = input.trim();

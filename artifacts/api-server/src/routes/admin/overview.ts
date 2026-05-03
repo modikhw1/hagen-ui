@@ -4,7 +4,7 @@ import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 
 const router = Router();
-const ADMIN_ONLY = requireRole(['admin', 'content_manager']);
+const ADMIN_ONLY = requireRole(['admin']);
 
 function formatSek(ore: number) {
   const sek = Math.round(ore / 100);

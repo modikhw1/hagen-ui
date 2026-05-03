@@ -653,8 +653,15 @@ router.post('/feed-spans', requireAuth, CM_ONLY, async (req, res) => {
 router.patch('/feed-spans/:spanId', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { spanId } = req.params;
-    const body = req.body as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
+    const { data: spanRow } = await supabase
+      .from('feed_spans').select('customer_id').eq('id', spanId).maybeSingle();
+    if (!spanRow) {
+      res.status(404).json({ error: 'Spann hittades inte' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, (spanRow as { customer_id: string }).customer_id))) return;
+    const body = req.body as Record<string, unknown>;
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     const allowed = ['label', 'color', 'start_feed_order', 'end_feed_order', 'frac_start', 'frac_end'];
     for (const key of allowed) {
@@ -683,6 +690,13 @@ router.delete('/feed-spans/:spanId', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { spanId } = req.params;
     const supabase = createSupabaseAdmin();
+    const { data: spanRow } = await supabase
+      .from('feed_spans').select('customer_id').eq('id', spanId).maybeSingle();
+    if (!spanRow) {
+      res.status(404).json({ error: 'Spann hittades inte' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, (spanRow as { customer_id: string }).customer_id))) return;
     const { error } = await supabase.from('feed_spans').delete().eq('id', spanId);
     if (error) {
       res.status(500).json({ error: error.message });
@@ -812,6 +826,7 @@ router.post('/email/send', requireAuth, CM_ONLY, async (req, res) => {
       res.status(400).json({ error: 'customer_id is required' });
       return;
     }
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
 
     const resendApiKey = process.env['RESEND_API_KEY'];
     const fromEmail = process.env['RESEND_FROM_EMAIL'] ?? 'LeTrend <hej@letrend.se>';
@@ -876,6 +891,13 @@ router.get('/email/jobs', requireAuth, CM_ONLY, async (req, res) => {
     const supabase = createSupabaseAdmin();
     const customerId = req.query['customer_id'] as string | undefined;
     const limit = Math.min(Number(req.query['limit'] ?? 10), 100);
+    const isAdmin = Boolean(req.user?.is_admin || req.user?.role === 'admin');
+    if (customerId) {
+      if (!(await ensureCustomerAccess(req, res, customerId))) return;
+    } else if (!isAdmin) {
+      res.status(400).json({ error: 'customer_id is required' });
+      return;
+    }
 
     let query = (supabase as any)
       .from('email_jobs')
@@ -912,6 +934,7 @@ router.get('/email/jobs/:jobId', requireAuth, CM_ONLY, async (req, res) => {
       res.status(404).json({ error: 'E-postjobb hittades inte' });
       return;
     }
+    if (!(await ensureCustomerAccess(req, res, (data as { customer_id?: string }).customer_id))) return;
     res.json({ job: data });
   } catch (err) {
     logger.error(err, 'studio-v2 email job by id error');
@@ -923,6 +946,13 @@ router.get('/email/jobs/:jobId', requireAuth, CM_ONLY, async (req, res) => {
 router.patch('/email/jobs/:jobId', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
+    const { data: jobRow } = await (supabase as any)
+      .from('email_jobs').select('customer_id').eq('id', req.params['jobId']).maybeSingle();
+    if (!jobRow) {
+      res.status(404).json({ error: 'E-postjobb hittades inte' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, (jobRow as { customer_id?: string }).customer_id))) return;
     const body = req.body as Record<string, unknown>;
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     const allowed = ['status', 'error_message', 'sent_at'];
@@ -984,6 +1014,7 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
       res.status(404).json({ error: 'Imported history row not found' });
       return;
     }
+    if (!(await ensureCustomerAccess(req, res, (historyRow as { customer_profile_id: string }).customer_profile_id))) return;
     if ((historyRow as Record<string, unknown>).concept_id) {
       res.status(409).json({ error: 'Only imported TikTok history can be reconciled' });
       return;
@@ -1019,8 +1050,15 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
 router.patch('/concepts/:conceptId', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { conceptId } = req.params;
-    const body = req.body as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
+    const { data: cc } = await supabase
+      .from('customer_concepts').select('customer_profile_id').eq('id', conceptId).maybeSingle();
+    if (!cc) {
+      res.status(404).json({ error: 'Koncept hittades inte' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, (cc as { customer_profile_id: string }).customer_profile_id))) return;
+    const body = req.body as Record<string, unknown>;
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
     const allowed = ['status', 'content_overrides', 'cm_note', 'tiktok_url', 'tiktok_thumbnail_url', 'tiktok_views', 'tiktok_likes', 'published_at', 'produced_at', 'feed_order', 'planned_publish_at'];
     for (const key of allowed) {
