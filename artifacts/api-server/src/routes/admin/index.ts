@@ -38,33 +38,86 @@ router.use('/account-managers', teamRouter);
 router.use('/concepts', conceptsRouter);
 
 // Notifications
+async function buildNotificationItems(req: any) {
+  const supabase = createSupabaseAdmin();
+  const limit = Math.min(Number(req.query?.['limit'] ?? 50), 100);
+
+  const { data: rows } = await (supabase as any)
+    .from('cm_notifications')
+    .select('id, from_cm_id, customer_id, message, priority, created_at, resolved_at')
+    .is('resolved_at', null)
+    .order('priority', { ascending: false })
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  const list = (rows ?? []) as any[];
+
+  // Lookup CM names
+  const cmIds = Array.from(new Set(list.map((r) => r.from_cm_id).filter(Boolean)));
+  const cmNameById = new Map<string, string>();
+  if (cmIds.length > 0) {
+    const { data: members } = await (supabase as any)
+      .from('team_members')
+      .select('id, name')
+      .in('id', cmIds);
+    for (const m of members ?? []) cmNameById.set(m.id, m.name ?? '');
+  }
+
+  const ids = list.map((r) => r.id);
+  const snoozedIds = new Set<string>();
+  if (ids.length > 0) {
+    const nowIso = new Date().toISOString();
+    const { data: snoozes } = await (supabase as any)
+      .from('attention_snoozes')
+      .select('subject_id, snoozed_until, released_at')
+      .eq('subject_type', 'cm_notification')
+      .in('subject_id', ids);
+    for (const s of (snoozes ?? []) as any[]) {
+      const stillSnoozed =
+        !s.released_at && (!s.snoozed_until || s.snoozed_until > nowIso);
+      if (stillSnoozed) snoozedIds.add(s.subject_id);
+    }
+  }
+
+  const all = list.map((r) => ({
+    kind: 'cm_notification' as const,
+    id: String(r.id),
+    subjectType: 'cm_notification' as const,
+    subjectId: String(r.id),
+    priority: r.priority === 'urgent' ? ('urgent' as const) : ('normal' as const),
+    createdAt: r.created_at,
+    from: cmNameById.get(r.from_cm_id) ?? 'Okänd',
+    message: r.message ?? '',
+    customerId: r.customer_id ?? null,
+    cmName: cmNameById.get(r.from_cm_id) ?? undefined,
+  }));
+
+  const items = all.filter((it) => !snoozedIds.has(it.id));
+  const snoozedItems = all.filter((it) => snoozedIds.has(it.id));
+  return { items, snoozedItems };
+}
+
 router.get('/notifications', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
-    const supabase = createSupabaseAdmin();
-    const limit = Math.min(Number(req.query['limit'] ?? 20), 100);
-
-    const { data, error } = await (supabase as any)
-      .from('audit_log')
-      .select('id, actor_email, action, entity_type, entity_id, created_at, metadata')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      res.json({ notifications: [], items: [], unreadCount: 0, totalCount: 0, snoozedCount: 0, snoozedItems: [], lastSeenAt: null });
-      return;
-    }
-
+    const { items, snoozedItems } = await buildNotificationItems(req);
     res.json({
-      notifications: data ?? [],
-      items: data ?? [],
-      unreadCount: 0,
-      totalCount: (data ?? []).length,
-      snoozedCount: 0,
-      snoozedItems: [],
+      items,
+      snoozedItems,
+      unreadCount: items.length,
+      totalCount: items.length,
+      snoozedCount: snoozedItems.length,
       lastSeenAt: null,
     });
-  } catch {
-    res.json({ notifications: [], items: [], unreadCount: 0, totalCount: 0, snoozedCount: 0, snoozedItems: [], lastSeenAt: null });
+  } catch (err) {
+    logger.error(err, 'admin notifications GET error');
+    res.json({
+      items: [],
+      snoozedItems: [],
+      unreadCount: 0,
+      totalCount: 0,
+      snoozedCount: 0,
+      lastSeenAt: null,
+    });
   }
 });
 
@@ -72,8 +125,35 @@ router.post('/notifications/mark-seen', requireAuth, ADMIN_ONLY, (_req, res) => 
   res.json({ success: true });
 });
 
-router.get('/notifications/unread-count', requireAuth, ADMIN_ONLY, (_req, res) => {
-  res.json({ count: 0, fetchedAt: new Date().toISOString() });
+router.post('/notifications/:id/read', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { id } = req.params;
+    await (supabase as any)
+      .from('cm_notifications')
+      .update({
+        resolved_at: new Date().toISOString(),
+        resolved_by_admin_id: req.user?.id ?? null,
+      })
+      .eq('id', id);
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'admin notification mark read error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+router.get('/notifications/unread-count', requireAuth, ADMIN_ONLY, async (_req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { count } = await (supabase as any)
+      .from('cm_notifications')
+      .select('id', { count: 'exact', head: true })
+      .is('resolved_at', null);
+    res.json({ count: count ?? 0, fetchedAt: new Date().toISOString() });
+  } catch {
+    res.json({ count: 0, fetchedAt: new Date().toISOString() });
+  }
 });
 
 // Service costs alias (used by some hooks)
