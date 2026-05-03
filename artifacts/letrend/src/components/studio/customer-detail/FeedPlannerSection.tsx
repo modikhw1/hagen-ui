@@ -323,7 +323,7 @@ export function FeedPlannerSection({
   // Bygg slot-map
   const slotMap = React.useMemo(() =>
     buildSlotMap(
-      concepts.filter((concept) => concept.placement?.feed_order !== null),
+      concepts.filter((concept) => concept.placement != null && concept.placement.feed_order !== null),
       gridConfig,
       historyOffset
     ),

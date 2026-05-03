@@ -52,7 +52,7 @@ export function buildSlotMap(
   const lowestMeaningful = getMeaningfulFloor(concepts);
   const conceptByFeedOrder = new Map(
     concepts
-      .map((concept) => [concept.placement.feed_order, concept] as const)
+      .map((concept) => [concept.placement?.feed_order, concept] as const)
       .filter((entry): entry is [number, CustomerConcept] => typeof entry[0] === 'number')
   );
   const slots: Array<FeedSlot | null> = Array.from({ length: totalSlots }, (_, slotIndex) => {
