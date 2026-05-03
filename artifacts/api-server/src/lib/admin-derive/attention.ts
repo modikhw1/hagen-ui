@@ -612,3 +612,54 @@ export function sortAttention(items: AttentionItem[], now: Date = new Date()) {
 }
 
 export { attentionTimestamp };
+
+/**
+ * Returns a millisecond timestamp representing how recent an attention item
+ * is, used by the bell badge to decide whether the item is "newer than the
+ * admin's last seen at". Mirrors the semantics of `attentionTimestamp` but
+ * returns a number (or null when no comparable timestamp exists).
+ */
+export function attentionTimestampMs(
+  item: AttentionItem,
+  now: Date = new Date(),
+): number | null {
+  switch (item.kind) {
+    case 'cm_notification':
+    case 'credit_note_failed':
+      return item.createdAt ? Date.parse(item.createdAt) : null;
+    case 'demo_responded':
+      return item.respondedAt ? Date.parse(item.respondedAt) : null;
+    case 'cm_change_due_today':
+      return item.effectiveDate ? Date.parse(item.effectiveDate) : null;
+    case 'pause_resume_due_today':
+      return item.resumeDate ? Date.parse(item.resumeDate) : null;
+    case 'invoice_unpaid':
+      return now.getTime() - Number(item.daysPastDue ?? 0) * 86_400_000;
+    case 'onboarding_stuck':
+      return now.getTime() - Number(item.daysSinceCmReady ?? 0) * 86_400_000;
+    case 'customer_blocked':
+      return now.getTime() - Number(item.daysBlocked ?? 0) * 86_400_000;
+    case 'cm_low_activity':
+      return now.getTime() - 7 * 86_400_000;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Counts how many open attention items are "unread" relative to the admin's
+ * last seen timestamp. When `lastSeenAt` is null/missing, every open item
+ * counts as unread. Otherwise an item counts only when it has a comparable
+ * timestamp strictly newer than `lastSeenAt`.
+ */
+export function computeUnreadCount(
+  openItems: AttentionItem[],
+  lastSeenAt: string | null,
+  now: Date = new Date(),
+): number {
+  const lastSeenMs = lastSeenAt ? Date.parse(lastSeenAt) : 0;
+  return openItems.filter((it) => {
+    const ts = attentionTimestampMs(it, now);
+    return !lastSeenAt || (ts !== null && ts > lastSeenMs);
+  }).length;
+}

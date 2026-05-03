@@ -15,7 +15,7 @@ import conceptsRouter from './concepts.js';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
-import { deriveAttention } from '../../lib/admin-derive/attention.js';
+import { deriveAttention, computeUnreadCount } from '../../lib/admin-derive/attention.js';
 import { getLastSeenAt, markSeen, type SeenSurface } from '../../lib/admin-derive/last-seen.js';
 
 const router = Router();
@@ -95,11 +95,7 @@ router.get('/notifications', requireAuth, ADMIN_ONLY, async (req, res) => {
       adminId ? getLastSeenAt(supabase, adminId, 'notifications') : Promise.resolve(null),
     ]);
 
-    const lastSeenMs = lastSeenAt ? Date.parse(lastSeenAt) : 0;
-    const unreadCount = open.filter((it) => {
-      const ts = itemTimestampMs(it);
-      return !lastSeenAt || (ts !== null && ts > lastSeenMs);
-    }).length;
+    const unreadCount = computeUnreadCount(open, lastSeenAt);
 
     res.json({
       items: open,
@@ -167,42 +163,13 @@ router.get('/notifications/unread-count', requireAuth, ADMIN_ONLY, async (req, r
       deriveAttention(supabase),
       adminId ? getLastSeenAt(supabase, adminId, 'notifications') : Promise.resolve(null),
     ]);
-    const lastSeenMs = lastSeenAt ? Date.parse(lastSeenAt) : 0;
-    const count = open.filter((it) => {
-      const ts = itemTimestampMs(it);
-      return !lastSeenAt || (ts !== null && ts > lastSeenMs);
-    }).length;
+    const count = computeUnreadCount(open, lastSeenAt);
     res.json({ count, fetchedAt: new Date().toISOString() });
   } catch (err) {
     logger.error(err, 'admin notifications unread-count error');
     res.json({ count: 0, fetchedAt: new Date().toISOString() });
   }
 });
-
-function itemTimestampMs(item: any): number | null {
-  switch (item.kind) {
-    case 'cm_notification':
-    case 'credit_note_failed':
-      return item.createdAt ? Date.parse(item.createdAt) : null;
-    case 'demo_responded':
-      return item.respondedAt ? Date.parse(item.respondedAt) : null;
-    case 'cm_change_due_today':
-      return item.effectiveDate ? Date.parse(item.effectiveDate) : null;
-    case 'pause_resume_due_today':
-      return item.resumeDate ? Date.parse(item.resumeDate) : null;
-    case 'invoice_unpaid':
-      return Date.now() - Number(item.daysPastDue ?? 0) * 86_400_000;
-    case 'onboarding_stuck':
-      return Date.now() - Number(item.daysSinceCmReady ?? 0) * 86_400_000;
-    case 'customer_blocked':
-      return Date.now() - Number(item.daysBlocked ?? 0) * 86_400_000;
-    case 'cm_low_activity':
-      return Date.now() - 7 * 86_400_000;
-    default:
-      return null;
-  }
-}
-
 
 // POST /api/admin/attention/:subjectType/:subjectId/snooze
 router.post('/attention/:subjectType/:subjectId/snooze', requireAuth, ADMIN_ONLY, async (req, res) => {
