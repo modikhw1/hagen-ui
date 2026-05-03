@@ -2,6 +2,11 @@
 
 import React from 'react';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
+import { supabase } from '@/lib/supabase/client';
+
+const ALLOWED_AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const COLLABORATOR_AVATAR_BUCKET = 'team-avatars';
 
 export type CollaborationScopeId = 'medverka' | 'skriva' | 'producera' | 'skriva_medverka';
 
@@ -118,9 +123,50 @@ export function CollaborationModal({
     ...EMPTY_COLLABORATION_FORM,
     ...(initialValues ?? {}),
   });
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = React.useState(false);
+  const [avatarError, setAvatarError] = React.useState<string | null>(null);
 
   const update = <K extends keyof CollaborationFormValues>(key: K, val: CollaborationFormValues[K]) => {
     setValues((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handlePickAvatar = () => {
+    if (uploading) return;
+    setAvatarError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleAvatarFile = async (file: File) => {
+    setAvatarError(null);
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setAvatarError('Filtypen stöds inte. Använd PNG, JPG eller WebP.');
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarError('Bilden är för stor (max 5 MB).');
+      return;
+    }
+    setUploading(true);
+    try {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `collaborator/${crypto.randomUUID()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from(COLLABORATOR_AVATAR_BUCKET)
+        .upload(path, file, {
+          contentType: file.type,
+          cacheControl: '31536000',
+          upsert: false,
+        });
+      if (uploadErr) throw uploadErr;
+      const { data } = supabase.storage.from(COLLABORATOR_AVATAR_BUCKET).getPublicUrl(path);
+      update('collaborator_avatar_url', data.publicUrl);
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Kunde inte ladda upp bilden.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const toggleScope = (id: CollaborationScopeId) => {
@@ -130,7 +176,7 @@ export function CollaborationModal({
     }));
   };
 
-  const canSave = values.partner_name.trim().length > 0 && !saving;
+  const canSave = values.partner_name.trim().length > 0 && !saving && !uploading;
 
   const handleSave = async () => {
     if (!canSave) return;
@@ -202,38 +248,53 @@ export function CollaborationModal({
 
         <Section label="Profil">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {values.collaborator_avatar_url ? (
-              <img
-                src={values.collaborator_avatar_url}
-                alt={values.partner_name || 'Profil'}
-                style={{
-                  width: 54,
-                  height: 54,
-                  borderRadius: '50%',
-                  objectFit: 'cover',
-                  border: `1.5px solid ${LeTrendColors.border}`,
-                  flexShrink: 0,
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: 54,
-                  height: 54,
-                  borderRadius: '50%',
-                  border: `1.5px dashed rgba(74,47,24,0.25)`,
-                  background: CREAM,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 18,
-                  flexShrink: 0,
-                  color: LeTrendColors.textMuted,
-                }}
-              >
-                ＋
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={handlePickAvatar}
+              disabled={uploading}
+              aria-label={values.collaborator_avatar_url ? 'Byt profilbild' : 'Ladda upp profilbild'}
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: '50%',
+                padding: 0,
+                border: values.collaborator_avatar_url
+                  ? `1.5px solid ${LeTrendColors.border}`
+                  : `1.5px dashed rgba(74,47,24,0.25)`,
+                background: values.collaborator_avatar_url ? 'transparent' : CREAM,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 18,
+                flexShrink: 0,
+                color: LeTrendColors.textMuted,
+                cursor: uploading ? 'progress' : 'pointer',
+                overflow: 'hidden',
+                opacity: uploading ? 0.6 : 1,
+              }}
+            >
+              {values.collaborator_avatar_url ? (
+                <img
+                  src={values.collaborator_avatar_url}
+                  alt={values.partner_name || 'Profil'}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              ) : uploading ? (
+                <span style={{ fontSize: 10, fontWeight: 600 }}>...</span>
+              ) : (
+                '＋'
+              )}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ALLOWED_AVATAR_TYPES.join(',')}
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleAvatarFile(file);
+              }}
+            />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
               <input
                 type="text"
@@ -251,13 +312,18 @@ export function CollaborationModal({
               />
             </div>
           </div>
-          <input
-            type="url"
-            value={values.collaborator_avatar_url}
-            onChange={(e) => update('collaborator_avatar_url', e.target.value)}
-            placeholder="Avatar-URL (valfritt)"
-            style={{ ...inputStyle, width: '100%', marginTop: 6 }}
-          />
+          {avatarError && (
+            <div
+              role="alert"
+              style={{
+                fontSize: 11,
+                color: '#b3261e',
+                marginTop: 4,
+              }}
+            >
+              {avatarError}
+            </div>
+          )}
         </Section>
 
         <Section label="Scope">
