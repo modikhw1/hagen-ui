@@ -76,15 +76,18 @@ export function useSubscriptionPricePreview({
       setError(null);
 
       try {
-        const res = await fetch(`/api/admin/customers/${customerId}/subscription-preview`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            monthly_price: newMonthlyPriceKr,
-            mode,
-          }),
-        });
+        const res = await fetch(
+          `/api/admin/customers/${customerId}/subscription-price/preview`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              monthly_price_sek: newMonthlyPriceKr,
+              mode,
+            }),
+          },
+        );
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));

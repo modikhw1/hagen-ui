@@ -279,6 +279,7 @@ export async function loadAdminCustomerHeader(id: string) {
             onboarding_state, paused_until, archived_at,
             concepts_per_week, expected_concepts_per_week,
             pricing_status,
+            stripe_customer_id, stripe_subscription_id,
             discount_type, discount_value, discount_ends_at,
             subscriptions (status, current_period_end)
           `)
@@ -357,6 +358,9 @@ export async function loadAdminCustomerHeader(id: string) {
         derived_status: derivedStatus,
         monthly_price_ore: monthlyPriceOre,
         pricing_status: (data.pricing_status as string | null) ?? null,
+        stripe_customer_id: (data.stripe_customer_id as string | null) ?? null,
+        stripe_subscription_id:
+          (data.stripe_subscription_id as string | null) ?? null,
         account_manager_name: accountManagerName,
         account_manager_avatar_url: accountManagerAvatarUrl,
         next_invoice_date: nextInvoiceDate ?? null,

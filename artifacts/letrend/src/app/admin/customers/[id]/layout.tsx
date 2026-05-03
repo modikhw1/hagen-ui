@@ -27,7 +27,15 @@ function CustomerHeader({ id }: { id: string }) {
 
   const statusConfig = customerStatusConfig(customer.status);
   const studioHref = studioUrlForCustomer({ id: customer.id, status: customer.status });
-  const showOnboarding = customer.onboarding_state && customer.onboarding_state !== 'live';
+  // Suppress the redundant "Onboarding: …" pill once the customer has reached
+  // a settled lifecycle status (active / paused / cancelled / archived). For
+  // those customers the main status pill already conveys the truth and the
+  // legacy onboarding_state column is just stale metadata.
+  const settledStatuses = ['active', 'paused', 'cancelled', 'archived'];
+  const showOnboarding =
+    customer.onboarding_state &&
+    customer.onboarding_state !== 'live' &&
+    !settledStatuses.includes(String(customer.status ?? ''));
   const accountManagerName = customer.account_manager ?? null;
   const accountManagerAvatar = customer.cm_avatar_url ?? null;
 

@@ -100,10 +100,19 @@ export function deriveHeaderBanner(
     };
   }
 
-  if (
-    customer.pricing_status === 'unknown' ||
-    (!customer.monthly_price_ore && (status === 'draft' || customer.agreed_at))
-  ) {
+  // "Pris saknas" should only fire when there is genuinely no price source.
+  // A live Stripe subscription (stripe_subscription_id present) or a real
+  // monthly_price_ore both count as evidence that pricing has been set, even
+  // if the legacy `pricing_status` column is still 'unknown'.
+  const hasStripeSub = Boolean((customer as any).stripe_subscription_id);
+  const hasRealMonthlyPrice = (customer.monthly_price_ore ?? 0) > 0;
+  const pricingMissing =
+    !hasStripeSub &&
+    !hasRealMonthlyPrice &&
+    (customer.pricing_status === 'unknown' ||
+      status === 'draft' ||
+      customer.agreed_at);
+  if (pricingMissing) {
     return {
       tone: 'warning',
       icon: TagIcon,

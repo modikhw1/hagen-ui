@@ -155,7 +155,19 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
   const { data: customer } = useCustomerDetail(customerId);
   const canManageBilling = permissions?.canManageBilling === true;
   const hasStripeCustomer = Boolean(data.stripe_customer_id);
-  const hasSubscriptionLink = Boolean(data.stripe_subscription_id);
+  // A subscription is considered "linked" primarily by the local mirror's
+  // stripe_subscription_id. As a fallback (covers the case where the local
+  // mirror lags behind a freshly created Stripe sub) we also accept a live
+  // subscription_status of 'active' / 'trialing' — but ONLY when we already
+  // have a stripe_customer_id, since 'paused' and 'past_due' can also be
+  // produced by purely local derivation (paused_until / lifecycle status)
+  // and would otherwise enable destructive actions on customers with no
+  // real Stripe link.
+  const stripeSourcedStatuses = ['active', 'trialing'];
+  const hasSubscriptionLink =
+    Boolean(data.stripe_subscription_id) ||
+    (hasStripeCustomer &&
+      stripeSourcedStatuses.includes(data.subscription_status ?? ''));
   const hasManageableBillingEnvironment = !data.environment_warning;
 
   const contractState = deriveCustomerContractState({
