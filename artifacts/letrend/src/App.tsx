@@ -81,8 +81,14 @@ function AppRoutes() {
         <Route path="/admin/team" component={lazy(() => import("@/app/admin/team/page"))} />
         <Route path="/admin/team/payroll" component={lazy(() => import("@/app/admin/team/payroll/page"))} />
 
+        <Route path="/studio" component={lazy(() => import("@/app/studio/page"))} />
+        <Route path="/studio/customers" component={lazy(() => import("@/app/studio/customers/page"))} />
+        <Route path="/studio/customers/:id" component={lazy(() => import("@/app/studio/customers/[id]/page"))} />
+        <Route path="/studio/concepts" component={lazy(() => import("@/app/studio/concepts/page"))} />
         <Route path="/studio/concepts/:id" component={lazy(() => import("@/app/studio/concepts/[id]/page"))} />
         <Route path="/studio/concepts/:id/edit" component={lazy(() => import("@/app/studio/concepts/[id]/edit/page"))} />
+        <Route path="/studio/concepts/:id/review" component={lazy(() => import("@/app/studio/concepts/[id]/review/page"))} />
+        <Route path="/studio/invoices" component={lazy(() => import("@/app/studio/invoices/page"))} />
 
         <Route component={NotFound} />
       </Switch>
@@ -115,7 +121,7 @@ function RootPage() {
     if (role === "admin") {
       navigate("/admin");
     } else if (role === "content_manager") {
-      navigate("/studio/customers" as "/");
+      navigate("/studio/customers");
     } else {
       navigate("/feed");
     }
