@@ -60,7 +60,13 @@ export function CustomerFeedShell() {
       return;
     }
 
-    if (role && role !== 'customer') {
+    // Profile fetch done but no row (or fetch failed): redirect to onboarding
+    if (!profile) {
+      router.replace('/welcome');
+      return;
+    }
+
+    if (role !== 'customer') {
       router.replace(getPrimaryRouteForRole(profile, { fallback: '/feed' }));
     }
   }, [authLoading, profile, role, router, user]);

@@ -17,7 +17,13 @@ export default function RootPage() {
       return;
     }
 
-    router.replace(getPrimaryRouteForRole(profile, { fallback: '/feed' }));
+    // loading=false + profile=null means no profile row → send to onboarding
+    if (!profile) {
+      router.replace('/welcome');
+      return;
+    }
+
+    router.replace(getPrimaryRouteForRole(profile, { fallback: '/welcome' }));
   }, [loading, profile, router, user]);
 
   return (

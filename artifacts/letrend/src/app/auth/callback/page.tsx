@@ -37,7 +37,9 @@ async function resolveRoleDestination(userId: string): Promise<string> {
     .eq('id', userId)
     .maybeSingle();
 
-  return getPrimaryRouteForRole(profileData, { fallback: '/feed' });
+  // No profile row yet → send to onboarding, not the customer feed
+  if (!profileData) return '/welcome';
+  return getPrimaryRouteForRole(profileData, { fallback: '/welcome' });
 }
 
 function AuthCallbackContent() {
