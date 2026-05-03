@@ -28,7 +28,7 @@ function toCollaborationCardData(concept: CustomerConcept): CollaborationCardDat
     ),
     price: concept.price,
     confirmed: concept.confirmed,
-    date: concept.result.planned_publish_at ?? null,
+    date: concept.result?.planned_publish_at ?? null,
     date_type: concept.collaboration_date_type ?? 'exact',
   };
 }
@@ -41,7 +41,7 @@ function toCollaborationFormValues(concept: CustomerConcept): CollaborationFormV
     scope: (concept.scope ?? []).filter((s): s is CollaborationScopeId =>
       s === 'medverka' || s === 'skriva' || s === 'producera' || s === 'skriva_medverka'
     ),
-    date: concept.result.planned_publish_at
+    date: concept.result?.planned_publish_at
       ? concept.result.planned_publish_at.slice(0, 10)
       : '',
     date_type: concept.collaboration_date_type ?? 'exact',
