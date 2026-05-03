@@ -801,18 +801,17 @@ export default function StudioConceptsPage() {
     }
   }, [user?.id]);
 
-  const fetchPendingConcepts = useCallback(async (scope: LibraryScope) => {
+  const fetchPendingConcepts = useCallback(async (_scope: LibraryScope) => {
     try {
-      let query = supabase
+      // Drafts (is_active=false) are visible to the whole CM team regardless of scope —
+      // unpublished work is shared so anyone can pick it up via "Ta över".
+      void _scope;
+      const query = supabase
         .from('concepts')
         .select('id, overrides, created_at, created_by, reviewed_at, reviewed_by')
         .eq('is_active', false)
         .order('created_at', { ascending: false })
         .limit(20);
-
-      if (scope === 'mine' && user?.id) {
-        query = query.eq('created_by', user.id);
-      }
 
       const { data } = await query;
 

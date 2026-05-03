@@ -33,7 +33,29 @@ router.get('/', requireAuth, CM_ONLY, async (req, res) => {
       res.status(500).json({ error: error.message });
       return;
     }
-    res.json({ concepts: data ?? [] });
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    const ownerIds = Array.from(new Set(
+      rows.map((r) => r['created_by']).filter((v): v is string => typeof v === 'string')
+    ));
+    let ownerMap: Record<string, string> = {};
+    if (ownerIds.length > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', ownerIds);
+      for (const p of profs ?? []) {
+        const id = (p as { id?: string }).id;
+        const name = (p as { full_name?: string | null; email?: string | null }).full_name
+          || (p as { email?: string | null }).email
+          || null;
+        if (id && name) ownerMap[id] = name;
+      }
+    }
+    const enriched = rows.map((r) => ({
+      ...r,
+      created_by_name: typeof r['created_by'] === 'string' ? ownerMap[r['created_by'] as string] ?? null : null,
+    }));
+    res.json({ concepts: enriched });
   } catch (err) {
     logger.error(err, 'admin concepts GET error');
     res.status(500).json({ error: 'Internt serverfel' });
@@ -89,7 +111,19 @@ router.get('/:id', requireAuth, CM_ONLY, async (req, res) => {
       res.status(500).json({ error: error.message });
       return;
     }
-    res.json({ concept: data });
+    let createdByName: string | null = null;
+    const ownerId = (data as { created_by?: string | null })?.created_by;
+    if (typeof ownerId === 'string') {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', ownerId)
+        .maybeSingle();
+      createdByName = (prof as { full_name?: string | null } | null)?.full_name
+        || (prof as { email?: string | null } | null)?.email
+        || null;
+    }
+    res.json({ concept: { ...(data as Record<string, unknown>), created_by_name: createdByName } });
   } catch (err) {
     logger.error(err, 'admin concept by id GET error');
     res.status(500).json({ error: 'Internt serverfel' });
@@ -107,8 +141,15 @@ async function patchHandler(req: Request, res: Response) {
       if (key in body) patch[key] = body[key];
     }
 
-    // Take-over: a CM can claim ownership of someone else's concept.
-    if (body['take_over'] === true) {
+    let previousOwner: string | null = null;
+    const takingOver = body['take_over'] === true;
+    if (takingOver) {
+      const { data: prior } = await supabase
+        .from('concepts')
+        .select('created_by')
+        .eq('id', req.params['id'])
+        .single();
+      previousOwner = (prior?.created_by as string | null) ?? null;
       patch['created_by'] = req.user!.id;
     }
 
@@ -123,6 +164,22 @@ async function patchHandler(req: Request, res: Response) {
       res.status(500).json({ error: error.message });
       return;
     }
+
+    if (takingOver && previousOwner !== req.user!.id) {
+      const { error: auditErr } = await supabase
+        .from('concept_ownership_audit')
+        .insert({
+          concept_id: req.params['id'],
+          previous_owner: previousOwner,
+          new_owner: req.user!.id,
+          actor: req.user!.id,
+          reason: typeof body['take_over_reason'] === 'string' ? body['take_over_reason'] : 'Ta över',
+        });
+      if (auditErr) {
+        logger.warn({ err: auditErr, conceptId: req.params['id'] }, 'concept take-over audit insert failed');
+      }
+    }
+
     res.json({ concept: data });
   } catch (err) {
     logger.error(err, 'admin concept PATCH error');

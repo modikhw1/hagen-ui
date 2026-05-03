@@ -98,6 +98,7 @@ export default function ConceptReviewPage() {
   const [saved, setSaved] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [createdBy, setCreatedBy] = useState<string | null>(null);
+  const [createdByName, setCreatedByName] = useState<string | null>(null);
   const [togglingActive, setTogglingActive] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -147,6 +148,7 @@ export default function ConceptReviewPage() {
       setRaw(concept);
       setIsActive(concept.is_active);
       setCreatedBy(concept.created_by ?? null);
+      setCreatedByName(((concept as unknown) as { created_by_name?: string | null }).created_by_name ?? null);
       setHeadlineSv(overrides.headline_sv ?? translated.headline_sv ?? '');
       setDescriptionSv(overrides.description_sv ?? translated.description_sv ?? '');
       setWhyItWorksSv(overrides.whyItWorks_sv ?? translated.whyItWorks_sv ?? '');
@@ -369,8 +371,11 @@ export default function ConceptReviewPage() {
             <span style={{ padding: '4px 10px', borderRadius: 999, background: isActive ? '#dcfce7' : '#fef3c7', color: isActive ? '#166534' : '#92400e', fontSize: 12, fontWeight: 700 }}>{lifecycleStage}</span>
             {draftQueueLabel ? <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>{draftQueueLabel}</span> : null}
             {createdBy ? (
-              <span style={{ fontSize: 12, color: isOwner ? '#16a34a' : '#6b7280', fontWeight: 600 }}>
-                {isOwner ? '🟢 Du äger' : `👤 Ägare: ${createdBy.slice(0, 8)}…`}
+              <span style={{ fontSize: 12, color: isOwner ? '#16a34a' : '#6b7280', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', background: isOwner ? '#16a34a' : '#9ca3af', color: '#fff', fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {(createdByName || createdBy).slice(0, 1).toUpperCase()}
+                </span>
+                {isOwner ? 'Du äger' : `Ägare: ${createdByName || createdBy.slice(0, 8) + '…'}`}
               </span>
             ) : null}
             {!isOwner && createdBy && user ? (
