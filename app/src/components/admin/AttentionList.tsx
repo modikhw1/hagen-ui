@@ -274,12 +274,12 @@ function hrefForItem(item: AttentionItem) {
     case 'demo_responded': return '/admin/demos?focus=responded';
     case 'cm_low_activity': return `/admin/team?focus=${item.subjectId}`;
     case 'cm_notification': return item.customerId ? `/admin/customers/${item.customerId}/activity` : '/admin/team';
-    case 'invoice_unpaid': return `/admin/customers/${item.customerId}/billing/${item.id}`;
+    case 'invoice_unpaid': return `/admin/customers/${item.customerId}/avtal/${item.id}`;
     case 'onboarding_stuck': return `/admin/customers/${item.customerId}`;
     case 'customer_blocked': return `/admin/customers/${item.customerId}`;
-    case 'cm_change_due_today': return `/admin/customers/${item.customerId}/operations#cm`;
-    case 'pause_resume_due_today': return `/admin/customers/${item.customerId}/operations`;
-    case 'credit_note_failed': return `/admin/customers/${item.customerId}/billing`;
+    case 'cm_change_due_today': return `/admin/customers/${item.customerId}#cm`;
+    case 'pause_resume_due_today': return `/admin/customers/${item.customerId}/avtal`;
+    case 'credit_note_failed': return `/admin/customers/${item.customerId}/avtal`;
     default: return '#';
   }
 }

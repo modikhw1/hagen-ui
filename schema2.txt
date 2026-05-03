@@ -1,0 +1,1314 @@
+## Table `admin_billing_reconcile_jobs`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `requested_by` | `uuid` |  Nullable |
+| `scope` | `text` |  |
+| `environment` | `text` |  |
+| `since` | `timestamptz` |  Nullable |
+| `status` | `text` |  |
+| `payload` | `jsonb` |  |
+| `result` | `jsonb` |  Nullable |
+| `error_message` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `started_at` | `timestamptz` |  Nullable |
+| `finished_at` | `timestamptz` |  Nullable |
+
+## Table `admin_customer_action_locks`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `lock_key` | `text` | Primary |
+| `customer_profile_id` | `uuid` |  |
+| `request_id` | `text` |  |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `expires_at` | `timestamptz` |  |
+
+## Table `admin_idempotency_keys`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `key` | `text` | Primary |
+| `operation` | `text` |  |
+| `customer_id` | `uuid` |  Nullable |
+| `demo_id` | `uuid` |  Nullable |
+| `metadata` | `jsonb` |  Nullable |
+| `created_at` | `timestamptz` |  |
+
+## Table `admin_request_log`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `created_at` | `timestamptz` |  |
+| `request_id` | `text` |  |
+| `actor_user_id` | `uuid` |  Nullable |
+| `route` | `text` |  |
+| `action` | `text` |  Nullable |
+| `entity_id` | `text` |  Nullable |
+| `status_code` | `int4` |  |
+| `duration_ms` | `int4` |  |
+
+## Table `admin_user_roles`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` |  |
+| `role` | `admin_role` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `attention_snoozes`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `subject_type` | `attention_subject_type` |  |
+| `subject_id` | `text` |  |
+| `snoozed_until` | `timestamptz` |  Nullable |
+| `note` | `text` |  Nullable |
+| `snoozed_by_admin_id` | `uuid` |  |
+| `snoozed_at` | `timestamptz` |  |
+| `released_at` | `timestamptz` |  Nullable |
+| `release_reason` | `text` |  Nullable |
+
+## Table `audit_log`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `actor_user_id` | `uuid` |  Nullable |
+| `actor_email` | `text` |  Nullable |
+| `actor_role` | `text` |  Nullable |
+| `action` | `text` |  |
+| `entity_type` | `text` |  |
+| `entity_id` | `text` |  Nullable |
+| `before_state` | `jsonb` |  Nullable |
+| `after_state` | `jsonb` |  Nullable |
+| `metadata` | `jsonb` |  Nullable |
+| `created_at` | `timestamptz` |  |
+
+## Table `auto_edit_sessions`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `template_id` | `uuid` |  |
+| `status` | `text` |  |
+| `template_snapshot` | `jsonb` |  |
+| `slot_fills` | `jsonb` |  |
+| `text_overlays` | `jsonb` |  |
+| `audio_selection` | `jsonb` |  Nullable |
+| `render_progress` | `numeric` |  Nullable |
+| `render_url` | `text` |  Nullable |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `auto_edit_templates`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  Nullable |
+| `concept_id` | `text` |  Nullable |
+| `name` | `text` |  |
+| `aspect_ratio` | `text` |  |
+| `total_duration` | `numeric` |  |
+| `replicability_score` | `numeric` |  |
+| `description` | `text` |  |
+| `required_elements` | `jsonb` |  |
+| `variable_elements` | `jsonb` |  |
+| `difficulty` | `text` |  |
+| `content_style` | `text` |  |
+| `content_format` | `text` |  |
+| `target_audience` | `text` |  Nullable |
+| `pacing_score` | `numeric` |  |
+| `tags` | `jsonb` |  |
+| `slots` | `jsonb` |  |
+| `text_overlays` | `jsonb` |  |
+| `audio` | `jsonb` |  |
+| `design_system_id` | `uuid` |  Nullable |
+| `color_mood` | `jsonb` |  Nullable |
+| `typography_hint` | `jsonb` |  Nullable |
+| `preview_url` | `text` |  Nullable |
+| `metadata` | `jsonb` |  |
+| `created_by` | `uuid` |  Nullable |
+| `is_active` | `bool` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `cm_absences`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `cm_id` | `uuid` |  |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `backup_cm_id` | `uuid` |  Nullable |
+| `absence_type` | `text` |  |
+| `compensation_mode` | `text` |  |
+| `starts_on` | `date` |  |
+| `ends_on` | `date` |  |
+| `note` | `text` |  Nullable |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `cm_activities`
+
+Tracks Content Manager activities for admin oversight
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `cm_user_id` | `uuid` |  Nullable |
+| `cm_email` | `text` |  |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `activity_type` | `text` |  |
+| `description` | `text` |  |
+| `metadata` | `jsonb` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `cm_id` | `uuid` |  Nullable |
+| `cm_name` | `text` |  Nullable |
+| `type` | `text` |  Nullable |
+
+## Table `cm_assignments`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `cm_id` | `uuid` |  Nullable |
+| `valid_from` | `date` |  |
+| `valid_to` | `date` |  Nullable |
+| `scheduled_change` | `jsonb` |  Nullable |
+| `handover_note` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `cm_interactions`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `cm_id` | `uuid` |  |
+| `customer_id` | `uuid` |  Nullable |
+| `type` | `text` |  |
+| `metadata` | `jsonb` |  Nullable |
+| `created_at` | `timestamptz` |  |
+
+## Table `cm_library_visits`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `cm_id` | `uuid` | Primary |
+| `last_visit` | `timestamptz` |  Nullable |
+
+## Table `cm_notifications`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `from_cm_id` | `uuid` |  |
+| `customer_id` | `uuid` |  Nullable |
+| `message` | `text` |  |
+| `priority` | `cm_notification_priority` |  |
+| `created_at` | `timestamptz` |  |
+| `resolved_at` | `timestamptz` |  Nullable |
+| `resolved_by_admin_id` | `uuid` |  Nullable |
+| `resolution_note` | `text` |  Nullable |
+
+## Table `cm_tags`
+
+CM:ns tagg-bibliotek för kategorisering av koncept
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `cm_id` | `uuid` |  |
+| `name` | `text` |  |
+| `color` | `text` |  |
+| `created_at` | `timestamptz` |  Nullable |
+
+## Table `collections`
+
+Kollektioner för att gruppera koncept (Fas 3)
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `cm_id` | `uuid` |  |
+| `name` | `text` |  |
+| `color` | `text` |  |
+| `created_at` | `timestamptz` |  Nullable |
+
+## Table `concept_versions`
+
+Version history and audit trail for concept changes
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `concept_id` | `text` |  |
+| `version` | `int4` |  |
+| `backend_data` | `jsonb` |  |
+| `overrides` | `jsonb` |  |
+| `changed_by` | `uuid` |  Nullable |
+| `change_summary` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+
+## Table `concepts`
+
+Master library of TikTok concepts from hagen analysis and CM-created content
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `text` | Primary |
+| `source` | `text` |  |
+| `created_by` | `uuid` |  Nullable |
+| `backend_data` | `jsonb` |  |
+| `overrides` | `jsonb` |  Nullable |
+| `is_active` | `bool` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+| `version` | `int4` |  Nullable |
+| `previous_version` | `jsonb` |  Nullable |
+| `reviewed_at` | `timestamptz` |  Nullable |
+| `reviewed_by` | `uuid` |  Nullable |
+
+## Table `credit_note_operations`
+
+Atomicity anchor för flersteg-operationer mot Stripe (kreditnota + ny faktura). Skapas FÖRE något Stripe-anrop. Status-state-machine säkerställer att vi alltid kan rekonstruera flödet.
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `operation_type` | `text` |  |
+| `customer_profile_id` | `uuid` |  |
+| `source_invoice_id` | `text` |  |
+| `status` | `text` |  |
+| `requires_attention` | `bool` |  |
+| `attention_reason` | `text` |  Nullable |
+| `stripe_credit_note_id` | `text` |  Nullable |
+| `stripe_reissue_invoice_id` | `text` |  Nullable |
+| `stripe_refund_id` | `text` |  Nullable |
+| `amount_ore` | `int8` |  Nullable |
+| `idempotency_key` | `text` |  Unique |
+| `error_message` | `text` |  Nullable |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+
+## Table `customer_concepts`
+
+Customer-specific concept customizations and assignments
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_profile_id` | `uuid` |  |
+| `concept_id` | `text` |  Nullable |
+| `custom_headline` | `text` |  Nullable |
+| `custom_description` | `text` |  Nullable |
+| `custom_why_it_works` | `text` |  Nullable |
+| `custom_instructions` | `text` |  Nullable |
+| `custom_target_audience` | `text` |  Nullable |
+| `custom_script` | `text` |  Nullable |
+| `custom_production_notes` | `_text` |  Nullable |
+| `match_percentage` | `int4` |  Nullable |
+| `status` | `text` |  Nullable |
+| `notes` | `text` |  Nullable |
+| `added_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+| `base_concept_version` | `int4` |  Nullable |
+| `customer_id` | `uuid` |  |
+| `cm_id` | `uuid` |  Nullable |
+| `why_it_fits` | `text` |  Nullable |
+| `filming_instructions` | `text` |  Nullable |
+| `tiktok_url` | `text` |  Nullable |
+| `feed_slot` | `int4` |  Nullable |
+| `sent_at` | `timestamptz` |  Nullable |
+| `produced_at` | `timestamptz` |  Nullable |
+| `feed_order` | `int4` |  Nullable |
+| `tags` | `_text` |  Nullable |
+| `collection_id` | `uuid` |  Nullable |
+| `cm_note` | `text` |  Nullable |
+| `content_overrides` | `jsonb` |  Nullable |
+| `tiktok_thumbnail_url` | `text` |  Nullable |
+| `tiktok_views` | `int4` |  Nullable |
+| `tiktok_likes` | `int4` |  Nullable |
+| `tiktok_comments` | `int4` |  Nullable |
+| `tiktok_watch_time_seconds` | `int4` |  Nullable |
+| `tiktok_last_synced_at` | `timestamptz` |  Nullable |
+| `planned_publish_at` | `timestamptz` |  Nullable |
+| `content_loaded_at` | `timestamptz` |  Nullable |
+| `content_loaded_seen_at` | `timestamptz` |  Nullable |
+| `published_at` | `timestamptz` |  Nullable |
+| `reconciled_customer_concept_id` | `uuid` |  Nullable |
+| `reconciled_by_cm_id` | `uuid` |  Nullable |
+| `reconciled_at` | `timestamptz` |  Nullable |
+| `partner_name` | `text` |  Nullable |
+| `profile_name` | `text` |  Nullable |
+| `profile_image_url` | `text` |  Nullable |
+| `visual_variant` | `text` |  Nullable |
+| `history_source` | `text` |  Nullable |
+| `observed_profile_handle` | `text` |  Nullable |
+| `provider_name` | `text` |  Nullable |
+| `provider_video_id` | `text` |  Nullable |
+| `first_observed_at` | `timestamptz` |  Nullable |
+| `last_observed_at` | `timestamptz` |  Nullable |
+
+## Table `customer_design_systems`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  Nullable |
+| `name` | `text` |  |
+| `definition` | `jsonb` |  |
+| `is_active` | `bool` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `customer_discounts`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `stripe_coupon_id` | `text` |  Nullable |
+| `stripe_promotion_code_id` | `text` |  Nullable |
+| `discount_type` | `text` |  |
+| `value` | `int4` |  |
+| `duration_months` | `int4` |  Nullable |
+| `ongoing` | `bool` |  |
+| `start_date` | `date` |  Nullable |
+| `end_date` | `date` |  Nullable |
+| `active` | `bool` |  |
+| `metadata` | `jsonb` |  |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `customer_game_plans`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  Unique |
+| `html` | `text` |  |
+| `plain_text` | `text` |  |
+| `editor_version` | `int4` |  |
+| `updated_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `customer_invites`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `email` | `text` |  |
+| `token` | `text` |  Unique |
+| `provider` | `text` |  |
+| `invite_link` | `text` |  Nullable |
+| `expires_at` | `timestamptz` |  Nullable |
+| `consumed_at` | `timestamptz` |  Nullable |
+| `superseded_at` | `timestamptz` |  Nullable |
+| `metadata` | `jsonb` |  |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+
+## Table `customer_notes`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `cm_id` | `uuid` |  |
+| `content` | `text` |  |
+| `created_at` | `timestamptz` |  Nullable |
+| `content_html` | `text` |  Nullable |
+| `note_type` | `text` |  |
+| `primary_customer_concept_id` | `uuid` |  Nullable |
+| `references` | `jsonb` |  |
+| `attachments` | `jsonb` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `customer_profiles`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `business_name` | `text` |  |
+| `contact_email` | `text` |  Nullable |
+| `monthly_price` | `int4` |  Nullable |
+| `price_start_date` | `date` |  Nullable |
+| `price_end_date` | `date` |  Nullable |
+| `contacts` | `jsonb` |  Nullable |
+| `profile_data` | `jsonb` |  Nullable |
+| `game_plan` | `jsonb` |  Nullable |
+| `concepts` | `jsonb` |  Nullable |
+| `status` | `text` |  Nullable |
+| `stripe_customer_id` | `text` |  Nullable |
+| `stripe_subscription_id` | `text` |  Nullable |
+| `invited_at` | `timestamptz` |  Nullable |
+| `agreed_at` | `timestamptz` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+| `invoice_text` | `text` |  Nullable |
+| `scope_items` | `jsonb` |  Nullable |
+| `subscription_interval` | `text` |  Nullable |
+| `customer_contact_name` | `text` |  Nullable |
+| `account_manager` | `text` |  Nullable |
+| `logo_url` | `text` |  Nullable |
+| `brief` | `jsonb` |  Nullable |
+| `contract_start_date` | `date` |  Nullable |
+| `billing_day_of_month` | `int2` |  Nullable |
+| `first_invoice_behavior` | `text` |  Nullable |
+| `pricing_status` | `text` |  Nullable |
+| `discount_type` | `text` |  Nullable |
+| `discount_value` | `int4` |  Nullable |
+| `discount_duration_months` | `int4` |  Nullable |
+| `discount_start_date` | `date` |  Nullable |
+| `discount_end_date` | `date` |  Nullable |
+| `upcoming_monthly_price` | `int4` |  Nullable |
+| `upcoming_price_effective_date` | `date` |  Nullable |
+| `contract_metadata` | `jsonb` |  Nullable |
+| `account_manager_profile_id` | `uuid` |  Nullable |
+| `tiktok_handle` | `text` |  Nullable |
+| `last_history_sync_at` | `timestamptz` |  Nullable |
+| `tiktok_profile_url` | `text` |  Nullable |
+| `pending_history_advance_at` | `timestamptz` |  Nullable |
+| `upload_schedule` | `_text` |  Nullable |
+| `last_upload_at` | `timestamptz` |  Nullable |
+| `phone` | `text` |  Nullable |
+| `discount_ends_at` | `timestamptz` |  Nullable |
+| `upcoming_price_change_at` | `timestamptz` |  Nullable |
+| `upcoming_price_change_value` | `numeric` |  Nullable |
+| `next_invoice_date` | `date` |  Nullable |
+| `user_id` | `uuid` |  Nullable |
+| `tiktok_profile_pic_url` | `text` |  Nullable |
+| `tiktok_profile_synced_at` | `timestamptz` |  Nullable |
+| `concepts_per_week` | `int2` |  |
+| `paused_until` | `date` |  Nullable |
+| `onboarding_state` | `text` |  |
+| `onboarding_state_changed_at` | `timestamptz` |  |
+| `from_demo_id` | `uuid` |  Nullable |
+| `operation_lock_until` | `timestamptz` |  Nullable |
+| `tiktok_user_id` | `text` |  Nullable |
+| `expected_concepts_per_week` | `int2` |  |
+| `invite_attempt_nonce` | `int8` |  |
+| `archived_at` | `timestamptz` |  Nullable |
+| `lifecycle_state` | `text` |  |
+| `lifecycle_state_changed_at` | `timestamptz` |  |
+
+## Table `customer_subscription_history`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `stripe_subscription_id` | `text` |  Nullable |
+| `stripe_schedule_id` | `text` |  Nullable |
+| `stripe_price_id` | `text` |  Nullable |
+| `mode` | `text` |  |
+| `previous_price_ore` | `int4` |  |
+| `next_price_ore` | `int4` |  |
+| `effective_date` | `date` |  |
+| `metadata` | `jsonb` |  |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+
+## Table `customer_upcoming_price_changes`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `customer_id` | `uuid` | Primary |
+| `stripe_subscription_id` | `text` |  Nullable |
+| `stripe_schedule_id` | `text` |  Nullable |
+| `price_ore` | `int4` |  |
+| `effective_date` | `date` |  |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `debug_log`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `int4` | Primary |
+| `ts` | `timestamptz` |  Nullable |
+| `msg` | `text` |  Nullable |
+
+## Table `demos`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `company_name` | `text` |  |
+| `contact_name` | `text` |  Nullable |
+| `contact_email` | `text` |  Nullable |
+| `tiktok_handle` | `text` |  Nullable |
+| `tiktok_profile_pic_url` | `text` |  Nullable |
+| `proposed_concepts_per_week` | `int2` |  Nullable |
+| `proposed_price_ore` | `int4` |  Nullable |
+| `preliminary_feedplan` | `jsonb` |  Nullable |
+| `status` | `demo_status` |  |
+| `status_changed_at` | `timestamptz` |  |
+| `sent_at` | `timestamptz` |  Nullable |
+| `opened_at` | `timestamptz` |  Nullable |
+| `responded_at` | `timestamptz` |  Nullable |
+| `resolved_at` | `timestamptz` |  Nullable |
+| `lost_reason` | `text` |  Nullable |
+| `owner_admin_id` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `converted_customer_id` | `uuid` |  Nullable |
+| `share_token` | `text` |  |
+
+## Table `email_history`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `email_type` | `text` |  |
+| `subject` | `text` |  |
+| `recipient_email` | `text` |  |
+| `content` | `jsonb` |  Nullable |
+| `concepts_included` | `_uuid` |  Nullable |
+| `status` | `text` |  Nullable |
+| `error_message` | `text` |  Nullable |
+| `sent_at` | `timestamptz` |  Nullable |
+| `scheduled_from` | `uuid` |  Nullable |
+
+## Table `email_jobs`
+
+Async queue for customer emails sent from Studio v2.
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `cm_id` | `uuid` |  |
+| `recipient_email` | `text` |  |
+| `subject` | `text` |  |
+| `body_html` | `text` |  |
+| `concept_ids` | `_uuid` |  |
+| `status` | `text` |  |
+| `attempts` | `int4` |  |
+| `max_attempts` | `int4` |  |
+| `last_error` | `text` |  Nullable |
+| `provider_message_id` | `text` |  Nullable |
+| `scheduled_at` | `timestamptz` |  |
+| `locked_at` | `timestamptz` |  Nullable |
+| `locked_by` | `text` |  Nullable |
+| `sent_at` | `timestamptz` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `email_log`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `cm_id` | `uuid` |  |
+| `subject` | `text` |  |
+| `body_html` | `text` |  |
+| `concept_ids` | `_uuid` |  Nullable |
+| `sent_at` | `timestamptz` |  Nullable |
+
+## Table `email_schedules`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `schedule_type` | `text` |  |
+| `day_of_week` | `int4` |  Nullable |
+| `send_time` | `time` |  Nullable |
+| `rules` | `jsonb` |  Nullable |
+| `email_subject` | `text` |  Nullable |
+| `email_intro` | `text` |  Nullable |
+| `email_outro` | `text` |  Nullable |
+| `is_active` | `bool` |  Nullable |
+| `last_sent_at` | `timestamptz` |  Nullable |
+| `next_send_at` | `timestamptz` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+
+## Table `events`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `type` | `text` |  |
+| `severity` | `text` |  |
+| `entity_type` | `text` |  Nullable |
+| `entity_id` | `text` |  Nullable |
+| `payload` | `jsonb` |  |
+| `read_at` | `timestamptz` |  Nullable |
+| `created_at` | `timestamptz` |  |
+
+## Table `feed_motor_signals`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `signal_type` | `text` |  |
+| `payload` | `jsonb` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `acknowledged_at` | `timestamptz` |  Nullable |
+| `auto_resolved_at` | `timestamptz` |  Nullable |
+
+## Table `feed_spans`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `cm_id` | `uuid` |  |
+| `frac_start` | `numeric` |  |
+| `frac_end` | `numeric` |  |
+| `climax` | `numeric` |  Nullable |
+| `color_index` | `int4` |  |
+| `title` | `text` |  |
+| `body` | `text` |  |
+| `created_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+| `start_feed_order` | `int4` |  Nullable |
+| `end_feed_order` | `int4` |  Nullable |
+
+## Table `feedplan_concepts`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `title` | `text` |  Nullable |
+| `body` | `jsonb` |  Nullable |
+| `created_by_cm_id` | `uuid` |  Nullable |
+| `planned_publish_date` | `date` |  Nullable |
+| `status` | `text` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `invites`
+
+Pre-created customer invites with profile data and assigned concepts
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `email` | `text` |  Unique |
+| `token` | `text` |  Unique |
+| `business_name` | `text` |  Nullable |
+| `business_description` | `text` |  Nullable |
+| `clip_ids` | `_text` |  Nullable |
+| `subscription_type` | `text` |  Nullable |
+| `subscription_price_cents` | `int4` |  Nullable |
+| `subscription_scope` | `text` |  Nullable |
+| `notes` | `text` |  Nullable |
+| `created_by` | `uuid` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `expires_at` | `timestamptz` |  Nullable |
+| `claimed_at` | `timestamptz` |  Nullable |
+| `claimed_by` | `uuid` |  Nullable |
+| `social_links` | `jsonb` |  Nullable |
+| `tone` | `_text` |  Nullable |
+| `energy` | `text` |  Nullable |
+| `industry` | `text` |  Nullable |
+| `avatar_url` | `text` |  Nullable |
+
+## Table `invoice_line_items`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `stripe_line_item_id` | `text` |  Unique |
+| `stripe_invoice_id` | `text` |  |
+| `stripe_invoice_item_id` | `text` |  Nullable |
+| `description` | `text` |  Nullable |
+| `amount` | `int4` |  |
+| `currency` | `text` |  |
+| `quantity` | `int4` |  Nullable |
+| `period_start` | `timestamptz` |  Nullable |
+| `period_end` | `timestamptz` |  Nullable |
+| `environment` | `text` |  Nullable |
+| `data` | `jsonb` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `invoices`
+
+Tracks all Stripe invoices for complete visibility and sync
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `stripe_invoice_id` | `text` |  Unique |
+| `stripe_subscription_id` | `text` |  Nullable |
+| `stripe_customer_id` | `text` |  |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `user_profile_id` | `uuid` |  Nullable |
+| `amount_due` | `int4` |  |
+| `amount_paid` | `int4` |  |
+| `currency` | `text` |  |
+| `status` | `text` |  |
+| `hosted_invoice_url` | `text` |  Nullable |
+| `invoice_pdf` | `text` |  Nullable |
+| `due_date` | `timestamptz` |  Nullable |
+| `paid_at` | `timestamptz` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+| `environment` | `text` |  Nullable |
+| `subtotal_ore` | `int4` |  |
+| `tax_ore` | `int4` |  |
+| `total_ore` | `int4` |  |
+| `invoice_number` | `text` |  Nullable |
+| `payment_intent_id` | `text` |  Nullable |
+| `dispute_status` | `text` |  Nullable |
+
+## Table `leads`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `email` | `text` |  |
+| `source` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+
+## Table `pending_invoice_items`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `amount_ore` | `int8` |  |
+| `currency` | `text` |  |
+| `description` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `stripe_invoice_item_id` | `text` |  Nullable |
+| `internal_note` | `text` |  Nullable |
+
+## Table `pending_stripe_attachments`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_profile_id` | `uuid` |  |
+| `stripe_customer_id` | `text` |  Nullable |
+| `stripe_subscription_id` | `text` |  Nullable |
+| `stripe_product_id` | `text` |  Nullable |
+| `stripe_price_id` | `text` |  Nullable |
+| `reason` | `text` |  |
+| `metadata` | `jsonb` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+| `status` | `text` |  |
+| `retry_count` | `int4` |  |
+| `next_retry_at` | `timestamptz` |  Nullable |
+| `reconciled_at` | `timestamptz` |  Nullable |
+| `last_error` | `text` |  Nullable |
+
+## Table `profiles`
+
+User profiles with role-based access control
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `created_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+| `email` | `text` |  |
+| `business_name` | `text` |  Nullable |
+| `business_description` | `text` |  Nullable |
+| `has_paid` | `bool` |  Nullable |
+| `stripe_customer_id` | `text` |  Nullable |
+| `is_admin` | `bool` |  Nullable |
+| `subscription_status` | `text` |  Nullable |
+| `subscription_id` | `text` |  Nullable |
+| `subscription_type` | `text` |  Nullable |
+| `subscription_price_cents` | `int4` |  Nullable |
+| `subscription_scope` | `text` |  Nullable |
+| `current_period_end` | `timestamptz` |  Nullable |
+| `has_concepts` | `bool` |  Nullable |
+| `social_links` | `jsonb` |  Nullable |
+| `matching_data` | `jsonb` |  Nullable |
+| `tone` | `_text` |  Nullable |
+| `energy` | `text` |  Nullable |
+| `industry` | `text` |  Nullable |
+| `avatar_url` | `text` |  Nullable |
+| `role` | `user_role` |  Nullable |
+| `grid_config` | `jsonb` |  Nullable |
+| `stepper_inbound_token` | `text` |  Nullable Unique |
+
+## Table `role_changes_log`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `profile_id` | `uuid` |  |
+| `old_role` | `user_role` |  Nullable |
+| `new_role` | `user_role` |  |
+| `changed_by` | `uuid` |  Nullable |
+| `changed_at` | `timestamptz` |  Nullable |
+| `reason` | `text` |  Nullable |
+
+## Table `service_costs`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `service` | `text` |  |
+| `date` | `date` |  |
+| `calls` | `int4` |  |
+| `cost_sek` | `numeric` |  |
+| `metadata` | `jsonb` |  Nullable |
+
+## Table `service_quotas`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `service` | `text` |  Unique |
+| `used` | `int8` |  |
+| `limit` | `int8` |  |
+| `reset_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  |
+
+## Table `settings`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `bool` | Primary |
+| `default_billing_interval` | `text` |  |
+| `default_payment_terms_days` | `int4` |  |
+| `default_currency` | `text` |  |
+| `default_commission_rate` | `numeric` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `stepper_email_imports`
+
+Queue of TikTok share emails parsed and pending import into Stepper board.
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` |  |
+| `source` | `text` |  |
+| `gmail_message_id` | `text` |  Nullable |
+| `email_subject` | `text` |  Nullable |
+| `email_from` | `text` |  Nullable |
+| `collection_name` | `text` |  Nullable |
+| `creator_username` | `text` |  Nullable |
+| `short_url` | `text` |  |
+| `resolved_collection_url` | `text` |  Nullable |
+| `status` | `text` |  |
+| `error` | `text` |  Nullable |
+| `import_group_id` | `uuid` |  |
+| `imported_count` | `int4` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `stepper_gmail_tokens`
+
+Per-user Gmail OAuth credentials for automated TikTok share email polling.
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` |  Unique |
+| `gmail_address` | `text` |  |
+| `access_token` | `text` |  |
+| `refresh_token` | `text` |  |
+| `token_expiry` | `timestamptz` |  |
+| `last_polled_at` | `timestamptz` |  Nullable |
+| `last_history_id` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `stripe_credit_notes`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `stripe_credit_note_id` | `text` |  Unique |
+| `stripe_invoice_id` | `text` |  Nullable |
+| `stripe_customer_id` | `text` |  Nullable |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `total` | `int4` |  |
+| `refund_amount` | `int4` |  |
+| `credit_amount` | `int4` |  |
+| `out_of_band_amount` | `int4` |  |
+| `currency` | `text` |  |
+| `reason` | `text` |  Nullable |
+| `memo` | `text` |  Nullable |
+| `status` | `text` |  |
+| `effective_at` | `timestamptz` |  Nullable |
+| `raw` | `jsonb` |  Nullable |
+| `environment` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `stripe_processed_events`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `event_id` | `text` | Primary |
+| `event_type` | `text` |  |
+| `processed_at` | `timestamptz` |  |
+
+## Table `stripe_refunds`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `stripe_refund_id` | `text` |  Unique |
+| `stripe_charge_id` | `text` |  Nullable |
+| `stripe_payment_intent_id` | `text` |  Nullable |
+| `stripe_invoice_id` | `text` |  Nullable |
+| `stripe_customer_id` | `text` |  Nullable |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `amount` | `int4` |  |
+| `currency` | `text` |  |
+| `reason` | `text` |  Nullable |
+| `status` | `text` |  |
+| `raw` | `jsonb` |  Nullable |
+| `environment` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `stripe_sync_events`
+
+Audit-logg över inkommande Stripe-events och deras effekt i appen. Skrivs endast från server-side (webhook, reconcile-jobb).
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `stripe_event_id` | `text` |  Nullable Unique |
+| `event_type` | `text` |  |
+| `object_type` | `text` |  Nullable |
+| `object_id` | `text` |  Nullable |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `source` | `text` |  |
+| `status` | `text` |  |
+| `applied_changes` | `jsonb` |  |
+| `raw_payload` | `jsonb` |  Nullable |
+| `error_message` | `text` |  Nullable |
+| `received_at` | `timestamptz` |  |
+| `processed_at` | `timestamptz` |  Nullable |
+| `environment` | `text` |  Nullable |
+
+## Table `stripe_sync_log`
+
+Audit log for all Stripe sync events, provides idempotency and debugging
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `event_type` | `text` |  |
+| `stripe_event_id` | `text` |  Nullable |
+| `object_type` | `text` |  Nullable |
+| `object_id` | `text` |  Nullable |
+| `sync_direction` | `text` |  Nullable |
+| `status` | `text` |  |
+| `error_message` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `event_id` | `text` |  Nullable |
+| `environment` | `text` |  |
+| `payload_summary` | `jsonb` |  Nullable |
+
+## Table `subscriptions`
+
+Tracks all Stripe subscriptions for complete visibility
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `stripe_subscription_id` | `text` |  Unique |
+| `stripe_customer_id` | `text` |  |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `user_profile_id` | `uuid` |  Nullable |
+| `status` | `text` |  |
+| `cancel_at_period_end` | `bool` |  Nullable |
+| `currency` | `text` |  |
+| `amount` | `int4` |  |
+| `interval` | `text` |  Nullable |
+| `interval_count` | `int4` |  Nullable |
+| `current_period_start` | `timestamptz` |  Nullable |
+| `current_period_end` | `timestamptz` |  Nullable |
+| `trial_start` | `timestamptz` |  Nullable |
+| `trial_end` | `timestamptz` |  Nullable |
+| `canceled_at` | `timestamptz` |  Nullable |
+| `cancel_at` | `timestamptz` |  Nullable |
+| `ended_at` | `timestamptz` |  Nullable |
+| `created` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+| `environment` | `text` |  Nullable |
+| `pause_until` | `date` |  Nullable |
+| `scheduled_price_change` | `jsonb` |  Nullable |
+
+## Table `sync_runs`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `mode` | `text` |  |
+| `started_at` | `timestamptz` |  |
+| `finished_at` | `timestamptz` |  Nullable |
+| `status` | `text` |  |
+| `fetched_count` | `int4` |  Nullable |
+| `imported_count` | `int4` |  Nullable |
+| `stats_updated_count` | `int4` |  Nullable |
+| `reconciled` | `bool` |  Nullable |
+| `error` | `text` |  Nullable |
+
+## Table `team_customer_history`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `team_member_id` | `uuid` |  Nullable |
+| `customer_profile_id` | `uuid` |  Nullable |
+| `assigned_at` | `timestamptz` |  |
+| `unassigned_at` | `timestamptz` |  Nullable |
+| `notes` | `text` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `team_members`
+
+Stores Content Manager and team member details with contact information
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `profile_id` | `uuid` |  Nullable |
+| `name` | `text` |  |
+| `email` | `text` |  Unique |
+| `phone` | `text` |  Nullable |
+| `role` | `text` |  |
+| `color` | `text` |  |
+| `avatar_url` | `text` |  Nullable |
+| `is_active` | `bool` |  Nullable |
+| `created_at` | `timestamptz` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+| `responsibility_area` | `text` |  Nullable |
+| `start_date` | `date` |  Nullable |
+| `invited_at` | `timestamptz` |  Nullable |
+| `bio` | `text` |  Nullable |
+| `region` | `text` |  Nullable |
+| `expertise` | `_text` |  Nullable |
+| `notes` | `text` |  Nullable |
+| `commission_rate` | `numeric` |  |
+| `city` | `text` |  Nullable |
+
+## Table `tiktok_publications`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_id` | `uuid` |  |
+| `tiktok_video_id` | `text` |  |
+| `published_at` | `timestamptz` |  |
+| `fetched_at` | `timestamptz` |  |
+
+## Table `tiktok_stats`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_profile_id` | `uuid` |  |
+| `snapshot_date` | `date` |  |
+| `followers` | `int4` |  |
+| `total_videos` | `int4` |  |
+| `videos_last_24h` | `int4` |  |
+| `total_views_24h` | `int8` |  |
+| `engagement_rate` | `numeric` |  |
+| `raw_payload` | `jsonb` |  Nullable |
+| `fetched_at` | `timestamptz` |  |
+
+## Table `tiktok_videos`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `customer_profile_id` | `uuid` |  |
+| `video_id` | `text` |  |
+| `uploaded_at` | `timestamptz` |  |
+| `views` | `int8` |  |
+| `likes` | `int4` |  |
+| `comments` | `int4` |  |
+| `shares` | `int4` |  |
+| `cover_image_url` | `text` |  Nullable |
+| `share_url` | `text` |  Nullable |
+| `raw_payload` | `jsonb` |  Nullable |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `user_clips`
+
+Associates clips with user profiles. Admin assigns clips, users see their assigned clips.
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` |  |
+| `clip_id` | `text` |  |
+| `assigned_at` | `timestamptz` |  Nullable |
+| `assigned_by` | `uuid` |  Nullable |
+| `notes` | `text` |  Nullable |
+| `is_unlocked` | `bool` |  Nullable |
+| `unlocked_at` | `timestamptz` |  Nullable |
+
+## Table `user_roles`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `user_id` | `uuid` |  |
+| `role` | `app_role` |  |
+

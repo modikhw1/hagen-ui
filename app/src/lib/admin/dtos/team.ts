@@ -123,6 +123,8 @@ export const teamMemberViewSchema = z.object({
       valid_to: z.string().nullable(),
       handover_note: z.string().nullable(),
       scheduled_effective_date: z.string().nullable(),
+      previous_cm_name: z.string().nullable().optional(),
+      next_cm_name: z.string().nullable().optional(),
     }),
   ),
   customerCount: z.number(),

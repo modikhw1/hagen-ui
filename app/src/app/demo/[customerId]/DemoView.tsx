@@ -5,9 +5,7 @@ import { LeTrendColors, LeTrendTypography, LeTrendRadius } from '@/styles/letren
 import { GamePlanDisplay } from '@/components/gameplan-editor/GamePlanDisplay';
 import { FeedTimeline, type TimelineConcept } from '@/components/studio/FeedTimeline';
 
-// ─────────────────────────────────────────────
 // Types
-// ─────────────────────────────────────────────
 
 interface CustomerBrief {
   tone?: string;
@@ -26,9 +24,7 @@ interface DemoViewProps {
 
 type Tab = 'gameplan' | 'feed';
 
-// ─────────────────────────────────────────────
-// DemoView — customer-facing presentation
-// ─────────────────────────────────────────────
+// DemoView is the customer-facing presentation.
 
 export default function DemoView({
   businessName,
@@ -41,7 +37,7 @@ export default function DemoView({
 
   const hasBrief = brief && (brief.tone || brief.constraints || brief.current_focus);
   const hasGamePlan = gamePlanHtml.trim().length > 0;
-  const feedConcepts = concepts.filter(c => c.feed_order !== null);
+  const feedConcepts = concepts.filter((concept) => concept.feed_order !== null);
 
   return (
     <div style={{
@@ -50,7 +46,6 @@ export default function DemoView({
       fontFamily: LeTrendTypography.fontFamily.body,
       color: LeTrendColors.textPrimary,
     }}>
-      {/* Header */}
       <header style={{
         borderBottom: `1px solid ${LeTrendColors.border}`,
         background: '#fff',
@@ -67,7 +62,6 @@ export default function DemoView({
           justifyContent: 'space-between',
           height: 60,
         }}>
-          {/* Business identity */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             {logoUrl ? (
               <img
@@ -101,7 +95,6 @@ export default function DemoView({
             </div>
           </div>
 
-          {/* LeTrend branding */}
           <div style={{
             fontSize: 12,
             fontWeight: 600,
@@ -113,10 +106,7 @@ export default function DemoView({
         </div>
       </header>
 
-      {/* Main content */}
       <main style={{ maxWidth: 900, margin: '0 auto', padding: '32px 32px 64px' }}>
-
-        {/* Brief strip */}
         {hasBrief && (
           <div style={{
             display: 'grid',
@@ -131,7 +121,7 @@ export default function DemoView({
               { label: 'Ton & känsla', value: brief?.tone },
               { label: 'Begränsningar', value: brief?.constraints },
               { label: 'Fokus just nu', value: brief?.current_focus },
-            ].filter(f => f.value).map(({ label, value }) => (
+            ].filter((field) => field.value).map(({ label, value }) => (
               <div key={label} style={{
                 background: '#fff',
                 padding: '16px 20px',
@@ -154,7 +144,6 @@ export default function DemoView({
           </div>
         )}
 
-        {/* Tab nav */}
         <div style={{
           display: 'flex',
           gap: 0,
@@ -164,7 +153,7 @@ export default function DemoView({
           {([
             { id: 'gameplan' as Tab, label: 'Game Plan' },
             { id: 'feed' as Tab, label: 'Content-kalender' },
-          ] as const).map(tab => (
+          ] as const).map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -188,7 +177,6 @@ export default function DemoView({
           ))}
         </div>
 
-        {/* Tab content */}
         {activeTab === 'gameplan' && (
           <section>
             <h2 style={{
@@ -244,7 +232,7 @@ export default function DemoView({
               marginBottom: 24,
               marginTop: 0,
             }}>
-              Kommande klipp, redo att producera, och publicerad historik — allt på ett ställe.
+              Kommande klipp, redo att producera, och publicerad historik - allt på ett ställe.
             </p>
             <div style={{
               background: '#fff',

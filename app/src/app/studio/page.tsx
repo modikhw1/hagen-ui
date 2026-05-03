@@ -88,10 +88,10 @@ export default function StudioDashboard() {
     : orgWideWithSent;
 
   const actionListHeading = canScopeToAssignedCustomers
-    ? 'Dina kunder - vantar pa atgard'
-    : 'Vantar pa atgard';
+    ? 'Dina kunder - väntar på åtgärd'
+    : 'Väntar på åtgärd';
   const actionListMeta = canScopeToAssignedCustomers
-    ? 'Visar kunder som ar tilldelade till dig via account manager-ID.'
+    ? 'Visar kunder som är tilldelade till dig via account manager-ID.'
     : null;
   const showAssignmentFallbackNote = Boolean(
     isContentManager &&
@@ -100,13 +100,13 @@ export default function StudioDashboard() {
       (orgWideWithDrafts.length > 0 || orgWideWithSent.length > 0),
   );
   const assignmentFallbackNote =
-    'Visar hela oversikten just nu eftersom tilldelning inte ar entydig for alla kunder i listan.';
+    'Visar hela översikten just nu eftersom tilldelning inte är entydig för alla kunder i listan.';
   const sentListHeading = canScopeToAssignedCustomers
-    ? 'Dina skickade - vantar pa produktion'
-    : 'Skickade - vantar pa produktion';
+    ? 'Dina skickade - väntar på produktion'
+    : 'Skickade - väntar på produktion';
   const emptyStateText = canScopeToAssignedCustomers
-    ? 'Inga av dina tilldelade kunder har koncept som vantar pa atgard just nu.'
-    : 'Inga koncept vantar pa atgard just nu.';
+    ? 'Inga av dina tilldelade kunder har koncept som väntar på åtgärd just nu.'
+    : 'Inga koncept väntar på åtgärd just nu.';
 
   const cmWorkload: CmWorkloadRow[] = isAdmin
     ? (() => {
@@ -153,7 +153,7 @@ export default function StudioDashboard() {
           Hej, {displayName}
         </h1>
         <p style={{ margin: '6px 0 0', fontSize: 14, color: '#6b7280' }}>
-          Har ar en snabb oversikt. Oppna en kund for att fortsatta arbetet.
+          Här är en snabb översikt. Öppna en kund för att fortsätta arbetet.
         </p>
       </div>
 
@@ -195,7 +195,7 @@ export default function StudioDashboard() {
             }}
           >
             <h2 style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', margin: 0 }}>
-              Teamoversikt
+              Teamöversikt
             </h2>
             <Link
               href="/studio/customers"
@@ -490,7 +490,7 @@ export default function StudioDashboard() {
               textDecoration: 'none',
             }}
           >
-            Oppna kundlistan
+            Öppna kundlistan
           </Link>
         </div>
       )}
@@ -506,7 +506,7 @@ function formatLastEmail(isoString: string | undefined): string {
   const now = new Date();
   const daysDiff = Math.floor((now.getTime() - sent.getTime()) / (1000 * 60 * 60 * 24));
   if (daysDiff === 0) return 'Senaste mail: idag';
-  if (daysDiff === 1) return 'Senaste mail: igar';
+  if (daysDiff === 1) return 'Senaste mail: igår';
   if (daysDiff < 14) return `Senaste mail: ${daysDiff} dagar sedan`;
   return `Senaste mail: ${sent.getDate()} ${MONTHS_SV[sent.getMonth()]}`;
 }

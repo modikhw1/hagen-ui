@@ -1,5 +1,4 @@
-import { loadCustomerView } from '@/lib/admin/server/customer-view';
-import { CustomerPulseRoute } from '@/components/admin/customers/routes/CustomerPulseRoute';
+import { redirect } from 'next/navigation';
 
 export default async function CustomerPulsePage({
   params,
@@ -7,13 +6,5 @@ export default async function CustomerPulsePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const data = await loadCustomerView(id);
-
-  return (
-    <CustomerPulseRoute
-      customerId={id}
-      initialData={data.pulse}
-      overview={data.overview}
-    />
-  );
+  redirect(`/admin/customers/${id}`);
 }

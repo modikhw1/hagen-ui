@@ -130,7 +130,6 @@ export function buildCustomerPayload(
       latest_planned_publish_date:
         options?.bufferRow?.latest_planned_publish_date ?? null,
       last_published_at: options?.bufferRow?.last_published_at ?? null,
-      // Ensure these are ALWAYS arrays, even if the spread profile had them as null/undefined
       attention_snoozes: Array.isArray(options?.attentionSnoozes) ? options.attentionSnoozes : [],
       coverage_absences: Array.isArray(options?.coverageAbsences) ? options.coverageAbsences : [],
     },
@@ -214,18 +213,16 @@ export async function loadCustomerDetail(params: {
   };
 }) {
   const { supabaseAdmin, id, user } = params;
-  
-  // Try RPC first
+
   let rpcPayload = null;
   let rpcError = null;
   try {
     rpcPayload = await loadCustomerDetailFromRpc(supabaseAdmin, id);
-  } catch (err) {
-    rpcError = err;
-    console.error('[admin.customer-detail] RPC failed:', err);
+  } catch (error) {
+    rpcError = error;
+    console.error('[admin.customer-detail] RPC failed:', error);
   }
 
-  // Fallback if RPC failed or returned nothing
   const payload =
     rpcPayload ?? (await loadCustomerDetailFromRelations(supabaseAdmin, id));
 
@@ -269,43 +266,126 @@ export async function loadAdminCustomerHeader(id: string) {
   return unstable_cache(
     async () => {
       const supabaseAdmin = createSupabaseAdmin();
-      const { data, error } = await supabaseAdmin
-        .from('customer_profiles')
-        .select(`
-          id, business_name, contact_email, customer_contact_name, 
-          tiktok_handle, status, monthly_price, account_manager, 
-          next_invoice_date, created_at, onboarding_state,
-          discount_type, discount_value, discount_ends_at,
-          subscriptions (status, current_period_end)
-        `)
-        .eq('id', id)
-        .single();
 
-      if (error) {
-        throw new Error(error.message || SERVER_COPY.fetchCustomerHeaderFailed);
+      const [profileResult, bufferResult, snoozesResult] = await Promise.all([
+        supabaseAdmin
+          .from('customer_profiles')
+          .select(`
+            id, business_name, contact_email, customer_contact_name,
+            tiktok_handle, status, monthly_price, account_manager,
+            account_manager_profile_id,
+            next_invoice_date, created_at, invited_at, agreed_at,
+            onboarding_state, paused_until, archived_at,
+            concepts_per_week, expected_concepts_per_week,
+            pricing_status,
+            discount_type, discount_value, discount_ends_at,
+            subscriptions (status, current_period_end)
+          `)
+          .eq('id', id)
+          .single(),
+        supabaseAdmin
+          .from('v_customer_buffer')
+          .select('latest_planned_publish_date, last_published_at, paused_until')
+          .eq('customer_id', id)
+          .maybeSingle(),
+        supabaseAdmin
+          .from('attention_snoozes')
+          .select('subject_type, subject_id, snoozed_until, released_at, note')
+          .in('subject_type', ['onboarding', 'customer_blocking'])
+          .eq('subject_id', id)
+          .is('released_at', null),
+      ]);
+
+      if (profileResult.error) {
+        throw new Error(
+          profileResult.error.message || SERVER_COPY.fetchCustomerHeaderFailed,
+        );
       }
 
-      // Hämta det mest relevanta datumet (Stripe först, sedan profil)
-      const activeSub = (data.subscriptions as any[])?.find(s => s.status === 'active' || s.status === 'trialing');
+      if (snoozesResult.error && !isMissingRelationError(snoozesResult.error.message)) {
+        throw new Error(
+          snoozesResult.error.message || SERVER_COPY.fetchSnoozesFailed,
+        );
+      }
+
+      const data = profileResult.data as Record<string, any>;
+      const buffer = (bufferResult.data ?? null) as Record<string, any> | null;
+      const attentionSnoozes = (snoozesResult.data ?? []) as Array<Record<string, unknown>>;
+
+      const activeSub = (data.subscriptions as any[])?.find(
+        (subscription) =>
+          subscription.status === 'active' || subscription.status === 'trialing',
+      );
       const nextInvoiceDate = activeSub?.current_period_end || data.next_invoice_date;
+      const monthlyPriceOre = Math.round((data.monthly_price ?? 0) * 100);
+      const pausedUntil = data.paused_until ?? buffer?.paused_until ?? null;
+      let accountManagerName = (data.account_manager as string | null) ?? null;
+      let accountManagerAvatarUrl: string | null = null;
+
+      if (typeof data.account_manager_profile_id === 'string' && data.account_manager_profile_id) {
+        const { data: teamMember } = await supabaseAdmin
+          .from('team_members')
+          .select('name, avatar_url')
+          .eq('profile_id', data.account_manager_profile_id)
+          .maybeSingle();
+
+        if (teamMember) {
+          accountManagerName = teamMember.name ?? accountManagerName;
+          accountManagerAvatarUrl = teamMember.avatar_url ?? null;
+        }
+      }
+
+      const derivedStatus = deriveCustomerStatus({
+        status: data.status ?? null,
+        archived_at: data.archived_at ?? null,
+        paused_until: pausedUntil,
+        invited_at: data.invited_at ?? null,
+        concepts_per_week: data.concepts_per_week ?? null,
+        expected_concepts_per_week: data.expected_concepts_per_week ?? null,
+        latest_planned_publish_date: buffer?.latest_planned_publish_date ?? null,
+        escalation_flag: null,
+      });
 
       return {
-        id: data.id,
-        business_name: data.business_name ?? '',
-        contact_email: data.contact_email ?? '',
-        customer_contact_name: data.customer_contact_name ?? null,
-        tiktok_handle: data.tiktok_handle ?? null,
-        status: data.status ?? 'pending',
-        monthly_price_ore: Math.round((data.monthly_price ?? 0) * 100),
-        account_manager_name: data.account_manager ?? null,
-        next_invoice_date: nextInvoiceDate,
-        created_at: data.created_at ?? '',
-        onboarding_state: data.onboarding_state ?? null,
-        discount: data.discount_type && data.discount_type !== 'none' ? {
-          type: data.discount_type,
-          value: data.discount_value,
-          ends_at: data.discount_ends_at
-        } : null
+        id: data.id as string,
+        business_name: (data.business_name as string) ?? '',
+        contact_email: (data.contact_email as string) ?? '',
+        customer_contact_name: (data.customer_contact_name as string | null) ?? null,
+        tiktok_handle: (data.tiktok_handle as string | null) ?? null,
+        status: (data.status as string) ?? 'pending',
+        derived_status: derivedStatus,
+        monthly_price_ore: monthlyPriceOre,
+        pricing_status: (data.pricing_status as string | null) ?? null,
+        account_manager_name: accountManagerName,
+        account_manager_avatar_url: accountManagerAvatarUrl,
+        next_invoice_date: nextInvoiceDate ?? null,
+        created_at: (data.created_at as string) ?? '',
+        invited_at: (data.invited_at as string | null) ?? null,
+        agreed_at: (data.agreed_at as string | null) ?? null,
+        onboarding_state: (data.onboarding_state as string | null) ?? null,
+        paused_until: pausedUntil,
+        archived_at: (data.archived_at as string | null) ?? null,
+        escalation_flag: false,
+        last_published_at: (buffer?.last_published_at as string | null) ?? null,
+        latest_planned_publish_date:
+          (buffer?.latest_planned_publish_date as string | null) ?? null,
+        attention_snoozes: attentionSnoozes,
+        concepts_per_week:
+          typeof data.concepts_per_week === 'number' ? data.concepts_per_week : null,
+        expected_concepts_per_week:
+          typeof data.expected_concepts_per_week === 'number'
+            ? data.expected_concepts_per_week
+            : typeof data.concepts_per_week === 'number'
+              ? data.concepts_per_week
+              : null,
+        discount:
+          data.discount_type && data.discount_type !== 'none'
+            ? {
+                type: data.discount_type as string,
+                value: data.discount_value as number,
+                ends_at: (data.discount_ends_at as string | null) ?? null,
+              }
+            : null,
       };
     },
     ['admin-customer-header-by-id', id],

@@ -82,47 +82,47 @@ export function CustomersTable({ items, isPending, currentSort, onSortChange }: 
         isPending ? 'opacity-50' : 'opacity-100'
       }`}
     >
-      <div className="grid grid-cols-[2.5fr_1fr_1fr_120px_120px] gap-4 border-b border-border bg-muted/50 px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground select-none">
+      <div className="grid grid-cols-[2.5fr_1fr_1fr_120px_120px] gap-4 border-b border-border bg-muted/50 px-5 py-3 text-[11px] font-semibold tracking-wider text-muted-foreground select-none uppercase">
         <button
           onClick={() => handleSort('name')}
           type="button"
-          className="group flex cursor-pointer items-center bg-transparent p-0 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+          className="group flex cursor-pointer items-center bg-transparent p-0 text-left text-[11px] font-semibold tracking-wider text-muted-foreground transition-colors hover:text-foreground uppercase"
         >
-          Foretag <SortIcon currentSort={currentSort} field="name" />
+          FÖRETAG <SortIcon currentSort={currentSort} field="name" />
         </button>
         <button
           onClick={() => handleSort('cm')}
           type="button"
-          className="group flex cursor-pointer items-center bg-transparent p-0 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+          className="group flex cursor-pointer items-center bg-transparent p-0 text-left text-[11px] font-semibold tracking-wider text-muted-foreground transition-colors hover:text-foreground uppercase"
         >
           CM <SortIcon currentSort={currentSort} field="cm" />
         </button>
         <button
           onClick={() => handleSort('price')}
           type="button"
-          className="group flex cursor-pointer items-center bg-transparent p-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+          className="group flex cursor-pointer items-center bg-transparent p-0 text-[11px] font-semibold tracking-wider text-muted-foreground transition-colors hover:text-foreground uppercase"
         >
-          Pris <SortIcon currentSort={currentSort} field="price" />
+          PRIS <SortIcon currentSort={currentSort} field="price" />
         </button>
-        <div className="text-center">Operativ puls</div>
+        <div className="text-center uppercase">OPERATIV PULS</div>
         <button
           onClick={() => handleSort('status')}
           type="button"
-          className="group flex cursor-pointer items-center bg-transparent p-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+          className="group flex cursor-pointer items-center bg-transparent p-0 text-[11px] font-semibold tracking-wider text-muted-foreground transition-colors hover:text-foreground uppercase"
         >
-          Status <SortIcon currentSort={currentSort} field="status" />
+          STATUS <SortIcon currentSort={currentSort} field="status" />
         </button>
       </div>
 
       <div className="divide-y divide-border">
         {items.map((customer) => {
           const statusConfig = customerStatusConfig(customer.status);
-          const fullName = customer.cm_full_name || 'Ej tilldelad';
-          const cmFirstName = fullName.split(' ')[0];
+          const hasAssignedCm = Boolean(customer.cm_full_name && customer.cm_full_name.trim().length > 0);
+          const cmDisplayName = hasAssignedCm ? customer.cm_full_name!.split(' ')[0] : 'Ej tilldelad';
           const planned = customer.planned_concepts_count ?? 0;
           const lastCmAction = customer.last_cm_action_at ? new Date(customer.last_cm_action_at) : null;
           const pulseStatus = customer.pulse_status ?? 'ok';
-          const reason = customer.pulse_reason ?? 'Allt rullar pa som det ska';
+          const reason = customer.pulse_reason ?? 'Allt rullar på som det ska';
 
           const scheduleLabels = (customer.upload_schedule ?? ['1', '4'])
             .sort()
@@ -144,17 +144,17 @@ export function CustomersTable({ items, isPending, currentSort, onSortChange }: 
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5">
                   <AdminAvatar
-                    name={cmFirstName}
-                    avatarUrl={customer.cm_avatar_url}
+                    name={cmDisplayName}
+                    avatarUrl={hasAssignedCm ? customer.cm_avatar_url : null}
                     size="sm"
                     fallbackColor={
-                      customer.account_manager_profile_id
+                      hasAssignedCm && customer.account_manager_profile_id
                         ? `hsl(var(--${cmColorVar(customer.account_manager_profile_id)}))`
                         : undefined
                     }
                   />
                   <div className="flex flex-col">
-                    <span className="text-xs font-medium text-foreground">{cmFirstName}</span>
+                    <span className={`text-xs font-medium ${hasAssignedCm ? 'text-foreground' : 'text-muted-foreground italic'}`}>{cmDisplayName}</span>
                     {customer.scheduled_cm_change && (
                       <div className="mt-0.5 flex items-center gap-0.5 text-[9px] leading-none font-semibold text-blue-600">
                         <Clock className="h-2.5 w-2.5" />

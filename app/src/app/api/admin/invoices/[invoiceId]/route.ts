@@ -4,6 +4,7 @@ import type Stripe from 'stripe';
 import { z } from 'zod';
 
 import { supabaseAdmin } from '@/integrations/supabase/client.server';
+import { recordAuditLog } from '@/lib/admin/audit-log';
 import { hasAdminScope, requireAdminScope, withAuth } from '@/lib/auth/api-auth';
 import {
   createCreditNoteOperation,
@@ -18,6 +19,33 @@ import {
   stripeEnvironment,
 } from '@/lib/stripe/dynamic-config';
 import { upsertInvoiceMirror } from '@/lib/stripe/mirror';
+
+type AuditActor = {
+  id: string;
+  email?: string | null;
+  role?: string | null;
+};
+
+async function auditInvoiceAction(params: {
+  actor: AuditActor;
+  action: string;
+  invoiceId: string;
+  customerProfileId: string | null;
+  metadata?: Record<string, unknown>;
+}) {
+  await recordAuditLog(supabaseAdmin, {
+    actorUserId: params.actor.id,
+    actorEmail: params.actor.email ?? null,
+    actorRole: params.actor.role ?? null,
+    action: params.action,
+    entityType: 'invoice',
+    entityId: params.invoiceId,
+    metadata: {
+      customer_profile_id: params.customerProfileId,
+      ...(params.metadata ?? {}),
+    },
+  }).catch(() => false);
+}
 
 type CreditSettlementMode =
   | 'reduce_amount_due'
@@ -196,7 +224,7 @@ export const GET = withAuth(
       invoiceRow.customer_profile_id !== expectedCustomerId
     ) {
       return NextResponse.json(
-        { error: 'Fakturan tillhor inte kunden' },
+        { error: 'Fakturan tillhör inte kunden' },
         { status: 404 },
       );
     }
@@ -225,7 +253,7 @@ export const GET = withAuth(
         amount_due: invoiceRow.amount_due,
         amount_paid: invoiceRow.amount_paid,
         currency: invoiceRow.currency,
-        customer_name: invoiceRow.customer_name || 'Okand kund',
+        customer_name: invoiceRow.customer_name || 'Okänd kund',
         customer_profile_id: invoiceRow.customer_profile_id,
         hosted_invoice_url: invoiceRow.hosted_invoice_url,
         invoice_pdf: invoiceRow.invoice_pdf,
@@ -236,7 +264,7 @@ export const GET = withAuth(
         operations: operations || [],
         warning: {
           type: 'stripe_environment_mismatch',
-          message: `Fakturan tillhor Stripe ${invoiceRow.environment}, medan admin just nu visar ${stripeEnvironment}.`,
+          message: `Fakturan tillhör Stripe ${invoiceRow.environment}, medan admin just nu visar ${stripeEnvironment}.`,
           details: `active=${stripeEnvironment}, invoice=${invoiceRow.environment}`,
         },
         permissions: {
@@ -249,7 +277,7 @@ export const GET = withAuth(
     try {
       if (!stripe) {
         return NextResponse.json(
-          { error: 'Stripe ar inte konfigurerat' },
+          { error: 'Stripe är inte konfigurerat' },
           { status: 500 },
         );
       }
@@ -266,7 +294,7 @@ export const GET = withAuth(
         amount_paid: stripeInvoice.amount_paid,
         currency: stripeInvoice.currency,
         customer_name:
-          invoiceRow?.customer_name || stripeInvoice.customer_name || 'Okand kund',
+          invoiceRow?.customer_name || stripeInvoice.customer_name || 'Okänd kund',
         customer_profile_id: invoiceRow?.customer_profile_id,
         hosted_invoice_url: stripeInvoice.hosted_invoice_url,
         invoice_pdf: stripeInvoice.invoice_pdf,
@@ -298,7 +326,7 @@ export const GET = withAuth(
       console.error('[API] Failed to fetch invoice from Stripe:', error);
       if (!invoiceRow) {
         return NextResponse.json(
-          { error: 'Kunde inte hamta faktura fran Stripe' },
+          { error: 'Kunde inte hämta faktura från Stripe' },
           { status: 500 },
         );
       }
@@ -316,7 +344,7 @@ export const GET = withAuth(
         amount_due: invoiceRow.amount_due,
         amount_paid: invoiceRow.amount_paid,
         currency: invoiceRow.currency,
-        customer_name: invoiceRow.customer_name || 'Okand kund',
+        customer_name: invoiceRow.customer_name || 'Okänd kund',
         customer_profile_id: invoiceRow.customer_profile_id,
         hosted_invoice_url: invoiceRow.hosted_invoice_url,
         invoice_pdf: invoiceRow.invoice_pdf,
@@ -328,7 +356,7 @@ export const GET = withAuth(
         warning: {
           type: 'stripe_invoice_unavailable',
           message:
-            'Fakturan kunde inte hamtas live fran Stripe. Visar lokal mirror-data.',
+            'Fakturan kunde inte hämtas live från Stripe. Visar lokal mirror-data.',
           details: error instanceof Error ? error.message : String(error),
         },
         permissions: {
@@ -389,7 +417,7 @@ export const PATCH = withAuth(
     const stripeClient = createStripeClient(environment);
     if (!stripeClient) {
       return NextResponse.json(
-        { error: `Stripe ej konfigurerat for miljo ${environment}` },
+        { error: `Stripe ej konfigurerat för miljö ${environment}` },
         { status: 500 },
       );
     }
@@ -435,6 +463,16 @@ export const PATCH = withAuth(
           invoice: updated,
           environment,
         });
+        await auditInvoiceAction({
+          actor: user,
+          action: 'admin.invoice.voided',
+          invoiceId: stripeInvoiceId,
+          customerProfileId: invoiceRow.customer_profile_id as string | null,
+          metadata: {
+            amount_ore: updated.amount_due,
+            idempotency_key: idempotencyKey,
+          },
+        });
         return NextResponse.json({ ok: true, status: updated.status });
       }
 
@@ -453,6 +491,16 @@ export const PATCH = withAuth(
           invoice: updated,
           environment,
         });
+        await auditInvoiceAction({
+          actor: user,
+          action: 'admin.invoice.uncollectible',
+          invoiceId: stripeInvoiceId,
+          customerProfileId: invoiceRow.customer_profile_id as string | null,
+          metadata: {
+            amount_ore: updated.amount_due,
+            idempotency_key: idempotencyKey,
+          },
+        });
         return NextResponse.json({ ok: true, status: updated.status });
       }
 
@@ -467,7 +515,7 @@ export const PATCH = withAuth(
         stripe: stripeClient,
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Okant fel';
+      const message = error instanceof Error ? error.message : 'Okänt fel';
       console.error(
         `[invoice PATCH] ${stripeInvoiceId} ${body.action} failed:`,
         error,
@@ -553,7 +601,7 @@ async function runCreditNoteFlow(args: {
       idempotencyKey: `${idempotencyKey}:credit_note`,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Okant Stripe-fel';
+    const message = error instanceof Error ? error.message : 'Okänt Stripe-fel';
     await markCreditNoteOperationStep({
       supabaseAdmin,
       operationId: operation.id,
@@ -595,6 +643,17 @@ async function runCreditNoteFlow(args: {
       supabaseAdmin,
       operationId: operation.id,
       status: 'completed',
+    });
+    await auditInvoiceAction({
+      actor: { id: createdBy },
+      action: 'admin.invoice.credit_note_created',
+      invoiceId,
+      customerProfileId,
+      metadata: {
+        amount_ore: creditAmountOre,
+        stripe_credit_note_id: creditNote.id,
+        idempotency_key: idempotencyKey,
+      },
     });
     return NextResponse.json({
       ok: true,
@@ -655,7 +714,7 @@ async function runCreditNoteFlow(args: {
       environment,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Okant Stripe-fel';
+    const message = error instanceof Error ? error.message : 'Okänt Stripe-fel';
     if (draftInvoice?.id) {
       try {
         await stripe.invoices.del(draftInvoice.id);
@@ -671,7 +730,42 @@ async function runCreditNoteFlow(args: {
         error_message: `reissue step: ${message}`,
         requires_attention: true,
         attention_reason:
-          'Kreditnota skapades men ny faktura misslyckades. Skapa ersattningsfakturan manuellt i Stripe eller forsok igen.',
+          'Kreditnota skapades men ny faktura misslyckades. Skapa ersättningsfakturan manuellt i Stripe eller försök igen.',
+      },
+    });
+    await auditInvoiceAction({
+      actor: { id: createdBy },
+      action: 'admin.invoice.credit_note_reissue_failed',
+      invoiceId,
+      customerProfileId,
+      metadata: {
+        amount_ore: creditAmountOre,
+        stripe_credit_note_id: creditNote.id,
+        error: message,
+        idempotency_key: idempotencyKey,
+      },
+    });
+    return NextResponse.json(
+      {
+        error: message,
+        operation_id: operation.id,
+        status: 'failed',
+        requires_attention: true,
+        stripe_credit_note_id: creditNote.id,
+      },
+      { status: 502 },
+    );
+  }
+    await auditInvoiceAction({
+      actor: { id: createdBy },
+      action: 'admin.invoice.credit_note_reissue_failed',
+      invoiceId,
+      customerProfileId,
+      metadata: {
+        amount_ore: creditAmountOre,
+        stripe_credit_note_id: creditNote.id,
+        error: message,
+        idempotency_key: idempotencyKey,
       },
     });
     return NextResponse.json(
@@ -696,6 +790,19 @@ async function runCreditNoteFlow(args: {
     supabaseAdmin,
     operationId: operation.id,
     status: 'completed',
+  });
+  await auditInvoiceAction({
+    actor: { id: createdBy },
+    action: 'admin.invoice.credit_note_reissued',
+    invoiceId,
+    customerProfileId,
+    metadata: {
+      amount_ore: creditAmountOre,
+      new_amount_ore: body.new_amount_ore,
+      stripe_credit_note_id: creditNote.id,
+      stripe_reissue_invoice_id: reissueInvoice?.id ?? null,
+      idempotency_key: idempotencyKey,
+    },
   });
 
   return NextResponse.json({

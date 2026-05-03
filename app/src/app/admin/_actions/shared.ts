@@ -56,7 +56,7 @@ async function authenticateActionUser(
     !requiredRoles.includes(user.role) &&
     !(requiredRoles.includes('admin') && user.is_admin)
   ) {
-    throw new AuthError(403, 'Du saknar behorighet');
+    throw new AuthError(403, 'Du saknar behörighet');
   }
 
   return user;
@@ -116,7 +116,7 @@ async function responseToActionResult<T>(
   if (!response.ok) {
     return actionError(
       `HTTP_${response.status}`,
-      payload.error || payload.message || 'Begaran misslyckades',
+      payload.error || payload.message || 'Begäran misslyckades',
     );
   }
 

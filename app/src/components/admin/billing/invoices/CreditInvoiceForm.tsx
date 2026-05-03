@@ -99,11 +99,11 @@ export function CreditInvoiceForm({
       value: 'credit_only',
       label: 'Kreditera faktura eller rad',
       description:
-        'For missnojda extrarader eller goodwill. Valj hela fakturan eller en specifik rad.',
+        'För missnöjda extrarader eller goodwill. Välj hela fakturan eller en specifik rad.',
     },
     {
       value: 'credit_and_reissue',
-      label: 'Kreditera och ersattningsfakturera',
+      label: 'Kreditera och ersättningsfakturera',
       description:
         'Kreditera gammalt underlag och skapa direkt en ny korrigerad faktura.',
     },
@@ -113,7 +113,7 @@ export function CreditInvoiceForm({
       value: 'cancel_subscription',
       label: 'Avsluta abonnemang och kreditera',
       description:
-        'Sager upp aktivt abonnemang direkt och krediterar vald faktura samtidigt.',
+        'Säger upp aktivt abonnemang direkt och krediterar vald faktura samtidigt.',
     });
   }
 
@@ -127,15 +127,15 @@ export function CreditInvoiceForm({
   async function handleAdjustInvoice() {
     const amountOre = Math.round(Number(amountKr) * 100);
     if (!Number.isFinite(amountOre) || amountOre <= 0) {
-      toast.error('Ange ett kreditbelopp over 0.');
+      toast.error('Ange ett kreditbelopp över 0.');
       return;
     }
     if (scope === 'line' && !selectedLineId) {
-      toast.error('Valj fakturaraden som ska krediteras.');
+      toast.error('Välj fakturaraden som ska krediteras.');
       return;
     }
     if (amountOre > maxCreditOre) {
-      toast.error('Kreditbeloppet far inte overstiga valt belopp.');
+      toast.error('Kreditbeloppet får inte överstiga valt belopp.');
       return;
     }
 
@@ -147,7 +147,7 @@ export function CreditInvoiceForm({
         replacementOre <= 0
       ) {
         toast.error(
-          'Ange nytt belopp och beskrivning for ersattningsfakturan.',
+          'Ange nytt belopp och beskrivning för ersättningsfakturan.',
         );
         return;
       }
@@ -188,10 +188,10 @@ export function CreditInvoiceForm({
 
     if (result.requires_attention) {
       toast.error(
-        'Kreditnota skapad men ersattningsfakturan behovde manuell uppfoljning.',
+        'Kreditnota skapad men ersättningsfakturan behövde manuell uppföljning.',
       );
     } else if (mode === 'credit_and_reissue') {
-      toast.success('Kreditnota och ersattningsfaktura skapade.');
+      toast.success('Kreditnota och ersättningsfaktura skapade.');
     } else {
       toast.success('Kreditnota skapad.');
     }
@@ -200,7 +200,7 @@ export function CreditInvoiceForm({
   async function handleCancelSubscription() {
     const amountOre = Math.round(Number(amountKr) * 100);
     if (!Number.isFinite(amountOre) || amountOre <= 0) {
-      toast.error('Ange ett kreditbelopp over 0.');
+      toast.error('Ange ett kreditbelopp över 0.');
       return;
     }
 
@@ -236,7 +236,7 @@ export function CreditInvoiceForm({
       }
       await onCompleted();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Natverksfel');
+      toast.error(error instanceof Error ? error.message : 'Nätverksfel');
     } finally {
       setSubmitting(false);
     }
@@ -274,12 +274,12 @@ export function CreditInvoiceForm({
         value={reason}
         onChange={(value) => setReason(value || 'order_change')}
         data={[
-          { value: 'order_change', label: 'Andring av order' },
+          { value: 'order_change', label: 'Ändring av order' },
           { value: 'duplicate', label: 'Dubblett' },
           { value: 'fraudulent', label: 'Bedraglig' },
           {
             value: 'product_unsatisfactory',
-            label: 'Produkt ej tillfredsstallande',
+            label: 'Produkt ej tillfredsställande',
           },
         ]}
       />
@@ -316,7 +316,7 @@ export function CreditInvoiceForm({
                 syncAmountToLine(value);
               }}
               data={lineOptions}
-              placeholder="Valj rad"
+              placeholder="Välj rad"
             />
           )}
         </>
@@ -344,16 +344,16 @@ export function CreditInvoiceForm({
             {canRefundPaymentMethod && (
               <Radio
                 value="refund"
-                label="Aterbetala till kundens betalmetod"
+                label="Återbetala till kundens betalmetod"
               />
             )}
             <Radio
               value="customer_balance"
-              label="Lagg som kundsaldo for framtida fakturor"
+              label="Lägg som kundsaldo för framtida fakturor"
             />
             <Radio
               value="outside_stripe"
-              label="Markerad som reglerad utanfor Stripe"
+              label="Markerad som reglerad utanför Stripe"
             />
           </Stack>
         </Radio.Group>
@@ -376,7 +376,7 @@ export function CreditInvoiceForm({
             label="Ny beskrivning"
             value={newDescription}
             onChange={(event) => setNewDescription(event.currentTarget.value)}
-            placeholder="Korrigerat manadsbelopp"
+            placeholder="Korrigerat månadsbelopp"
             maxLength={500}
           />
         </>
@@ -386,21 +386,21 @@ export function CreditInvoiceForm({
         <Switch
           checked={autoReissue}
           onChange={(event) => setAutoReissue(event.currentTarget.checked)}
-          label="Skapa i stallet en korrigerad ersattningsfaktura efter kreditering"
+          label="Skapa i stället en korrigerad ersättningsfaktura efter kreditering"
         />
       )}
 
       {autoReissue && mode === 'credit_only' && (
         <>
           <Alert color="blue">
-            Du har slagit pa ersattningsfaktura. Formularet byter till samma
-            flode som Kreditera och ersattningsfakturera.
+            Du har slagit på ersättningsfaktura. Formuläret byter till samma
+            flöde som Kreditera och ersättningsfakturera.
           </Alert>
           <Button
             variant="light"
             onClick={() => setMode('credit_and_reissue')}
           >
-            Byt till ersattningsflode
+            Byt till ersättningsflöde
           </Button>
         </>
       )}
@@ -416,17 +416,17 @@ export function CreditInvoiceForm({
       {mode === 'cancel_subscription' ? (
         <Alert color="yellow" icon={<AlertTriangle className="h-4 w-4" />}>
           Detta avslutar kundens aktiva abonnemang direkt och krediterar vald
-          faktura i samma flode.
+          faktura i samma flöde.
         </Alert>
       ) : isOpenInvoice ? (
         <Alert color="blue">
-          Pa en oppen faktura minskar kreditnotan det kvarvarande beloppet. Om
+          På en öppen faktura minskar kreditnotan det kvarvarande beloppet. Om
           totalen blir 0 markerar Stripe fakturan som betald.
         </Alert>
       ) : (
         <Alert color="yellow" icon={<AlertTriangle className="h-4 w-4" />}>
-          Pa en betald faktura maste krediten landa som refund, kundsaldo eller
-          reglering utanfor Stripe.
+          På en betald faktura måste krediten landa som refund, kundsaldo eller
+          reglering utanför Stripe.
         </Alert>
       )}
 
@@ -435,7 +435,7 @@ export function CreditInvoiceForm({
         {mode === 'cancel_subscription'
           ? 'Avsluta abonnemang och kreditera'
           : mode === 'credit_and_reissue'
-            ? 'Kreditera och skapa ersattningsfaktura'
+            ? 'Kreditera och skapa ersättningsfaktura'
             : 'Skapa kreditnota'}
       </Button>
     </div>

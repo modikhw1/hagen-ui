@@ -5,12 +5,11 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Card, Button, TextInput, Stack, Group, Text, Box, Grid, Avatar, Select } from '@mantine/core';
-import { IconSparkles, IconExternalLink } from '@tabler/icons-react';
+import { Avatar, Box, Button, Card, Group, Select, Stack, Text, TextInput } from '@mantine/core';
+import { IconSparkles } from '@tabler/icons-react';
 
-import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
-import TikTokProfileSection from '@/components/admin/customers/sections/TikTokProfileSection';
+import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
 
 const Schema = z.object({
   business_name: z.string().min(1).max(200),
@@ -33,10 +32,13 @@ type CustomerOrganisationInitialData = FormInput & {
 export interface CustomerOrganisationRouteProps {
   customerId: string;
   initialData: CustomerOrganisationInitialData;
+  hideFirstInvoiceBehavior?: boolean;
 }
 
 export function CustomerOrganisationRoute({
-  customerId, initialData,
+  customerId,
+  initialData,
+  hideFirstInvoiceBehavior = false,
 }: CustomerOrganisationRouteProps) {
   const { mutateAsync, isPending } = useCustomerMutation(customerId, 'update_profile');
   const refresh = useAdminRefresh();
@@ -47,7 +49,7 @@ export function CustomerOrganisationRoute({
     reset,
     formState: { errors, isDirty },
     control,
-    setValue
+    setValue,
   } = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: initialData,
@@ -56,7 +58,6 @@ export function CustomerOrganisationRoute({
   const firstInvoiceBehavior = useWatch({ control, name: 'first_invoice_behavior' });
   const logoUrl = useWatch({ control, name: 'logo_url' });
 
-  // Re-sync när serverdata ändras
   useEffect(() => {
     reset(initialData);
   }, [initialData, reset]);
@@ -70,115 +71,83 @@ export function CustomerOrganisationRoute({
       });
       toast.success('Uppgifter sparade.');
       await refresh([{ type: 'customer', customerId }]);
-      reset(values); // markera som "clean" igen
+      reset(values);
     } catch {
-      // Error is handled by the hook
+      // Error handled in hook.
     }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <Stack gap="lg">
-        {initialData.status === 'prospect' && (
-          <Card withBorder padding="md" bg="blue.0" style={{ borderColor: 'var(--mantine-color-blue-3)' }}>
+        {initialData.status === 'prospect' ? (
+          <Card
+            withBorder
+            padding="md"
+            bg="blue.0"
+            style={{ borderColor: 'var(--mantine-color-blue-3)' }}
+          >
             <Group gap="md">
-              <div className="h-10 w-10 flex items-center justify-center rounded-full bg-blue-100 text-blue-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-600">
                 <IconSparkles size={20} />
               </div>
               <div className="flex-1">
-                <Text size="sm" fw={700} c="blue.9">Shadow-profil (Demo)</Text>
+                <Text size="sm" fw={700} c="blue.9">
+                  Shadow-profil (Demo)
+                </Text>
                 <Text size="xs" c="blue.7">
-                  Denna profil används för att förbereda demos i Studio. 
-                  Den är dold från den vanliga kundlistan i Admin.
+                  Denna profil används för att förbereda demos i Studio. Den är dold från den
+                  vanliga kundlistan i Admin.
                 </Text>
               </div>
             </Group>
           </Card>
-        )}
+        ) : null}
 
-        <Grid grow align="stretch">
-          <Grid.Col span={{ base: 12, md: 8 }}>
-            {/* Företag */}
-            <Card withBorder padding="md" h="100%">
-              <Text size="md" fw={600} mb="md">Företagsuppgifter</Text>
-              <Stack gap="sm">
-                <TextInput
-                  label="Företagsnamn"
-                  {...register('business_name')}
-                  error={errors.business_name?.message}
-                />
-                <TextInput
-                  label="Logotyp URL"
-                  placeholder="https://..."
-                  {...register('logo_url')}
-                  error={errors.logo_url?.message}
-                />
-                <Text size="xs" c="dimmed">
-                  TikTok-profil hanteras i den dedikerade TikTok-sektionen for att anvanda samma
-                  centrala link- och syncflode som Studio och invite.
-                </Text>
-              </Stack>
-            </Card>
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, md: 4 }}>
-            {/* Visuell identitet */}
-            <Card withBorder padding="md" h="100%">
-              <Text size="sm" fw={500} c="dimmed" mb="md">Visuell identitet</Text>
-              <Stack align="center" justify="center" gap="sm" h="100%" mt="-md">
-                <Group gap="xl">
-                  <Stack align="center" gap={4}>
-                    <Avatar src={initialData.tiktok_profile_pic_url} size={60} radius="md" />
-                    <Text size="10px" c="dimmed" tt="uppercase" fw={700}>TikTok</Text>
-                  </Stack>
-                  <Stack align="center" gap={4}>
-                    <Avatar src={logoUrl} size={60} radius="xl" />
-                    <Text size="10px" c="dimmed" tt="uppercase" fw={700}>Logotyp</Text>
-                  </Stack>
-                </Group>
-                {initialData.tiktok_handle ? (
-                  <Button 
-                    variant="subtle" 
-                    size="compact-xs" 
-                    component="a" 
-                    href={`https://tiktok.com/@${initialData.tiktok_handle.replace('@', '')}`}
-                    target="_blank"
-                    rightSection={<IconExternalLink size={12} />}
-                  >
-                    @{initialData.tiktok_handle.replace('@', '')}
-                  </Button>
-                ) : (
-                  <Text size="xs" c="dimmed">Ingen profil kopplad</Text>
-                )}
-              </Stack>
-            </Card>
-          </Grid.Col>
-        </Grid>
-
-        <TikTokProfileSection customerId={customerId} />
-
-        {/* Kontrakt & Billing setup */}
         <Card withBorder padding="md">
-          <Text size="md" fw={600} mb="md">Kontrakt & Debitering</Text>
-          <Stack gap="md">
-            <Select
-              label="Beteende vid första fakturan"
-              description="Hur ska kunden debiteras när de startar?"
-              value={firstInvoiceBehavior ?? 'prorated'}
-              onChange={(val) => {
-                if (!val) return;
-                setValue('first_invoice_behavior', val as FirstInvoiceBehavior, { shouldDirty: true });
-              }}
-              data={[
-                { value: 'prorated', label: 'Pro-rata (debitera resterande dagar i månaden)' },
-                { value: 'full', label: 'Fullt belopp oavsett startdatum' },
-                { value: 'free_until_anchor', label: 'Gratis fram till nästa faktureringsdag' },
-              ]}
+          <Group justify="space-between" align="flex-start" mb="md" wrap="nowrap">
+            <Text size="md" fw={600}>Företagsuppgifter</Text>
+            <Avatar src={logoUrl} size={48} radius="md" alt="Logotyp" />
+          </Group>
+          <Stack gap="sm">
+            <TextInput
+              label="Företagsnamn"
+              {...register('business_name')}
+              error={errors.business_name?.message}
+            />
+            <TextInput
+              label="Logotyp URL"
+              placeholder="https://..."
+              {...register('logo_url')}
+              error={errors.logo_url?.message}
             />
           </Stack>
         </Card>
 
-        {/* Kontaktperson */}
+        {!hideFirstInvoiceBehavior ? (
+          <Card withBorder padding="md">
+            <Text size="md" fw={600} mb="md">Kontrakt & Debitering</Text>
+            <Stack gap="md">
+              <Select
+                label="Beteende vid första fakturan"
+                description="Hur ska kunden debiteras när de startar?"
+                value={firstInvoiceBehavior ?? 'prorated'}
+                onChange={(value) => {
+                  if (!value) return;
+                  setValue('first_invoice_behavior', value as FirstInvoiceBehavior, {
+                    shouldDirty: true,
+                  });
+                }}
+                data={[
+                  { value: 'prorated', label: 'Pro-rata (debitera resterande dagar i månaden)' },
+                  { value: 'full', label: 'Fullt belopp oavsett startdatum' },
+                  { value: 'free_until_anchor', label: 'Gratis fram till nästa faktureringsdag' },
+                ]}
+              />
+            </Stack>
+          </Card>
+        ) : null}
+
         <Card withBorder padding="md">
           <Text size="md" fw={600} mb="md">Kontaktperson</Text>
           <Stack gap="sm">
@@ -203,8 +172,7 @@ export function CustomerOrganisationRoute({
           </Stack>
         </Card>
 
-        {/* Save bar */}
-        {isDirty && (
+        {isDirty ? (
           <Box
             style={{
               position: 'sticky',
@@ -233,7 +201,7 @@ export function CustomerOrganisationRoute({
               Spara ändringar
             </Button>
           </Box>
-        )}
+        ) : null}
       </Stack>
     </form>
   );

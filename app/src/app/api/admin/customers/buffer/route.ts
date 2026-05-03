@@ -14,7 +14,7 @@ export const GET = withAuth(async (_request, user) => {
       );
 
     if (error) {
-      return jsonError(error.message || 'Kunde inte hamta bufferdata', 500);
+      return jsonError(error.message || 'Kunde inte hämta bufferdata', 500);
     }
 
     return new Response(JSON.stringify({ bufferRows: data ?? [] }), {

@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@mantine/core';
 import InviteCustomerModal from './InviteCustomerModal';
-import { useTeamLite } from '@/hooks/admin/useTeamLite';
+import { useTeamMembers } from '@/hooks/admin/useTeamMembers';
 
 interface AddCustomerButtonProps {
   onCreated: () => void;
@@ -14,7 +14,10 @@ interface AddCustomerButtonProps {
 
 export function AddCustomerButton({ onCreated }: AddCustomerButtonProps) {
   const [open, setOpen] = useState(false);
-  const { data: team = [] } = useTeamLite('admin');
+  const { data: allMembers = [] } = useTeamMembers();
+  const team = allMembers.filter(
+    (member) => member.role === 'content_manager' || member.role === 'admin',
+  );
 
   return (
     <>

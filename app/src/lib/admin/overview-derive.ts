@@ -51,8 +51,11 @@ export function deriveOverview(
 
   const customers = payload.customers.map((customer) => {
     const buffer = bufferByCustomerId.get(customer.id);
+    const briefDays = customer.brief?.posting_weekdays;
     const expectedConceptsPerWeek =
-      customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2;
+      Array.isArray(briefDays) && briefDays.length > 0
+        ? briefDays.length
+        : customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2;
     const blocking = customerBlocking({
       lastPublishedAt: buffer?.last_published_at
         ? new Date(buffer.last_published_at)
@@ -105,6 +108,7 @@ export function deriveOverview(
 
     return {
       ...customer,
+      expected_concepts_per_week: expectedConceptsPerWeek,
       bufferStatus,
       blocking,
       blockingDisplayDays: blockingDisplayDays(blocking),

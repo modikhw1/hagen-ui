@@ -4,6 +4,7 @@ import { recordAuditLog } from '@/lib/admin/audit-log';
 import { syncOperationalSubscriptionState } from '@/lib/admin/subscription-operational-sync';
 import type { CustomerAction } from '@/lib/admin/schemas/customer-actions';
 import { resumeCustomerSubscription } from '@/lib/stripe/admin-billing';
+import { withCustomerActionLock } from './lock';
 import {
   actionFailure,
   actionSuccess,
@@ -22,44 +23,54 @@ export async function handleResumeSubscription(
   input: ResumeSubscriptionInput,
 ): Promise<ActionResult> {
   void input;
-  const subscription = await resumeCustomerSubscription({
-    supabaseAdmin: ctx.supabaseAdmin,
-    stripeClient: ctx.stripeClient,
-    profileId: ctx.id,
-    requestId: ctx.requestId,
+  return withCustomerActionLock(ctx, 'billing', async () => {
+    let subscription;
+    try {
+      subscription = await resumeCustomerSubscription({
+        supabaseAdmin: ctx.supabaseAdmin,
+        stripeClient: ctx.stripeClient,
+        profileId: ctx.id,
+        requestId: ctx.requestId,
+      });
+    } catch (error) {
+      return actionFailure({
+        error: error instanceof Error ? error.message : 'Kunde inte ateruppta abonnemang',
+        statusCode: 500,
+      });
+    }
+
+    const { data: profile, error } = await ctx.supabaseAdmin
+      .from('customer_profiles')
+      .update({
+        paused_until: null,
+      })
+      .eq('id', ctx.id)
+      .select()
+      .single();
+
+    if (error) {
+      return actionFailure({ error: error.message, statusCode: 500 });
+    }
+
+    await syncOperationalSubscriptionState({
+      supabaseAdmin: ctx.supabaseAdmin,
+      customerProfileId: ctx.id,
+      profile: toOperationalProfileInput(profile),
+    });
+    await recordAuditLog(ctx.supabaseAdmin, {
+      actorUserId: ctx.user.id,
+      actorEmail: ctx.user.email,
+      actorRole: ctx.user.role,
+      action: 'admin.customer.subscription_resumed',
+      entityType: 'subscription',
+      entityId: String(ctx.beforeProfile?.stripe_subscription_id ?? ctx.id),
+      beforeState: ctx.beforeProfile,
+      afterState: profile as unknown as Record<string, unknown>,
+      metadata: buildCustomerActionAuditMetadata(ctx, {
+        idempotency_key: ctx.requestId,
+      }),
+    });
+
+    return actionSuccess({ subscription, profile });
   });
-
-  const { data: profile, error } = await ctx.supabaseAdmin
-    .from('customer_profiles')
-    .update({
-      paused_until: null,
-    })
-    .eq('id', ctx.id)
-    .select()
-    .single();
-
-  if (error) {
-    return actionFailure({ error: error.message, statusCode: 500 });
-  }
-
-  await syncOperationalSubscriptionState({
-    supabaseAdmin: ctx.supabaseAdmin,
-    customerProfileId: ctx.id,
-    profile: toOperationalProfileInput(profile),
-  });
-  await recordAuditLog(ctx.supabaseAdmin, {
-    actorUserId: ctx.user.id,
-    actorEmail: ctx.user.email,
-    actorRole: ctx.user.role,
-    action: 'admin.customer.subscription_resumed',
-    entityType: 'subscription',
-    entityId: String(ctx.beforeProfile?.stripe_subscription_id ?? ctx.id),
-    beforeState: ctx.beforeProfile,
-    afterState: profile as unknown as Record<string, unknown>,
-    metadata: buildCustomerActionAuditMetadata(ctx, {
-      idempotency_key: ctx.requestId,
-    }),
-  });
-
-  return actionSuccess({ subscription, profile });
 }

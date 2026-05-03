@@ -52,7 +52,7 @@ export const GET = withAuth(async (request, user) => {
     return response;
   } catch (error) {
     return jsonError(
-      error instanceof Error ? error.message : 'Kunde inte hamta audit-loggen',
+      error instanceof Error ? error.message : 'Kunde inte hämta audit-loggen',
       500,
     );
   }

@@ -28,6 +28,9 @@ export default function SubscriptionActions({
   >('end_of_period');
   const [creditAmountSek, setCreditAmountSek] = useState('');
   const [cancelMemo, setCancelMemo] = useState('');
+  const [creditSettlementMode, setCreditSettlementMode] = useState<
+    'refund' | 'customer_balance' | 'outside_stripe'
+  >('refund');
   const [confirmAction, setConfirmAction] = useState<'cancel' | 'archive' | null>(null);
 
   const reactivateArchiveMutation = useCustomerMutation(customerId, 'reactivate_archive', {
@@ -92,13 +95,20 @@ export default function SubscriptionActions({
     (cancelMode === 'immediate_with_credit' &&
       (!latestPaidInvoice || creditAmountOre == null || creditAmountOre <= 0));
 
+  const settlementLabel =
+    creditSettlementMode === 'refund'
+      ? 'återbetalas till betalkortet'
+      : creditSettlementMode === 'customer_balance'
+        ? 'läggs som kundsaldo på nästa faktura'
+        : 'hanteras manuellt utanför Stripe';
+
   const cancelConfirmDescription =
     cancelMode === 'end_of_period'
       ? 'Abonnemanget fortsätter fram till periodslut och stoppas sedan. Ingen kreditnota skapas.'
       : cancelMode === 'immediate'
         ? 'Abonnemanget stoppas omedelbart utan kreditnota eller refund.'
         : latestPaidInvoice
-          ? `Abonnemanget stoppas omedelbart och en kreditnota skapas mot senaste betalda fakturan på ${formatPriceSEK(parsedCreditAmountSek, { fallback: '0 kr' })}.`
+          ? `Abonnemanget stoppas omedelbart. En kreditnota på ${formatPriceSEK(parsedCreditAmountSek, { fallback: '0 kr' })} skapas mot senaste betalda fakturan och beloppet ${settlementLabel}.`
           : 'Det finns ingen betald faktura att kreditera mot. Den här åtgärden kommer att misslyckas.';
 
   const showSafe = variant === 'all' || variant === 'safe';
@@ -221,6 +231,25 @@ export default function SubscriptionActions({
                   placeholder="Belopp i SEK"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
+                <label className="block text-xs text-muted-foreground">
+                  Kreditering hanteras som
+                  <select
+                    value={creditSettlementMode}
+                    onChange={(event) =>
+                      setCreditSettlementMode(
+                        event.target.value as
+                          | 'refund'
+                          | 'customer_balance'
+                          | 'outside_stripe',
+                      )
+                    }
+                    className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="refund">Återbetala till betalkort</option>
+                    <option value="customer_balance">Kundsaldo på nästa faktura</option>
+                    <option value="outside_stripe">Hanteras manuellt utanför Stripe</option>
+                  </select>
+                </label>
                 <textarea
                   value={cancelMemo}
                   onChange={(event) => setCancelMemo(event.target.value)}
@@ -288,9 +317,12 @@ export default function SubscriptionActions({
           void cancelSubscriptionMutation
             .mutateAsync({
               mode: cancelMode,
-              invoice_id: latestPaidInvoice?.id ?? null,
+              invoice_id:
+                latestPaidInvoice?.stripe_invoice_id ?? latestPaidInvoice?.id ?? null,
               credit_amount_ore:
                 cancelMode === 'immediate_with_credit' ? creditAmountOre : null,
+              credit_settlement_mode:
+                cancelMode === 'immediate_with_credit' ? creditSettlementMode : null,
               memo: cancelMemo || null,
             })
             .catch(() => {})
@@ -309,16 +341,6 @@ export default function SubscriptionActions({
       />
     </>
   );
-}
-
-function statusLabel(status: string, cancelAtPeriodEnd: boolean) {
-  if (cancelAtPeriodEnd) return 'Avslutas vid periodens slut';
-  if (status === 'paused') return 'Pausad';
-  if (status === 'active') return 'Aktiv';
-  if (status === 'past_due') return 'Förfallen';
-  if (status === 'trialing') return 'Trial';
-  if (status === 'canceled' || status === 'cancelled') return 'Avslutad';
-  return status || 'Okänd';
 }
 
 function ModeRow({

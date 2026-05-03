@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import SummaryCard from '@/components/admin/_shared/SummaryCard';
 import ConfirmActionDialog from '@/components/admin/ConfirmActionDialog';
+import DriftBanner from '@/components/admin/billing/health/DriftBanner';
 import RecentFailuresList from '@/components/admin/billing/health/RecentFailuresList';
+import ReconcileJobsList from '@/components/admin/billing/health/ReconcileJobsList';
 import SyncLogList from '@/components/admin/billing/health/SyncLogList';
 import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
+import { AdminSection } from '@/components/admin/ui/AdminSection';
 import { apiClient } from '@/lib/admin/api-client';
 import { type EnvFilter } from '@/lib/admin/billing';
 import { useBillingHealthRetry } from '@/lib/admin/billing-ops';
@@ -19,16 +20,8 @@ import {
 import { parseDto } from '@/lib/admin/dtos/parse';
 import { qk } from '@/lib/admin/queryKeys';
 import { timeAgoSv } from '@/lib/admin/time';
-import { cn } from '@/lib/utils';
-
-import AdminTable from '@/components/admin/ui/AdminTable';
-import { AdminSection } from '@/components/admin/ui/AdminSection';
 
 export default function HealthRoute({ env }: { env: EnvFilter }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
   const {
     run: retrySync,
     isPending,
@@ -36,7 +29,7 @@ export default function HealthRoute({ env }: { env: EnvFilter }) {
     rateLimitRemainingSeconds,
   } = useBillingHealthRetry();
   const [confirmRetryOpen, setConfirmRetryOpen] = useState(false);
-  
+
   const { data: health, isLoading } = useQuery({
     queryKey: qk.billing.healthStatus(env),
     queryFn: async ({ signal }) => {
@@ -59,13 +52,10 @@ export default function HealthRoute({ env }: { env: EnvFilter }) {
   const failures = health?.recentFailures ?? entries.filter((entry) => entry.status === 'failed');
   const retryBlocked = isPending || rateLimitRemainingSeconds > 0;
 
-  // Mock data for "Sync-status per kund" since DTO doesn't have it yet
-  const customersWithErrors: any[] = []; 
-
   return (
     <div className="space-y-8">
-      <PageHeader 
-        title="Billing Health" 
+      <PageHeader
+        title="Billing Health"
         subtitle="Systemstatus och synkronisering"
         actions={
           <div className="flex items-center gap-3">
@@ -108,32 +98,27 @@ export default function HealthRoute({ env }: { env: EnvFilter }) {
           value={String(health?.stats.failedSyncs ?? 0)}
           tone={(health?.stats.failedSyncs ?? 0) > 0 ? 'warning' : 'success'}
         />
-        <SummaryCard 
-          label="Senaste lyckade sync" 
+        <SummaryCard
+          label="Senaste lyckade sync"
           value={{
             primary: timeAgoSv(health?.stats.latestSuccessfulSyncAt ?? null),
-            secondary: health?.stats.latestSuccessfulSyncAt ? `Uppdaterades nyss` : 'Aldrig kört'
+            secondary: health?.stats.latestSuccessfulSyncAt ? 'Uppdaterades nyss' : 'Aldrig kört',
           }}
         />
       </div>
 
+      <DriftBanner env={env} />
+
       <div className="space-y-10">
-        <AdminSection title="Senaste misslyckade events" description="Webhooks, jobs, retries">
-          <RecentFailuresList entries={failures} isLoading={isLoading} />
+        <AdminSection
+          title="Reconcile-jobb"
+          description="Asynkrona Stripe-synkar – kö, körning och historik"
+        >
+          <ReconcileJobsList />
         </AdminSection>
 
-        <AdminSection title="Sync-status per kund" description="Kunder med aktuella problem">
-          <AdminTable
-            columns={[
-              { key: 'customer', header: 'Kund', render: (c: any) => c.name },
-              { key: 'error', header: 'Felmeddelande', render: (c: any) => c.error },
-              { key: 'action', header: '', align: 'right', width: '100px', render: (c: any) => <Link href={`/admin/customers/${c.id}`} className="text-xs text-primary hover:underline">Visa kund →</Link> }
-            ]}
-            rows={customersWithErrors}
-            getRowKey={(c: any) => c.id}
-            emptyLabel="Inga kunder har aktuella synk-problem."
-            density="compact"
-          />
+        <AdminSection title="Senaste misslyckade events" description="Webhooks, jobs, retries">
+          <RecentFailuresList entries={failures} isLoading={isLoading} />
         </AdminSection>
 
         <AdminSection title="Sync-logg" description="Senaste 100 körningarna">

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
+
+import { CustomerDriftRoute } from '@/components/admin/customers/routes/CustomerDriftRoute';
 import { loadCustomerView } from '@/lib/admin/server/customer-view';
-import { CustomerOverviewRoute } from '@/components/admin/customers/routes/CustomerOverviewRoute';
 
 type PageProps = {
   params: Promise<{ id: string }>;
@@ -18,21 +19,21 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
   const invoice = getValue(query.invoice);
 
   if (invoice) {
-    redirect(`/admin/customers/${id}/billing/${invoice}`);
+    redirect(`/admin/customers/${id}/avtal/${invoice}`);
   }
 
   const focusMap: Record<string, string> = {
-    contract:           `/admin/customers/${id}/organisation`,
-    invoices:           `/admin/customers/${id}/billing`,
-    "upcoming-invoice": `/admin/customers/${id}/billing`,
-    pending:            `/admin/customers/${id}/billing`,
-    operations:         `/admin/customers/${id}/pulse`,
-    cm:                 `/admin/customers/${id}/pulse`,
-    activity:           `/admin/customers/${id}/pulse`,
-    contact:            `/admin/customers/${id}/organisation`,
-    "tiktok-profile":   `/admin/customers/${id}/organisation`,
-    studio:             `/admin/customers/${id}/pulse`,
-    subscription:       `/admin/customers/${id}/billing`,
+    contract: `/admin/customers/${id}/avtal`,
+    invoices: `/admin/customers/${id}/avtal`,
+    'upcoming-invoice': `/admin/customers/${id}/avtal`,
+    pending: `/admin/customers/${id}/avtal`,
+    operations: `/admin/customers/${id}`,
+    cm: `/admin/customers/${id}#cm`,
+    activity: `/admin/customers/${id}`,
+    contact: `/admin/customers/${id}/avtal`,
+    'tiktok-profile': `/admin/customers/${id}/avtal`,
+    studio: `/admin/customers/${id}`,
+    subscription: `/admin/customers/${id}/avtal`,
   };
 
   if (focus && focus in focusMap) {
@@ -42,10 +43,10 @@ export default async function CustomerDetailPage({ params, searchParams }: PageP
   const data = await loadCustomerView(id);
 
   return (
-    <CustomerOverviewRoute
+    <CustomerDriftRoute
       customerId={id}
-      initialData={data.overview}
-      pulseData={data.pulse}
+      overview={data.overview}
+      pulse={data.pulse}
     />
   );
 }

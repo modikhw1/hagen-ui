@@ -1,5 +1,4 @@
-import { loadCustomerView } from '@/lib/admin/server/customer-view';
-import { CustomerOrganisationRoute } from '@/components/admin/customers/routes/CustomerOrganisationRoute';
+import { redirect } from 'next/navigation';
 
 export default async function CustomerOrganisationPage({
   params,
@@ -7,12 +6,5 @@ export default async function CustomerOrganisationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const data = await loadCustomerView(id);
-
-  return (
-    <CustomerOrganisationRoute
-      customerId={id}
-      initialData={data.organisation}
-    />
-  );
+  redirect(`/admin/customers/${id}/avtal`);
 }

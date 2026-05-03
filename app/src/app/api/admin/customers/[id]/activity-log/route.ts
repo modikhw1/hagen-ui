@@ -6,13 +6,25 @@ import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 type ActivityEntry = {
   id: string;
   at: string;
-  kind: 'audit' | 'cm_activity' | 'game_plan' | 'concept';
+  kind: 'audit' | 'cm_activity' | 'game_plan' | 'concept' | 'admin_note';
   entityType?: string | null;
   title: string;
   description: string;
   actorLabel: string | null;
   actorRole: string | null;
+  pinned?: boolean;
+  noteId?: string | null;
 };
+
+function isTimelineNoiseDescription(value: string | null | undefined) {
+  const normalized = value?.toLowerCase().trim() ?? '';
+  return normalized.includes('laddade upp video') || normalized.includes('uploaded video');
+}
+
+function isTimelineNoiseActivityType(value: string | null | undefined) {
+  const normalized = value?.toLowerCase().trim() ?? '';
+  return normalized.includes('upload') && normalized.includes('video');
+}
 
 function metadataCustomerProfileId(
   metadata: Record<string, unknown> | null | undefined,
@@ -28,27 +40,32 @@ function humanizeAuditAction(action: string) {
     'admin.customer.invited': 'Kund inbjuden',
     'admin.customer.invite_resent': 'Invite skickad igen',
     'admin.customer.activated': 'Kund aktiverad',
-    'admin.customer.reactivated': 'Arkiverad kund ateraktiverad',
+    'admin.customer.reactivated': 'Arkiverad kund återaktiverad',
     'admin.customer.updated': 'Kunduppgifter uppdaterade',
     'admin.customer.archived': 'Kund arkiverad',
-    'admin.customer.cm_changed': 'Content Manager andrad',
+    'admin.customer.cm_changed': 'Content Manager ändrad',
     'admin.customer.cm_change_scheduled': 'CM-byte schemalagt',
     'admin.customer.subscription_cancelled': 'Abonnemang avslutat',
     'admin.customer.subscription_paused': 'Abonnemang pausat',
-    'admin.customer.subscription_resumed': 'Abonnemang aterupptaget',
-    'admin.customer.subscription_price_changed': 'Abonnemangspris andrat',
+    'admin.customer.subscription_resumed': 'Abonnemang återupptaget',
+    'admin.customer.subscription_price_changed': 'Abonnemangspris ändrat',
     'admin.customer.discount_applied': 'Rabatt applicerad',
     'admin.customer.discount_removed': 'Rabatt borttagen',
-    'system.customer.discount_expired': 'Rabatt lopte ut',
-    'admin.customer.temporary_coverage_created': 'Tillfallig CM-coverage skapad',
+    'system.customer.discount_expired': 'Rabatt löpte ut',
+    'admin.customer.temporary_coverage_created': 'Tillfällig CM-coverage skapad',
     'admin.invoice.created': 'Manuell faktura skapad',
     'admin.invoice.paid': 'Faktura markerad som betald',
+    'admin.invoice.pay_now': 'Försökte ta betalt direkt',
+    'admin.invoice.resent': 'Faktura skickad igen',
+    'admin.invoice.resync': 'Faktura synkad från Stripe',
     'admin.invoice.voided': 'Faktura annullerad',
+    'admin.invoice.uncollectible': 'Faktura markerad svårindrivbar',
     'admin.invoice.credit_note_created': 'Kreditnota skapad',
     'admin.invoice.credit_note_reissued':
-      'Kreditnota skapad och ersattningsfaktura skickad',
+      'Kreditnota skapad och ersättningsfaktura skickad',
     'admin.invoice.credit_note_reissue_failed':
-      'Kreditnota skapad men ersattningsfaktura misslyckades',
+      'Kreditnota skapad men ersättningsfaktura misslyckades',
+    'admin.invoice.refunded': 'Återbetalning genomförd',
     'admin.invoice_item.created': 'Pending invoice item skapad',
     'admin.invoice_item.updated': 'Pending invoice item uppdaterad',
     'admin.invoice_item.deleted': 'Pending invoice item borttagen',
@@ -67,7 +84,7 @@ function buildAuditDescription(entry: {
     entry.action === 'admin.customer.invited' ||
     entry.action === 'admin.customer.invite_resent'
   ) {
-    return 'En ny onboarding-lank skickades till kunden.';
+    return 'En ny onboarding-länk skickades till kunden.';
   }
 
   if (
@@ -78,7 +95,7 @@ function buildAuditDescription(entry: {
       typeof entry.metadata?.effective_date === 'string'
         ? entry.metadata.effective_date
         : null;
-    return date ? `Galler fran ${date}.` : 'CM-ansvaret uppdaterades.';
+    return date ? `Gäller från ${date}.` : 'CM-ansvaret uppdaterades.';
   }
 
   if (entry.action === 'admin.customer.subscription_price_changed') {
@@ -87,8 +104,8 @@ function buildAuditDescription(entry: {
         ? entry.metadata.monthly_price
         : null;
     return monthlyPrice != null
-      ? `Nytt manadspris ${monthlyPrice.toLocaleString('sv-SE')} kr.`
-      : 'Abonnemangspriset andrades.';
+      ? `Nytt månadspris ${monthlyPrice.toLocaleString('sv-SE')} kr.`
+      : 'Abonnemangspriset ändrades.';
   }
 
   if (entry.action === 'admin.customer.discount_applied') {
@@ -98,7 +115,7 @@ function buildAuditDescription(entry: {
       typeof entry.metadata?.value === 'number' ? entry.metadata.value : null;
     return value != null
       ? `${type} satt till ${value}.`
-      : 'Rabatt lades till pa kunden.';
+      : 'Rabatt lades till på kunden.';
   }
 
   if (entry.action === 'system.customer.discount_expired') {
@@ -108,7 +125,7 @@ function buildAuditDescription(entry: {
         : null;
     return endDate
       ? `Rabatten togs bort automatiskt efter slutdatum ${endDate}.`
-      : 'Rabatten togs bort automatiskt nar perioden lopte ut.';
+      : 'Rabatten togs bort automatiskt när perioden löpte ut.';
   }
 
   if (entry.action === 'admin.invoice.created') {
@@ -117,18 +134,18 @@ function buildAuditDescription(entry: {
         ? entry.metadata.item_count
         : null;
     return itemCount != null
-      ? `${itemCount} rad${itemCount === 1 ? '' : 'er'} lades pa fakturan.`
+      ? `${itemCount} rad${itemCount === 1 ? '' : 'er'} lades på fakturan.`
       : 'En manuell faktura skapades.';
   }
 
-  return 'Handelsen loggades via adminpanelen.';
+  return 'Händelsen loggades via adminpanelen.';
 }
 
 export const GET = withAuth(
   async (_request, _user, { params }: { params: Promise<{ id: string }> }) => {
     const { id } = await params;
     if (!id) {
-      return jsonError('Kund-ID kravs', 400);
+      return jsonError('Kund-ID krävs', 400);
     }
 
     try {
@@ -137,8 +154,8 @@ export const GET = withAuth(
       const [
         auditResult,
         cmActivitiesResult,
-        gamePlanResult,
         conceptTimelineResult,
+        adminNotesResult,
       ] = await Promise.all([
         listAuditLog(supabaseAdmin, 250),
         supabaseAdmin
@@ -148,11 +165,6 @@ export const GET = withAuth(
           .order('created_at', { ascending: false })
           .limit(20),
         supabaseAdmin
-          .from('customer_game_plans')
-          .select('updated_at, updated_by')
-          .eq('customer_id', id)
-          .maybeSingle(),
-        supabaseAdmin
           .from('customer_concepts')
           .select(
             'id, custom_headline, added_at, sent_at, produced_at, published_at',
@@ -160,6 +172,16 @@ export const GET = withAuth(
           .eq('customer_profile_id', id)
           .order('updated_at', { ascending: false })
           .limit(12),
+        (supabaseAdmin.from as any)('admin_customer_notes')
+          .select('id, body, pinned, author_name, author_user_id, created_at, updated_at')
+          .eq('customer_profile_id', id)
+          .order('created_at', { ascending: false })
+          .limit(50)
+          .then(
+            (result: { data: any[] | null; error: { message?: string } | null }) =>
+              result.error ? { data: [], error: null, missing: true } : { ...result, missing: false },
+            () => ({ data: [], error: null, missing: true }),
+          ),
       ]);
 
       const activity: ActivityEntry[] = [];
@@ -185,6 +207,12 @@ export const GET = withAuth(
 
       (cmActivitiesResult.data ?? []).forEach((entry) => {
         if (!entry.created_at) return;
+        if (
+          isTimelineNoiseDescription(entry.description) ||
+          isTimelineNoiseActivityType(entry.activity_type)
+        ) {
+          return;
+        }
         activity.push({
           id: `cm_activity:${entry.id}`,
           at: entry.created_at,
@@ -196,28 +224,6 @@ export const GET = withAuth(
         });
       });
 
-      if (gamePlanResult.data?.updated_at) {
-        let actorLabel: string | null = null;
-        if (gamePlanResult.data.updated_by) {
-          const profileResult = await supabaseAdmin
-            .from('profiles')
-            .select('email')
-            .eq('id', gamePlanResult.data.updated_by)
-            .maybeSingle();
-          actorLabel = profileResult.data?.email ?? null;
-        }
-
-        activity.push({
-          id: `game_plan:${id}`,
-          at: gamePlanResult.data.updated_at,
-          kind: 'game_plan',
-          title: 'Game Plan uppdaterad',
-          description: 'Den personliga game planen justerades eller ersattes.',
-          actorLabel,
-          actorRole: gamePlanResult.data.updated_by ? 'editor' : null,
-        });
-      }
-
       (conceptTimelineResult.data ?? []).forEach((concept) => {
         const conceptLabel = concept.custom_headline?.trim() || 'Koncept';
         const milestones = [
@@ -226,12 +232,6 @@ export const GET = withAuth(
             at: concept.published_at,
             title: 'Video publicerad',
             description: `${conceptLabel} gick ut i historiken som publicerat innehall.`,
-          },
-          {
-            key: 'produced',
-            at: concept.produced_at,
-            title: 'Video producerad',
-            description: `${conceptLabel} markerades som producerad.`,
           },
           {
             key: 'sent',
@@ -263,10 +263,25 @@ export const GET = withAuth(
         });
       });
 
+      ((adminNotesResult as any)?.data ?? []).forEach((note: any) => {
+        if (!note?.created_at) return;
+        activity.push({
+          id: `admin_note:${note.id}`,
+          at: note.created_at,
+          kind: 'admin_note',
+          title: note.pinned ? 'Anteckning (fäst)' : 'Anteckning',
+          description: typeof note.body === 'string' ? note.body : '',
+          actorLabel: note.author_name ?? null,
+          actorRole: 'admin',
+          pinned: Boolean(note.pinned),
+          noteId: note.id,
+        });
+      });
+
       activity.sort((left, right) => +new Date(right.at) - +new Date(left.at));
 
       return jsonOk({
-        activities: activity.slice(0, 40),
+        activities: activity.slice(0, 60),
         schemaWarnings: auditResult.schemaWarnings,
       });
     } catch (error) {

@@ -5,26 +5,34 @@ import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import {
   IconAlertTriangle,
+  IconArrowBackUp,
+  IconCash,
   IconExternalLink,
+  IconPlayerPause,
+  IconPlus,
   IconTag,
 } from '@tabler/icons-react';
 import {
-  Card,
-  Button,
-  Badge,
-  Table,
-  Group,
-  Text,
-  Stack,
   ActionIcon,
-  Box,
   Alert,
+  Badge,
+  Box,
+  Button,
+  Card,
+  Group,
+  Paper,
+  Stack,
+  Table,
+  Text,
 } from '@mantine/core';
 
-import PendingInvoiceItems from '@/components/admin/customers/PendingInvoiceItems';
 import { InvoiceDetailModal } from '@/components/admin/billing/invoices/InvoiceDetailModal';
+import PendingInvoiceItems from '@/components/admin/customers/PendingInvoiceItems';
+import { PauseSubscriptionModal } from '@/components/admin/customers/modals/PauseSubscriptionModal';
 import { StandaloneInvoiceModal } from '@/components/admin/customers/modals/StandaloneInvoiceModal';
 import { UpdatePricingDialog } from '@/components/admin/customers/modals/UpdatePricingDialog';
+import { CreditNotesSection } from '@/components/admin/customers/sections/CreditNotesSection';
+import { useCustomerBalance } from '@/hooks/admin/useCustomerBalance';
 
 export interface CustomerBillingInvoice {
   stripe_invoice_id: string;
@@ -60,14 +68,14 @@ export interface CustomerBillingInitialData {
 const statusLabels: Record<string, string> = {
   active: 'Aktivt',
   trialing: 'Provperiod',
-  past_due: 'Förfallet',
-  uncollectible: 'Går ej att driva in',
+  past_due: 'Forfallet',
+  uncollectible: 'Gar ej att driva in',
   canceled: 'Avslutat',
-  incomplete: 'Ofullständigt',
-  incomplete_expired: 'Utgått',
+  incomplete: 'Ofullstandigt',
+  incomplete_expired: 'Utgatt',
   paused: 'Pausat',
   paid: 'Betald',
-  open: 'Öppen',
+  open: 'Oppen',
   void: 'Annullerad',
   draft: 'Utkast',
 };
@@ -122,13 +130,15 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
     canManageBilling && hasSubscriptionLink && hasManageableBillingEnvironment;
   const invoices = data.invoices ?? [];
 
-  const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(
-    initialInvoiceId ?? null,
-  );
-  const [standaloneOpen, setStandaloneOpen] = useState(
-    initialStandaloneOpen === true,
-  );
+  const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(initialInvoiceId ?? null);
+  const [standaloneOpen, setStandaloneOpen] = useState(initialStandaloneOpen === true);
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [pauseOpen, setPauseOpen] = useState(false);
+  const { data: balance } = useCustomerBalance(customerId);
+
+  const isPaused = data.subscription_status === 'paused';
+  const canPause =
+    canManageBilling && hasSubscriptionLink && hasManageableBillingEnvironment;
 
   function upsertInvoiceInState(nextInvoice: CustomerBillingInvoice) {
     setData((current) => {
@@ -153,14 +163,9 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
   const hasDiscount = !!data.discount;
   let effectivePriceOre = data.monthly_price_ore;
   if (data.discount?.type === 'percent') {
-    effectivePriceOre = Math.round(
-      data.monthly_price_ore * (1 - data.discount.value / 100),
-    );
+    effectivePriceOre = Math.round(data.monthly_price_ore * (1 - data.discount.value / 100));
   } else if (data.discount?.type === 'amount') {
-    effectivePriceOre = Math.max(
-      0,
-      data.monthly_price_ore - data.discount.value * 100,
-    );
+    effectivePriceOre = Math.max(0, data.monthly_price_ore - data.discount.value * 100);
   } else if (data.discount?.type === 'free_months') {
     effectivePriceOre = 0;
   }
@@ -180,20 +185,54 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
 
   return (
     <Stack gap="lg">
+      {canManageBilling ? (
+        <Paper withBorder p="sm" radius="md">
+          <Group justify="space-between" wrap="wrap" gap="xs">
+            <Text size="sm" c="dimmed" fw={600} tt="uppercase" pl={6}>
+              Snabbåtgärder
+            </Text>
+            <Group gap="xs" wrap="wrap">
+              {canChangePricing ? (
+                <Button
+                  size="sm"
+                  variant="light"
+                  leftSection={<IconCash size={14} />}
+                  onClick={() => setPricingOpen(true)}
+                >
+                  Ändra pris
+                </Button>
+              ) : null}
+              {canCreateManualInvoice ? (
+                <Button
+                  size="sm"
+                  variant="light"
+                  leftSection={<IconPlus size={14} />}
+                  onClick={() => setStandaloneOpen(true)}
+                >
+                  Skapa engångsfaktura
+                </Button>
+              ) : null}
+              {canPause ? (
+                <Button
+                  size="sm"
+                  variant={isPaused ? 'filled' : 'light'}
+                  color={isPaused ? 'blue' : 'orange'}
+                  leftSection={<IconPlayerPause size={14} />}
+                  onClick={() => setPauseOpen(true)}
+                >
+                  {isPaused ? 'Ateruppta abonnemang' : 'Pausa abonnemang'}
+                </Button>
+              ) : null}
+            </Group>
+          </Group>
+        </Paper>
+      ) : null}
+
       <Card withBorder padding="md">
         <Group justify="space-between" mb="md">
           <Text size="md" fw={600}>
             Abonnemang & pris
           </Text>
-          {canChangePricing && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setPricingOpen(true)}
-            >
-              Hantera prissättning
-            </Button>
-          )}
         </Group>
         <Group grow align="flex-start">
           <Stack gap={4}>
@@ -201,28 +240,20 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
               Baspris (MRR)
             </Text>
             <Group gap="xs" align="baseline">
-              <Text
-                size="lg"
-                fw={600}
-                style={{ fontVariantNumeric: 'tabular-nums' }}
-              >
+              <Text size="lg" fw={600} style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {(data.monthly_price_ore / 100).toLocaleString('sv-SE', {
                   style: 'currency',
                   currency: 'SEK',
                   maximumFractionDigits: 0,
                 })}
               </Text>
-              {hasDiscount && (
-                <Badge
-                  variant="light"
-                  color="orange"
-                  leftSection={<IconTag size={10} />}
-                >
+              {hasDiscount ? (
+                <Badge variant="light" color="orange" leftSection={<IconTag size={10} />}>
                   {discountLabel}
                 </Badge>
-              )}
+              ) : null}
             </Group>
-            {hasDiscount && (
+            {hasDiscount ? (
               <Text size="xs" c="dimmed">
                 Effektivt pris:{' '}
                 {(effectivePriceOre / 100).toLocaleString('sv-SE', {
@@ -231,49 +262,75 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
                   maximumFractionDigits: 0,
                 })}
               </Text>
-            )}
+            ) : null}
           </Stack>
           <Stack gap={4}>
             <Text size="xs" c="dimmed">
               Status
             </Text>
             <Box>
-              <Badge
-                color={statusTones[data.subscription_status ?? ''] || 'gray'}
-                variant="filled"
-              >
+              <Badge color={statusTones[data.subscription_status ?? ''] || 'gray'} variant="filled">
                 {data.subscription_status
-                  ? statusLabels[data.subscription_status] ||
-                    data.subscription_status
+                  ? statusLabels[data.subscription_status] || data.subscription_status
                   : 'Inget abonnemang'}
               </Badge>
             </Box>
           </Stack>
           <Stack gap={4}>
             <Text size="xs" c="dimmed">
-              Nästa faktura
+              Nasta faktura
             </Text>
             <Text size="sm" fw={500}>
               {data.next_invoice_date
-                ? format(new Date(data.next_invoice_date), 'd MMM yyyy', {
-                    locale: sv,
-                  })
-                : '—'}
+                ? format(new Date(data.next_invoice_date), 'd MMM yyyy', { locale: sv })
+                : '-'}
             </Text>
           </Stack>
         </Group>
-        {canManageBilling && !hasStripeCustomer && (
-          <Alert color="yellow" mt="md">
-            Kunden saknar Stripe-koppling i aktiv miljö. Billing-åtgärder är
-            därför dolda.
+        {balance && balance.balance_ore !== 0 ? (
+          <Alert
+            color={balance.balance_ore < 0 ? 'green' : 'orange'}
+            mt="md"
+            variant="light"
+          >
+            {balance.balance_ore < 0 ? (
+              <>
+                Kunden har ett tillgodohavande pa{' '}
+                <strong>
+                  {(Math.abs(balance.balance_ore) / 100).toLocaleString('sv-SE', {
+                    style: 'currency',
+                    currency: (balance.currency ?? 'sek').toUpperCase(),
+                    maximumFractionDigits: 0,
+                  })}
+                </strong>{' '}
+                som dras automatiskt pa nasta faktura.
+              </>
+            ) : (
+              <>
+                Kunden har en utestaende skuld pa{' '}
+                <strong>
+                  {(balance.balance_ore / 100).toLocaleString('sv-SE', {
+                    style: 'currency',
+                    currency: (balance.currency ?? 'sek').toUpperCase(),
+                    maximumFractionDigits: 0,
+                  })}
+                </strong>{' '}
+                som laggs pa nasta faktura.
+              </>
+            )}
           </Alert>
-        )}
-        {canManageBilling && hasStripeCustomer && !hasSubscriptionLink && (
+        ) : null}
+        {canManageBilling && !hasStripeCustomer ? (
+          <Alert color="yellow" mt="md">
+            Kunden saknar Stripe-koppling i aktiv miljö. Billing-åtgärder är därför dolda.
+          </Alert>
+        ) : null}
+        {canManageBilling && hasStripeCustomer && !hasSubscriptionLink ? (
           <Alert color="blue" mt="md">
             Kunden har ingen aktiv abonnemangskoppling i den här Stripe-miljön.
             Engångsfaktura kan fortfarande användas.
           </Alert>
-        )}
+        ) : null}
       </Card>
 
       <PendingInvoiceItems
@@ -285,30 +342,26 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
       />
 
       <Card withBorder padding="md">
-        {data.environment_warning && (
+        {data.environment_warning ? (
           <Box mb="md">
             <Badge color="yellow" variant="light">
               {data.environment_warning.message}
             </Badge>
           </Box>
-        )}
+        ) : null}
         <Group justify="space-between" mb="md">
           <Text size="md" fw={600}>
             Fakturahistorik
           </Text>
-          {canCreateManualInvoice && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setStandaloneOpen(true)}
-            >
-              Skapa engångsfaktura
+          {canCreateManualInvoice ? (
+            <Button variant="outline" size="sm" onClick={() => setStandaloneOpen(true)}>
+              Skapa engangsfaktura
             </Button>
-          )}
+          ) : null}
         </Group>
         {invoices.length === 0 ? (
           <Text size="sm" c="dimmed" fs="italic" py="xl">
-            Inga fakturor än.
+            Inga fakturor an.
           </Text>
         ) : (
           <Table highlightOnHover>
@@ -331,22 +384,16 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
                   <Table.Td>
                     <Group gap="xs">
                       <Text size="sm" fw={500}>
-                        {invoice.number ??
-                          invoice.stripe_invoice_id.slice(0, 12)}
+                        {invoice.number ?? invoice.stripe_invoice_id.slice(0, 12)}
                       </Text>
-                      {invoice.has_incomplete_operation && (
-                        <IconAlertTriangle
-                          size={16}
-                          color="var(--mantine-color-red-6)"
-                        />
-                      )}
+                      {invoice.has_incomplete_operation ? (
+                        <IconAlertTriangle size={16} color="var(--mantine-color-red-6)" />
+                      ) : null}
                     </Group>
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm">
-                      {format(new Date(invoice.created_at), 'd MMM yyyy', {
-                        locale: sv,
-                      })}
+                      {format(new Date(invoice.created_at), 'd MMM yyyy', { locale: sv })}
                     </Text>
                   </Table.Td>
                   <Table.Td>
@@ -363,27 +410,37 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
                       {invoice.status}
                     </Badge>
                   </Table.Td>
-                  <Table.Td
-                    style={{
-                      textAlign: 'right',
-                      fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
+                  <Table.Td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
                     <Text size="sm">{amountLabel(invoice)}</Text>
                   </Table.Td>
                   <Table.Td>
-                    {invoice.hosted_invoice_url && (
-                      <ActionIcon
-                        variant="subtle"
-                        component="a"
-                        href={invoice.hosted_invoice_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <IconExternalLink size={14} />
-                      </ActionIcon>
-                    )}
+                    <Group gap={4} wrap="nowrap" justify="flex-end">
+                      {invoice.status === 'paid' && canManageBilling ? (
+                        <ActionIcon
+                          variant="subtle"
+                          color="orange"
+                          title="Aterbetala / kreditera"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenInvoiceId(invoice.stripe_invoice_id);
+                          }}
+                        >
+                          <IconArrowBackUp size={14} />
+                        </ActionIcon>
+                      ) : null}
+                      {invoice.hosted_invoice_url ? (
+                        <ActionIcon
+                          variant="subtle"
+                          component="a"
+                          href={invoice.hosted_invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <IconExternalLink size={14} />
+                        </ActionIcon>
+                      ) : null}
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}
@@ -392,7 +449,12 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
         )}
       </Card>
 
-      {openInvoiceId && (
+      <CreditNotesSection
+        customerId={customerId}
+        onOpenInvoice={(stripeInvoiceId) => setOpenInvoiceId(stripeInvoiceId)}
+      />
+
+      {openInvoiceId ? (
         <InvoiceDetailModal
           open={!!openInvoiceId}
           onOpenChange={(open) => !open && setOpenInvoiceId(null)}
@@ -400,11 +462,11 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
           customerId={customerId}
           onInvoiceChanged={upsertInvoiceInState}
         />
-      )}
+      ) : null}
 
-      {canManageBilling && (
+      {canManageBilling ? (
         <>
-          {canCreateManualInvoice && (
+          {canCreateManualInvoice ? (
             <StandaloneInvoiceModal
               open={standaloneOpen}
               onOpenChange={setStandaloneOpen}
@@ -412,8 +474,8 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
               customerName={customerName}
               onCreated={upsertInvoiceInState}
             />
-          )}
-          {canChangePricing && (
+          ) : null}
+          {canChangePricing ? (
             <UpdatePricingDialog
               key={data.monthly_price_ore}
               open={pricingOpen}
@@ -421,9 +483,21 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
               customerId={customerId}
               currentPriceOre={data.monthly_price_ore}
             />
-          )}
+          ) : null}
+          {canPause ? (
+            <PauseSubscriptionModal
+              open={pauseOpen}
+              onOpenChange={setPauseOpen}
+              customerId={customerId}
+              customerName={customerName}
+              resumeMode={isPaused}
+              pausedUntil={null}
+              nextInvoiceDate={data.next_invoice_date}
+              nextInvoiceAmountOre={effectivePriceOre}
+            />
+          ) : null}
         </>
-      )}
+      ) : null}
     </Stack>
   );
 }

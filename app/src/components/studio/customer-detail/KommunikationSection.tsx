@@ -261,7 +261,7 @@ export function KommunikationSection({
     if (message.length < 5) {
       setAdminNotificationFeedback({
         tone: 'error',
-        text: 'Skriv lite mer sa att admin forstar vad som behovs.',
+        text: 'Skriv lite mer så att admin förstår vad som behövs.',
       });
       return;
     }
@@ -358,10 +358,10 @@ export function KommunikationSection({
         >
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: LeTrendColors.brownDark, marginBottom: 4 }}>
-              Be admin om hjalp
+              Be admin om hjälp
             </div>
             <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, lineHeight: 1.6 }}>
-              Skicka en intern CM-notis nar du behover beslut, blocker-losning eller snabb admininsats for kunden.
+              Skicka en intern CM-notis när du behöver beslut, blocker-lösning eller snabb admininsats för kunden.
             </div>
           </div>
 
@@ -416,7 +416,7 @@ export function KommunikationSection({
             <textarea
               value={adminNotificationMessage}
               onChange={(event) => setAdminNotificationMessage(event.target.value)}
-              placeholder="Beskriv vad du behover hjalp med, vad som blockerar och om det ar tidskritiskt."
+              placeholder="Beskriv vad du behöver hjälp med, vad som blockerar och om det är tidskritiskt."
               rows={4}
               style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.6 }}
             />

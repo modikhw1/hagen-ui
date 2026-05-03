@@ -166,7 +166,7 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
         </div>
 
         <p className="rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
-          Efter att demot skapats kan du öppna det i Studio för att fylla feedplan, och sedan kopiera den publika demo-länken från listan.
+          Efter att demot skapats kan du öppna det i Studio för att fylla feedplanen, och sedan kopiera den publika demo-länken från listan.
         </p>
       </div>
     </AdminFormDialog>

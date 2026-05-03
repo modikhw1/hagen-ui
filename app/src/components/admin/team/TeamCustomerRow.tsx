@@ -9,13 +9,18 @@ import { longDateSv, shortDateSv } from '@/lib/admin/time';
 import type { TeamMemberView } from '@/hooks/admin/useTeam';
 
 const statusDotClassName = {
+  live_healthy: 'bg-status-success-fg',
   active: 'bg-status-success-fg',
   agreed: 'bg-status-success-fg',
+  live_underfilled: 'bg-status-warning-fg',
+  escalated: 'bg-status-warning-fg',
+  onboarding_stuck: 'bg-status-warning-fg',
   invited: 'bg-status-info-fg',
+  pending: 'bg-status-info-fg',
+  archived: 'bg-status-neutral-fg',
+  paused: 'bg-status-neutral-fg',
   default: 'bg-status-warning-fg',
 } as const;
-
-const FLOW_DOT_COUNT = 4;
 
 function clampExpectedConcepts(value: number | undefined) {
   return Math.min(7, Math.max(0, value ?? 0));
@@ -25,15 +30,14 @@ function buildFlowState(customer: TeamMemberView['customers'][number]) {
   const plannedConceptsCount = Math.max(0, customer.planned_concepts_count ?? 0);
   const expectedConceptsPerWeek = clampExpectedConcepts(customer.expected_concepts_per_week);
   const overdueConceptsCount = Math.max(0, customer.overdue_7d_concepts_count ?? 0);
-  const cappedPlannedConcepts = Math.min(plannedConceptsCount, expectedConceptsPerWeek || plannedConceptsCount);
-  const completionRatio =
-    expectedConceptsPerWeek > 0 ? Math.min(1, cappedPlannedConcepts / expectedConceptsPerWeek) : 0;
-  const filledDots =
-    plannedConceptsCount === 0
-      ? 0
-      : Math.max(1, Math.min(FLOW_DOT_COUNT, Math.ceil(completionRatio * FLOW_DOT_COUNT)));
-  const missingConcepts =
-    expectedConceptsPerWeek > 0 ? Math.max(0, expectedConceptsPerWeek - cappedPlannedConcepts) : 0;
+  
+  // The number of total dots is now dynamic based on tempo (default to 1 if not set but synced)
+  const totalDots = expectedConceptsPerWeek > 0 ? expectedConceptsPerWeek : 1;
+  const filledDots = Math.min(plannedConceptsCount, totalDots);
+
+  const missingConcepts = expectedConceptsPerWeek > 0 
+    ? Math.max(0, expectedConceptsPerWeek - plannedConceptsCount) 
+    : 0;
 
   const labelParts = [
     expectedConceptsPerWeek > 0
@@ -48,6 +52,7 @@ function buildFlowState(customer: TeamMemberView['customers'][number]) {
   ].filter(Boolean);
 
   return {
+    totalDots,
     filledDots,
     label: labelParts.join(' · '),
   };
@@ -121,14 +126,18 @@ export default function TeamCustomerRow({
           '-'
         )}
       </div>
-      <div className="flex items-center justify-end gap-1.5">
-        {Array.from({ length: FLOW_DOT_COUNT }, (_, index) => (
-          <WorkflowDot
-            key={`${customer.id}-flow-${index}`}
-            active={index < flow.filledDots}
-            label={flow.label}
-          />
-        ))}
+      <div className="flex items-center justify-end gap-1">
+        {publicationDate || customer.followers > 0 ? (
+          Array.from({ length: flow.totalDots }, (_, index) => (
+            <WorkflowDot
+              key={`${customer.id}-flow-${index}`}
+              active={index < flow.filledDots}
+              label={flow.label}
+            />
+          ))
+        ) : (
+          <span className="text-muted-foreground/50 mr-1.5">-</span>
+        )}
       </div>
     </Link>
   );

@@ -3,9 +3,17 @@
  *
  * Cron job for billing maintenance.
  * Runs daily to:
- * - promote upcoming_monthly_price to monthly_price
  * - resume paused subscriptions when pause date has passed
  * - remove discounts that have passed their inclusive end date
+ * - apply scheduled CM assignment changes
+ *
+ * NOTE: Pris-aktivering vid period_end hanteras numera atomart av
+ * Stripe subscriptionSchedule (se applySubscriptionPriceChange i
+ * admin-billing.ts). Webhook-flodet (subscription_schedule.* +
+ * promoteUpcomingPriceIfSubscriptionMatches) rensar
+ * upcoming_monthly_price nar Stripe rullar fram nasta fas.
+ * Cron-jobbet tar darfor inte langre hand om prisbyten, vilket
+ * undviker dubbla prisobjekt och race-villkor mot webhook-flodet.
  *
  * Authorization:
  * - Cron secret header (x-cron-secret or Bearer token)
@@ -24,19 +32,10 @@ import {
 } from '@/lib/stripe/admin-billing';
 import { stripe } from '@/lib/stripe/dynamic-config';
 import { AuthError, validateApiRequest } from '@/lib/auth/api-auth';
-import { applyPriceToSubscription } from '@/lib/stripe/subscription-pricing';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const cronSecret = process.env.CRON_SECRET || process.env.VERCEL_CRON_SECRET || '';
-
-interface DueProfile {
-  id: string;
-  stripe_subscription_id: string | null;
-  monthly_price: number | null;
-  upcoming_monthly_price: number | null;
-  upcoming_price_effective_date: string | null;
-}
 
 function isAuthorized(request: NextRequest) {
   if (!cronSecret) return false;
@@ -46,13 +45,6 @@ function isAuthorized(request: NextRequest) {
   const xSecret = request.headers.get('x-cron-secret') || '';
 
   return bearer === cronSecret || xSecret === cronSecret;
-}
-
-interface ApplyPriceResult {
-  scanned: number;
-  applied: number;
-  promoted_without_subscription: number;
-  failed: Array<{ customer_profile_id: string; error: string }>;
 }
 
 interface ResumePauseResult {
@@ -74,96 +66,6 @@ interface DiscountExpiryResult {
   expired: number;
   cleared_without_stripe_link: number;
   failed: Array<{ customer_profile_id: string; error: string }>;
-}
-
-async function runPriceActivationJob(): Promise<ApplyPriceResult> {
-  if (!stripe) {
-    throw new Error('Stripe not configured');
-  }
-
-  const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-  const today = new Date().toISOString().slice(0, 10);
-
-  const { data: dueProfiles, error } = await supabaseAdmin
-    .from('customer_profiles')
-    .select('id, stripe_subscription_id, monthly_price, upcoming_monthly_price, upcoming_price_effective_date')
-    .not('upcoming_monthly_price', 'is', null)
-    .lte('upcoming_price_effective_date', today)
-    .limit(200);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const profiles = (dueProfiles || []) as DueProfile[];
-  const result: ApplyPriceResult = {
-    scanned: profiles.length,
-    applied: 0,
-    promoted_without_subscription: 0,
-    failed: [],
-  };
-
-  for (const profile of profiles) {
-    const nextPrice = Number(profile.upcoming_monthly_price) || 0;
-    if (nextPrice <= 0) {
-      result.failed.push({
-        customer_profile_id: profile.id,
-        error: 'Invalid upcoming_monthly_price',
-      });
-      continue;
-    }
-
-    try {
-      // Update Stripe subscription if exists
-      if (profile.stripe_subscription_id) {
-        await applyPriceToSubscription({
-          stripeClient: stripe,
-          subscriptionId: profile.stripe_subscription_id,
-          monthlyPriceSek: nextPrice,
-          source: 'scheduled_upcoming',
-          supabaseAdmin,
-        });
-        result.applied += 1;
-      } else {
-        result.promoted_without_subscription += 1;
-      }
-
-      // Promote upcoming price to current price
-      const { error: promoteError } = await supabaseAdmin
-        .from('customer_profiles')
-        .update({
-          monthly_price: nextPrice,
-          pricing_status: 'fixed',
-          upcoming_monthly_price: null,
-          upcoming_price_effective_date: null,
-        })
-        .eq('id', profile.id);
-
-      if (promoteError) {
-        throw new Error(promoteError.message);
-      }
-
-      await syncOperationalSubscriptionState({
-        supabaseAdmin,
-        customerProfileId: profile.id,
-        profile: {
-          id: profile.id,
-          stripe_subscription_id: profile.stripe_subscription_id,
-          paused_until: null,
-          monthly_price: nextPrice,
-          upcoming_monthly_price: null,
-          upcoming_price_effective_date: null,
-        },
-      });
-    } catch (err: unknown) {
-      result.failed.push({
-        customer_profile_id: profile.id,
-        error: err instanceof Error ? err.message : 'Unknown error',
-      });
-    }
-  }
-
-  return result;
 }
 
 async function runResumePausedSubscriptionsJob(): Promise<ResumePauseResult> {
@@ -307,8 +209,7 @@ export async function GET(request: NextRequest) {
       await validateApiRequest(request, ['admin']);
     }
 
-    const [priceActivation, pauseResumes, discountExpiry, scheduledAssignments] = await Promise.all([
-      runPriceActivationJob(),
+    const [pauseResumes, discountExpiry, scheduledAssignments] = await Promise.all([
       runResumePausedSubscriptionsJob(),
       runDiscountExpiryJob(),
       (async () => {
@@ -318,7 +219,10 @@ export async function GET(request: NextRequest) {
     ]);
 
     return NextResponse.json({
-      price_activation: priceActivation,
+      price_activation: {
+        skipped: true,
+        reason: 'Handled atomically by Stripe subscriptionSchedule at period_end',
+      },
       pause_resumes: pauseResumes,
       discount_expiry: discountExpiry,
       scheduled_assignments: scheduledAssignments,
@@ -330,7 +234,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Cron execution failed' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

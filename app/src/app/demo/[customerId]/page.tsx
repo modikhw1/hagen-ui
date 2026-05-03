@@ -5,9 +5,7 @@ import { resolveGamePlanDocument } from '@/lib/game-plan';
 import DemoView from './DemoView';
 import type { TimelineConcept } from '@/components/studio/FeedTimeline';
 
-// ─────────────────────────────────────────────
-// Server component — fetches all data, passes to client DemoView
-// ─────────────────────────────────────────────
+// Server component that fetches demo data and passes it to the client view.
 
 export default async function DemoPage({
   params,
@@ -42,7 +40,6 @@ export default async function DemoPage({
   }
   const resolvedCustomerId = customer.id;
 
-  // Don't expose archived customers
   if (customer.status === 'archived') {
     notFound();
   }
@@ -55,7 +52,6 @@ export default async function DemoPage({
 
   const gamePlanHtml = resolveGamePlanDocument(gamePlanRecord, customer.game_plan).html;
 
-  // Fetch feed concepts (all feed_order values, including history)
   const { data: concepts } = await supabase
     .from('customer_concepts')
     .select('id, cm_note, tags, tiktok_thumbnail_url, tiktok_views, tiktok_likes, feed_order, published_at')
@@ -63,15 +59,15 @@ export default async function DemoPage({
     .not('feed_order', 'is', null)
     .order('feed_order', { ascending: false });
 
-  const timelineConcepts: TimelineConcept[] = (concepts ?? []).map(c => ({
-    id: String(c.id),
-    feed_order: c.feed_order ?? null,
-    cm_note: c.cm_note ?? null,
-    tags: (c.tags as string[]) ?? [],
-    tiktok_thumbnail_url: c.tiktok_thumbnail_url ?? null,
-    tiktok_views: c.tiktok_views ?? null,
-    tiktok_likes: c.tiktok_likes ?? null,
-    published_at: c.published_at ?? null,
+  const timelineConcepts: TimelineConcept[] = (concepts ?? []).map((concept) => ({
+    id: String(concept.id),
+    feed_order: concept.feed_order ?? null,
+    cm_note: concept.cm_note ?? null,
+    tags: (concept.tags as string[]) ?? [],
+    tiktok_thumbnail_url: concept.tiktok_thumbnail_url ?? null,
+    tiktok_views: concept.tiktok_views ?? null,
+    tiktok_likes: concept.tiktok_likes ?? null,
+    published_at: concept.published_at ?? null,
   }));
 
   return (

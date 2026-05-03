@@ -274,6 +274,7 @@ function mapCustomersForOverview(
     onboarding_state: string | null;
     onboarding_state_changed_at: string | null;
     tiktok_handle: string | null;
+    brief: any | null;
   }>,
 ): OverviewPayload['customers'] {
   return rows.map((customer) => ({
@@ -295,6 +296,7 @@ function mapCustomersForOverview(
     onboarding_state: normalizeOnboardingState(customer.onboarding_state),
     onboarding_state_changed_at: customer.onboarding_state_changed_at ?? null,
     tiktok_handle: customer.tiktok_handle ?? null,
+    brief: customer.brief ?? null,
   }));
 }
 

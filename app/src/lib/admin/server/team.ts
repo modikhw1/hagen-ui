@@ -180,6 +180,10 @@ function mapBaseCustomers(
         customer.last_upload_at ??
         null;
 
+      const briefDays = (customer as any).brief?.posting_weekdays;
+      const uploadScheduleCount =
+        Array.isArray(briefDays) && briefDays.length > 0 ? briefDays.length : null;
+
       return {
         id: customer.id,
         business_name: customer.business_name,
@@ -198,7 +202,10 @@ function mapBaseCustomers(
               : latestPublication?.source ?? null,
         planned_concepts_count: customer.planned_concepts_count ?? 0,
         expected_concepts_per_week:
-          customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 0,
+          uploadScheduleCount ??
+          customer.expected_concepts_per_week ??
+          customer.concepts_per_week ??
+          0,
         overdue_7d_concepts_count: customer.overdue_7d_concepts_count ?? 0,
       };
     });

@@ -12,16 +12,30 @@ const VIRTUALIZED_HEIGHT_PX = 384;
 type SortField = 'business_name' | 'monthly_price' | 'followers' | 'last_published_at' | 'flow';
 type SortDirection = 'asc' | 'desc';
 
-function getInitialSortDirection(field: SortField): SortDirection {
-  return field === 'business_name' ? 'asc' : 'desc';
+const STATUS_PRIORITY: Record<string, number> = {
+  // Priority 0: Active & Healthy (Green)
+  live_healthy: 0,
+  active: 0,
+  agreed: 0,
+  // Priority 1: Attention needed (Warning/Brown)
+  escalated: 1,
+  live_underfilled: 1,
+  onboarding_stuck: 1,
+  // Priority 2: In progress (Info/Blue)
+  invited: 2,
+  pending: 2,
+  // Priority 3: Paused (Muted)
+  paused: 3,
+  // Priority 4: Archived/Other
+  archived: 4,
+};
+
+function getStatusPriority(status: string): number {
+  return STATUS_PRIORITY[status] ?? STATUS_PRIORITY[status.toLowerCase()] ?? 5;
 }
 
-function getFlowSortValue(customer: TeamMemberView['customers'][number]) {
-  const planned = Math.max(0, customer.planned_concepts_count ?? 0);
-  const expected = Math.max(0, customer.expected_concepts_per_week ?? 0);
-  const cappedPlanned = Math.min(planned, expected || planned);
-  const ratio = expected > 0 ? cappedPlanned / expected : 0;
-  return ratio * 100 + Math.min(planned, 99) / 100;
+function getInitialSortDirection(field: SortField): SortDirection {
+  return field === 'business_name' ? 'asc' : 'desc';
 }
 
 function getSortValue(
@@ -29,8 +43,10 @@ function getSortValue(
   field: SortField,
 ) {
   switch (field) {
-    case 'business_name':
-      return customer.business_name.toLocaleLowerCase('sv-SE');
+    case 'business_name': {
+      const priority = getStatusPriority(customer.status);
+      return `${priority}_${customer.business_name.toLocaleLowerCase('sv-SE')}`;
+    }
     case 'monthly_price':
       return customer.monthly_price ?? 0;
     case 'followers':
@@ -39,8 +55,24 @@ function getSortValue(
       return customer.last_published_at || customer.last_upload_at
         ? new Date(customer.last_published_at ?? customer.last_upload_at ?? '').getTime()
         : -1;
-    case 'flow':
-      return getFlowSortValue(customer);
+    case 'flow': {
+      const publicationDate = customer.last_published_at ?? customer.last_upload_at;
+      const isSynced = publicationDate || customer.followers > 0;
+      
+      if (!isSynced) {
+        return -1; // Always at the bottom
+      }
+
+      // We need to re-calculate the dots logic here to ensure sort consistency with UI
+      const expected = Math.min(7, Math.max(0, customer.expected_concepts_per_week ?? 0));
+      const totalDots = expected > 0 ? expected : 1;
+      const planned = Math.max(0, customer.planned_concepts_count ?? 0);
+      const filledDots = Math.min(planned, totalDots);
+      
+      // Hierarchy: Synced (handled above) > totalDots (tempo) > filledDots (completion)
+      // Using weight 100 for tempo ensures segments are grouped together.
+      return (totalDots * 100) + filledDots;
+    }
     default:
       return 0;
   }

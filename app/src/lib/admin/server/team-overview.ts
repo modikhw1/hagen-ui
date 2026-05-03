@@ -1,4 +1,4 @@
-﻿
+
 import { formatDateOnly } from '@/lib/admin/billing-periods';
 import type { TeamMemberView } from '@/lib/admin/dtos/team';
 import {
@@ -100,6 +100,7 @@ type BuildMemberParams = {
   today: string;
   todayDate: Date;
   absences: EnrichedCmAbsence[];
+  allMembers: TeamMemberRow[];
 };
 
 export type TeamOverviewResult = {
@@ -139,7 +140,6 @@ export function buildTeamOverview(params: {
   });
 
   const rows: TeamMemberView[] = [];
-
   for (const member of members) {
     try {
       rows.push(
@@ -153,12 +153,13 @@ export function buildTeamOverview(params: {
           today,
           todayDate,
           absences,
+          allMembers: members,
         }),
       );
     } catch (error) {
       warnings.add('team-overview-degraded');
       warnings.add(`team-overview-member-skipped:${member.id}`);
-      console.error('[admin.team-overview] failed to build member row', {
+      console.error(' [admin.team-overview] failed to build member row', {
         member_id: member.id,
         error: error instanceof Error ? error.message : String(error),
       });
@@ -354,20 +355,55 @@ export function buildAssignmentHistory(params: {
   member: TeamMemberRow;
   assignments: AssignmentHistoryRow[];
   customerNameById: Map<string, string>;
+  allMembers: TeamMemberRow[];
 }) {
-  return params.assignments
-    .filter((assignment) => assignment.cm_id === params.member.id)
-    .map((assignment) => ({
-      id: assignment.id,
-      customer_id: assignment.customer_id,
-      customer_name: params.customerNameById.get(assignment.customer_id) ?? 'Kund',
-      starts_on: assignment.valid_from,
-      ends_on: assignment.valid_to,
-      valid_from: assignment.valid_from,
-      valid_to: assignment.valid_to,
-      handover_note: assignment.handover_note,
-      scheduled_effective_date: extractScheduledEffectiveDate(assignment.scheduled_change),
-    }))
+  const memberNameById = new Map(params.allMembers.map((m) => [m.id, m.name]));
+
+  // Get all assignments for this member
+  const memberAssignments = params.assignments.filter(
+    (assignment) => assignment.cm_id === params.member.id
+  );
+
+  return memberAssignments
+    .map((assignment) => {
+      // Find the assignment immediately preceding this one for the same customer
+      const previousAssignment = params.assignments
+        .filter(
+          (a) =>
+            a.customer_id === assignment.customer_id &&
+            a.valid_to === assignment.valid_from &&
+            a.cm_id !== assignment.cm_id
+        )
+        .sort((a, b) => b.valid_from.localeCompare(a.valid_from))[0];
+
+      // Find the assignment immediately following this one for the same customer
+      const nextAssignment = params.assignments
+        .filter(
+          (a) =>
+            a.customer_id === assignment.customer_id &&
+            a.valid_from === assignment.valid_to &&
+            a.cm_id !== assignment.cm_id
+        )
+        .sort((a, b) => a.valid_from.localeCompare(b.valid_from))[0];
+
+      return {
+        id: assignment.id,
+        customer_id: assignment.customer_id,
+        customer_name: params.customerNameById.get(assignment.customer_id) ?? 'Kund',
+        starts_on: assignment.valid_from,
+        ends_on: assignment.valid_to,
+        valid_from: assignment.valid_from,
+        valid_to: assignment.valid_to,
+        handover_note: assignment.handover_note,
+        scheduled_effective_date: extractScheduledEffectiveDate(assignment.scheduled_change),
+        previous_cm_name: previousAssignment?.cm_id 
+          ? memberNameById.get(previousAssignment.cm_id) ?? null 
+          : null,
+        next_cm_name: nextAssignment?.cm_id 
+          ? memberNameById.get(nextAssignment.cm_id) ?? null 
+          : null,
+      };
+    })
     .sort(
       (left, right) =>
         right.valid_from.localeCompare(left.valid_from) ||
@@ -382,7 +418,7 @@ export function classifyLoad(customerCount: number) {
     return {
       customerLoadLevel: 'overload' as const,
       customerLoadClass: 'overload' as const,
-      customerLoadLabel: 'Överbelastad',
+      customerLoadLabel: 'Overbelastad',
       overloaded: true,
       loadPercent,
     };
@@ -392,7 +428,7 @@ export function classifyLoad(customerCount: number) {
     return {
       customerLoadLevel: 'overload' as const,
       customerLoadClass: 'overload' as const,
-      customerLoadLabel: 'Full portfölj',
+      customerLoadLabel: 'Full portflj',
       overloaded: false,
       loadPercent,
     };
@@ -411,7 +447,7 @@ export function classifyLoad(customerCount: number) {
   return {
     customerLoadLevel: 'ok' as const,
     customerLoadClass: 'ok' as const,
-    customerLoadLabel: 'Lätt portfölj',
+    customerLoadLabel: 'Ltt portflj',
     overloaded: false,
     loadPercent,
   };
@@ -432,6 +468,7 @@ function buildMemberOverview(params: BuildMemberParams): TeamMemberView {
     member: params.member,
     assignments: params.assignments,
     customerNameById: params.customerNameById,
+    allMembers: params.allMembers,
   });
   const derivedLoad = classifyLoad(portfolio.memberCustomers.length);
 
@@ -673,3 +710,5 @@ function flowScore(videosLast7d: number, engagementRate: number): number {
   const normalizedEngagement = Math.min(40, Math.max(0, engagementRate) * 4);
   return Math.round(Math.min(100, normalizedVideos + normalizedEngagement));
 }
+
+

@@ -22,6 +22,7 @@ type CustomerOperationalInput = {
   last_published_at: string | null;
   paused_until: string | null;
   tiktok_handle: string | null;
+  brief?: any | null;
   attention_snoozes: Array<{
     subject_type:
       | 'onboarding'
@@ -79,9 +80,15 @@ export function deriveCustomerOperationalSignals(
     today,
   });
 
+  const briefDays = customer.brief?.posting_weekdays;
+  const expectedConceptsPerWeek =
+    Array.isArray(briefDays) && briefDays.length > 0
+      ? briefDays.length
+      : customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2;
+
   const onboardingChecklist = {
     contractSigned: true as const,
-    contentPlanSet: (customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2) >= 1,
+    contentPlanSet: expectedConceptsPerWeek >= 1,
     startConceptsLoaded: Boolean(customer.latest_planned_publish_date),
     tiktokHandleConfirmed: Boolean(customer.tiktok_handle),
     firstPublication: Boolean(customer.last_published_at),
@@ -98,12 +105,7 @@ export function deriveCustomerOperationalSignals(
 
   const bufferStatus = customerBufferStatus(
     {
-      pace: (customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2) as
-        | 1
-        | 2
-        | 3
-        | 4
-        | 5,
+      pace: expectedConceptsPerWeek as 1 | 2 | 3 | 4 | 5,
       latestPlannedPublishDate: customer.latest_planned_publish_date
         ? new Date(customer.latest_planned_publish_date)
         : null,

@@ -12,7 +12,7 @@ export const POST = withAuth(
 
       const { id } = (await context.params) as { id?: string };
       if (!id) {
-        return jsonError('Teammedlem-ID kravs', 400);
+        return jsonError('Teammedlem-ID krävs', 400);
       }
 
       const body = await request.json();
@@ -21,7 +21,7 @@ export const POST = withAuth(
       const resendRole = body?.role === 'admin' ? 'admin' : 'content_manager';
 
       if (!resendEmail) {
-        return jsonError('email kravs', 400);
+        return jsonError('email krävs', 400);
       }
 
       const supabaseAdmin = createSupabaseAdmin();

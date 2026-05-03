@@ -27,6 +27,10 @@ import {
   recurringUnitAmountFromMonthlySek,
 } from './price-amounts';
 import { applyPriceToSubscription } from './subscription-pricing';
+import {
+  configureSubscriptionSchedule,
+  createScheduleFromSubscription,
+} from './subscription-schedule';
 
 type Ctx = {
   supabaseAdmin: SupabaseClient;
@@ -1283,21 +1287,25 @@ export async function applySubscriptionPriceChange(
     }
 
     if (!schedule) {
-      schedule = await stripe.subscriptionSchedules.create(
-        {
-          from_subscription: subscription.id,
-          end_behavior: 'release',
-        },
-        args.requestId
-          ? { idempotencyKey: `sub-${subscription.id}:schedule-create:${args.requestId}` }
-          : undefined,
-      );
+      // Stripe disallows end_behavior/phases in the same create call as
+      // from_subscription. Create first, configure in a separate update.
+      schedule = await createScheduleFromSubscription({
+        stripe,
+        subscriptionId: subscription.id,
+        idempotencyKey: args.requestId
+          ? `sub-${subscription.id}:schedule-create:${args.requestId}`
+          : null,
+      });
       scheduleId = schedule.id;
     }
 
-    schedule = await stripe.subscriptionSchedules.update(
-      scheduleId!,
-      {
+    schedule = await configureSubscriptionSchedule({
+      stripe,
+      scheduleId: scheduleId!,
+      idempotencyKey: args.requestId
+        ? `sub-${subscription.id}:schedule-update:${args.requestId}`
+        : null,
+      payload: {
         end_behavior: 'release',
         proration_behavior: 'none',
         metadata: {
@@ -1329,10 +1337,7 @@ export async function applySubscriptionPriceChange(
           },
         ],
       },
-      args.requestId
-        ? { idempotencyKey: `sub-${subscription.id}:schedule-update:${args.requestId}` }
-        : undefined,
-    );
+    });
 
     await logStripeAdminAction(args.supabaseAdmin, {
       eventType: 'admin.subscription.price_scheduled',

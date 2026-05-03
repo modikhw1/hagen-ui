@@ -356,6 +356,46 @@ export async function createAdminCustomer(params: {
   } = parsed.data;
 
   try {
+    const recencyCutoff = new Date(Date.now() - 30_000).toISOString();
+    const { data: recentDuplicateRaw } = await params.supabaseAdmin
+      .from('customer_profiles')
+      .select('id, business_name, contact_email, created_at, profile_data, status, lifecycle_state' as never)
+      .ilike('contact_email', contact_email.trim())
+      .gte('created_at', recencyCutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const recentDuplicate = recentDuplicateRaw as
+      | (Tables<'customer_profiles'> & { lifecycle_state?: string | null })
+      | null;
+
+    if (recentDuplicate) {
+      const slugRecord = readDemoSlugFromProfileData(recentDuplicate.profile_data);
+      const profileUrl = slugRecord
+        ? buildCustomerProfileUrl(slugRecord.normalized)
+        : `${getAppUrl()}/admin/customers/${recentDuplicate.id}`;
+
+      console.warn(
+        `[createAdminCustomer] Idempotency hit: returning existing customer ${recentDuplicate.id} for email ${contact_email}`,
+      );
+
+      return {
+        ok: true,
+        status: 200,
+        payload: {
+          customer: recentDuplicate,
+          invite_sent: recentDuplicate.lifecycle_state === 'invited',
+          profile_url: profileUrl,
+          warnings: ['Detta var en duplicerad förfrågan - befintlig kund returnerades.'],
+        },
+      };
+    }
+  } catch (idempotencyError) {
+    console.warn('[createAdminCustomer] Idempotency check failed (non-fatal):', idempotencyError);
+  }
+
+  try {
     const assignment = await resolveAccountManagerAssignment(
       params.supabaseAdmin,
       account_manager,

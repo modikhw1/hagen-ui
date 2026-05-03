@@ -1,0 +1,214 @@
+{
+  "_meta": {
+    "description": "Demo-profiler baserade på priority clips kategorier",
+    "lastUpdated": "2026-01-12",
+    "version": "1.0"
+  },
+  "profiles": [
+    {
+      "id": "cafe_gen_z",
+      "icon": "☕",
+      "label": "Café Gen Z",
+      "profile": {
+        "handle": "@cafe.vibes",
+        "avatar": "C",
+        "followers": "2,8K",
+        "avgViews": "1,200",
+        "posts": 45,
+        "tone": [
+          "lekfull",
+          "självironisk",
+          "autentisk"
+        ],
+        "energy": "Hög",
+        "teamSize": "2-3 personer",
+        "topMechanisms": [
+          "subversion",
+          "recognition"
+        ]
+      },
+      "concepts": [
+        {
+          "clipId": "clip-70690326",
+          "matchOverride": 90
+        },
+        {
+          "clipId": "clip-92037398",
+          "matchOverride": 90
+        },
+        {
+          "clipId": "clip-39251991",
+          "matchOverride": 90
+        },
+        {
+          "clipId": "clip-18074647",
+          "matchOverride": 90
+        }
+      ]
+    },
+    {
+      "id": "restaurang",
+      "icon": "🍽️",
+      "label": "Restaurang",
+      "profile": {
+        "handle": "@bistro.karelia",
+        "avatar": "B",
+        "followers": "3,2K",
+        "avgViews": "890",
+        "posts": 67,
+        "tone": [
+          "varm",
+          "välkomnande",
+          "jordnära"
+        ],
+        "energy": "Balanserad",
+        "teamSize": "3-5 personer",
+        "topMechanisms": [
+          "recognition",
+          "subversion"
+        ]
+      },
+      "concepts": [
+        {
+          "clipId": "clip-84559877",
+          "matchOverride": 88
+        },
+        {
+          "clipId": "clip-44893709",
+          "matchOverride": 88
+        },
+        {
+          "clipId": "clip-62206230",
+          "matchOverride": 88
+        },
+        {
+          "clipId": "clip-68018446",
+          "matchOverride": 88
+        }
+      ]
+    },
+    {
+      "id": "restaurang_upscale",
+      "icon": "🥂",
+      "label": "Restaurang (upscale)",
+      "profile": {
+        "handle": "@finedining.sthlm",
+        "avatar": "F",
+        "followers": "5,1K",
+        "avgViews": "2,300",
+        "posts": 89,
+        "tone": [
+          "sofistikerad",
+          "varm",
+          "exklusiv"
+        ],
+        "energy": "Lugn",
+        "teamSize": "4-6 personer",
+        "topMechanisms": [
+          "contrast",
+          "absurdism"
+        ]
+      },
+      "concepts": [
+        {
+          "clipId": "clip-76898326",
+          "matchOverride": 85
+        },
+        {
+          "clipId": "clip-32984598",
+          "matchOverride": 85
+        },
+        {
+          "clipId": "clip-29634592",
+          "matchOverride": 85
+        },
+        {
+          "clipId": "clip-38309408",
+          "matchOverride": 85
+        },
+        {
+          "clipId": "clip-18636040",
+          "matchOverride": 85
+        }
+      ]
+    },
+    {
+      "id": "bar",
+      "icon": "🍸",
+      "label": "Bar",
+      "profile": {
+        "handle": "@cocktail.corner",
+        "avatar": "C",
+        "followers": "4,5K",
+        "avgViews": "1,800",
+        "posts": 112,
+        "tone": [
+          "avslappnad",
+          "social",
+          "lekfull"
+        ],
+        "energy": "Hög",
+        "teamSize": "2-4 personer",
+        "topMechanisms": [
+          "absurdism",
+          "escalation"
+        ]
+      },
+      "concepts": [
+        {
+          "clipId": "clip-29810710",
+          "matchOverride": 92
+        },
+        {
+          "clipId": "clip-12846358",
+          "matchOverride": 92
+        },
+        {
+          "clipId": "clip-38309408",
+          "matchOverride": 88
+        },
+        {
+          "clipId": "clip-74569494",
+          "matchOverride": 85
+        },
+        {
+          "clipId": "clip-19762454",
+          "matchOverride": 80
+        }
+      ]
+    },
+    {
+      "id": "cafe",
+      "icon": "☕",
+      "label": "Café",
+      "profile": {
+        "handle": "@local.cafe",
+        "avatar": "L",
+        "followers": "1,8K",
+        "avgViews": "650",
+        "posts": 34,
+        "tone": [
+          "mysig",
+          "hemtrevlig",
+          "lokal"
+        ],
+        "energy": "Lugn",
+        "teamSize": "1-2 personer",
+        "topMechanisms": [
+          "recognition",
+          "warmth"
+        ]
+      },
+      "concepts": [
+        {
+          "clipId": "clip-45435414",
+          "matchOverride": 90
+        },
+        {
+          "clipId": "clip-14943766",
+          "matchOverride": 88
+        }
+      ]
+    }
+  ]
+}

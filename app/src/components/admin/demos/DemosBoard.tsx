@@ -68,8 +68,8 @@ function statusTone(status: DemoStatus): string {
 
 function buildShareUrl(token: string | null): string | null {
   if (!token) return null;
-  if (typeof window === 'undefined') return `/demo/${token}`;
-  return `${window.location.origin}/demo/${token}`;
+  if (typeof window === 'undefined') return `/d/${token}`;
+  return `${window.location.origin}/d/${token}`;
 }
 
 export function DemosBoard({ days = 30 }: { days?: number }) {
@@ -169,7 +169,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     try {
       await navigator.clipboard.writeText(url);
       toast.success(demosCopy.copyLinkSuccess);
-      // Auto-bump till "sent" om det fortfarande är förberett
+      // Auto-bump till "sent" om det fortfarande är förberett.
       if (demo.status === 'draft') {
         await updateStatus.mutateAsync({ id: demo.id, status: 'sent', lost_reason: null });
       }

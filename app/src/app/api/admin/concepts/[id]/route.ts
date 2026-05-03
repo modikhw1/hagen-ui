@@ -9,7 +9,7 @@ interface RouteParams {
 }
 
 function conceptIdError() {
-  return jsonError('Koncept-ID kravs', 400);
+  return jsonError('Koncept-ID krävs', 400);
 }
 
 export const GET = withAuth(
@@ -90,7 +90,7 @@ export const PUT = withAuth(
             p_backend_data: backend_data || current.backend_data,
             p_overrides: overrides || current.overrides,
             p_changed_by: user.id,
-            p_change_summary: change_summary || 'Uppdaterad fran admin',
+            change_summary: change_summary || 'Uppdaterad från admin',
           },
         );
 
@@ -183,10 +183,9 @@ export const DELETE = withAuth(
 
       if (count && count > 0) {
         return jsonError(
-          `Konceptet kan inte tas bort eftersom det ar kopplat till ${count} kund${count === 1 ? '' : 'er'}. Satt is_active=false i stallet.`,
+          `Konceptet kan inte tas bort eftersom det är kopplat till ${count} kund${count === 1 ? '' : 'er'}. Sätt is_active=false i stället.`,
           400,
-        );
-      }
+        );      }
 
       const { error } = await supabaseAdmin
         .from('concepts')

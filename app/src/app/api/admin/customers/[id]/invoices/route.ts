@@ -12,9 +12,8 @@ export const GET = withAuth(async (_request, user, { params }: RouteParams) => {
 
   const { id } = await params;
   if (!id) {
-    return jsonError('Kund-ID kravs', 400);
+    return jsonError('Kund-ID krävs', 400);
   }
-
   const result = await loadCustomerInvoicesSnapshot({
     customerId: id,
   });

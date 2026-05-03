@@ -119,7 +119,7 @@ export function StripeSyncFeed({ limit = 10 }: { limit?: number }) {
               <li key={ev.id}>
                 {ev.customer_profile_id ? (
                   <Link
-                    href={`/admin/customers/${ev.customer_profile_id}/billing`}
+                    href={`/admin/customers/${ev.customer_profile_id}/avtal`}
                     className="block rounded hover:bg-muted/40"
                   >
                     {inner}

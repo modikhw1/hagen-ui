@@ -1,0 +1,30 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/lib/admin/api-client';
+import {
+  customerInvoicesPayloadSchema,
+  type CustomerInvoice,
+  type CreditNoteOperation,
+} from '@/lib/admin/dtos/billing';
+import { parseDto } from '@/lib/admin/dtos/parse';
+import { qk } from '@/lib/admin/queryKeys';
+
+export function useCustomerInvoices(id: string) {
+  return useQuery({
+    queryKey: qk.customers.invoices(id),
+    enabled: Boolean(id),
+    queryFn: async ({ signal }): Promise<{ invoices: CustomerInvoice[]; operations: CreditNoteOperation[] }> => {
+      const payload = await apiClient.get(`/api/admin/customers/${id}/invoices`, { signal });
+      const parsed = await parseDto(customerInvoicesPayloadSchema, payload, {
+        name: 'customerInvoicesPayload',
+        path: `/api/admin/customers/${id}/invoices`,
+      });
+      return { invoices: parsed.invoices, operations: parsed.operations ?? [] };
+    },
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export type { CustomerInvoice, CreditNoteOperation } from '@/lib/admin/dtos/billing';
