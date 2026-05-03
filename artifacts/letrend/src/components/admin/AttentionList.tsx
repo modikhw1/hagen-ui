@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'wouter';
 import { useMutation } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, ExternalLink, Filter } from 'lucide-react';
@@ -52,27 +52,32 @@ export default function AttentionList({
   surface?: 'overview' | 'notifications';
 }) {
   const refresh = useAdminRefresh();
-  const refreshOverview = async (cid?: string | null) => {
-    if (cid) {
-      await refresh([{ type: 'customer', customerId: cid }, { type: 'global', scope: 'overview' }]);
-    } else {
-      await refresh([{ type: 'global', scope: 'overview' }]);
-    }
-  };
+  const refreshOverview = useCallback(
+    async (cid?: string | null) => {
+      if (cid) {
+        await refresh([{ type: 'customer', customerId: cid }, { type: 'global', scope: 'overview' }]);
+      } else {
+        await refresh([{ type: 'global', scope: 'overview' }]);
+      }
+    },
+    [refresh],
+  );
   const [sortMode, setSortMode] = useState<SortMode>('standard');
   const parsedLastSeenAt = lastSeenAt ? new Date(lastSeenAt) : null;
 
+  const markSeenFiredRef = useRef(false);
   useEffect(() => {
     if (mode !== 'open' || !trackSeen) return;
+    if (markSeenFiredRef.current) return;
+    markSeenFiredRef.current = true;
     void (async () => {
       try {
         await apiClient.post('/api/admin/notifications/mark-seen', { surface });
-        await refreshOverview();
       } catch (error) {
         captureAdminError('admin.notifications.seen', error, { surface });
       }
     })();
-  }, [mode, refreshOverview, surface, trackSeen]);
+  }, [mode, surface, trackSeen]);
 
   const sortedItems = useMemo(() => {
     const list = [...items];
