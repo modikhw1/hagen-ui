@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 import { fetchSubscription } from '../../lib/stripe-client.js';
+import { resolveExpectedConceptsPerWeek } from '../../lib/admin-derive/expected-per-week.js';
 
 const router = Router();
 
@@ -727,7 +728,7 @@ router.get('/:id/drift', requireAuth, ADMIN_ONLY, async (req, res) => {
     const [profileResult, cmActivitiesResult, conceptsResult, tiktokStatsResult, tiktokVideosResult] = await Promise.all([
       supabase
         .from('customer_profiles')
-        .select('id, business_name, status, invited_at, paused_until, monthly_price, account_manager, account_manager_profile_id, next_invoice_date, stripe_customer_id, tiktok_handle, expected_concepts_per_week, concepts_per_week, upload_schedule, last_upload_at')
+        .select('id, business_name, status, invited_at, paused_until, monthly_price, account_manager, account_manager_profile_id, next_invoice_date, stripe_customer_id, tiktok_handle, expected_concepts_per_week, concepts_per_week, brief, upload_schedule, last_upload_at')
         .eq('id', id)
         .maybeSingle(),
       supabase
@@ -836,11 +837,16 @@ router.get('/:id/drift', requireAuth, ADMIN_ONLY, async (req, res) => {
       return Boolean(c['content_loaded_at']) || status === 'draft' || status === 'sent' || status === 'produced';
     }).length;
 
-    const scheduleDays = Array.isArray(profile.upload_schedule) ? profile.upload_schedule.length : 0;
-    const expectedPerWeek =
-      profile.expected_concepts_per_week ??
-      profile.concepts_per_week ??
-      (scheduleDays > 0 ? scheduleDays : 0);
+    // Resolve through the shared chain
+    //   briefDays → expected_concepts_per_week → concepts_per_week → 2
+    // so a customer whose tempo was set only via the studio's TempoModal
+    // (brief.posting_weekdays) still gets the right expected count here —
+    // matching what the admin customers list and team page show.
+    const expectedPerWeek = resolveExpectedConceptsPerWeek({
+      brief: (profile as Record<string, unknown>).brief as { posting_weekdays?: unknown } | null,
+      expected_concepts_per_week: profile.expected_concepts_per_week ?? null,
+      concepts_per_week: profile.concepts_per_week ?? null,
+    });
 
     const recentPublications = concepts
       .filter((c: Record<string, string | null>) => c['published_at'])

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import { resolveExpectedConceptsPerWeek } from '../../lib/admin-derive/expected-per-week.js';
 
 const router = Router();
 const ADMIN_ONLY = requireRole(['admin']);
@@ -99,11 +100,48 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
     if (allCustomerIds.length > 0) {
       const { data: customers } = await (supabase as any)
         .from('customer_profiles')
-        .select('id, business_name, monthly_price, status, paused_until, expected_concepts_per_week, last_upload_at, tiktok_handle, account_manager_profile_id')
+        .select('id, business_name, monthly_price, status, paused_until, expected_concepts_per_week, concepts_per_week, brief, last_upload_at, tiktok_handle, account_manager_profile_id')
         .in('id', allCustomerIds);
       for (const c of customers ?? []) {
         customerNameById.set(c.id as string, (c.business_name as string) ?? '');
         customerProfileById.set(c.id as string, c);
+      }
+    }
+
+    // Per-customer "planned this week" — concepts with planned_publish_at in
+    // the current ISO week (måndag-baserat) that are not yet published or
+    // archived. This is the same definition CustomerPulseRoute uses, so the
+    // team-page flöde dots and the customer-page pulse bar agree on the
+    // numerator of the planned/expected ratio.
+    const plannedThisWeekByCustomer = new Map<string, number>();
+    if (activeCustomerIds.length > 0) {
+      // Calendar-based week boundary so DST transitions don't shift the
+      // window by ±1 hour (which would mis-bucket concepts planned right at
+      // the Sunday/Monday midnight seam).
+      const now = new Date();
+      const dow = now.getDay();
+      const daysSinceMonday = (dow + 6) % 7;
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - daysSinceMonday);
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 7);
+      weekEnd.setHours(0, 0, 0, 0);
+
+      const conceptsResult = await (supabase as any)
+        .from('customer_concepts')
+        .select('customer_profile_id, planned_publish_at, status, published_at')
+        .in('customer_profile_id', activeCustomerIds)
+        .gte('planned_publish_at', weekStart.toISOString())
+        .lt('planned_publish_at', weekEnd.toISOString());
+      if (!conceptsResult.error) {
+        for (const row of conceptsResult.data ?? []) {
+          const status = row.status as string | null;
+          if (row.published_at) continue;
+          if (status === 'published' || status === 'archived') continue;
+          const cid = row.customer_profile_id as string;
+          plannedThisWeekByCustomer.set(cid, (plannedThisWeekByCustomer.get(cid) ?? 0) + 1);
+        }
       }
     }
 
@@ -235,8 +273,23 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
               last_upload_at: lastUpload,
               last_published_at: lastPublished,
               last_publication_source,
+              // Lifetime pipeline count from v_admin_customer_list — kept on
+              // the row for any UI that still needs the long-tail number.
               planned_concepts_count: Number(signals.planned_concepts_count ?? 0),
-              expected_concepts_per_week: Number(profile.expected_concepts_per_week ?? 0),
+              // This-week count, same definition CustomerPulseRoute uses.
+              // The team-page flöde dots prefer this so the team and customer
+              // pages agree on the planned/expected ratio numerator.
+              planned_concepts_this_week: Number(plannedThisWeekByCustomer.get(profile.id as string) ?? 0),
+              // Resolved through the shared chain
+              // briefDays → expected_concepts_per_week → concepts_per_week → 2
+              // so customers whose tempo was set only via the studio's
+              // TempoModal (brief.posting_weekdays) still get the right
+              // expected count here.
+              expected_concepts_per_week: resolveExpectedConceptsPerWeek({
+                brief: profile.brief ?? null,
+                expected_concepts_per_week: profile.expected_concepts_per_week ?? null,
+                concepts_per_week: profile.concepts_per_week ?? null,
+              }),
               overdue_7d_concepts_count: Number(signals.overdue_7d_concepts_count ?? 0),
               covered_by_absence: !!coveringBackupId,
               payout_cm_id: coveringBackupId ?? memberId,
@@ -261,7 +314,9 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
             continue;
           }
           const expected = c.expected_concepts_per_week ?? 0;
-          const planned = c.planned_concepts_count ?? 0;
+          // Use the same this-week-planned count as the per-row flöde dots
+          // so the CM-card aggregate counts and the per-customer dots line up.
+          const planned = c.planned_concepts_this_week ?? c.planned_concepts_count ?? 0;
           if (c.overdue_7d_concepts_count > 0 || (expected > 0 && planned < expected)) {
             n_under += 1;
           } else {

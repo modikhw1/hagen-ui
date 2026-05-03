@@ -54,6 +54,10 @@ export const teamCustomerSchema = z.object({
   last_published_at: z.string().nullable().optional(),
   last_publication_source: z.enum(['letrend', 'tiktok']).nullable().optional(),
   planned_concepts_count: z.number().optional(),
+  // Concepts with planned_publish_at in the current ISO week that aren't
+  // published or archived yet — same definition the customer pulse uses.
+  // Optional so older API responses still validate.
+  planned_concepts_this_week: z.number().optional(),
   expected_concepts_per_week: z.number().optional(),
   overdue_7d_concepts_count: z.number().optional(),
   covered_by_absence: z.boolean(),

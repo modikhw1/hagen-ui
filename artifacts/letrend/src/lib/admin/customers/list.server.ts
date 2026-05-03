@@ -8,6 +8,7 @@ import { SERVER_COPY } from '@/lib/admin/copy/server-errors';
 import { deriveCustomerStatus } from '@/lib/admin/customer-status';
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
 import { deriveCustomerOperationalSignals } from '@/lib/admin-derive/index.server';
+import { resolveExpectedConceptsPerWeek } from '@/lib/admin-derive/expected-per-week';
 import { CUSTOMERS_PAGE_SIZE } from '@/lib/admin/customers/list.constants';
 import { customerListParamsInputSchema } from '@/lib/admin/customers/list.schemas';
 import type {
@@ -176,10 +177,11 @@ function mapAdminCustomers(rawRows: any[], team: AdminTeamOption[]): AdminCustom
     const cm_avatar_url = cmInTeam?.avatar_url || customer.cm_avatar_url || null;
 
     // Compute the operational pulse server-side so SSR and client agree.
-    const briefDays = customer.brief?.posting_weekdays;
-    const expected = (Array.isArray(briefDays) && briefDays.length > 0)
-      ? briefDays.length
-      : (customer.expected_concepts_per_week ?? 2);
+    const expected = resolveExpectedConceptsPerWeek({
+      brief: customer.brief ?? null,
+      expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
+      concepts_per_week: customer.concepts_per_week ?? null,
+    });
     const planned = customer.planned_concepts_count ?? 0;
     const lastCmActionMs = customer.last_cm_action_at
       ? new Date(customer.last_cm_action_at).getTime()

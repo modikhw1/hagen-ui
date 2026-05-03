@@ -1,4 +1,5 @@
 import { sortAttention } from '@/lib/admin-derive/attention';
+import { resolveExpectedConceptsPerWeek } from '@/lib/admin-derive/expected-per-week';
 import { customerBufferStatus } from '@/lib/admin-derive/buffer';
 import { blockingDisplayDays, customerBlocking } from '@/lib/admin-derive/blocking';
 import { cmAggregate, sortCmRows, type SortMode } from '@/lib/admin-derive/cm-pulse';
@@ -51,11 +52,11 @@ export function deriveOverview(
 
   const customers = payload.customers.map((customer) => {
     const buffer = bufferByCustomerId.get(customer.id);
-    const briefDays = customer.brief?.posting_weekdays;
-    const expectedConceptsPerWeek =
-      Array.isArray(briefDays) && briefDays.length > 0
-        ? briefDays.length
-        : customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2;
+    const expectedConceptsPerWeek = resolveExpectedConceptsPerWeek({
+      brief: customer.brief ?? null,
+      expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
+      concepts_per_week: customer.concepts_per_week ?? null,
+    });
     const blocking = customerBlocking({
       lastPublishedAt: buffer?.last_published_at
         ? new Date(buffer.last_published_at)
@@ -167,13 +168,11 @@ export function deriveOverview(
           id: customer.id,
           name: customer.business_name,
           bufferStatus: customer.bufferStatus,
-          pace:
-            (customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2) as
-              | 1
-              | 2
-              | 3
-              | 4
-              | 5,
+          pace: resolveExpectedConceptsPerWeek({
+            brief: (customer as { brief?: { posting_weekdays?: unknown } | null }).brief ?? null,
+            expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
+            concepts_per_week: customer.concepts_per_week ?? null,
+          }) as 1 | 2 | 3 | 4 | 5,
           onboardingState: customer.onboardingState,
           lastPublishedAt: customer.lastPublishedAt,
           plannedConceptsCount: customer.planned_concepts_count ?? 0,

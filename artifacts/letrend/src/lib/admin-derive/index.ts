@@ -9,6 +9,7 @@ import {
   settleIfDue,
   type OnboardingState,
 } from '@/lib/admin-derive/onboarding';
+import { resolveExpectedConceptsPerWeek } from '@/lib/admin-derive/expected-per-week';
 
 type CustomerOperationalInput = {
   status: string;
@@ -80,11 +81,11 @@ export function deriveCustomerOperationalSignals(
     today,
   });
 
-  const briefDays = customer.brief?.posting_weekdays;
-  const expectedConceptsPerWeek =
-    Array.isArray(briefDays) && briefDays.length > 0
-      ? briefDays.length
-      : customer.expected_concepts_per_week ?? customer.concepts_per_week ?? 2;
+  const expectedConceptsPerWeek = resolveExpectedConceptsPerWeek({
+    brief: customer.brief ?? null,
+    expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
+    concepts_per_week: customer.concepts_per_week ?? null,
+  });
 
   const onboardingChecklist = {
     contractSigned: true as const,

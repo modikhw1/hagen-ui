@@ -66,7 +66,11 @@ function getSortValue(
       // We need to re-calculate the dots logic here to ensure sort consistency with UI
       const expected = Math.min(7, Math.max(0, customer.expected_concepts_per_week ?? 0));
       const totalDots = expected > 0 ? expected : 1;
-      const planned = Math.max(0, customer.planned_concepts_count ?? 0);
+      // Mirror buildFlowState in TeamCustomerRow so sort order matches dots.
+      const planned = Math.max(
+        0,
+        customer.planned_concepts_this_week ?? customer.planned_concepts_count ?? 0,
+      );
       const filledDots = Math.min(planned, totalDots);
       
       // Hierarchy: Synced (handled above) > totalDots (tempo) > filledDots (completion)

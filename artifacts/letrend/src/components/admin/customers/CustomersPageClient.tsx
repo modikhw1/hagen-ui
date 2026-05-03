@@ -14,6 +14,7 @@ import { useCustomerListParamsState } from '@/hooks/admin/useCustomerListParamsS
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { apiClient } from '@/lib/admin/api-client';
 import { deriveCustomerOperationalSignals } from '@/lib/admin-derive';
+import { resolveExpectedConceptsPerWeek } from '@/lib/admin-derive/expected-per-week';
 import { deriveCustomerStatus } from '@/lib/admin/customer-status';
 import type {
   AdminCustomerListItem,
@@ -77,10 +78,11 @@ function mapAdminCustomers(rawRows: any[], team: AdminTeamOption[]): AdminCustom
       cmInTeam?.name || customer.cm_full_name || legacyAccountManager || null;
     const cm_avatar_url = cmInTeam?.avatar_url || customer.cm_avatar_url || null;
 
-    const briefDays = customer.brief?.posting_weekdays;
-    const expected = (Array.isArray(briefDays) && briefDays.length > 0)
-      ? briefDays.length
-      : (customer.expected_concepts_per_week ?? 2);
+    const expected = resolveExpectedConceptsPerWeek({
+      brief: customer.brief ?? null,
+      expected_concepts_per_week: customer.expected_concepts_per_week ?? null,
+      concepts_per_week: customer.concepts_per_week ?? null,
+    });
     const planned = customer.planned_concepts_count ?? 0;
     const lastCmActionMs = customer.last_cm_action_at
       ? new Date(customer.last_cm_action_at).getTime()

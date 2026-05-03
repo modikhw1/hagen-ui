@@ -27,7 +27,14 @@ function clampExpectedConcepts(value: number | undefined) {
 }
 
 function buildFlowState(customer: TeamMemberView['customers'][number]) {
-  const plannedConceptsCount = Math.max(0, customer.planned_concepts_count ?? 0);
+  // Prefer the this-week count (same definition as CustomerPulseRoute) so
+  // the team-page flöde dots and the customer-page pulse bar agree on the
+  // numerator. Fall back to lifetime planned_concepts_count for older API
+  // responses that don't yet expose the weekly field.
+  const plannedConceptsCount = Math.max(
+    0,
+    customer.planned_concepts_this_week ?? customer.planned_concepts_count ?? 0,
+  );
   const expectedConceptsPerWeek = clampExpectedConcepts(customer.expected_concepts_per_week);
   const overdueConceptsCount = Math.max(0, customer.overdue_7d_concepts_count ?? 0);
   
