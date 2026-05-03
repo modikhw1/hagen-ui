@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { changeSubscriptionPrice, previewSubscriptionPrice } from '@/app/admin/_actions/billing';
+import { apiClient } from '@/lib/admin/api-client';
 import { Metric, ModeButton } from '@/components/admin/_primitives';
 import { TextInput, Table } from '@mantine/core';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
@@ -81,18 +81,13 @@ export default function SubscriptionPriceChangeModal({
       previewKey: string;
       requestId: number;
     }) => {
-      const result = await previewSubscriptionPrice({
-        customerId,
-        monthlyPriceSek: input.monthlyPriceSek,
-        mode: input.mode,
-      });
-
-      if ('error' in result) {
-        throw new Error(result.error.message);
-      }
+      const result = await apiClient.post<{ preview: PreviewPayload }>(
+        `/api/admin/customers/${customerId}/subscription-price/preview`,
+        { monthly_price_sek: input.monthlyPriceSek, mode: input.mode },
+      );
 
       return {
-        preview: result.data as PreviewPayload,
+        preview: result.preview,
         previewKey: input.previewKey,
         requestId: input.requestId,
       };
@@ -106,17 +101,13 @@ export default function SubscriptionPriceChangeModal({
         throw new Error('Förhandsvisningen är inaktuell. Uppdatera innan du sparar.');
       }
 
-      const result = await changeSubscriptionPrice({
-        customerId,
-        monthlyPriceSek: validation.data.monthly_price,
-        mode: validation.data.mode,
-      });
-
-      if ('error' in result) {
-        throw new Error(result.error.message);
-      }
-
-      return result.data;
+      await apiClient.patch<unknown>(
+        `/api/admin/customers/${customerId}/subscription-price`,
+        {
+          monthly_price: validation.data.monthly_price,
+          mode: validation.data.mode,
+        },
+      );
     },
     onSuccess: () => {
       onClose();

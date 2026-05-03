@@ -15,7 +15,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { inviteCustomer } from '@/app/admin/_actions/billing';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { AdminField } from '@/components/admin/ui/form/AdminField';
 import { apiClient } from '@/lib/admin/api-client';
@@ -118,9 +117,8 @@ export default function InviteCustomerModal({
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const result = await inviteCustomer(state);
-      if ('error' in result) throw new Error(result.error.message);
-      return result.data;
+      const result = await apiClient.post<InviteCustomerResult>('/api/admin/customers/create', state);
+      return result;
     },
     onSuccess: (payload: InviteCustomerResult) => {
       const recipient = state.contact_email;

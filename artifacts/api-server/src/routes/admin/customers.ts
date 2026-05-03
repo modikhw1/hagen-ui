@@ -955,28 +955,47 @@ router.post('/create', requireAuth, requireRole(['admin']), async (req, res) => 
   try {
     const supabase = createSupabaseAdmin();
     const body = req.body as Record<string, unknown>;
+    const sendInviteNow = body.send_invite_now === true;
+
     const insert: Record<string, unknown> = {
       business_name: typeof body.business_name === 'string' ? body.business_name.trim() : null,
       contact_email: typeof body.contact_email === 'string' ? body.contact_email.trim().toLowerCase() : null,
       customer_contact_name: typeof body.customer_contact_name === 'string' ? body.customer_contact_name.trim() : null,
+      phone: typeof body.phone === 'string' ? body.phone.trim() : null,
       account_manager: typeof body.account_manager === 'string' ? body.account_manager.trim() : null,
       account_manager_profile_id: typeof body.account_manager_profile_id === 'string' ? body.account_manager_profile_id : null,
       monthly_price: typeof body.monthly_price === 'number' ? body.monthly_price : null,
-      status: typeof body.status === 'string' ? body.status : 'invited',
+      status: sendInviteNow ? 'invited' : 'draft',
       concepts_per_week: typeof body.concepts_per_week === 'number' ? body.concepts_per_week : 1,
       subscription_interval: typeof body.subscription_interval === 'string' ? body.subscription_interval : 'month',
+      tiktok_profile_url: typeof body.tiktok_profile_url === 'string' ? body.tiktok_profile_url : null,
+      contract_start_date: typeof body.contract_start_date === 'string' ? body.contract_start_date : null,
+      billing_day_of_month: typeof body.billing_day_of_month === 'number' ? body.billing_day_of_month : 25,
     };
+
     const { data, error } = await supabase
       .from('customer_profiles')
       .insert(insert)
-      .select()
+      .select('id, business_name, contact_email, status')
       .single();
 
     if (error) {
       res.status(500).json({ error: error.message });
       return;
     }
-    res.status(201).json({ customer: data });
+
+    const customer = data as Record<string, unknown>;
+    const customerId = customer.id as string;
+
+    // Return shape compatible with legacy _actions/billing inviteCustomer response
+    const origin = `${req.protocol}://${req.headers.host}`;
+    res.status(201).json({
+      customerId,
+      inviteSent: false, // email invite requires separate service; stub as false
+      profileUrl: `${origin}/admin/customers/${customerId}`,
+      warnings: sendInviteNow ? ['E-postinbjudan skickas inte automatiskt i Express-läge. Skicka manuellt via kundprofilen.'] : [],
+      customer,
+    });
   } catch (err) {
     logger.error(err, 'admin customer create error');
     res.status(500).json({ error: 'Internt serverfel' });
@@ -1233,6 +1252,62 @@ router.get('/:id/subscription-preview', requireAuth, ADMIN_ONLY, async (req, res
     res.json({ profileId: id, preview: cp ?? null });
   } catch (err) {
     logger.error(err, 'admin customer subscription-preview error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/customers/:id/subscription-price/preview
+// Previews what a subscription price change would look like (proration, line items, etc.)
+router.post('/:id/subscription-price/preview', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body as Record<string, unknown>;
+    const monthlyPriceSek = typeof body.monthly_price_sek === 'number' ? body.monthly_price_sek : null;
+    const mode = typeof body.mode === 'string' ? body.mode : 'now';
+
+    if (!monthlyPriceSek || monthlyPriceSek <= 0) {
+      res.status(400).json({ error: 'monthly_price_sek krävs och måste vara > 0' });
+      return;
+    }
+
+    const supabase = createSupabaseAdmin();
+    const { data: cp } = await supabase
+      .from('customer_profiles')
+      .select('stripe_subscription_id, monthly_price, stripe_customer_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    const currentMonthlyPriceSek = (cp as Record<string, unknown> | null)?.monthly_price as number | null ?? 0;
+    const newPriceOre = monthlyPriceSek * 100;
+    const currentPriceOre = currentMonthlyPriceSek * 100;
+    const now = new Date();
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    // Stub preview — full Stripe proration requires Stripe SDK configured
+    const preview = {
+      mode,
+      effective_date: mode === 'now' ? now.toISOString() : nextMonth.toISOString(),
+      subscription_id: (cp as Record<string, unknown> | null)?.stripe_subscription_id as string | null ?? null,
+      current_period_end: nextMonth.toISOString(),
+      proration_behavior: mode === 'now' ? 'create_prorations' : 'none',
+      current_price_ore: currentPriceOre,
+      new_price_ore: newPriceOre,
+      line_items: mode === 'now' && newPriceOre !== currentPriceOre ? [
+        {
+          id: 'preview-item',
+          description: `Prisbyte från ${currentMonthlyPriceSek} kr → ${monthlyPriceSek} kr`,
+          amount_ore: newPriceOre - currentPriceOre,
+          currency: 'sek',
+          period_start: now.toISOString(),
+          period_end: nextMonth.toISOString(),
+        }
+      ] : [],
+      invoice_total_ore: mode === 'now' ? Math.max(0, newPriceOre - currentPriceOre) : 0,
+    };
+
+    res.json({ preview });
+  } catch (err) {
+    logger.error(err, 'admin customer subscription-price preview error');
     res.status(500).json({ error: 'Internt serverfel' });
   }
 });

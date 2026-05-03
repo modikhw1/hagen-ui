@@ -79,46 +79,77 @@ All pages fully converted to `'use client'` React components:
 
 ## Express API Routes
 
-All mounted at `/api/admin/` in `artifacts/api-server/src/routes/admin/`:
+Mounted at `/api/*` in `artifacts/api-server/src/routes/`:
 
+### Admin routes (`/api/admin/`)
 | File | Routes |
 |---|---|
-| `customers.ts` | CRUD + drift + pulse + activity + absences + snooze |
-| `team.ts` | team list/lite + absences + create + handover cancel/reschedule |
-| `billing.ts` | health + invoices + subscriptions + upcoming + reconcile |
-| `demos.ts` | board + CRUD + **POST /:id/prepare-studio** |
-| `audit.ts` | audit log list |
-| `payroll.ts` | payroll data |
-| `settings.ts` | settings read/write |
-| `invoices.ts` | invoice list + actions |
-| `subscriptions.ts` | subscription list + actions |
-| `tiktok.ts` | TikTok profile + sync |
-| `notifications.ts` | notification endpoints |
+| `admin/customers.ts` | CRUD + buffer + export + coverage + discount + invoice-items + billing/resync + billing/sync-events + subscription-price (+ preview) + invite + reminder + reassign + drift + pulse + activity + change-account-manager |
+| `admin/billing.ts` | health + invoices + subscriptions + upcoming + reconcile + sync-events + sync-invoices + sync-subscriptions + health-retry |
+| `admin/concepts.ts` | concepts library CRUD |
+| `admin/team.ts` | team list/lite + absences + create + handover cancel/reschedule |
+| `admin/demos.ts` | board + CRUD + POST /:id/prepare-studio |
+| `admin/audit.ts` | audit log list + export |
+| `admin/payroll.ts` | payroll data |
+| `admin/settings.ts` | settings read/write |
+| `admin/invoices.ts` | invoice list + actions |
+| `admin/subscriptions.ts` | subscription list + actions |
+| `admin/tiktok.ts` | TikTok profile + sync |
+| `admin/index.ts` | notifications + attention snooze + service-costs |
+
+### Other route families
+| Router | Prefix | Description |
+|---|---|---|
+| `customer.ts` | `/api/customer` | Customer-facing feed, game-plan, notes, concepts |
+| `stripe.ts` | `/api/stripe` | Customer invoices, checkout, payment check |
+| `studio.ts` | `/api/studio` | Concept analyze/enrich, email schedules |
+| `studio-v2.ts` | `/api/studio-v2` | Full CM studio (customers, feed, email, dashboard) |
+| `letrend.ts` | `/api/letrend`, `/api/video`, `/api/videos` | Hagen proxy: concept prepare, library, video |
+| `onboarding.ts` | `/api/onboarding` | Onboarding context |
 
 ## Key Commands
 
 - `pnpm --filter @workspace/letrend run dev` — run frontend locally
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
-- `pnpm --filter @workspace/letrend exec tsc --noEmit` — typecheck frontend (0 errors)
+- `pnpm --filter @workspace/letrend exec tsc --noEmit` — typecheck frontend
 - `pnpm --filter @workspace/api-server exec tsc --noEmit` — typecheck API server (0 errors)
+- `curl http://localhost:8080/api/healthz` — smoke test API server
 
 ## Environment Variables Needed
 
-| Variable | Used for |
-|---|---|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Supabase anon key |
-| `VITE_STRIPE_PUBLISHABLE_KEY` | Stripe client-side key |
-| `VITE_API_URL` | API server base URL (if separate from frontend) |
-| `VITE_POSTHOG_KEY` | PostHog analytics |
-| `VITE_SENTRY_DSN` | Sentry error tracking |
-| `SUPABASE_URL` | API server Supabase URL (service role) |
-| `SUPABASE_SERVICE_ROLE_KEY` | API server service role key |
-| `STRIPE_SECRET_KEY` | API server Stripe secret key |
+### Frontend (`artifacts/letrend`) — all prefixed `VITE_`
+| Variable | Required | Used for |
+|---|---|---|
+| `VITE_SUPABASE_URL` | ✅ | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | ✅ | Supabase anon key |
+| `VITE_STRIPE_PUBLISHABLE_KEY` | ✅ | Stripe client-side key |
+| `VITE_API_URL` | Optional | API server base URL if separate from frontend |
+| `VITE_POSTHOG_KEY` | Optional | PostHog analytics |
+| `VITE_SENTRY_DSN` | Optional | Sentry error tracking |
+
+### API Server (`artifacts/api-server`)
+| Variable | Required | Used for |
+|---|---|---|
+| `SUPABASE_URL` | ✅ | Supabase project URL (server) |
+| `SUPABASE_SERVICE_ROLE_KEY` | ✅ | Supabase service role key |
+| `STRIPE_SECRET_KEY` | ✅ | Stripe live/test secret key |
+| `STRIPE_LIVE_SECRET_KEY` | Optional | Explicit live key (overrides STRIPE_SECRET_KEY) |
+| `STRIPE_TEST_SECRET_KEY` | Optional | Explicit test key |
+| `STRIPE_WEBHOOK_SECRET` | Optional | Webhook signature verification |
+| `HAGEN_BASE_URL` | Optional | Hagen API base URL for video/concept proxy |
+| `HAGEN_API_KEY` | Optional | Hagen API auth key |
+| `RESEND_API_KEY` | Optional | Email sending via Resend |
+| `JWT_SECRET` | Optional | JWT signing (falls back to Supabase verification) |
+
+## Cleaned-Up Next.js Residue
+
+The following dead code has been removed:
+- `artifacts/letrend/src/app/api/` — 180 Next.js route.ts files (replaced by Express)
+- `artifacts/letrend/src/app/admin/_actions/` — 3 Next.js server action files (replaced by `apiClient` calls)
 
 ## TODO / Remaining Work
 
 1. **Set env vars** — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`
-2. **Wire API proxy** — configure Vite dev proxy or deploy API server so `/api/*` calls reach the Express server
+2. **Wire API proxy** — Vite dev proxy or CORS config so `/api/*` calls from the frontend reach Express on port 8080
 3. **RLS policies** — `demo/[customerId]` uses anon Supabase client; ensure `customer_profiles` RLS allows public demo reads
-4. **`_actions/` cleanup** — server action files in `src/app/admin/_actions/` are dead code (replaced by Express routes); can be removed once confident
+4. **Stripe full implementation** — subscription-price preview and billing routes return stubs; wire up with Stripe SDK when keys are configured
