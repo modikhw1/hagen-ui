@@ -1,0 +1,55 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "**/*.test.ts",
+    "src/app/api/**",
+    "src/lib/stripe/**",
+    "src/jobs/**",
+    "src/lib/admin/customer-billing-store.ts",
+    "src/lib/admin/auth.ts",
+    "src/lib/admin/billing-list.server.ts",
+    "src/lib/admin/billing-route-query.ts",
+    "src/lib/admin/billing-service.ts",
+    "src/lib/admin/customer-actions/**",
+    "src/lib/admin/customer-detail/**",
+    "src/lib/admin/customers/list.server.ts",
+    "src/lib/admin/server/**",
+    "src/lib/admin/with-admin.ts",
+    "src/lib/auth/api-auth.ts",
+    "src/lib/auth/shared-auth.ts",
+    "src/lib/server/**",
+    "src/stubs/**"
+  ],
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "preserve",
+    "lib": [
+      "esnext",
+      "dom",
+      "dom.iterable"
+    ],
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "moduleResolution": "bundler",
+    "types": [
+      "node",
+      "vite/client"
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
+  },
+  "references": [
+    {
+      "path": "../../lib/api-client-react"
+    }
+  ]
+}

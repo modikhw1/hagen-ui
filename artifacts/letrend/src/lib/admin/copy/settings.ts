@@ -1,0 +1,27 @@
+export const settingsCopy = {
+  title: 'Settings',
+  subtitle: 'Globala drift-defaults f\u00f6r billing och teamkommission.',
+  loading: 'Laddar settings...',
+  loadError: 'Kunde inte ladda settings.',
+  saveSuccess: 'Settings sparades.',
+  saveError: 'Kunde inte spara settings.',
+  saveButton: 'Spara settings',
+  saveButtonSaving: 'Sparar...',
+  defaultBillingIntervalLabel: 'Default billing interval',
+  paymentTermsDaysLabel: 'Payment terms (dagar)',
+  currencyLabel: 'Valuta',
+  commissionLabel: 'Default CM-kommission (%)',
+  sectionBillingTitle: 'Billing-defaults',
+  sectionBillingDescription: 'Standardv\u00e4rden f\u00f6r fakturering och betalningsvillkor.',
+  sectionCommissionTitle: 'Team och kommission',
+  sectionCommissionDescription: 'F\u00f6rval f\u00f6r kommission p\u00e5 nya relationer.',
+  sectionNotificationsTitle: 'Notifikationer (kommer)',
+  sectionNotificationsDescription:
+    'Plats reserverad f\u00f6r kommande defaults kring alerts och tr\u00f6sklar.',
+  unsavedBadge: 'Osparade \u00e4ndringar',
+  unsavedLeaveTitle: 'Osparade \u00e4ndringar',
+  unsavedLeaveMessage:
+    'Du har osparade \u00e4ndringar. Om du navigerar bort nu f\u00f6rlorar du dem.',
+  unsavedStay: 'Stanna kvar',
+  unsavedLeave: 'L\u00e4mna sidan',
+} as const;

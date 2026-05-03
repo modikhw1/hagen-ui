@@ -1,0 +1,139 @@
+{
+  "_meta": {
+    "description": "Demo-profiler för LeTrend. Editera för att ändra vilka klipp som visas per profil.",
+    "lastUpdated": "2026-01-12",
+    "version": "2.2"
+  },
+  "profiles": [
+    {
+      "id": "restaurant",
+      "icon": "🍽️",
+      "label": "Restaurang",
+      "profile": {
+        "handle": "@bistro.karelia",
+        "avatar": "B",
+        "followers": "3,2K",
+        "avgViews": "890",
+        "posts": 67,
+        "tone": ["varm", "välkomnande", "jordnära"],
+        "energy": "Balanserad",
+        "teamSize": "3-5 personer",
+        "topMechanisms": ["recognition", "subversion"],
+        "recentHits": [
+          { "title": "Fredagslunchen i köket", "views": "2,1K" },
+          { "title": "Stammisen beställer", "views": "1,4K" }
+        ]
+      },
+      "concepts": [
+        { "clipId": "clip-84559877", "matchOverride": 94 },
+        { "clipId": "clip-44893709", "matchOverride": 90 },
+        { "clipId": "clip-62206230", "matchOverride": 87 },
+        { "clipId": "clip-68018446", "matchOverride": 84 }
+      ]
+    },
+    {
+      "id": "cafe",
+      "icon": "☕",
+      "label": "Café",
+      "profile": {
+        "handle": "@mellowroast.gbg",
+        "avatar": "M",
+        "followers": "2,9K",
+        "avgViews": "780",
+        "posts": 89,
+        "tone": ["lugn", "personlig", "genuin"],
+        "energy": "Avslappnad",
+        "teamSize": "2-3 personer",
+        "topMechanisms": ["recognition", "contrast"],
+        "recentHits": [
+          { "title": "Morgonrushen", "views": "1,8K" },
+          { "title": "Stamkundens ordning", "views": "1,2K" }
+        ]
+      },
+      "concepts": [
+        { "clipId": "clip-45435414", "matchOverride": 94 },
+        { "clipId": "clip-14943766", "matchOverride": 90 }
+      ]
+    },
+    {
+      "id": "bar",
+      "icon": "🍺",
+      "label": "Bar",
+      "profile": {
+        "handle": "@cornerbar.sthlm",
+        "avatar": "C",
+        "followers": "4,1K",
+        "avgViews": "1,6K",
+        "posts": 112,
+        "tone": ["avslappnad", "rolig", "rak"],
+        "energy": "Chill men närvarande",
+        "teamSize": "2-4 personer",
+        "topMechanisms": ["recognition", "absurdism"],
+        "recentHits": [
+          { "title": "Stamgästen förklarar", "views": "5,3K" },
+          { "title": "Happy hour-rushen", "views": "3,7K" }
+        ]
+      },
+      "concepts": [
+        { "clipId": "clip-29810710", "matchOverride": 94 },
+        { "clipId": "clip-12846358", "matchOverride": 90 },
+        { "clipId": "clip-38309408", "matchOverride": 86 },
+        { "clipId": "clip-74569494", "matchOverride": 82 },
+        { "clipId": "clip-19762454", "matchOverride": 78 }
+      ]
+    },
+    {
+      "id": "cafe-genz",
+      "icon": "☕",
+      "label": "Café (gen z)",
+      "profile": {
+        "handle": "@fika.collective",
+        "avatar": "F",
+        "followers": "8,4K",
+        "avgViews": "3,1K",
+        "posts": 156,
+        "tone": ["självironisk", "snabb", "trendig"],
+        "energy": "Hög och lekfull",
+        "teamSize": "2-3 personer",
+        "topMechanisms": ["absurdism", "subversion"],
+        "recentHits": [
+          { "title": "POV: 5 min till stängning", "views": "12K" },
+          { "title": "Havremjölk-krisen", "views": "8,5K" }
+        ]
+      },
+      "concepts": [
+        { "clipId": "clip-70690326", "matchOverride": 96 },
+        { "clipId": "clip-92037398", "matchOverride": 94 },
+        { "clipId": "clip-39251991", "matchOverride": 91 },
+        { "clipId": "clip-18074647", "matchOverride": 88 }
+      ]
+    },
+    {
+      "id": "restaurant-upscale",
+      "icon": "🍽️",
+      "label": "Restaurang (upscale)",
+      "profile": {
+        "handle": "@matsal.nord",
+        "avatar": "M",
+        "followers": "5,8K",
+        "avgViews": "2,2K",
+        "posts": 48,
+        "tone": ["sofistikerad", "subtil", "stilren"],
+        "energy": "Avskalad elegans",
+        "teamSize": "4-6 personer",
+        "topMechanisms": ["subversion", "contrast"],
+        "recentHits": [
+          { "title": "När gästen googlar vinet", "views": "4,1K" },
+          { "title": "Sommelierblicken", "views": "2,9K" }
+        ]
+      },
+      "concepts": [
+        { "clipId": "clip-76898326", "matchOverride": 92 },
+        { "clipId": "clip-32984598", "matchOverride": 89 },
+        { "clipId": "clip-29634592", "matchOverride": 86 },
+        { "clipId": "clip-38309408", "matchOverride": 83 },
+        { "clipId": "clip-18636040", "matchOverride": 80 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+'use client';
+
+import { useMemo } from 'react';
+import { Link } from 'wouter';
+import { useLocation as _useLocation } from 'wouter';
+const usePathname = () => _useLocation()[0];
+
+const customerTabs = [
+  { suffix: '',              label: 'Översikt' },
+  { suffix: '/billing',      label: 'Fakturering' },
+  { suffix: '/pulse',        label: 'Puls' },
+  { suffix: '/organisation', label: 'Organisation' },
+] as const;
+
+export default function CustomerDetailTabs({ 
+  customerId, 
+  status 
+}: { 
+  customerId: string;
+  status?: string;
+}) {
+  const pathname = usePathname() ?? `/admin/customers/${customerId}`;
+
+  const tabs = useMemo(
+    () => {
+      // Filtrera flikar baserat på status
+      const visibleTabs = customerTabs.filter(tab => {
+        if (status === 'prospect') {
+          return tab.suffix === '' || tab.suffix === '/organisation';
+        }
+        return true;
+      });
+
+      return visibleTabs.map((tab) => {
+        const href = `/admin/customers/${customerId}${tab.suffix}`;
+        const isActive =
+          tab.suffix === ''
+            ? pathname === href
+            : pathname === href || pathname.startsWith(`${href}/`);
+
+        return {
+          ...tab,
+          href,
+          isActive,
+        };
+      });
+    },
+    [customerId, pathname, status],
+  );
+
+  return (
+    <nav className="mt-4 -mb-px flex gap-1 border-b border-border">
+      {tabs.map((tab) => (
+        <Link
+          key={tab.href}
+          to={tab.href}
+          aria-current={tab.isActive ? 'page' : undefined}
+          className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            tab.isActive
+              ? 'border-primary text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {tab.label}
+        </Link>
+      ))}
+    </nav>
+  );
+}

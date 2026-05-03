@@ -1,0 +1,49 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "description": "Brand profile data med svenska UI-fält. Raw data hämtas från TikTok, transleringslager appliceras."
+  },
+
+  "profiles": {
+    "contraband.coffee": {
+      "_source": "tiktok",
+      "_lastFetched": "2026-01-09T18:25:29.249Z",
+
+      "raw": {
+        "handle": "@contraband.coffee",
+        "displayName": "Contraband Coffee",
+        "bio": "Specialty coffee in Stockholm",
+        "avatarUrl": null,
+        "followers": "4,7K",
+        "likes": "542,5K",
+        "videoCount": "425"
+      },
+
+      "override": {
+        "avgViews": "1,3K"
+      }
+    }
+  },
+
+  "defaults": {
+    "followers": "—",
+    "avgViews": "—",
+    "videoCount": "—",
+    "teamSize": "Okänt",
+    "energy": "Neutral"
+  },
+
+  "_comment_translation": "Nedanstående fält genereras av transleringslagret baserat på analyserade videor",
+
+  "derivedFields": {
+    "contraband.coffee": {
+      "tone": ["torr", "deadpan", "serviceinriktad"],
+      "energy": "Lugn men skarp",
+      "teamSize": "2-3 personer",
+      "topMechanisms": ["subversion", "recognition"],
+      "recentHits": [
+        { "title": "Kunden ställer uppenbara frågor", "views": "—", "contentType": "humor" }
+      ]
+    }
+  }
+}
