@@ -216,18 +216,38 @@ router.get('/cm-pulse', requireAuth, ADMIN_ONLY, async (req, res) => {
     }
 
     const cmPulse = (teamResult.data ?? []).map((member: Record<string, unknown>) => {
-      const customers = customersByCm.get(member['id'] as string) ?? [];
+      const cmId = member['id'] as string;
+      const customers = customersByCm.get(cmId) ?? [];
+      const expected = customers.reduce(
+        (sum: number, c: Record<string, unknown>) => sum + Number(c['expected_concepts_per_week'] ?? 0),
+        0,
+      );
+      const totalCustomers = customers.length;
       return {
-        id: member['id'],
-        name: member['name'],
-        email: member['email'],
-        avatar_url: member['avatar_url'],
-        customer_count: customers.length,
-        expected_per_week: customers.reduce(
-          (sum: number, c: Record<string, unknown>) => sum + (Number(c['expected_concepts_per_week'] ?? 0)),
-          0,
-        ),
-        status: 'standard',
+        member: {
+          id: cmId,
+          name: member['name'],
+          email: member['email'],
+          avatar_url: member['avatar_url'] ?? null,
+          created_at: null,
+        },
+        aggregate: {
+          cmId,
+          status: 'ok' as const,
+          activeAbsence: null,
+          counts: { n_under: 0, n_thin: 0, n_blocked: 0, n_ok: totalCustomers, n_paused: 0 },
+          totalCustomers,
+          lastInteractionAt: null,
+          last_interaction_days: 999,
+          planned_concepts_total: 0,
+          expected_concepts_7d: expected,
+          fillPct: expected === 0 ? 100 : 0,
+          overflow: false,
+          barLabel: `0/${expected} koncept`,
+          interaction_count_7d: 0,
+          newCustomers: [],
+          recentPublications: [],
+        },
       };
     });
 
