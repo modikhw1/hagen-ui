@@ -116,30 +116,6 @@ export interface CustomerBillingInitialData {
   } | null;
 }
 
-const statusLabels: Record<string, string> = {
-  active: 'Aktivt',
-  trialing: 'Provperiod',
-  past_due: 'Forfallet',
-  uncollectible: 'Gar ej att driva in',
-  canceled: 'Avslutat',
-  incomplete: 'Ofullstandigt',
-  incomplete_expired: 'Utgatt',
-  paused: 'Pausat',
-  paid: 'Betald',
-  open: 'Oppen',
-  void: 'Annullerad',
-  draft: 'Utkast',
-};
-
-const statusTones: Record<string, string> = {
-  active: 'blue',
-  paid: 'green',
-  past_due: 'red',
-  uncollectible: 'red',
-  void: 'gray',
-  open: 'blue',
-};
-
 export interface CustomerBillingRouteProps {
   customerId: string;
   customerName: string;
