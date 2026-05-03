@@ -124,24 +124,13 @@ export function GamePlanSection({
         <div
           style={{
             display: 'flex',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             alignItems: 'center',
             gap: 12,
             marginBottom: 12,
             flexWrap: 'wrap',
           }}
         >
-          <h2
-            style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: LeTrendColors.brownInk,
-              margin: 0,
-            }}
-          >
-            Game Plan
-          </h2>
-
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {!editingGamePlan ? (
               <button

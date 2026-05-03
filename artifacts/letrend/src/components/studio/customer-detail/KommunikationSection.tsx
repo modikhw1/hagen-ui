@@ -314,23 +314,6 @@ export function KommunikationSection({
         boxShadow: LeTrendShadows.warmthCard,
       }}
     >
-      <div style={{ marginBottom: 20 }}>
-        <h2
-          style={{
-            margin: '0 0 6px',
-            fontFamily: LeTrendTypography.fontFamily.heading,
-            fontSize: 28,
-            fontWeight: 400,
-            color: LeTrendColors.brownInk,
-          }}
-        >
-          Kommunikation
-        </h2>
-        <div style={{ fontSize: 14, color: LeTrendColors.textSecondary, lineHeight: 1.6 }}>
-          Skicka varumärkesmässiga kundmail med samma mallsystem som används i API:t. Delade koncept markeras direkt i kundflödet.
-        </div>
-      </div>
-
       {communicationFeedback && (
         <div
           style={{

@@ -1,4 +1,4 @@
-export { CustomerActionBar } from './CustomerActionBar';
+
 export { CustomerCommunicationPanel } from './CustomerCommunicationPanel';
 export { CustomerConceptDetail } from './CustomerConceptDetail';
 export { CustomerConceptsList } from './CustomerConceptsList';

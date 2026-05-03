@@ -17,7 +17,7 @@
  */
 
 import React, { Suspense, useState, useEffect, useRef } from 'react';
-import { Link } from 'wouter';
+
 import { useParams, useRouter, useSearchParams } from '@/lib/navigation-compat';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -60,7 +60,6 @@ import {
   buildStudioWorkspaceHref,
   STUDIO_WORKSPACE_SECTIONS,
   getStudioWorkspaceSection,
-  getStudioWorkspaceSectionMeta,
 } from '@/lib/studio/navigation';
 import {
   isStudioAssignedCustomerConcept,
@@ -2594,28 +2593,10 @@ function CustomerWorkspacePageContent() {
   const editingConceptDetails = getWorkspaceConceptDetails(editingConcept, getConceptDetails);
   const latestEmailJob = emailJobs[0] || null;
   const latestSentEmailJob = emailJobs.find((job) => job.sent_at) || null;
-  const activeSectionMeta = getStudioWorkspaceSectionMeta(activeSection);
   const customerStatusMeta = getStudioCustomerStatusMeta(normalizeStudioCustomerStatus(customer.status));
 
   return (
     <div>
-      {/* Back button */}
-      <div style={{ marginBottom: 16 }}>
-        <Link
-          href="/studio/customers"
-          style={{
-            color: LeTrendColors.textSecondary,
-            fontSize: 14,
-            textDecoration: 'none',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 4
-          }}
-        >
-          Till kundarbete
-        </Link>
-      </div>
-
       {/* Sticky quick-switch tab strip */}
       <div
         style={{
@@ -2929,24 +2910,6 @@ function CustomerWorkspacePageContent() {
 
         {/* RIGHT COLUMN - Flexible content */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: LeTrendRadius.lg,
-            padding: 20,
-            marginBottom: 16,
-            border: `1px solid ${LeTrendColors.border}`
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: LeTrendColors.textMuted, marginBottom: 6 }}>
-              Aktiv del
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: LeTrendColors.brownDark, marginBottom: 6 }}>
-              {activeSectionMeta.label}
-            </div>
-            <div style={{ fontSize: 14, color: LeTrendColors.textSecondary, lineHeight: 1.6 }}>
-              {activeSectionMeta.description}
-            </div>
-          </div>
-
           {pendingEmailPrompt && (
             <div
               style={{
