@@ -26,7 +26,7 @@ export function useTeam(
     gcTime: 300_000,
     refetchOnWindowFocus: false,
     placeholderData: (previousData) => previousData,
-    initialData: options?.initialData,
+    initialData: options?.initialData && options.initialData.length > 0 ? options.initialData : undefined,
   });
 }
 

@@ -1,4 +1,4 @@
-modules = ["nodejs-24", "python-3.11"]
+modules = ["nodejs-24", "python-3.11", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -62,3 +62,6 @@ RAPIDAPI_KEY = "c8dff8746bmsh609e25f37ead79cp133ffcjsn455616bba8d8"
 CRON_SECRET = "eb77640370f5a8ab552b64b0c94513cc3931a274a4b0f33343662e80645618c2"
 VITE_APP_URL = "http://localhost:3000"
 VITE_ENV = "test"
+
+[nix]
+channel = "stable-25_05"
