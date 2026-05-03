@@ -19,6 +19,36 @@ async function recordHagenCall(unit: string, fallbackOre: number, extra?: Record
   }
 }
 
+// Records the Gemini-side cost of a hagen call. Hagen does not yet return a
+// `usage` field with real token counts, so we use a per-route token estimate.
+// When hagen starts surfacing `usage`, replace `estInputTok/estOutputTok` with
+// the measured values and switch metadata.data_source to 'measured'.
+async function recordGeminiCall(
+  estInputTok: number,
+  estOutputTok: number,
+  extra?: Record<string, unknown>,
+) {
+  try {
+    const inOre = await getPriceOre('gemini', 'per_1k_input_tok', 1);
+    const outOre = await getPriceOre('gemini', 'per_1k_output_tok', 4);
+    const cost = Math.round((estInputTok / 1000) * inOre + (estOutputTok / 1000) * outOre);
+    await recordServiceUsage({
+      service: 'Gemini API',
+      calls: 1,
+      cost_ore: cost,
+      metadata: {
+        source: 'hagen-proxy',
+        data_source: 'estimated',
+        est_input_tok: estInputTok,
+        est_output_tok: estOutputTok,
+        ...(extra ?? {}),
+      },
+    });
+  } catch {
+    /* best-effort */
+  }
+}
+
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
 
@@ -86,6 +116,7 @@ router.post('/concept/prepare', requireAuth, CM_ONLY, async (req, res) => {
   }
 
   void recordHagenCall('per_prepare', 10, { route: 'concept/prepare', request_id: result.requestId });
+  void recordGeminiCall(2000, 1000, { route: 'concept/prepare', request_id: result.requestId });
   res.status(result.status).json(prepared);
 });
 
@@ -110,7 +141,10 @@ router.post('/reprocess', requireAuth, CM_ONLY, async (req, res) => {
     timeoutMs: 20000,
     routeTag: 'letrend.reprocess',
   });
-  if (result.ok) void recordHagenCall('per_prepare', 10, { route: 'reprocess', request_id: result.requestId });
+  if (result.ok) {
+    void recordHagenCall('per_prepare', 10, { route: 'reprocess', request_id: result.requestId });
+    void recordGeminiCall(2000, 1000, { route: 'reprocess', request_id: result.requestId });
+  }
 });
 
 // GET /api/letrend/video/:id
@@ -184,7 +218,10 @@ router.post('/videos/analyze/deep', requireAuth, CM_ONLY, async (req, res) => {
     timeoutMs: 60000,
     routeTag: 'videos.analyze.deep',
   });
-  if (result.ok) void recordHagenCall('per_deep_analyze', 50, { route: 'videos/analyze/deep', request_id: result.requestId });
+  if (result.ok) {
+    void recordHagenCall('per_deep_analyze', 50, { route: 'videos/analyze/deep', request_id: result.requestId });
+    void recordGeminiCall(8000, 3000, { route: 'videos/analyze/deep', request_id: result.requestId });
+  }
 });
 
 export default router;

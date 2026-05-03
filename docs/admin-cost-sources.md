@@ -17,19 +17,23 @@ which are still completely missing — so the operator UI never lies.
 
 ### TikTok fetcher (RapidAPI · `tiktok-scraper7`)
 
-- **Anropas i**: `artifacts/letrend/src/lib/studio/tiktok-provider.ts`
-  (`fetchProviderVideos` + `fetchProviderUser`). Kallas i sin tur från
-  `sync-customer-history.ts`, `fetch-full-profile-history.ts` och
-  `run-history-sync-batch.ts`.
-- **Räknare**: RapidAPI exponerar kvot via en GraphQL-endpoint
-  (`fetchRapidApiQuotas` användes tidigare i `lib/admin/server/rapidapi-quota.ts`,
-  numera bortkommenterad pga 429 vid varje overview-load).
-- **Prismodell**: prenumerationsplan + per-call-overage. Vi vet inte exakt vad
-  Letrends nuvarande plan kostar utan att läsa fakturan; default i seed antar
+- **Anropas i**: `artifacts/api-server/src/lib/studio/tiktok-sync.ts`
+  (`fetchProviderVideos` + `fetchProviderUser`). Kallas av cron-routen
+  `/api/studio-v2/internal/sync-history-all`, manuell-routen
+  `/api/studio-v2/customers/:id/fetch-profile-history` samt
+  `triggerInitialTikTokSyncBackground` vid invite/profile-link.
+- **Räknare**: varje `rapidApiFetch`-anrop skriver en rad till `service_costs`
+  via `recordRapidApiCall(...)` direkt efter HTTP-svaret (oavsett status —
+  RapidAPI debiterar försökta requests). Quota-refresh via
+  `/api/admin/costs/refresh` läser dessutom `x-ratelimit-*`-headers och skriver
+  in den till `metadata.quota`.
+- **Prismodell**: prenumerationsplan + per-call-overage. Default i seed antar
   PRO-planen ≈ 25 USD / 50k requests ≈ 0,005 USD ≈ 5 öre per call.
-- **Status**: Uppskattat (per-call) + manuell quota-refresh.
-- **TODO**: läs faktiska fakturor från RapidAPI dashboard (manuell), aktivera
-  `fetchRapidApiQuotas` bakom refresh-knappen istället för i overview-loaden.
+- **Status**: Mätt (per-call) + Uppskattat månads-flat i prognosen.
+- **TODO**: läs faktiska fakturor från RapidAPI dashboard för att verifiera
+  per-call-priset; instrumentera även eventuella SPA-side anrop om
+  `triggerInitialTikTokSync` (i `artifacts/letrend/src/lib/tiktok/`)
+  reaktiveras (idag `'server-only'`-stub).
 
 ### Gemini API (gameplan + analys via `@google/genai`)
 
@@ -37,16 +41,19 @@ which are still completely missing — so the operator UI never lies.
   `artifacts/hagen/src/lib/services/brand/brand-analyzer.ts`.
   Letrend triggar via `/api/letrend/concept/prepare` (proxas i api-server
   `routes/letrend.ts`).
-- **Räknare**: SDK-svaret innehåller `usageMetadata.promptTokenCount` och
-  `candidatesTokenCount`. Hagen loggar dem inte vidare till oss idag.
+- **Räknare**: hagen-proxyn i `artifacts/api-server/src/routes/letrend.ts`
+  skriver en rad per `2xx`-svar via `recordGeminiCall(estIn, estOut, …)`.
+  Token-tal är estimerade per route (`concept/prepare`/`reprocess` ≈ 2k in /
+  1k ut; `videos/analyze/deep` ≈ 8k in / 3k ut) tills hagen börjar returnera
+  riktiga `usageMetadata.promptTokenCount` / `candidatesTokenCount`.
 - **Prismodell**: per 1k input/output-tokens (Gemini 2.5 Flash ≈ 0,075 USD /
   1M input, 0,30 USD / 1M output i april 2026). Default i seed: 1 öre / 1k
   input + 4 öre / 1k output.
-- **Status**: Saknar data idag. Aktiveras när hagens `/api/letrend/...`
-  börjar returnera ett `usage`-fält (TODO i hagen-task #1) — då skriver
-  proxyn raden via `recordServiceUsage`.
-- **TODO**: lägg till `usage` i hagens svar, alt. uppskatta utifrån antal
-  förbrukningstillfällen.
+- **Status**: Uppskattat (per-call token-estimat). Blir Mätt så snart hagen
+  returnerar ett `usage`-fält — då räcker det att byta `estIn/estOut` mot
+  värdena från svaret och sätta `metadata.data_source = 'measured'`.
+- **TODO**: lägg till `usage` i hagens svar; bör vara en liten ändring i
+  `analyzeVideoCombined` och prepare-pipelinen.
 
 ### Google Cloud (Vertex + GCS) — körs via hagen
 
@@ -146,13 +153,15 @@ Operatören kan justera dessa rader direkt i Supabase studio utan deploy;
 
 ## Vad som lämnas som TODO
 
-- Gemini token-usage från hagen (kräver att hagen returnerar `usage` i sitt
-  svar — ej i scope för denna task).
+- Gemini token-usage från hagen (idag estimerat per route i proxyn — byts
+  till mätt så snart hagen returnerar `usageMetadata`).
 - Stripe `balance_transactions` backfill-cron för utebliven webhook eller
   refunds (idag förlitar vi oss på live webhooks).
 - Supabase Management API-integration.
-- TikTok/Gemini call-collectors *inifrån* LeTrend SPA (tiktok-provider.ts /
-  studio gemini-anrop) — kräver en ny `/api/usage/record`-endpoint, se
-  follow-up.
+- En `/api/usage/record`-endpoint för SPA-side anrop behövs *inte* idag — alla
+  riktiga TikTok-anrop sker server-side i api-server, och letrend-SPA:n gör
+  inte själv några Gemini-anrop. Endpointen aktualiseras först om
+  `triggerInitialTikTokSync` (`artifacts/letrend/src/lib/tiktok/`) flyttas
+  tillbaka till klienten med `VITE_RAPIDAPI_KEY`.
 - Daily snapshot-cron är inte schemalagd — refresh-knappen sköter manuell
   trigger tills vi har en cron-runner.

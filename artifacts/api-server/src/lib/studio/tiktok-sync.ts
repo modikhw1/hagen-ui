@@ -20,6 +20,23 @@
 
 import { createSupabaseAdmin } from '../supabase.js';
 import { logger } from '../logger.js';
+import { getPriceOre, recordServiceUsage } from '../service-usage.js';
+
+// Records one billable RapidAPI tiktok-scraper7 call. Best-effort: any
+// failure is swallowed so it cannot affect the user-visible sync result.
+async function recordRapidApiCall(extra?: Record<string, unknown>): Promise<void> {
+  try {
+    const perCallOre = await getPriceOre('rapidapi', 'per_call', 5);
+    await recordServiceUsage({
+      service: 'TikTok Fetcher',
+      calls: 1,
+      cost_ore: perCallOre,
+      metadata: { source: 'tiktok-sync', data_source: 'measured', ...(extra ?? {}) },
+    });
+  } catch {
+    /* best-effort */
+  }
+}
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
@@ -154,6 +171,8 @@ async function fetchProviderVideos(
   url.searchParams.set('count', String(count));
   if (cursor !== undefined) url.searchParams.set('cursor', String(cursor));
   const res = await rapidApiFetch(url.toString(), apiKey);
+  // RapidAPI bills attempted requests, not just successful ones — record now.
+  void recordRapidApiCall({ endpoint: 'user/posts', status: res.status });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`tiktok-scraper7 ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
@@ -178,6 +197,7 @@ async function fetchProviderUser(handle: string, apiKey: string): Promise<FetchU
   const url = new URL(`https://${RAPIDAPI_HOST}/user/info`);
   url.searchParams.set('unique_id', handle);
   const res = await rapidApiFetch(url.toString(), apiKey, 10_000);
+  void recordRapidApiCall({ endpoint: 'user/info', status: res.status });
   if (!res.ok) return { followers: 0, avatar: null, callsUsed: 1 };
   const data = await res.json() as { code?: number; data?: { stats?: { followerCount?: number }; user?: { avatarMedium?: string } } };
   if (data.code !== 0) return { followers: 0, avatar: null, callsUsed: 1 };
