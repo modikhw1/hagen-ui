@@ -149,7 +149,7 @@ The following dead code has been removed:
 
 ## TODO / Remaining Work
 
-1. **Set env vars** — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`
-2. **Wire API proxy** — Vite dev proxy or CORS config so `/api/*` calls from the frontend reach Express on port 8080
+1. **Set env vars** — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY` ✅ (set in .replit userenv)
+2. ~~**Wire API proxy**~~ — resolved: Replit path-based routing (`paths = ["/api"]` in api-server artifact.toml) correctly routes `/api/*` fetch calls from the frontend to the Express server on port 8080. No Vite proxy needed.
 3. **RLS policies** — `demo/[customerId]` uses anon Supabase client; ensure `customer_profiles` RLS allows public demo reads
 4. **Stripe full implementation** — subscription-price preview and billing routes return stubs; wire up with Stripe SDK when keys are configured

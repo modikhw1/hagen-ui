@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes/index.js";
+import webhookRouter from "./routes/stripe-webhook.js";
 import { logger } from "./lib/logger.js";
 
 const app: Express = express();
@@ -52,6 +53,11 @@ app.use(
 );
 
 app.use(cookieParser());
+
+// Stripe webhook must receive the raw body for signature verification.
+// Mount BEFORE express.json() so the raw buffer is preserved.
+app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), webhookRouter);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
