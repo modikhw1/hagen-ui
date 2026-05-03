@@ -72,35 +72,117 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
       }
     }
 
-    // Lookup customer business names for assignment history
-    const customerIds = Array.from(new Set(
+    // Customer ids referenced by *any* assignment (active or historical).
+    // We need the names for assignment-history rendering, but the active
+    // ones get a richer signal payload below.
+    const allCustomerIds = Array.from(new Set(
       (assignmentsResult.data ?? []).map((a: any) => a.customer_id).filter(Boolean),
     )) as string[];
-    let customerNameById = new Map<string, string>();
-    if (customerIds.length > 0) {
+
+    // Active assignment customer ids — the ones we surface as table rows.
+    const activeCustomerIds = Array.from(new Set(
+      Array.from(activeAssignmentsByCm.values()).flat().map((a: any) => a.customer_id).filter(Boolean),
+    )) as string[];
+
+    // Batch-fetch customer rows + signals (planned/overdue counts, last_published_at)
+    // and the latest follower / engagement snapshot. Mirrors the lookup pattern in
+    // routes/admin/customers.ts (v_admin_customer_list view + tiktok_history_snapshots).
+    const customerNameById = new Map<string, string>();
+    const customerProfileById = new Map<string, any>();
+    const customerSignalsById = new Map<string, any>();
+    const tiktokByCustomer = new Map<string, {
+      followers: number;
+      engagement_rate: number;
+      videos_last_7d: number;
+    }>();
+
+    if (allCustomerIds.length > 0) {
       const { data: customers } = await (supabase as any)
         .from('customer_profiles')
-        .select('id, business_name')
-        .in('id', customerIds);
+        .select('id, business_name, monthly_price, status, paused_until, expected_concepts_per_week, last_upload_at, tiktok_handle, account_manager_profile_id')
+        .in('id', allCustomerIds);
       for (const c of customers ?? []) {
         customerNameById.set(c.id as string, (c.business_name as string) ?? '');
+        customerProfileById.set(c.id as string, c);
+      }
+    }
+
+    if (activeCustomerIds.length > 0) {
+      // v_admin_customer_list already exposes planned_concepts_count,
+      // overdue_7d_concepts_count and last_published_at per customer — same
+      // source the /admin/customers route relies on. Fall back gracefully if
+      // the view isn't present so we never crash the team page.
+      const signalsResult = await (supabase as any)
+        .from('v_admin_customer_list')
+        .select('id, planned_concepts_count, overdue_7d_concepts_count, last_published_at, latest_planned_publish_date')
+        .in('id', activeCustomerIds);
+      if (!signalsResult.error) {
+        for (const row of signalsResult.data ?? []) {
+          customerSignalsById.set(row.id as string, row);
+        }
+      }
+
+      // Latest TikTok signals: pull recent snapshots for all customers in
+      // one query and bucket by customer in JS so we don't N+1.
+      const snapshotsResult = await (supabase as any)
+        .from('tiktok_history_snapshots')
+        .select('customer_profile_id, snapshot_date, followers, engagement_rate, videos_last_24h')
+        .in('customer_profile_id', activeCustomerIds)
+        .order('snapshot_date', { ascending: false })
+        .limit(activeCustomerIds.length * 14);
+      if (!snapshotsResult.error) {
+        const grouped = new Map<string, any[]>();
+        for (const row of snapshotsResult.data ?? []) {
+          const id = row.customer_profile_id as string;
+          const arr = grouped.get(id) ?? [];
+          arr.push(row);
+          grouped.set(id, arr);
+        }
+        for (const [id, snaps] of grouped) {
+          const latest = snaps[0];
+          const last7 = snaps.slice(0, 7);
+          tiktokByCustomer.set(id, {
+            followers: Number(latest?.followers ?? 0),
+            engagement_rate: Number(latest?.engagement_rate ?? 0),
+            videos_last_7d: last7.reduce(
+              (sum, s) => sum + Number(s.videos_last_24h ?? 0),
+              0,
+            ),
+          });
+        }
       }
     }
 
     const includeInactive = req.query['includeInactive'] === '1';
     const sort = (req.query['sort'] as string | undefined) ?? 'standard';
 
+    // All assignments (active *and* historical) per CM — needed for the
+    // history list, separate from the active-only map used for the cards.
+    const allAssignmentsByCm = new Map<string, Array<any>>();
+    for (const a of assignmentsResult.data ?? []) {
+      const cmId = (a as any).cm_id as string | null;
+      if (!cmId) continue;
+      const arr = allAssignmentsByCm.get(cmId) ?? [];
+      arr.push(a);
+      allAssignmentsByCm.set(cmId, arr);
+    }
+
     const members = (membersResult.data ?? [])
       .filter((m: any) => includeInactive || m['is_active'])
       .map((member: Record<string, any>) => {
         const memberId = member['id'] as string;
         const memberAssignments = activeAssignmentsByCm.get(memberId) ?? [];
-        const customerCount = memberAssignments.length;
-        const overloaded = customerCount >= 12;
 
         const absRow = activeAbsenceByCm.get(memberId) ?? upcomingAbsenceByCm.get(memberId) ?? null;
         const isActiveAbsence = !!activeAbsenceByCm.get(memberId);
         const isUpcomingAbsence = !isActiveAbsence && !!upcomingAbsenceByCm.get(memberId);
+
+        // While an absence is active *and* compensation is set to "covering_cm",
+        // the backup CM owns these customers for payout/coverage purposes.
+        const coveringBackupId =
+          isActiveAbsence && absRow?.compensation_mode === 'covering_cm' && absRow?.backup_cm_id
+            ? (absRow.backup_cm_id as string)
+            : null;
 
         const active_absence = absRow
           ? {
@@ -120,22 +202,96 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
             }
           : null;
 
+        // Build the customer table rows for this CM from the active assignments.
+        const customers = memberAssignments
+          .map((a: any) => {
+            const profile = customerProfileById.get(a.customer_id as string);
+            if (!profile) return null;
+            const signals = customerSignalsById.get(a.customer_id as string) ?? {};
+            const tiktok = tiktokByCustomer.get(a.customer_id as string) ?? {
+              followers: 0,
+              engagement_rate: 0,
+              videos_last_7d: 0,
+            };
+            const lastUpload = profile.last_upload_at ?? null;
+            const lastPublished = signals.last_published_at ?? null;
+            const last_publication_source: 'letrend' | 'tiktok' | null =
+              lastPublished && lastUpload && new Date(lastUpload).getTime() >= new Date(lastPublished).getTime()
+                ? 'tiktok'
+                : lastPublished
+                  ? 'letrend'
+                  : lastUpload
+                    ? 'tiktok'
+                    : null;
+            return {
+              id: String(profile.id),
+              business_name: String(profile.business_name ?? ''),
+              monthly_price: Number(profile.monthly_price ?? 0),
+              status: String(profile.status ?? 'active'),
+              paused_until: profile.paused_until ?? null,
+              followers: Number(tiktok.followers ?? 0),
+              videos_last_7d: Number(tiktok.videos_last_7d ?? 0),
+              engagement_rate: Number(tiktok.engagement_rate ?? 0),
+              last_upload_at: lastUpload,
+              last_published_at: lastPublished,
+              last_publication_source,
+              planned_concepts_count: Number(signals.planned_concepts_count ?? 0),
+              expected_concepts_per_week: Number(profile.expected_concepts_per_week ?? 0),
+              overdue_7d_concepts_count: Number(signals.overdue_7d_concepts_count ?? 0),
+              covered_by_absence: !!coveringBackupId,
+              payout_cm_id: coveringBackupId ?? memberId,
+            };
+          })
+          .filter(Boolean) as Array<any>;
+
+        const customerCount = customers.length;
+        const overloaded = customerCount >= 12;
+
+        // Recompute pulse counts from the real rows.
+        let n_paused = 0;
+        let n_under = 0;
+        let n_ok = 0;
+        let mrrSekTotal = 0;
+        for (const c of customers) {
+          mrrSekTotal += c.monthly_price ?? 0;
+          const isPaused =
+            c.status === 'paused' || (c.paused_until && c.paused_until > today);
+          if (isPaused) {
+            n_paused += 1;
+            continue;
+          }
+          const expected = c.expected_concepts_per_week ?? 0;
+          const planned = c.planned_concepts_count ?? 0;
+          if (c.overdue_7d_concepts_count > 0 || (expected > 0 && planned < expected)) {
+            n_under += 1;
+          } else {
+            n_ok += 1;
+          }
+        }
+
         const customerLoadLevel: 'ok' | 'warn' | 'overload' =
           customerCount >= 12 ? 'overload' : customerCount >= 8 ? 'warn' : 'ok';
 
-        const assignmentHistory = memberAssignments.map((a: any) => ({
-          id: String(a.id),
-          customer_id: String(a.customer_id),
-          customer_name: customerNameById.get(a.customer_id as string) ?? '',
-          starts_on: a.valid_from ?? undefined,
-          ends_on: a.valid_to ?? null,
-          valid_from: String(a.valid_from ?? ''),
-          valid_to: a.valid_to ?? null,
-          handover_note: a.handover_note ?? null,
-          scheduled_effective_date: null,
-          previous_cm_name: null,
-          next_cm_name: null,
-        }));
+        // History should only show *past* assignments — active rows are now
+        // surfaced in the customer table above.
+        const assignmentHistory = (allAssignmentsByCm.get(memberId) ?? [])
+          .filter((a: any) => {
+            const validTo = a.valid_to as string | null;
+            return !!validTo && validTo < today;
+          })
+          .map((a: any) => ({
+            id: String(a.id),
+            customer_id: String(a.customer_id),
+            customer_name: customerNameById.get(a.customer_id as string) ?? '',
+            starts_on: a.valid_from ?? undefined,
+            ends_on: a.valid_to ?? null,
+            valid_from: String(a.valid_from ?? ''),
+            valid_to: a.valid_to ?? null,
+            handover_note: a.handover_note ?? null,
+            scheduled_effective_date: null,
+            previous_cm_name: null,
+            next_cm_name: null,
+          }));
 
         return {
           id: memberId,
@@ -157,12 +313,12 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
             expectedConcepts7d: 0,
             interactionCount7d: 0,
             lastInteractionDays: 0,
-            counts: { n_under: 0, n_thin: 0, n_blocked: 0, n_ok: customerCount, n_paused: 0 },
+            counts: { n_under, n_thin: 0, n_blocked: 0, n_ok, n_paused },
           },
-          customers: [],
+          customers,
           assignmentHistory,
           customerCount,
-          mrr_ore: 0,
+          mrr_ore: Math.round(mrrSekTotal * 100),
           activityCount: 0,
           activeWorkflowSteps: 0,
           activityRatio: 0,
