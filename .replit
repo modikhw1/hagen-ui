@@ -34,3 +34,27 @@ externalPort = 3000
 [[ports]]
 localPort = 25280
 externalPort = 80
+
+[userenv]
+
+[userenv.shared]
+VITE_SUPABASE_URL = "https://fllzlpecwwabwgfbnxfu.supabase.co"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsbHpscGVjd3dhYndnZmJueGZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5NjcyMDYsImV4cCI6MjA4MzU0MzIwNn0.-jWFoXZlUQR0jc4n0fssz8H0bEMWuxfgwgIyjntnC1w"
+SUPABASE_URL = "https://fllzlpecwwabwgfbnxfu.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsbHpscGVjd3dhYndnZmJueGZ1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Nzk2NzIwNiwiZXhwIjoyMDgzNTQzMjA2fQ.xvlq_KEoeYAFWNgctfN-GRhuwFO9A2LB2Shoe-4Kms4"
+VITE_STRIPE_PUBLISHABLE_KEY = "pk_live_51SnhAeBiis9BBJ4LdGqnByHdfyaMyif2bjyZDiTG0oZqJEN1UFNDu9GIam1NniNCvnDU5wTAygjAbSfx9uhr0JZb00GruF4SX5"
+STRIPE_SECRET_KEY = "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"
+STRIPE_WEBHOOK_SECRET = "whsec_qKrWtYYC8mc9Nkd7WA7d2fSRsDtQEZ5i"
+STRIPE_LIVE_SECRET_KEY = "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"
+STRIPE_LIVE_WEBHOOK_SECRET = "whsec_qKrWtYYC8mc9Nkd7WA7d2fSRsDtQEZ5i"
+STRIPE_ENV = "live"
+STRIPE_TEST_PUBLISHABLE_KEY = "pk_test_51SnhAoPetwZcCbhPAniEmOEUQrs4b9JBKOThOGX7uBFsmF6QI9bG7QjnnFg47wg5a2Zmn3qK5b1opKl1rx7NsB3d00oLpCVQRe"
+STRIPE_TEST_SECRET_KEY = "sk_test_51SnhAoPetwZcCbhPw8naR2R0Ps4Zd1n7zlR39uEEBCN0jJqjb5rFziRwe9rLRoonb6OfYFxYeWJd9n1FfCOlFTs900yw6sekme"
+STRIPE_TEST_WEBHOOK_SECRET = "whsec_QnqCQ31C1B1F1IavecUesxe3vgRxKK5b"
+HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
+RESEND_API_KEY = "re_hiC34mfq_7m9FGirJogLoJ6kP3pJYpksX"
+RESEND_FROM_EMAIL = "LeTrend <hej@letrend.se>"
+RAPIDAPI_KEY = "c8dff8746bmsh609e25f37ead79cp133ffcjsn455616bba8d8"
+CRON_SECRET = "eb77640370f5a8ab552b64b0c94513cc3931a274a4b0f33343662e80645618c2"
+VITE_APP_URL = "http://localhost:3000"
+VITE_ENV = "test"
