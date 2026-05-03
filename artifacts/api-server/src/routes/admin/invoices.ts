@@ -127,7 +127,7 @@ function buildInvoiceDetail(
       created_at: String(op.created_at ?? ''),
     })),
     permissions: {
-      can_manage_adjustments: ['draft', 'open'].includes(status),
+      can_manage_adjustments: ['draft', 'open', 'past_due'].includes(status),
     },
     billing_context: {
       stripe_subscription_id: stripeSubId,
@@ -446,14 +446,10 @@ router.post('/:id/actions', requireAuth, ADMIN_ONLY, async (req, res) => {
     switch (action) {
       case 'mark_paid': {
         const amountDue = Number(inv.amount_due ?? 0);
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('invoices')
-          .update({
-            status: 'paid',
-            amount_paid: amountDue,
-            paid_at: new Date().toISOString(),
-          } as never)
-          .eq('stripe_invoice_id' as 'id', stripeInvoiceId);
+          .update({ status: 'paid', amount_paid: amountDue, paid_at: new Date().toISOString() })
+          .eq('stripe_invoice_id', stripeInvoiceId);
         if (error) {
           res.status(500).json({ error: error.message });
           return;
@@ -501,10 +497,10 @@ router.post('/:id/actions', requireAuth, ADMIN_ONLY, async (req, res) => {
                 stripeInv.status_transitions.paid_at * 1000,
               ).toISOString();
             }
-            await supabase
+            await (supabase as any)
               .from('invoices')
-              .update(updatePayload as never)
-              .eq('stripe_invoice_id' as 'id', stripeInvoiceId);
+              .update(updatePayload)
+              .eq('stripe_invoice_id', stripeInvoiceId);
             logger.info({ invoiceId: stripeInvoiceId }, 'invoice resynced from Stripe');
           } catch (stripeErr) {
             logger.warn(
@@ -534,14 +530,14 @@ router.post('/:id/actions', requireAuth, ADMIN_ONLY, async (req, res) => {
               paid.status_transitions?.paid_at != null
                 ? new Date(paid.status_transitions.paid_at * 1000).toISOString()
                 : new Date().toISOString();
-            await supabase
+            await (supabase as any)
               .from('invoices')
               .update({
                 status: 'paid',
                 amount_paid: paid.amount_paid ?? Number(inv.amount_due ?? 0),
                 paid_at: paidAt,
-              } as never)
-              .eq('stripe_invoice_id' as 'id', stripeInvoiceId);
+              })
+              .eq('stripe_invoice_id', stripeInvoiceId);
           } catch (stripeErr) {
             const msg = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
             logger.warn({ err: msg, invoiceId: stripeInvoiceId }, 'stripe pay_now failed; returning graceful response');
@@ -603,10 +599,10 @@ router.patch('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
         }
       }
 
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await (supabase as any)
         .from('invoices')
-        .update({ status: newStatus } as never)
-        .eq('stripe_invoice_id' as 'id', stripeInvoiceId);
+        .update({ status: newStatus })
+        .eq('stripe_invoice_id', stripeInvoiceId);
 
       if (updateErr) {
         res.status(500).json({ error: updateErr.message });
@@ -697,7 +693,7 @@ router.patch('/:id/lines', requireAuth, ADMIN_ONLY, async (req, res) => {
         return;
       }
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('invoice_line_items')
         .insert({
           stripe_line_item_id: `manual_${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -705,7 +701,7 @@ router.patch('/:id/lines', requireAuth, ADMIN_ONLY, async (req, res) => {
           description,
           amount: amountOre,
           quantity,
-        } as never);
+        });
 
       if (error) {
         logger.warn({ err: error.message }, 'invoice_line_items insert failed');
