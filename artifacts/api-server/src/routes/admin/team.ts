@@ -8,109 +8,201 @@ const ADMIN_ONLY = requireRole(['admin', 'content_manager']);
 
 // GET /api/admin/team
 router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
+  const t0 = Date.now();
   try {
     const supabase = createSupabaseAdmin();
 
     const [membersResult, assignmentsResult, absencesResult] = await Promise.all([
       (supabase as any)
         .from('team_members')
-        .select('id, name, email, role, is_active, commission_rate, avatar_url, region, start_date, color')
+        .select('id, profile_id, name, email, phone, role, is_active, commission_rate, avatar_url, region, city, bio, start_date, color, created_at')
         .order('name'),
       supabase
         .from('cm_assignments')
-        .select('customer_id, cm_id')
-        .is('valid_to', null),
+        .select('id, customer_id, cm_id, valid_from, valid_to, handover_note, scheduled_change'),
       supabase
         .from('cm_absences')
-        .select('cm_id, starts_on, ends_on, absence_type')
+        .select('id, cm_id, backup_cm_id, absence_type, compensation_mode, starts_on, ends_on, note')
         .order('starts_on', { ascending: false })
-        .limit(100),
+        .limit(500),
     ]);
 
     if (membersResult.error) {
       const msg = String(membersResult.error?.message ?? '').toLowerCase();
       if (msg.includes('does not exist')) {
-        res.json({ members: [] });
+        res.json({ members: [], asOfDate: new Date().toISOString().slice(0, 10), schemaWarnings: ['Tabellen team_members saknas'], buildDurationMs: Date.now() - t0 });
         return;
       }
       res.status(500).json({ error: membersResult.error.message });
       return;
     }
 
-    const customerCountByCm = new Map<string, number>();
-    for (const assignment of assignmentsResult.data ?? []) {
-      const cmId = assignment.cm_id as string;
-      if (!cmId) continue;
-      customerCountByCm.set(cmId, (customerCountByCm.get(cmId) ?? 0) + 1);
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Build CM name lookup for absences and assignments
+    const memberById = new Map<string, any>();
+    for (const m of membersResult.data ?? []) {
+      memberById.set(m['id'] as string, m);
     }
 
-    const today = new Date().toISOString().slice(0, 10);
-    const activeAbsenceByCm = new Map<string, Record<string, any>>();
+    // Active assignments per CM
+    const activeAssignmentsByCm = new Map<string, Array<any>>();
+    for (const a of assignmentsResult.data ?? []) {
+      const validTo = (a as any).valid_to as string | null;
+      if (validTo && validTo < today) continue;
+      const cmId = (a as any).cm_id as string | null;
+      if (!cmId) continue;
+      const arr = activeAssignmentsByCm.get(cmId) ?? [];
+      arr.push(a);
+      activeAssignmentsByCm.set(cmId, arr);
+    }
+
+    // Pick first active absence per CM
+    const activeAbsenceByCm = new Map<string, any>();
+    const upcomingAbsenceByCm = new Map<string, any>();
     for (const absence of absencesResult.data ?? []) {
       const cmId = (absence as any)['cm_id'] as string;
-      if (cmId && (absence as any)['starts_on'] <= today && (absence as any)['ends_on'] >= today) {
-        if (!activeAbsenceByCm.has(cmId)) {
-          activeAbsenceByCm.set(cmId, absence as Record<string, any>);
-        }
+      if (!cmId) continue;
+      const start = (absence as any)['starts_on'] as string;
+      const end = (absence as any)['ends_on'] as string;
+      if (start <= today && end >= today) {
+        if (!activeAbsenceByCm.has(cmId)) activeAbsenceByCm.set(cmId, absence);
+      } else if (start > today) {
+        if (!upcomingAbsenceByCm.has(cmId)) upcomingAbsenceByCm.set(cmId, absence);
+      }
+    }
+
+    // Lookup customer business names for assignment history
+    const customerIds = Array.from(new Set(
+      (assignmentsResult.data ?? []).map((a: any) => a.customer_id).filter(Boolean),
+    )) as string[];
+    let customerNameById = new Map<string, string>();
+    if (customerIds.length > 0) {
+      const { data: customers } = await (supabase as any)
+        .from('customer_profiles')
+        .select('id, business_name')
+        .in('id', customerIds);
+      for (const c of customers ?? []) {
+        customerNameById.set(c.id as string, (c.business_name as string) ?? '');
       }
     }
 
     const includeInactive = req.query['includeInactive'] === '1';
     const sort = (req.query['sort'] as string | undefined) ?? 'standard';
 
-    let members = (membersResult.data ?? [])
+    const members = (membersResult.data ?? [])
       .filter((m: any) => includeInactive || m['is_active'])
-      .map((member: Record<string, unknown>) => {
-        const hasActiveAbsence = activeAbsenceByCm.has(member['id'] as string);
-        const absence = activeAbsenceByCm.get(member['id'] as string);
-        const customerCount = customerCountByCm.get(member['id'] as string) ?? 0;
+      .map((member: Record<string, any>) => {
+        const memberId = member['id'] as string;
+        const memberAssignments = activeAssignmentsByCm.get(memberId) ?? [];
+        const customerCount = memberAssignments.length;
         const overloaded = customerCount >= 12;
-        const derived_status = hasActiveAbsence ? 'absent' : overloaded ? 'overloaded' : 'standard';
+
+        const absRow = activeAbsenceByCm.get(memberId) ?? upcomingAbsenceByCm.get(memberId) ?? null;
+        const isActiveAbsence = !!activeAbsenceByCm.get(memberId);
+        const isUpcomingAbsence = !isActiveAbsence && !!upcomingAbsenceByCm.get(memberId);
+
+        const active_absence = absRow
+          ? {
+              id: String(absRow.id),
+              cm_id: String(absRow.cm_id),
+              customer_profile_id: null,
+              backup_cm_id: absRow.backup_cm_id ?? null,
+              backup_cm_name: absRow.backup_cm_id ? (memberById.get(absRow.backup_cm_id as string)?.name ?? null) : null,
+              cm_name: member['name'] ?? null,
+              absence_type: String(absRow.absence_type ?? 'other'),
+              compensation_mode: (absRow.compensation_mode === 'covering_cm' ? 'covering_cm' : 'primary_cm') as 'covering_cm' | 'primary_cm',
+              starts_on: String(absRow.starts_on),
+              ends_on: String(absRow.ends_on),
+              note: absRow.note ?? null,
+              is_active: isActiveAbsence,
+              is_upcoming: isUpcomingAbsence,
+            }
+          : null;
+
+        const customerLoadLevel: 'ok' | 'warn' | 'overload' =
+          customerCount >= 12 ? 'overload' : customerCount >= 8 ? 'warn' : 'ok';
+
+        const assignmentHistory = memberAssignments.map((a: any) => ({
+          id: String(a.id),
+          customer_id: String(a.customer_id),
+          customer_name: customerNameById.get(a.customer_id as string) ?? '',
+          starts_on: a.valid_from ?? undefined,
+          ends_on: a.valid_to ?? null,
+          valid_from: String(a.valid_from ?? ''),
+          valid_to: a.valid_to ?? null,
+          handover_note: a.handover_note ?? null,
+          scheduled_effective_date: null,
+          previous_cm_name: null,
+          next_cm_name: null,
+        }));
 
         return {
-          ...member,
-          customer_count: customerCount,
-          customerCount,
-          has_active_absence: hasActiveAbsence,
-          active_absence: hasActiveAbsence && absence
-            ? { absence_type: absence['absence_type'], ends_on: absence['ends_on'], backup_cm_name: null }
-            : null,
-          status: derived_status,
-          derived_status,
-          overloaded,
-          activityDeviation: 0,
-          overload_score: Math.min(1, customerCount / 12),
-          cm_avatar_url: member['avatar_url'] ?? null,
-          last_activity_at: null,
+          id: memberId,
+          name: String(member['name'] ?? ''),
+          email: String(member['email'] ?? ''),
+          phone: member['phone'] ?? null,
+          city: member['city'] ?? member['region'] ?? null,
+          bio: member['bio'] ?? null,
+          avatar_url: member['avatar_url'] ?? null,
+          role: String(member['role'] ?? 'content_manager'),
+          is_active: !!member['is_active'],
+          commission_rate: Number(member['commission_rate'] ?? 0),
+          active_absence,
+          pulse: {
+            status: isActiveAbsence ? 'absent' : overloaded ? 'overloaded' : 'standard',
+            fillPct: Math.min(1, customerCount / 12),
+            barLabel: `${customerCount} kunder`,
+            plannedConceptsTotal: 0,
+            expectedConcepts7d: 0,
+            interactionCount7d: 0,
+            lastInteractionDays: 0,
+            counts: { n_under: 0, n_thin: 0, n_blocked: 0, n_ok: customerCount, n_paused: 0 },
+          },
           customers: [],
+          assignmentHistory,
+          customerCount,
+          mrr_ore: 0,
+          activityCount: 0,
+          activeWorkflowSteps: 0,
+          activityRatio: 0,
+          activitySeries: [],
+          activityDots: [],
+          activitySummary: { activeDays: 0, total: 0, median: 0, longestRest: 0 },
+          activityBaseline: 0,
+          activityAverage7d: 0,
+          activityDeviation: 0,
+          customerLoadLevel,
+          customerLoadClass: customerLoadLevel,
+          customerLoadLabel: customerLoadLevel === 'overload' ? 'Överbelastad' : customerLoadLevel === 'warn' ? 'Hög belastning' : 'Normal belastning',
+          overloaded,
+          isCovering: false,
         };
       });
 
     // Sort
+    let sorted = members;
     if (sort === 'name') {
-      members = members.sort((a: any, b: any) => a['name'].localeCompare(b['name']));
+      sorted = [...members].sort((a, b) => a.name.localeCompare(b.name));
     } else if (sort === 'standard') {
-      members = members.sort((a: any, b: any) =>
-        (b['customer_count'] ?? 0) - (a['customer_count'] ?? 0) ||
-        a['name'].localeCompare(b['name']),
+      sorted = [...members].sort((a, b) =>
+        (b.customerCount ?? 0) - (a.customerCount ?? 0) || a.name.localeCompare(b.name),
       );
     } else {
-      const rank: Record<string, number> = { attention: 0, absent: 1, overloaded: 2, standard: 3 };
-      members = members.sort((a: any, b: any) => {
-        const ra = rank[a['derived_status']] ?? 3;
-        const rb = rank[b['derived_status']] ?? 3;
-        return ra !== rb ? ra - rb : a['name'].localeCompare(b['name']);
+      const rank: Record<string, number> = { absent: 0, overloaded: 1, standard: 2 };
+      sorted = [...members].sort((a, b) => {
+        const ra = rank[a.pulse.status] ?? 3;
+        const rb = rank[b.pulse.status] ?? 3;
+        return ra !== rb ? ra - rb : a.name.localeCompare(b.name);
       });
     }
 
-    const summary = {
-      total: members.length,
-      active: members.filter((m: any) => m['is_active']).length,
-      absent: members.filter((m: any) => m['derived_status'] === 'absent').length,
-      overloaded: members.filter((m: any) => m['derived_status'] === 'overloaded').length,
-    };
-
-    res.json({ members, summary });
+    res.json({
+      members: sorted,
+      asOfDate: today,
+      schemaWarnings: [],
+      buildDurationMs: Date.now() - t0,
+    });
   } catch (err) {
     logger.error(err, 'team list error');
     res.status(500).json({ error: 'Internt serverfel' });
