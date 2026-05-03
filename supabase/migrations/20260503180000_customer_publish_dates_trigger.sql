@@ -92,4 +92,18 @@ WHERE cp.id = agg.customer_profile_id
   AND (cp.last_published_at IS DISTINCT FROM agg.last_published_at
     OR cp.latest_planned_publish_date IS DISTINCT FROM agg.latest_planned_publish_date);
 
+-- Second pass: clear stale values for customers that no longer have any
+-- concepts (or whose concepts all have NULL dates). Without this, a row
+-- that had values backfilled but later lost all concepts would keep
+-- showing a "last upload" date in the admin list forever.
+UPDATE public.customer_profiles cp
+SET last_published_at           = NULL,
+    latest_planned_publish_date = NULL
+WHERE (cp.last_published_at IS NOT NULL OR cp.latest_planned_publish_date IS NOT NULL)
+  AND NOT EXISTS (
+    SELECT 1 FROM public.customer_concepts cc
+    WHERE cc.customer_profile_id = cp.id
+      AND (cc.published_at IS NOT NULL OR cc.planned_publish_at IS NOT NULL)
+  );
+
 COMMIT;
