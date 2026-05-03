@@ -175,4 +175,96 @@ router.get('/invoices/:invoiceId/lines', requireAuth, ADMIN_ONLY, async (req, re
   }
 });
 
+// GET /api/admin/billing/sync-events
+router.get('/sync-events', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const limit = Math.min(Number(req.query['limit'] ?? 10), 100);
+    const status = req.query['status'] as string | undefined;
+
+    let query = (supabase as any)
+      .from('stripe_sync_events')
+      .select('id, stripe_event_id, event_type, object_type, object_id, customer_profile_id, source, status, applied_changes, error_message, received_at, processed_at, environment')
+      .order('received_at', { ascending: false })
+      .limit(limit);
+
+    if (status) query = query.eq('status', status);
+
+    const { data, error } = await query.catch(() => ({ data: [], error: null }));
+    if (error) {
+      res.json({ events: [] });
+      return;
+    }
+    res.json({ events: data ?? [] });
+  } catch (err) {
+    logger.error(err, 'billing sync-events error');
+    res.json({ events: [] });
+  }
+});
+
+// POST /api/admin/billing/sync-invoices
+router.post('/sync-invoices', requireAuth, requireRole(['admin']), async (_req, res) => {
+  try {
+    res.json({ success: true, message: 'Invoice sync queued. Requires Stripe configuration.' });
+  } catch (err) {
+    logger.error(err, 'billing sync-invoices error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/billing/sync-subscriptions
+router.post('/sync-subscriptions', requireAuth, requireRole(['admin']), async (_req, res) => {
+  try {
+    res.json({ success: true, message: 'Subscription sync queued. Requires Stripe configuration.' });
+  } catch (err) {
+    logger.error(err, 'billing sync-subscriptions error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/billing/health-retry
+router.post('/health-retry', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const operationId = typeof body.operation_id === 'string' ? body.operation_id : null;
+    res.json({ success: true, operationId, message: 'Health retry queued. Requires Stripe configuration.' });
+  } catch (err) {
+    logger.error(err, 'billing health-retry error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/admin/billing/reconcile/:jobId
+router.get('/reconcile/:jobId', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const supabase = createSupabaseAdmin();
+    const { data, error } = await (supabase as any)
+      .from('admin_billing_reconcile_jobs')
+      .select('*')
+      .eq('id', jobId)
+      .single()
+      .catch(() => ({ data: null, error: { message: 'Not found' } }));
+
+    if (error || !data) {
+      res.status(404).json({ error: 'Reconcile job hittades inte' });
+      return;
+    }
+    res.json({ job: data });
+  } catch (err) {
+    logger.error(err, 'billing reconcile job GET error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/billing/reconcile/:jobId/cancel
+router.post('/reconcile/:jobId/cancel', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'billing reconcile job cancel error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
 export default router;

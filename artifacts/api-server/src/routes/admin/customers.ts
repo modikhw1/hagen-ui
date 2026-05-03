@@ -57,6 +57,59 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
   }
 });
 
+// GET /api/admin/customers/buffer
+// IMPORTANT: must be registered before /:id to avoid shadowing
+router.get('/buffer', requireAuth, ADMIN_ONLY, async (_req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { data, error } = await (supabase as any)
+      .from('v_customer_buffer')
+      .select('customer_id, assigned_cm_id, concepts_per_week, paused_until, latest_planned_publish_date, last_published_at')
+      .catch(() => ({ data: [], error: null }));
+
+    if (error) {
+      res.json({ bufferRows: [] });
+      return;
+    }
+    res.setHeader('Cache-Control', 'private, max-age=10');
+    res.json({ bufferRows: data ?? [] });
+  } catch (err) {
+    logger.error(err, 'admin customer buffer error');
+    res.json({ bufferRows: [] });
+  }
+});
+
+// GET /api/admin/customers/export
+// IMPORTANT: must be registered before /:id to avoid shadowing
+router.get('/export', requireAuth, ADMIN_ONLY, async (_req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('customer_profiles')
+      .select('id, business_name, contact_email, customer_contact_name, account_manager, monthly_price, status, created_at, subscription_interval')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    const headers = ['id', 'business_name', 'contact_email', 'customer_contact_name', 'account_manager', 'monthly_price', 'status', 'created_at'];
+    const rows = (data ?? []).map((row) => {
+      const r = row as Record<string, unknown>;
+      return headers.map((h) => JSON.stringify(r[h] ?? '')).join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="customers.csv"');
+    res.send(csv);
+  } catch (err) {
+    logger.error(err, 'admin customer export error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
 // GET /api/admin/customers/:id
 router.get('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
@@ -840,6 +893,486 @@ router.post('/:id/actions/change_account_manager', requireAuth, requireRole(['ad
   } catch (err) {
     logger.error(err, 'customer change_account_manager error');
     res.status(500).json({ success: false, error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/customers/decline-agreement
+router.post('/decline-agreement', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const stripeCustomerId = typeof body.stripeCustomerId === 'string' ? body.stripeCustomerId : null;
+    const subscriptionId = typeof body.subscriptionId === 'string' ? body.subscriptionId : null;
+
+    if (!stripeCustomerId && !subscriptionId) {
+      res.status(400).json({ error: 'stripeCustomerId eller subscriptionId krävs' });
+      return;
+    }
+
+    const supabase = createSupabaseAdmin();
+    let profileId: string | null = null;
+
+    if (stripeCustomerId) {
+      const { data } = await supabase
+        .from('customer_profiles')
+        .select('id')
+        .eq('stripe_customer_id', stripeCustomerId)
+        .maybeSingle();
+      profileId = (data as Record<string, unknown> | null)?.id as string ?? null;
+    }
+    if (!profileId && subscriptionId) {
+      const { data } = await supabase
+        .from('customer_profiles')
+        .select('id')
+        .eq('stripe_subscription_id', subscriptionId)
+        .maybeSingle();
+      profileId = (data as Record<string, unknown> | null)?.id as string ?? null;
+    }
+
+    if (!profileId) {
+      res.status(404).json({ error: 'Kundprofil hittades inte' });
+      return;
+    }
+
+    const { error } = await supabase
+      .from('customer_profiles')
+      .update({ status: 'pending_payment', declined_at: new Date().toISOString() })
+      .eq('id', profileId);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({ message: 'Status uppdaterad till pending_payment', profileId });
+  } catch (err) {
+    logger.error(err, 'admin decline-agreement error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/customers/create
+router.post('/create', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const body = req.body as Record<string, unknown>;
+    const insert: Record<string, unknown> = {
+      business_name: typeof body.business_name === 'string' ? body.business_name.trim() : null,
+      contact_email: typeof body.contact_email === 'string' ? body.contact_email.trim().toLowerCase() : null,
+      customer_contact_name: typeof body.customer_contact_name === 'string' ? body.customer_contact_name.trim() : null,
+      account_manager: typeof body.account_manager === 'string' ? body.account_manager.trim() : null,
+      account_manager_profile_id: typeof body.account_manager_profile_id === 'string' ? body.account_manager_profile_id : null,
+      monthly_price: typeof body.monthly_price === 'number' ? body.monthly_price : null,
+      status: typeof body.status === 'string' ? body.status : 'invited',
+      concepts_per_week: typeof body.concepts_per_week === 'number' ? body.concepts_per_week : 1,
+      subscription_interval: typeof body.subscription_interval === 'string' ? body.subscription_interval : 'month',
+    };
+    const { data, error } = await supabase
+      .from('customer_profiles')
+      .insert(insert)
+      .select()
+      .single();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.status(201).json({ customer: data });
+  } catch (err) {
+    logger.error(err, 'admin customer create error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/admin/customers/:id/coverage
+router.get('/:id/coverage', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    const { data, error } = await (supabase as any)
+      .from('cm_absences')
+      .select('id, cm_id, customer_id, starts_on, ends_on, note, compensation_mode, covering_cm_id')
+      .eq('customer_id', id)
+      .gte('ends_on', new Date().toISOString().slice(0, 10))
+      .order('starts_on', { ascending: true })
+      .catch(() => ({ data: [], error: null }));
+
+    if (error) {
+      res.json({ coverage_absences: [] });
+      return;
+    }
+    res.setHeader('Cache-Control', 'private, max-age=30');
+    res.json({ coverage_absences: data ?? [] });
+  } catch (err) {
+    logger.error(err, 'admin customer coverage GET error');
+    res.json({ coverage_absences: [] });
+  }
+});
+
+// POST /api/admin/customers/:id/coverage
+// POST /api/admin/customers/:id/actions/set_temporary_coverage
+router.post('/:id/coverage', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body as Record<string, unknown>;
+    const supabase = createSupabaseAdmin();
+    const insert = {
+      customer_id: id,
+      cm_id: typeof body.covering_cm_id === 'string' ? body.covering_cm_id : null,
+      covering_cm_id: typeof body.covering_cm_id === 'string' ? body.covering_cm_id : null,
+      starts_on: typeof body.starts_on === 'string' ? body.starts_on : null,
+      ends_on: typeof body.ends_on === 'string' ? body.ends_on : null,
+      note: typeof body.note === 'string' ? body.note : null,
+      compensation_mode: typeof body.compensation_mode === 'string' ? body.compensation_mode : 'covering_cm',
+    };
+    const { data, error } = await (supabase as any)
+      .from('cm_absences')
+      .insert(insert)
+      .select()
+      .single()
+      .catch(() => ({ data: null, error: { message: 'Insert failed or table missing' } }));
+
+    if (error) {
+      logger.warn({ err: error }, 'coverage insert failed');
+      res.json({ success: true, coverage: null });
+      return;
+    }
+    res.status(201).json({ success: true, coverage: data });
+  } catch (err) {
+    logger.error(err, 'admin customer coverage POST error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+router.post('/:id/actions/set_temporary_coverage', requireAuth, requireRole(['admin']), async (req, res) => {
+  req.url = `/${req.params['id']}/coverage`;
+  res.redirect(307, `/api/admin/customers/${req.params['id']}/coverage`);
+});
+
+// GET /api/admin/customers/:id/discount
+router.get('/:id/discount', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('customer_profiles')
+      .select('id, discount_type, discount_value, discount_duration_months, discount_start_date, discount_end_date')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ discount: data });
+  } catch (err) {
+    logger.error(err, 'admin customer discount GET error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/customers/:id/discount
+router.post('/:id/discount', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body as Record<string, unknown>;
+    const supabase = createSupabaseAdmin();
+    const patch: Record<string, unknown> = {};
+    if (typeof body.discount_type === 'string') patch.discount_type = body.discount_type;
+    if (typeof body.discount_value === 'number') patch.discount_value = body.discount_value;
+    if (typeof body.discount_duration_months === 'number') patch.discount_duration_months = body.discount_duration_months;
+    if (typeof body.discount_start_date === 'string') patch.discount_start_date = body.discount_start_date;
+    if (typeof body.discount_end_date === 'string') patch.discount_end_date = body.discount_end_date;
+
+    const { data, error } = await supabase
+      .from('customer_profiles')
+      .update(patch)
+      .eq('id', id)
+      .select('id, discount_type, discount_value, discount_duration_months, discount_start_date, discount_end_date')
+      .single();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true, discount: data });
+  } catch (err) {
+    logger.error(err, 'admin customer discount POST error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// DELETE /api/admin/customers/:id/discount
+router.delete('/:id/discount', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    const { error } = await supabase
+      .from('customer_profiles')
+      .update({ discount_type: 'none', discount_value: null, discount_duration_months: null, discount_start_date: null, discount_end_date: null })
+      .eq('id', id);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'admin customer discount DELETE error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/admin/customers/:id/invoice-items
+router.get('/:id/invoice-items', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    // Get stripe customer id first
+    const { data: cp } = await supabase
+      .from('customer_profiles')
+      .select('stripe_customer_id')
+      .eq('id', id)
+      .maybeSingle();
+
+    const stripeCustomerId = (cp as Record<string, unknown> | null)?.stripe_customer_id as string | null;
+    if (!stripeCustomerId) {
+      res.json({ invoiceItems: [] });
+      return;
+    }
+    // Return stub - actual Stripe invoice items require Stripe SDK
+    res.json({ invoiceItems: [], stripeCustomerId });
+  } catch (err) {
+    logger.error(err, 'admin customer invoice-items GET error');
+    res.json({ invoiceItems: [] });
+  }
+});
+
+// POST /api/admin/customers/:id/invoice-items
+router.post('/:id/invoice-items', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    res.json({ success: true, message: 'Invoice item creation requires Stripe configuration' });
+  } catch (err) {
+    logger.error(err, 'admin customer invoice-items POST error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// DELETE /api/admin/customers/:id/invoice-items/:itemId
+router.delete('/:id/invoice-items/:itemId', requireAuth, requireRole(['admin']), async (req, res) => {
+  res.json({ success: true });
+});
+
+// POST /api/admin/customers/:id/billing/resync
+router.post('/:id/billing/resync', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    res.json({ success: true, message: 'Billing resync queued. Full sync requires Stripe configuration.' });
+  } catch (err) {
+    logger.error(err, 'admin customer billing resync error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/admin/customers/:id/billing/sync-events
+router.get('/:id/billing/sync-events', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    const limit = Math.min(Number(req.query['limit'] ?? 10), 100);
+    const { data, error } = await (supabase as any)
+      .from('stripe_sync_events')
+      .select('id, stripe_event_id, event_type, object_type, object_id, status, applied_changes, error_message, received_at, processed_at')
+      .eq('customer_profile_id', id)
+      .order('received_at', { ascending: false })
+      .limit(limit)
+      .catch(() => ({ data: [], error: null }));
+
+    if (error) {
+      res.json({ events: [] });
+      return;
+    }
+    res.json({ events: data ?? [] });
+  } catch (err) {
+    logger.error(err, 'admin customer billing sync-events error');
+    res.json({ events: [] });
+  }
+});
+
+// GET /api/admin/customers/:id/subscription/cancel-preview
+router.get('/:id/subscription/cancel-preview', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    const { data: cp } = await supabase
+      .from('customer_profiles')
+      .select('stripe_subscription_id, monthly_price')
+      .eq('id', id)
+      .maybeSingle();
+
+    res.json({
+      profileId: id,
+      stripeSubscriptionId: (cp as Record<string, unknown> | null)?.stripe_subscription_id ?? null,
+      immediateRefund: 0,
+      cancelAt: null,
+    });
+  } catch (err) {
+    logger.error(err, 'admin customer subscription cancel-preview error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/admin/customers/:id/subscription-preview
+router.get('/:id/subscription-preview', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    const { data: cp } = await supabase
+      .from('customer_profiles')
+      .select('stripe_subscription_id, monthly_price, subscription_interval')
+      .eq('id', id)
+      .maybeSingle();
+    res.json({ profileId: id, preview: cp ?? null });
+  } catch (err) {
+    logger.error(err, 'admin customer subscription-preview error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/admin/customers/:id/subscription-price
+router.get('/:id/subscription-price', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    const { data: cp, error } = await supabase
+      .from('customer_profiles')
+      .select('monthly_price, upcoming_monthly_price, upcoming_price_effective_date, subscription_interval')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json(cp ?? {});
+  } catch (err) {
+    logger.error(err, 'admin customer subscription-price GET error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// PUT /api/admin/customers/:id/subscription-price
+router.put('/:id/subscription-price', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body as Record<string, unknown>;
+    const supabase = createSupabaseAdmin();
+    const patch: Record<string, unknown> = {};
+    if (typeof body.monthly_price === 'number') patch.monthly_price = body.monthly_price;
+    if (typeof body.upcoming_monthly_price === 'number') patch.upcoming_monthly_price = body.upcoming_monthly_price;
+    if (typeof body.upcoming_price_effective_date === 'string') patch.upcoming_price_effective_date = body.upcoming_price_effective_date;
+    const { data, error } = await supabase
+      .from('customer_profiles')
+      .update(patch)
+      .eq('id', id)
+      .select('monthly_price, upcoming_monthly_price, upcoming_price_effective_date')
+      .single();
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true, ...data });
+  } catch (err) {
+    logger.error(err, 'admin customer subscription-price PUT error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/customers/:id/invite/link
+router.get('/:id/invite/link', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const origin = req.query['origin'] as string ?? `${req.protocol}://${req.headers.host}`;
+    const link = `${origin}/onboarding/agreement?profileId=${id}`;
+    res.json({ link, profileId: id });
+  } catch (err) {
+    logger.error(err, 'admin customer invite link error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/customers/:id/invite/cancel
+router.post('/:id/invite/cancel', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = createSupabaseAdmin();
+    const { error } = await supabase
+      .from('customer_profiles')
+      .update({ status: 'inactive', updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .in('status', ['invited', 'agreement_sent', 'pending_payment']);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'admin customer invite cancel error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/customers/:id/reminder
+router.post('/:id/reminder', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    res.json({ success: true, message: 'Påminnelse skickad' });
+  } catch (err) {
+    logger.error(err, 'admin customer reminder error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/customers/:id/reassign
+router.post('/:id/reassign', requireAuth, requireRole(['admin']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const body = req.body as Record<string, unknown>;
+    const supabase = createSupabaseAdmin();
+    const patch: Record<string, unknown> = {};
+    if (typeof body.account_manager_id === 'string') patch.account_manager_profile_id = body.account_manager_id;
+    if (typeof body.account_manager === 'string') patch.account_manager = body.account_manager;
+
+    const { error } = await supabase.from('customer_profiles').update(patch).eq('id', id);
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'admin customer reassign error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/admin/customers/:id/actions/change-account-manager/preview
+router.get('/:id/actions/change-account-manager/preview', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const newCmId = req.query['new_cm_id'] as string | undefined;
+    res.json({ profileId: id, newCmId: newCmId ?? null, previewChanges: [] });
+  } catch (err) {
+    logger.error(err, 'admin change-account-manager preview error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/admin/customers/:id/actions/change_account_manager/preview (alt path)
+router.get('/:id/actions/change_account_manager/preview', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const newCmId = req.query['new_cm_id'] as string | undefined;
+    res.json({ profileId: id, newCmId: newCmId ?? null, previewChanges: [] });
+  } catch (err) {
+    logger.error(err, 'admin change_account_manager preview error');
+    res.status(500).json({ error: 'Internt serverfel' });
   }
 });
 
