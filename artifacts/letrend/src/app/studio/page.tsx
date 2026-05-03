@@ -109,14 +109,14 @@ export default function StudioDashboard() {
               totalSent: 0,
             };
           }
-          const stats = customer.concept_stats;
-          if (stats.draft > 0) {
+          const stats = customer.concept_stats ?? { draft: 0, sent: 0, produced: 0 };
+          if ((stats.draft ?? 0) > 0) {
             map[cm].draftCustomers += 1;
-            map[cm].totalDrafts += stats.draft;
+            map[cm].totalDrafts += stats.draft ?? 0;
           }
-          if (stats.sent > 0) {
+          if ((stats.sent ?? 0) > 0) {
             map[cm].sentCustomers += 1;
-            map[cm].totalSent += stats.sent;
+            map[cm].totalSent += stats.sent ?? 0;
           }
         }
         return Object.values(map).sort(

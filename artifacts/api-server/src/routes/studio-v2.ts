@@ -91,10 +91,21 @@ router.get('/customers', requireAuth, CM_ONLY, async (req, res) => {
 ,
     ]);
 
-    const conceptCountMap = new Map<string, number>();
+    const conceptStatsMap = new Map<string, { draft: number; sent: number; produced: number }>();
     for (const c of (conceptsResult.data ?? [])) {
       const cid = c.customer_profile_id as string;
-      conceptCountMap.set(cid, (conceptCountMap.get(cid) ?? 0) + 1);
+      if (!conceptStatsMap.has(cid)) {
+        conceptStatsMap.set(cid, { draft: 0, sent: 0, produced: 0 });
+      }
+      const stats = conceptStatsMap.get(cid)!;
+      const status = c.status as string;
+      if (status === 'draft' || status === 'assigned') {
+        stats.draft += 1;
+      } else if (status === 'sent') {
+        stats.sent += 1;
+      } else if (status === 'produced') {
+        stats.produced += 1;
+      }
     }
 
     const lastEmailMap = new Map<string, string>();
@@ -105,7 +116,7 @@ router.get('/customers', requireAuth, CM_ONLY, async (req, res) => {
 
     const customers = (profiles ?? []).map((p) => ({
       ...p,
-      concept_count: conceptCountMap.get(p.id) ?? 0,
+      concept_stats: conceptStatsMap.get(p.id) ?? { draft: 0, sent: 0, produced: 0 },
       last_email_sent_at: lastEmailMap.get(p.id) ?? null,
     }));
 
@@ -1143,6 +1154,84 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
 // ─────────────────────────────────────────────────────────────────────────────
 // Concepts (library-level)
 // ─────────────────────────────────────────────────────────────────────────────
+
+// PATCH /api/studio-v2/library-concepts/:conceptId
+// Patches the overrides JSONB on the concepts library table.
+// Accepts either a DB UUID or the backend clip ID (backend_data->>'id').
+router.patch('/library-concepts/:conceptId', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const { conceptId } = req.params;
+    const supabase = createSupabaseAdmin();
+    const body = req.body as Record<string, unknown>;
+
+    // Try to find by DB UUID first, then fall back to backend clip id.
+    let row: { id: string; overrides: unknown } | null = null;
+
+    const byUuid = await supabase
+      .from('concepts')
+      .select('id, overrides')
+      .eq('id', conceptId)
+      .maybeSingle();
+
+    if (byUuid.error && byUuid.error.code !== 'PGRST116') {
+      // PGRST116 = no rows found (not an error), anything else is a DB problem
+      res.status(500).json({ error: byUuid.error.message });
+      return;
+    }
+
+    if (byUuid.data) {
+      row = byUuid.data as { id: string; overrides: unknown };
+    } else {
+      // conceptId is a clip JSON id stored inside backend_data->>'id'
+      const byClipId = await (supabase as any)
+        .from('concepts')
+        .select('id, overrides')
+        .filter('backend_data->>id', 'eq', conceptId)
+        .maybeSingle();
+      if (byClipId.error && byClipId.error.code !== 'PGRST116') {
+        res.status(500).json({ error: byClipId.error.message });
+        return;
+      }
+      if (byClipId.data) {
+        row = byClipId.data as { id: string; overrides: unknown };
+      }
+    }
+
+    if (!row) {
+      res.status(404).json({ error: 'Konceptet hittades inte' });
+      return;
+    }
+
+    const existingOverrides = (typeof row.overrides === 'object' && row.overrides !== null)
+      ? row.overrides as Record<string, unknown>
+      : {};
+
+    // Merge allowed override fields
+    const patch: Record<string, unknown> = { ...existingOverrides };
+    if (typeof body.headline_sv === 'string') patch.headline_sv = body.headline_sv;
+    if (typeof body.difficulty === 'string') patch.difficulty = body.difficulty;
+    if (typeof body.trend_level === 'number') patch.trendLevel = body.trend_level;
+    if (typeof body.film_time === 'string') patch.filmTime = body.film_time;
+    if (typeof body.people_needed === 'string') patch.peopleNeeded = body.people_needed;
+    if (typeof body.why_it_works === 'string') patch.whyItWorks_sv = body.why_it_works;
+    if (typeof body.target_audience === 'string') patch.targetAudience_sv = body.target_audience;
+
+    const { error: updateError } = await supabase
+      .from('concepts')
+      .update({ overrides: patch, updated_at: new Date().toISOString() })
+      .eq('id', (row as { id: string }).id);
+
+    if (updateError) {
+      res.status(500).json({ error: updateError.message });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'studio-v2 library-concepts PATCH error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
 
 // PATCH /api/studio-v2/concepts/:conceptId
 router.patch('/concepts/:conceptId', requireAuth, CM_ONLY, async (req, res) => {

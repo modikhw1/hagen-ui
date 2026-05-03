@@ -59,16 +59,36 @@ export default function StudioConceptEditPage() {
     setLoading(false);
   }, [conceptId]);
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleSave = async () => {
     setSaving(true);
-    
-    // TODO: Save to database
-    // For now, just show saved state
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setSaveError(null);
+    try {
+      const response = await fetch(`/api/studio-v2/library-concepts/${conceptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          headline_sv: formData.headline_sv,
+          difficulty: formData.difficulty,
+          trend_level: formData.trend_level,
+          film_time: formData.film_time,
+          people_needed: formData.people_needed,
+          why_it_works: formData.why_it_works,
+          target_audience: formData.target_audience,
+        }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(payload?.error || 'Kunde inte spara');
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Kunde inte spara');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) {
@@ -100,6 +120,11 @@ export default function StudioConceptEditPage() {
           {saved && (
             <span style={{ color: '#10b981', fontWeight: 500 }}>
               ✓ Sparat!
+            </span>
+          )}
+          {saveError && (
+            <span style={{ color: '#ef4444', fontWeight: 500, fontSize: '14px' }}>
+              ✗ {saveError}
             </span>
           )}
           <button

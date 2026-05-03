@@ -54,8 +54,8 @@ export default function StudioCustomersPage() {
       (cmFilter === 'all' || customer.account_manager === cmFilter),
     )
     .sort((a, b) => {
-      const sa = a.concept_stats;
-      const sb = b.concept_stats;
+      const sa = a.concept_stats ?? { draft: 0, sent: 0, produced: 0 };
+      const sb = b.concept_stats ?? { draft: 0, sent: 0, produced: 0 };
 
       if (sa.draft > 0 && sb.draft === 0) return -1;
       if (sb.draft > 0 && sa.draft === 0) return 1;
