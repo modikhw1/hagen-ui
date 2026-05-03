@@ -3,7 +3,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from '@/lib/navigation-compat';
-import { loadConceptById, type TranslatedConcept } from '@/lib/conceptLoader';
+import { loadConceptById } from '@/lib/conceptLoaderDB';
+import { type TranslatedConcept } from '@/lib/conceptLoader';
 
 interface ConceptFormData {
   headline_sv: string;
@@ -39,8 +40,14 @@ export default function StudioConceptEditPage() {
   });
 
   useEffect(() => {
-    if (conceptId) {
-      const found = loadConceptById(conceptId);
+    let cancelled = false;
+    async function load() {
+      if (!conceptId) {
+        setLoading(false);
+        return;
+      }
+      const found = await loadConceptById(conceptId);
+      if (cancelled) return;
       if (found) {
         setConcept(found);
         setFormData({
@@ -55,8 +62,12 @@ export default function StudioConceptEditPage() {
           scene_breakdown: JSON.stringify((found as any).sceneBreakdown, null, 2),
         });
       }
+      setLoading(false);
     }
-    setLoading(false);
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [conceptId]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
