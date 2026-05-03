@@ -155,6 +155,7 @@ export const customerDetailSchema = z.object({
   contract_start_date: z.string().nullable(),
   billing_day_of_month: z.number().nullable(),
   upcoming_price_change: nullableUpcomingPriceChangeSchema,
+  subscription_status: z.string().nullable().optional(),
   discount_type: z.enum(['none', 'percent', 'amount', 'free_months']).nullable(),
   discount_value: z.number().nullable(),
   discount_duration_months: z.number().nullable(),

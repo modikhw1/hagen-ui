@@ -64,10 +64,11 @@ export default function CustomerAvtalPage() {
   const billingInitialData = {
     monthly_price_ore: (customer.monthly_price ?? 0) * 100,
     pricing_status: customer.pricing_status ?? 'fixed',
-    subscription_status: null,
+    subscription_status: customer.subscription_status ?? null,
     stripe_customer_id: customer.stripe_customer_id ?? null,
     stripe_subscription_id: customer.stripe_subscription_id ?? null,
     next_invoice_date: customer.next_invoice_date ?? null,
+    upcoming_price_change: customer.upcoming_price_change ?? null,
     invoices: billingInvoices,
     environment_warning: null,
     discount:

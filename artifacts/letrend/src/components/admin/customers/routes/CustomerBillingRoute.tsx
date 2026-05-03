@@ -24,15 +24,62 @@ import {
   Stack,
   Table,
   Text,
+  Tooltip,
 } from '@mantine/core';
 
 import { InvoiceDetailModal } from '@/components/admin/billing/invoices/InvoiceDetailModal';
 import PendingInvoiceItems from '@/components/admin/customers/PendingInvoiceItems';
+import DiscountModal from '@/components/admin/customers/modals/DiscountModal';
+import { InitialPriceModal } from '@/components/admin/customers/modals/InitialPriceModal';
 import { PauseSubscriptionModal } from '@/components/admin/customers/modals/PauseSubscriptionModal';
 import { StandaloneInvoiceModal } from '@/components/admin/customers/modals/StandaloneInvoiceModal';
 import { UpdatePricingDialog } from '@/components/admin/customers/modals/UpdatePricingDialog';
 import { CreditNotesSection } from '@/components/admin/customers/sections/CreditNotesSection';
 import { useCustomerBalance } from '@/hooks/admin/useCustomerBalance';
+import { useCustomerDetail } from '@/hooks/admin/useCustomerDetail';
+import {
+  deriveCustomerContractState,
+  describeContractState,
+} from '@/lib/admin/customer-contract-state';
+
+interface ActionButtonProps {
+  enabled: boolean;
+  reason: string;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  color?: string;
+  variant?: 'light' | 'filled' | 'outline' | 'subtle' | 'default';
+}
+
+function ActionButton({
+  enabled,
+  reason,
+  icon,
+  label,
+  onClick,
+  color,
+  variant = 'light',
+}: ActionButtonProps) {
+  const button = (
+    <Button
+      size="sm"
+      variant={variant}
+      color={color}
+      leftSection={icon}
+      onClick={onClick}
+      disabled={!enabled}
+    >
+      {label}
+    </Button>
+  );
+  if (enabled) return button;
+  return (
+    <Tooltip label={reason} withArrow position="top">
+      <span style={{ display: 'inline-flex' }}>{button}</span>
+    </Tooltip>
+  );
+}
 
 export interface CustomerBillingInvoice {
   stripe_invoice_id: string;
@@ -55,6 +102,10 @@ export interface CustomerBillingInitialData {
   stripe_subscription_id: string | null;
   next_invoice_date: string | null;
   invoices: CustomerBillingInvoice[];
+  upcoming_price_change?: {
+    price_ore: number;
+    effective_date: string;
+  } | null;
   environment_warning?: {
     message: string;
   } | null;
@@ -118,27 +169,51 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
   } = props;
 
   const [data, setData] = useState(initialData);
+  const { data: customer } = useCustomerDetail(customerId);
   const canManageBilling = permissions?.canManageBilling === true;
   const hasStripeCustomer = Boolean(data.stripe_customer_id);
   const hasSubscriptionLink = Boolean(data.stripe_subscription_id);
   const hasManageableBillingEnvironment = !data.environment_warning;
+
+  const contractState = deriveCustomerContractState({
+    pricing_status: data.pricing_status,
+    monthly_price_ore: data.monthly_price_ore,
+    subscription_status: data.subscription_status,
+    stripe_customer_id: data.stripe_customer_id,
+    stripe_subscription_id: data.stripe_subscription_id,
+    environment_warning: data.environment_warning ?? null,
+  });
+
+  const isOnboarding =
+    contractState === 'onboarding_no_price' || contractState === 'onboarding_priced';
+  const isPaused = contractState === 'paused';
+  const isCancelled = contractState === 'cancelled';
+
   const canManagePendingItems =
     canManageBilling && hasStripeCustomer && hasManageableBillingEnvironment;
   const canCreateManualInvoice =
     canManageBilling && hasStripeCustomer && hasManageableBillingEnvironment;
   const canChangePricing =
     canManageBilling && hasSubscriptionLink && hasManageableBillingEnvironment;
+  const canPause =
+    canManageBilling && hasSubscriptionLink && hasManageableBillingEnvironment && !isCancelled;
+  const canManageDiscount = canManageBilling;
+  const canSetInitialPrice = canManageBilling && isOnboarding;
   const invoices = data.invoices ?? [];
 
   const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(initialInvoiceId ?? null);
   const [standaloneOpen, setStandaloneOpen] = useState(initialStandaloneOpen === true);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [initialPriceOpen, setInitialPriceOpen] = useState(false);
   const { data: balance } = useCustomerBalance(customerId);
 
-  const isPaused = data.subscription_status === 'paused';
-  const canPause =
-    canManageBilling && hasSubscriptionLink && hasManageableBillingEnvironment;
+  const noStripeReason = !hasStripeCustomer
+    ? 'Kunden saknar Stripe-koppling i aktiv miljö.'
+    : !hasSubscriptionLink
+      ? 'Kunden har ingen aktiv abonnemangskoppling.'
+      : null;
 
   function upsertInvoiceInState(nextInvoice: CustomerBillingInvoice) {
     setData((current) => {
@@ -192,37 +267,55 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
               Snabbåtgärder
             </Text>
             <Group gap="xs" wrap="wrap">
-              {canChangePricing ? (
+              {canSetInitialPrice ? (
                 <Button
                   size="sm"
-                  variant="light"
+                  variant="filled"
+                  color="blue"
                   leftSection={<IconCash size={14} />}
-                  onClick={() => setPricingOpen(true)}
+                  onClick={() => setInitialPriceOpen(true)}
                 >
-                  Ändra pris
+                  Sätt inledande pris
                 </Button>
-              ) : null}
-              {canCreateManualInvoice ? (
+              ) : (
+                <ActionButton
+                  enabled={canChangePricing}
+                  reason={noStripeReason ?? 'Aktivt abonnemang krävs.'}
+                  icon={<IconCash size={14} />}
+                  label="Ändra pris"
+                  onClick={() => setPricingOpen(true)}
+                />
+              )}
+              <ActionButton
+                enabled={canCreateManualInvoice}
+                reason={noStripeReason ?? 'Stripe-koppling krävs.'}
+                icon={<IconPlus size={14} />}
+                label="Skapa engångsfaktura"
+                onClick={() => setStandaloneOpen(true)}
+              />
+              {canManageDiscount ? (
                 <Button
                   size="sm"
                   variant="light"
-                  leftSection={<IconPlus size={14} />}
-                  onClick={() => setStandaloneOpen(true)}
+                  leftSection={<IconTag size={14} />}
+                  onClick={() => setDiscountOpen(true)}
                 >
-                  Skapa engångsfaktura
+                  Rabatt
                 </Button>
               ) : null}
-              {canPause ? (
-                <Button
-                  size="sm"
-                  variant={isPaused ? 'filled' : 'light'}
-                  color={isPaused ? 'blue' : 'orange'}
-                  leftSection={<IconPlayerPause size={14} />}
-                  onClick={() => setPauseOpen(true)}
-                >
-                  {isPaused ? 'Ateruppta abonnemang' : 'Pausa abonnemang'}
-                </Button>
-              ) : null}
+              <ActionButton
+                enabled={canPause}
+                reason={
+                  isCancelled
+                    ? 'Abonnemanget är avslutat.'
+                    : noStripeReason ?? 'Aktivt abonnemang krävs.'
+                }
+                icon={<IconPlayerPause size={14} />}
+                label={isPaused ? 'Återuppta abonnemang' : 'Pausa abonnemang'}
+                color={isPaused ? 'blue' : 'orange'}
+                variant={isPaused ? 'filled' : 'light'}
+                onClick={() => setPauseOpen(true)}
+              />
             </Group>
           </Group>
         </Paper>
@@ -269,11 +362,14 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
               Status
             </Text>
             <Box>
-              <Badge color={statusTones[data.subscription_status ?? ''] || 'gray'} variant="filled">
-                {data.subscription_status
-                  ? statusLabels[data.subscription_status] || data.subscription_status
-                  : 'Inget abonnemang'}
-              </Badge>
+              {(() => {
+                const desc = describeContractState(contractState);
+                return (
+                  <Badge color={desc.tone} variant="filled">
+                    {desc.label}
+                  </Badge>
+                );
+              })()}
             </Box>
           </Stack>
           <Stack gap={4}>
@@ -482,6 +578,22 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
               onOpenChange={setPricingOpen}
               customerId={customerId}
               currentPriceOre={data.monthly_price_ore}
+              upcomingPrice={data.upcoming_price_change ?? null}
+            />
+          ) : null}
+          {canManageDiscount && customer ? (
+            <DiscountModal
+              open={discountOpen}
+              onClose={() => setDiscountOpen(false)}
+              customerId={customerId}
+              customer={customer}
+            />
+          ) : null}
+          {canSetInitialPrice ? (
+            <InitialPriceModal
+              open={initialPriceOpen}
+              onClose={() => setInitialPriceOpen(false)}
+              customerId={customerId}
             />
           ) : null}
           {canPause ? (

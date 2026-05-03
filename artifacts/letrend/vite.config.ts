@@ -57,7 +57,7 @@ export default defineConfig({
             // calls it. Inject a polyfill into React's CJS bundle so that
             // __toESM() snapshots include the function before Mantine loads.
             build.onLoad(
-              { filter: /react[\\/]cjs[\\/]react\.(development|production\.min)\.js$/ },
+              { filter: /react[\\/]cjs[\\/]react\.(development|production)(\.min)?\.js$/ },
               (args) => {
                 const source = readFileSync(args.path, 'utf8');
                 const polyfill = `

@@ -207,11 +207,25 @@ router.get('/:id', requireAuth, ADMIN_ONLY, async (req, res) => {
     const pricing_status =
       (profile as any).pricing_status === 'fixed' ? 'fixed' : 'unknown';
 
+    // Derive a coarse subscription_status purely from the columns we have.
+    // We don't poll Stripe here; this is enough for the admin avtal view to
+    // show the correct badge and pause/resume button.
+    const rawStatus = String((profile as any).status ?? '').toLowerCase();
+    let subscription_status: string | null = null;
+    if (rawStatus === 'paused' || (profile as any).paused_until) {
+      subscription_status = 'paused';
+    } else if (rawStatus === 'canceled' || rawStatus === 'cancelled') {
+      subscription_status = 'canceled';
+    } else if ((profile as any).stripe_subscription_id) {
+      subscription_status = 'active';
+    }
+
     res.json({
       customer: {
         ...profile,
         subscription_interval,
         pricing_status,
+        subscription_status,
         cm_avatar_url: null,
         cm_initial_color: null,
         preview_image_url: null,

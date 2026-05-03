@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { AdminField } from '@/components/admin/ui/form/AdminField';
 import { PriceInput } from '@/components/admin/ui/form/PriceInput';
+import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { oreToSek, sekToOre } from '@/lib/admin/money';
 import { todayDateInput } from '@/lib/admin/time';
 import { toast } from 'sonner';
@@ -35,6 +36,7 @@ export default function DiscountModal({
   const [monthsValue, setMonthsValue] = useState<number>(type === 'free_months' ? customer.discount_value || 0 : 0);
   const [endsAt, setEndsAt] = useState<string>(customer.discount_end_date || customer.discount_ends_at || '');
   const [submitting, setSubmitting] = useState(false);
+  const refresh = useAdminRefresh();
 
   useEffect(() => {
     if (!open) return;
@@ -90,8 +92,12 @@ export default function DiscountModal({
       }
 
       toast.success('Rabatten har uppdaterats');
+      await refresh([
+        { type: 'customer', customerId },
+        { type: 'customer-billing', customerId },
+        'customers',
+      ]);
       onClose();
-      window.location.reload();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Kunde inte spara rabatt');
     } finally {
