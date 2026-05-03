@@ -42,18 +42,20 @@ which are still completely missing — so the operator UI never lies.
   Letrend triggar via `/api/letrend/concept/prepare` (proxas i api-server
   `routes/letrend.ts`).
 - **Räknare**: hagen-proxyn i `artifacts/api-server/src/routes/letrend.ts`
-  skriver en rad per `2xx`-svar via `recordGeminiCall(estIn, estOut, …)`.
-  Token-tal är estimerade per route (`concept/prepare`/`reprocess` ≈ 2k in /
-  1k ut; `videos/analyze/deep` ≈ 8k in / 3k ut) tills hagen börjar returnera
-  riktiga `usageMetadata.promptTokenCount` / `candidatesTokenCount`.
+  skriver en rad per `2xx`-svar via `recordGeminiCall(hagenData, …)`. Helpern
+  letar efter `usage.input_tokens` / `output_tokens` (eller SDK-namnen
+  `usageMetadata.promptTokenCount` / `candidatesTokenCount`) i hagens svar
+  och använder dem direkt om de finns (`metadata.data_source = 'measured'`);
+  annars faller den tillbaka till en per-route-uppskattning
+  (`concept/prepare`/`reprocess` ≈ 2k in / 1k ut; `videos/analyze/deep`
+  ≈ 8k in / 3k ut, `metadata.data_source = 'estimated'`).
 - **Prismodell**: per 1k input/output-tokens (Gemini 2.5 Flash ≈ 0,075 USD /
   1M input, 0,30 USD / 1M output i april 2026). Default i seed: 1 öre / 1k
   input + 4 öre / 1k output.
-- **Status**: Uppskattat (per-call token-estimat). Blir Mätt så snart hagen
-  returnerar ett `usage`-fält — då räcker det att byta `estIn/estOut` mot
-  värdena från svaret och sätta `metadata.data_source = 'measured'`.
-- **TODO**: lägg till `usage` i hagens svar; bör vara en liten ändring i
-  `analyzeVideoCombined` och prepare-pipelinen.
+- **Status**: Mätt så snart hagen returnerar ett `usage`-fält, annars
+  Uppskattat (per-call token-estimat).
+- **TODO**: lägg till `usage` i hagens svar (litet jobb i
+  `analyzeVideoCombined` och prepare-pipelinen) så att alla rader blir Mätt.
 
 ### Google Cloud (Vertex + GCS) — körs via hagen
 

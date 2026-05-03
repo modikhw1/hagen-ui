@@ -19,34 +19,62 @@ async function recordHagenCall(unit: string, fallbackOre: number, extra?: Record
   }
 }
 
-// Records the Gemini-side cost of a hagen call. Hagen does not yet return a
-// `usage` field with real token counts, so we use a per-route token estimate.
-// When hagen starts surfacing `usage`, replace `estInputTok/estOutputTok` with
-// the measured values and switch metadata.data_source to 'measured'.
+// Records the Gemini-side cost of a hagen call. Prefers measured token
+// counts from hagen's response (`usage.input_tokens` / `output_tokens` —
+// also accepts the Gemini SDK names `promptTokenCount` / `candidatesTokenCount`).
+// Falls back to the per-route estimate (`fallbackInTok` / `fallbackOutTok`) only
+// when hagen has not yet wired token usage through.
 async function recordGeminiCall(
-  estInputTok: number,
-  estOutputTok: number,
+  hagenData: Record<string, unknown> | undefined,
+  fallbackInTok: number,
+  fallbackOutTok: number,
   extra?: Record<string, unknown>,
 ) {
   try {
+    const usage = extractUsage(hagenData);
+    const inTok = usage?.inputTokens ?? fallbackInTok;
+    const outTok = usage?.outputTokens ?? fallbackOutTok;
+    const dataSource = usage ? 'measured' : 'estimated';
+
     const inOre = await getPriceOre('gemini', 'per_1k_input_tok', 1);
     const outOre = await getPriceOre('gemini', 'per_1k_output_tok', 4);
-    const cost = Math.round((estInputTok / 1000) * inOre + (estOutputTok / 1000) * outOre);
+    const cost = Math.round((inTok / 1000) * inOre + (outTok / 1000) * outOre);
     await recordServiceUsage({
       service: 'Gemini API',
       calls: 1,
       cost_ore: cost,
       metadata: {
         source: 'hagen-proxy',
-        data_source: 'estimated',
-        est_input_tok: estInputTok,
-        est_output_tok: estOutputTok,
+        data_source: dataSource,
+        input_tok: inTok,
+        output_tok: outTok,
         ...(extra ?? {}),
       },
     });
   } catch {
     /* best-effort */
   }
+}
+
+function extractUsage(
+  data: Record<string, unknown> | undefined,
+): { inputTokens: number; outputTokens: number } | null {
+  if (!data || typeof data !== 'object') return null;
+  const u = (data as { usage?: unknown; usageMetadata?: unknown }).usage
+    ?? (data as { usageMetadata?: unknown }).usageMetadata;
+  if (!u || typeof u !== 'object') return null;
+  const obj = u as Record<string, unknown>;
+  const inTok = pickNumber(obj['input_tokens'], obj['promptTokenCount'], obj['prompt_token_count']);
+  const outTok = pickNumber(obj['output_tokens'], obj['candidatesTokenCount'], obj['candidates_token_count']);
+  if (inTok === null && outTok === null) return null;
+  return { inputTokens: inTok ?? 0, outputTokens: outTok ?? 0 };
+}
+
+function pickNumber(...candidates: unknown[]): number | null {
+  for (const c of candidates) {
+    if (typeof c === 'number' && Number.isFinite(c)) return c;
+  }
+  return null;
 }
 
 const router = Router();
@@ -116,7 +144,7 @@ router.post('/concept/prepare', requireAuth, CM_ONLY, async (req, res) => {
   }
 
   void recordHagenCall('per_prepare', 10, { route: 'concept/prepare', request_id: result.requestId });
-  void recordGeminiCall(2000, 1000, { route: 'concept/prepare', request_id: result.requestId });
+  void recordGeminiCall(prepared, 2000, 1000, { route: 'concept/prepare', request_id: result.requestId });
   res.status(result.status).json(prepared);
 });
 
@@ -143,7 +171,7 @@ router.post('/reprocess', requireAuth, CM_ONLY, async (req, res) => {
   });
   if (result.ok) {
     void recordHagenCall('per_prepare', 10, { route: 'reprocess', request_id: result.requestId });
-    void recordGeminiCall(2000, 1000, { route: 'reprocess', request_id: result.requestId });
+    void recordGeminiCall(result.data, 2000, 1000, { route: 'reprocess', request_id: result.requestId });
   }
 });
 
@@ -220,7 +248,7 @@ router.post('/videos/analyze/deep', requireAuth, CM_ONLY, async (req, res) => {
   });
   if (result.ok) {
     void recordHagenCall('per_deep_analyze', 50, { route: 'videos/analyze/deep', request_id: result.requestId });
-    void recordGeminiCall(8000, 3000, { route: 'videos/analyze/deep', request_id: result.requestId });
+    void recordGeminiCall(result.data, 8000, 3000, { route: 'videos/analyze/deep', request_id: result.requestId });
   }
 });
 

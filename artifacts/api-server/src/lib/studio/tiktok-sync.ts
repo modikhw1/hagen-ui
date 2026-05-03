@@ -127,10 +127,18 @@ class RateLimitError extends Error {
   }
 }
 
-async function rapidApiFetch(url: string, apiKey: string, timeoutMs = 15000): Promise<Response> {
+async function rapidApiFetch(
+  url: string,
+  apiKey: string,
+  timeoutMs = 15000,
+  endpointTag = 'unknown',
+): Promise<Response> {
   // Bounded exponential backoff with jitter on 429. Respects Retry-After when
   // present, otherwise uses 1s, 2s, 4s + jitter. Gives up after 3 attempts and
   // surfaces a RateLimitError so the caller can stop the batch.
+  //
+  // RapidAPI bills every attempted request, so each iteration of this loop
+  // (including the 429s and the terminal failure) records a service_costs row.
   const maxAttempts = 3;
   let lastRetryAfter = 0;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
@@ -138,6 +146,7 @@ async function rapidApiFetch(url: string, apiKey: string, timeoutMs = 15000): Pr
       headers: { 'x-rapidapi-key': apiKey, 'x-rapidapi-host': RAPIDAPI_HOST },
       signal: AbortSignal.timeout(timeoutMs),
     });
+    void recordRapidApiCall({ endpoint: endpointTag, status: res.status, attempt });
     if (res.status !== 429) return res;
 
     const retryAfterHeader = Number(res.headers.get('retry-after'));
@@ -170,9 +179,7 @@ async function fetchProviderVideos(
   url.searchParams.set('unique_id', handle);
   url.searchParams.set('count', String(count));
   if (cursor !== undefined) url.searchParams.set('cursor', String(cursor));
-  const res = await rapidApiFetch(url.toString(), apiKey);
-  // RapidAPI bills attempted requests, not just successful ones — record now.
-  void recordRapidApiCall({ endpoint: 'user/posts', status: res.status });
+  const res = await rapidApiFetch(url.toString(), apiKey, 15000, 'user/posts');
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`tiktok-scraper7 ${res.status}${body ? `: ${body.slice(0, 200)}` : ''}`);
@@ -196,8 +203,7 @@ interface FetchUserResult {
 async function fetchProviderUser(handle: string, apiKey: string): Promise<FetchUserResult> {
   const url = new URL(`https://${RAPIDAPI_HOST}/user/info`);
   url.searchParams.set('unique_id', handle);
-  const res = await rapidApiFetch(url.toString(), apiKey, 10_000);
-  void recordRapidApiCall({ endpoint: 'user/info', status: res.status });
+  const res = await rapidApiFetch(url.toString(), apiKey, 10_000, 'user/info');
   if (!res.ok) return { followers: 0, avatar: null, callsUsed: 1 };
   const data = await res.json() as { code?: number; data?: { stats?: { followerCount?: number }; user?: { avatarMedium?: string } } };
   if (data.code !== 0) return { followers: 0, avatar: null, callsUsed: 1 };
