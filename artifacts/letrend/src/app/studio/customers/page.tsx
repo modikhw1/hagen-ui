@@ -3,7 +3,7 @@
 import { Link } from 'wouter';
 import { useEffect, useState } from 'react';
 import { useAdminPageHeader } from '@/admin-ui';
-import { getStudioCustomerStatusMeta } from '@/lib/studio/customer-status';
+import { getStudioCustomerStatusMeta, normalizeStudioCustomerStatus } from '@/lib/studio/customer-status';
 import { buildStudioWorkspaceHref } from '@/lib/studio/navigation';
 import type { StudioCustomerListItem } from '@/types/studio-v2';
 
@@ -224,7 +224,7 @@ export default function StudioCustomersPage() {
           </div>
         ) : (
           filteredCustomers.map((customer, index) => {
-            const statusMeta = getStudioCustomerStatusMeta(customer.status);
+            const statusMeta = getStudioCustomerStatusMeta(normalizeStudioCustomerStatus(customer.status));
             const stats = customer.concept_stats;
             const tiktokSummary = customer.tiktok_summary;
 
