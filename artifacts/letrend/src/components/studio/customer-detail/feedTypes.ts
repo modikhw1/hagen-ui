@@ -219,4 +219,6 @@ export interface KonceptSectionProps {
   brief: { tone: string; constraints: string; current_focus: string };
   onNavigateToFeedSlot?: (feedOrder: number) => void;
   onBeginFeedPlacement?: (conceptId: string) => void;
+  onCreateCollaboration?: (values: import('./CollaborationModal').CollaborationFormValues) => Promise<void>;
+  onUpdateCollaboration?: (conceptId: string, values: import('./CollaborationModal').CollaborationFormValues) => Promise<void>;
 }

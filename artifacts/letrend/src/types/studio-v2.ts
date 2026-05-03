@@ -150,6 +150,13 @@ interface CustomerConceptBase {
   profile_name: string | null;
   profile_image_url: string | null;
   visual_variant: string | null;
+  collaborator_reach: string | null;
+  collaborator_avatar_url: string | null;
+  scope: string[];
+  price: number | null;
+  confirmed: boolean;
+  collaboration_note: string | null;
+  collaboration_date_type: 'exact' | 'projected' | null;
 
   // Feed planner
   /** @deprecated Prefer `placement.feed_order`. */

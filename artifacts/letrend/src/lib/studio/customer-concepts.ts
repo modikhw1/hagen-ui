@@ -52,7 +52,14 @@ export const STUDIO_CUSTOMER_CONCEPT_SELECT = `
   partner_name,
   profile_name,
   profile_image_url,
-  visual_variant
+  visual_variant,
+  collaborator_reach,
+  collaborator_avatar_url,
+  scope,
+  price,
+  confirmed,
+  collaboration_note,
+  collaboration_date_type
 `;
 
 function asStringArray(value: unknown): string[] {
@@ -109,6 +116,12 @@ export function isStudioAssignedCustomerConcept(
   concept: CustomerConcept
 ): concept is AssignedCustomerConcept {
   return concept.row_kind === 'assignment' && concept.assignment.has_source_concept;
+}
+
+export function isCollaborationCustomerConcept(
+  concept: Pick<CustomerConcept, 'visual_variant'>
+): boolean {
+  return (concept.visual_variant ?? '').toLowerCase() === 'collaboration';
 }
 
 export function isConceptPlaced(concept: Pick<CustomerConcept, 'placement'>): boolean {
@@ -202,6 +215,17 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
   const profileName = readString(row.profile_name);
   const profileImageUrl = readString(row.profile_image_url);
   const visualVariant = readString(row.visual_variant);
+  const collaboratorReach = readString(row.collaborator_reach);
+  const collaboratorAvatarUrl = readString(row.collaborator_avatar_url);
+  const scope = asStringArray(row.scope);
+  const price = readNumber(row.price);
+  const confirmed = row.confirmed === true;
+  const collaborationNote = readString(row.collaboration_note);
+  const collaborationDateTypeRaw = readString(row.collaboration_date_type);
+  const collaborationDateType: 'exact' | 'projected' | null =
+    collaborationDateTypeRaw === 'exact' || collaborationDateTypeRaw === 'projected'
+      ? collaborationDateTypeRaw
+      : null;
   // Only present on enriched LeTrend historik cards — the ID of the imported clip
   // that supplies their TikTok stats. Used for undo-reconciliation from the LeTrend side.
   const reconciledImportedClipId = readString(row.reconciled_imported_clip_id);
@@ -233,6 +257,13 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
     profile_name: profileName,
     profile_image_url: profileImageUrl,
     visual_variant: visualVariant,
+    collaborator_reach: collaboratorReach,
+    collaborator_avatar_url: collaboratorAvatarUrl,
+    scope,
+    price,
+    confirmed,
+    collaboration_note: collaborationNote,
+    collaboration_date_type: collaborationDateType,
     feed_order: feedOrder,
     tags,
     collection_id: collectionId,

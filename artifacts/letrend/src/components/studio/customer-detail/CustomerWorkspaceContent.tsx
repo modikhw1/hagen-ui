@@ -1434,6 +1434,73 @@ function CustomerWorkspacePageContent() {
     }
   };
 
+  const handleCreateCollaboration = async (
+    values: import('./CollaborationModal').CollaborationFormValues
+  ) => {
+    try {
+      const response = await fetch(`/api/studio-v2/customers/${customerId}/concepts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visual_variant: 'collaboration',
+          partner_name: values.partner_name || null,
+          collaborator_reach: values.collaborator_reach || null,
+          collaborator_avatar_url: values.collaborator_avatar_url || null,
+          scope: values.scope,
+          price: values.price === '' ? null : Number(values.price),
+          confirmed: values.confirmed,
+          collaboration_note: values.collaboration_note || null,
+          collaboration_date_type: values.date_type,
+          planned_publish_at: values.date ? new Date(values.date).toISOString() : null,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to create collaboration');
+      }
+      await fetchConcepts(true);
+      if (data?.concept?.id) {
+        setJustAddedConceptId(data.concept.id);
+      }
+    } catch (err) {
+      console.error('Error creating collaboration:', err);
+      alert(err instanceof Error ? err.message : 'Kunde inte skapa samarbete');
+      throw err;
+    }
+  };
+
+  const handleUpdateCollaboration = async (
+    conceptId: string,
+    values: import('./CollaborationModal').CollaborationFormValues
+  ) => {
+    try {
+      const response = await fetch(`/api/studio-v2/concepts/${conceptId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partner_name: values.partner_name || null,
+          collaborator_reach: values.collaborator_reach || null,
+          collaborator_avatar_url: values.collaborator_avatar_url || null,
+          scope: values.scope,
+          price: values.price === '' ? null : Number(values.price),
+          confirmed: values.confirmed,
+          collaboration_note: values.collaboration_note || null,
+          collaboration_date_type: values.date_type,
+          planned_publish_at: values.date ? new Date(values.date).toISOString() : null,
+        }),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || 'Failed to update collaboration');
+      }
+      await fetchConcepts(true);
+    } catch (err) {
+      console.error('Error updating collaboration:', err);
+      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera samarbete');
+      throw err;
+    }
+  };
+
   const handleDeleteConcept = async (conceptId: string) => {
     if (!confirm('Ta bort detta koncept frÃ¥n kunden?')) return;
 
@@ -2969,6 +3036,8 @@ function CustomerWorkspacePageContent() {
                 setHistoryOffset(gridConfig.currentSlotIndex - feedOrder);
               }}
               onBeginFeedPlacement={handleBeginFeedPlacement}
+              onCreateCollaboration={handleCreateCollaboration}
+              onUpdateCollaboration={handleUpdateCollaboration}
             />
           )}
 

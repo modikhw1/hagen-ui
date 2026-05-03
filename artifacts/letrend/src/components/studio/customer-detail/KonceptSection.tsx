@@ -2,11 +2,54 @@ import React from 'react';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import {
   getConceptPriority,
+  isCollaborationCustomerConcept,
   isStudioAssignedCustomerConcept,
 } from '@/lib/studio/customer-concepts';
+import type { CustomerConcept } from '@/types/studio-v2';
 import type { KonceptSectionProps } from './feedTypes';
 import { ActiveConceptCard } from './ActiveConceptCard';
 import { ProducedConceptCard } from './ProducedConceptCard';
+import { CollaborationCard, type CollaborationCardData } from './CollaborationCard';
+import {
+  CollaborationModal,
+  EMPTY_COLLABORATION_FORM,
+  type CollaborationFormValues,
+  type CollaborationScopeId,
+} from './CollaborationModal';
+
+function toCollaborationCardData(concept: CustomerConcept): CollaborationCardData {
+  return {
+    id: concept.id,
+    partner_name: concept.partner_name,
+    collaborator_reach: concept.collaborator_reach,
+    collaborator_avatar_url: concept.collaborator_avatar_url,
+    scope: (concept.scope ?? []).filter((s): s is CollaborationScopeId =>
+      s === 'medverka' || s === 'skriva' || s === 'producera' || s === 'skriva_medverka'
+    ),
+    price: concept.price,
+    confirmed: concept.confirmed,
+    date: concept.result.planned_publish_at ?? null,
+    date_type: concept.collaboration_date_type ?? 'exact',
+  };
+}
+
+function toCollaborationFormValues(concept: CustomerConcept): CollaborationFormValues {
+  return {
+    partner_name: concept.partner_name ?? '',
+    collaborator_reach: concept.collaborator_reach ?? '',
+    collaborator_avatar_url: concept.collaborator_avatar_url ?? '',
+    scope: (concept.scope ?? []).filter((s): s is CollaborationScopeId =>
+      s === 'medverka' || s === 'skriva' || s === 'producera' || s === 'skriva_medverka'
+    ),
+    date: concept.result.planned_publish_at
+      ? concept.result.planned_publish_at.slice(0, 10)
+      : '',
+    date_type: concept.collaboration_date_type ?? 'exact',
+    price: concept.price != null ? String(concept.price) : '',
+    confirmed: concept.confirmed,
+    collaboration_note: concept.collaboration_note ?? '',
+  };
+}
 
 export const KonceptSection = React.memo(function KonceptSection({
   concepts,
@@ -29,10 +72,23 @@ export const KonceptSection = React.memo(function KonceptSection({
   brief,
   onNavigateToFeedSlot,
   onBeginFeedPlacement,
+  onCreateCollaboration,
+  onUpdateCollaboration,
 }: KonceptSectionProps) {
   const [showProducedSection, setShowProducedSection] = React.useState(false);
   const [selectedConceptIds, setSelectedConceptIds] = React.useState<string[]>([]);
   const [batchUpdatingStatus, setBatchUpdatingStatus] = React.useState<string | null>(null);
+  const [collabModal, setCollabModal] = React.useState<
+    | { mode: 'create' }
+    | { mode: 'edit'; conceptId: string; initial: CollaborationFormValues }
+    | null
+  >(null);
+  const [savingCollab, setSavingCollab] = React.useState(false);
+
+  const collaborationConcepts = React.useMemo(
+    () => concepts.filter(isCollaborationCustomerConcept),
+    [concepts]
+  );
 
   React.useEffect(() => {
     if (justProducedConceptId) {
@@ -123,21 +179,45 @@ export const KonceptSection = React.memo(function KonceptSection({
         >
           Koncept
         </h2>
-        <button
-          onClick={() => setShowAddConceptPanel(true)}
-          style={{
-            padding: '10px 16px',
-            background: LeTrendColors.success,
-            color: '#fff',
-            border: 'none',
-            borderRadius: LeTrendRadius.md,
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          + Lägg till koncept
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {onCreateCollaboration ? (
+            <button
+              type="button"
+              onClick={() => setCollabModal({ mode: 'create' })}
+              style={{
+                padding: '10px 16px',
+                background: '#fff',
+                color: LeTrendColors.brownDark,
+                border: `1.5px solid ${LeTrendColors.brownDark}`,
+                borderRadius: LeTrendRadius.md,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+              data-testid="button-planera-samarbete"
+            >
+              <span>✦</span> Planera samarbete
+            </button>
+          ) : null}
+          <button
+            onClick={() => setShowAddConceptPanel(true)}
+            style={{
+              padding: '10px 16px',
+              background: LeTrendColors.success,
+              color: '#fff',
+              border: 'none',
+              borderRadius: LeTrendRadius.md,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            + Lägg till koncept
+          </button>
+        </div>
       </div>
 
       <div
@@ -283,7 +363,25 @@ export const KonceptSection = React.memo(function KonceptSection({
         </div>
       ) : null}
 
-      {activeConcepts.length === 0 && producedConcepts.length === 0 ? (
+      {collaborationConcepts.length > 0 ? (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: LeTrendColors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+            Samarbeten ({collaborationConcepts.length})
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            {collaborationConcepts.map((c) => (
+              <CollaborationCard
+                key={c.id}
+                data={toCollaborationCardData(c)}
+                onClick={() => setCollabModal({ mode: 'edit', conceptId: c.id, initial: toCollaborationFormValues(c) })}
+                onDelete={() => void handleDeleteConcept(c.id)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {activeConcepts.length === 0 && producedConcepts.length === 0 && collaborationConcepts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, color: LeTrendColors.textMuted }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>[ ]</div>
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
@@ -363,6 +461,28 @@ export const KonceptSection = React.memo(function KonceptSection({
           ) : null}
         </div>
       )}
+
+      {collabModal ? (
+        <CollaborationModal
+          mode={collabModal.mode}
+          initialValues={collabModal.mode === 'edit' ? collabModal.initial : EMPTY_COLLABORATION_FORM}
+          saving={savingCollab}
+          onClose={() => setCollabModal(null)}
+          onSave={async (values) => {
+            setSavingCollab(true);
+            try {
+              if (collabModal.mode === 'create') {
+                if (onCreateCollaboration) await onCreateCollaboration(values);
+              } else {
+                if (onUpdateCollaboration) await onUpdateCollaboration(collabModal.conceptId, values);
+              }
+              setCollabModal(null);
+            } finally {
+              setSavingCollab(false);
+            }
+          }}
+        />
+      ) : null}
     </div>
   );
 });

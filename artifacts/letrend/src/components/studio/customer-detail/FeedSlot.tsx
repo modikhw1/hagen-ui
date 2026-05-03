@@ -142,7 +142,7 @@ function FeedSlot({
         details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null
       )
     : null;
-  const isCustomCollaboration = Boolean(concept?.partner_name) && (type === 'planned' || type === 'current');
+  const isCustomCollaboration = (concept?.visual_variant ?? '').toLowerCase() === 'collaboration' && (type === 'planned' || type === 'current');
   const collaborationPalette = (() => {
     switch ((concept?.visual_variant ?? 'default').toLowerCase()) {
       case 'editorial':
@@ -696,16 +696,36 @@ function FeedSlot({
                 })}
               </div>
             )}
+            {(concept.scope?.length ?? 0) > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                {concept.scope.slice(0, 3).map((scopeId) => (
+                  <span key={scopeId} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 999, background: collaborationPalette.surface, border: collaborationPalette.border, fontSize: 9, fontWeight: 600, color: collaborationPalette.text }}>
+                    {scopeId === 'medverka' ? 'Medverkar' : scopeId === 'skriva' ? 'Skriver' : scopeId === 'producera' ? 'Producerar' : 'Skriver+Medverkar'}
+                  </span>
+                ))}
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 10.5, color: hexToRgba(collaborationPalette.text, 0.72) }}>
               <span>
-                {result?.planned_publish_at
-                  ? new Date(result.planned_publish_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })
-                  : projectedDate
+                {(() => {
+                  const dt = concept.collaboration_date_type;
+                  if (result?.planned_publish_at) {
+                    const formatted = new Date(result.planned_publish_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+                    return dt === 'projected' ? `~${formatted}` : formatted;
+                  }
+                  return projectedDate
                     ? `~${projectedDate.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`
-                    : 'Ingen plan satt'}
+                    : 'Ingen plan satt';
+                })()}
               </span>
-              <span style={{ textTransform: 'capitalize' }}>
-                {concept.visual_variant && concept.visual_variant !== 'default' ? concept.visual_variant : 'premium'}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {concept.price != null && (
+                  <span style={{ fontWeight: 700, color: collaborationPalette.text }}>{concept.price} kr</span>
+                )}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: concept.confirmed ? '#10B981' : hexToRgba(collaborationPalette.text, 0.4) }} />
+                  {concept.confirmed ? 'Bekräftat' : 'Ej bekräftat'}
+                </span>
               </span>
             </div>
 

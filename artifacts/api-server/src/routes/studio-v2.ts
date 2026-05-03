@@ -9,16 +9,43 @@ import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
 
+// Select all customer_concepts columns plus the joined source concept. Using `*`
+// keeps the API forward/backward compatible with optional columns (e.g. the
+// collaboration-card fields added by 20260503200000_customer_concepts_collaboration_fields.sql)
+// that may not yet exist on every environment.
 const STUDIO_CONCEPT_SELECT = `
-  id, customer_profile_id, customer_id, concept_id, status,
-  content_overrides, cm_id, cm_note, match_percentage, feed_order,
-  tags, collection_id, updated_at, added_at, sent_at, produced_at,
-  planned_publish_at, content_loaded_at, content_loaded_seen_at,
-  published_at, reconciled_customer_concept_id, reconciled_by_cm_id,
-  reconciled_at, tiktok_url, tiktok_thumbnail_url, tiktok_views,
-  tiktok_likes, tiktok_comment_count, tiktok_share_count, tiktok_synced_at,
+  *,
   concepts ( id, backend_data, overrides, is_active, source, version )
 `;
+
+const COLLABORATION_SCOPE_VALUES = new Set([
+  'medverka',
+  'skriva',
+  'producera',
+  'skriva_medverka',
+]);
+
+function sanitizeScope(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  for (const item of input) {
+    if (typeof item === 'string' && COLLABORATION_SCOPE_VALUES.has(item)) {
+      seen.add(item);
+    }
+  }
+  return Array.from(seen);
+}
+
+function sanitizeCollaborationDateType(input: unknown): string | null {
+  return input === 'exact' || input === 'projected' ? input : null;
+}
+
+function sanitizePrice(input: unknown): number | null {
+  if (input === null || input === undefined || input === '') return null;
+  const n = typeof input === 'number' ? input : Number(input);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Customers
@@ -234,24 +261,44 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
     const body = req.body as Record<string, unknown>;
     const supabase = createSupabaseAdmin();
     const conceptId = typeof body.concept_id === 'string' ? body.concept_id.trim() : '';
-    if (!conceptId) {
+    const visualVariantRaw = typeof body.visual_variant === 'string' ? body.visual_variant.trim() : '';
+    const isCollaboration = visualVariantRaw === 'collaboration';
+    if (!conceptId && !isCollaboration) {
       res.status(400).json({ error: 'concept_id is required' });
       return;
     }
-    const feedOrder = typeof body.feed_order === 'number' ? body.feed_order : 1;
+    const feedOrder = typeof body.feed_order === 'number'
+      ? body.feed_order
+      : isCollaboration ? null : 1;
     const cmId = req.user!.id;
 
-    const insert = {
+    const insert: Record<string, unknown> = {
       customer_profile_id: customerId,
-      concept_id: conceptId,
+      customer_id: customerId,
+      concept_id: conceptId || null,
       cm_id: cmId,
       feed_order: feedOrder,
-      status: 'assigned',
+      status: isCollaboration ? 'draft' : 'assigned',
       match_percentage: typeof body.match_percentage === 'number' ? body.match_percentage : null,
       cm_note: typeof body.cm_note === 'string' ? body.cm_note : null,
       content_overrides: typeof body.content_overrides === 'object' && body.content_overrides ? body.content_overrides : {},
       added_at: new Date().toISOString(),
     };
+
+    if (isCollaboration) {
+      insert.visual_variant = 'collaboration';
+      insert.partner_name = typeof body.partner_name === 'string' ? body.partner_name.trim() || null : null;
+      insert.collaborator_reach = typeof body.collaborator_reach === 'string' ? body.collaborator_reach.trim() || null : null;
+      insert.collaborator_avatar_url = typeof body.collaborator_avatar_url === 'string' ? body.collaborator_avatar_url.trim() || null : null;
+      insert.scope = sanitizeScope(body.scope);
+      insert.price = sanitizePrice(body.price);
+      insert.confirmed = body.confirmed === true;
+      insert.collaboration_note = typeof body.collaboration_note === 'string' ? body.collaboration_note : null;
+      insert.collaboration_date_type = sanitizeCollaborationDateType(body.collaboration_date_type);
+      if (typeof body.planned_publish_at === 'string' && body.planned_publish_at.trim()) {
+        insert.planned_publish_at = body.planned_publish_at;
+      }
+    }
 
     const { data, error } = await supabase
       .from('customer_concepts')
@@ -1111,10 +1158,20 @@ router.patch('/concepts/:conceptId', requireAuth, CM_ONLY, async (req, res) => {
     if (!(await ensureCustomerAccess(req, res, (cc as { customer_profile_id: string }).customer_profile_id))) return;
     const body = req.body as Record<string, unknown>;
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-    const allowed = ['status', 'content_overrides', 'cm_note', 'tiktok_url', 'tiktok_thumbnail_url', 'tiktok_views', 'tiktok_likes', 'published_at', 'produced_at', 'feed_order', 'planned_publish_at'];
+    const allowed = [
+      'status', 'content_overrides', 'cm_note', 'tiktok_url', 'tiktok_thumbnail_url',
+      'tiktok_views', 'tiktok_likes', 'published_at', 'produced_at', 'feed_order',
+      'planned_publish_at',
+      'partner_name', 'profile_name', 'profile_image_url', 'visual_variant',
+      'collaborator_reach', 'collaborator_avatar_url', 'collaboration_note',
+    ];
     for (const key of allowed) {
       if (key in body) patch[key] = body[key];
     }
+    if ('scope' in body) patch.scope = sanitizeScope(body.scope);
+    if ('price' in body) patch.price = sanitizePrice(body.price);
+    if ('confirmed' in body) patch.confirmed = body.confirmed === true;
+    if ('collaboration_date_type' in body) patch.collaboration_date_type = sanitizeCollaborationDateType(body.collaboration_date_type);
 
     const { data, error } = await supabase
       .from('customer_concepts')

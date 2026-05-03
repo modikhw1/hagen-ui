@@ -914,6 +914,13 @@ export type Database = {
           visual_variant: string | null
           why_it_fits: string | null
           last_observed_at: string | null
+          collaborator_reach: string | null
+          collaborator_avatar_url: string | null
+          scope: string[]
+          price: number | null
+          confirmed: boolean
+          collaboration_note: string | null
+          collaboration_date_type: string | null
         }
         Insert: {
           added_at?: string | null
@@ -968,6 +975,13 @@ export type Database = {
           visual_variant?: string | null
           why_it_fits?: string | null
           last_observed_at?: string | null
+          collaborator_reach?: string | null
+          collaborator_avatar_url?: string | null
+          scope?: string[]
+          price?: number | null
+          confirmed?: boolean
+          collaboration_note?: string | null
+          collaboration_date_type?: string | null
         }
         Update: {
           added_at?: string | null
@@ -1022,6 +1036,13 @@ export type Database = {
           visual_variant?: string | null
           why_it_fits?: string | null
           last_observed_at?: string | null
+          collaborator_reach?: string | null
+          collaborator_avatar_url?: string | null
+          scope?: string[]
+          price?: number | null
+          confirmed?: boolean
+          collaboration_note?: string | null
+          collaboration_date_type?: string | null
         }
         Relationships: [
           {
