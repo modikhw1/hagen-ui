@@ -62,11 +62,11 @@ export default function StudioDashboard() {
     customer.status === 'active' || customer.status === 'agreed',
   );
   const orgWideWithDrafts: CustomerWithStats[] = activeCustomers
-    .filter((customer) => customer.concept_stats.draft > 0)
+    .filter((customer) => (customer.concept_stats?.draft ?? 0) > 0)
     .map((customer) => ({ ...customer, stats: customer.concept_stats }))
-    .sort((a, b) => b.stats.draft - a.stats.draft);
+    .sort((a, b) => (b.stats?.draft ?? 0) - (a.stats?.draft ?? 0));
   const orgWideWithSent: CustomerWithStats[] = activeCustomers
-    .filter((customer) => customer.concept_stats.sent > 0)
+    .filter((customer) => (customer.concept_stats?.sent ?? 0) > 0)
     .map((customer) => ({ ...customer, stats: customer.concept_stats }));
 
   const displayName = profile?.email?.split('@')[0] ?? 'Studio';
