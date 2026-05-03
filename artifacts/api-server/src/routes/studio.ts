@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
 
@@ -73,6 +74,13 @@ router.get('/email/schedules', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
     const customerId = req.query['customer_id'] as string | undefined;
+    const isAdmin = Boolean(req.user?.is_admin || req.user?.role === 'admin');
+    if (customerId) {
+      if (!(await ensureCustomerAccess(req, res, customerId))) return;
+    } else if (!isAdmin) {
+      res.status(400).json({ error: 'customer_id is required' });
+      return;
+    }
 
     let query = (supabase as any)
       .from('email_schedules')
@@ -106,6 +114,7 @@ router.post('/email/schedules', requireAuth, CM_ONLY, async (req, res) => {
       res.status(400).json({ error: 'customer_profile_id is required' });
       return;
     }
+    if (!(await ensureCustomerAccess(req, res, customerProfileId))) return;
 
     const insert = {
       customer_profile_id: customerProfileId,
@@ -140,6 +149,13 @@ router.post('/email/schedules', requireAuth, CM_ONLY, async (req, res) => {
 router.put('/email/schedules/:id', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
+    const { data: scheduleRow } = await (supabase as any)
+      .from('email_schedules').select('customer_profile_id').eq('id', req.params['id']).maybeSingle();
+    if (!scheduleRow) {
+      res.status(404).json({ error: 'Schemat hittades inte' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, (scheduleRow as { customer_profile_id?: string }).customer_profile_id))) return;
     const body = req.body as Record<string, unknown>;
     const patch: Record<string, unknown> = {};
     const allowed = ['schedule_type', 'day_of_week', 'send_time', 'rules', 'email_subject', 'email_intro', 'email_outro', 'is_active'];
@@ -170,6 +186,13 @@ router.put('/email/schedules/:id', requireAuth, CM_ONLY, async (req, res) => {
 router.delete('/email/schedules/:id', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
+    const { data: scheduleRow } = await (supabase as any)
+      .from('email_schedules').select('customer_profile_id').eq('id', req.params['id']).maybeSingle();
+    if (!scheduleRow) {
+      res.status(404).json({ error: 'Schemat hittades inte' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, (scheduleRow as { customer_profile_id?: string }).customer_profile_id))) return;
     const { error } = await (supabase as any)
       .from('email_schedules')
       .delete()

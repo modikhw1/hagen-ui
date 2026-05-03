@@ -1,54 +1,11 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
-
-/**
- * For content managers (non-admin), enforce that the customer is assigned to them
- * via customer_profiles.account_manager_profile_id. Admins bypass the check.
- * Returns true when access is allowed; otherwise writes a 403/404 response and returns false.
- */
-async function ensureCustomerAccess(
-  req: import('express').Request,
-  res: import('express').Response,
-  customerIdInput: string | string[] | undefined,
-): Promise<boolean> {
-  const customerId = typeof customerIdInput === 'string' ? customerIdInput : '';
-  if (!customerId) {
-    res.status(400).json({ error: 'customer_id is required' });
-    return false;
-  }
-  if (!req.user) {
-    res.status(401).json({ error: 'Inte autentiserad' });
-    return false;
-  }
-  if (req.user.is_admin || req.user.role === 'admin') return true;
-
-  const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from('customer_profiles')
-    .select('id, account_manager_profile_id')
-    .eq('id', customerId)
-    .maybeSingle();
-
-  if (error) {
-    res.status(500).json({ error: error.message });
-    return false;
-  }
-  // For non-admin callers, return 403 for both "not found" and "not assigned to me"
-  // to avoid leaking whether a customer ID exists.
-  if (
-    !data
-    || (data as { account_manager_profile_id: string | null }).account_manager_profile_id !== req.user.id
-  ) {
-    res.status(403).json({ error: 'Du har inte åtkomst till denna kund.' });
-    return false;
-  }
-  return true;
-}
 
 const STUDIO_CONCEPT_SELECT = `
   id, customer_profile_id, customer_id, concept_id, status,
