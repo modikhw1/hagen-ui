@@ -1,8 +1,7 @@
 // @ts-nocheck
 'use client';
 
-// @ts-ignore
-import Image from 'next/image';
+import Image from '@/components/shared/NativeImage';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { useRouter } from '@/lib/navigation-compat';
 import { supabase } from '@/lib/supabase/client';

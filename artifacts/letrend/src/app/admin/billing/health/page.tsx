@@ -2,7 +2,7 @@ import HealthRoute from '@/components/admin/billing/health/HealthRoute';
 import { useSearchParams } from '@/lib/navigation-compat';
 import { resolveConcreteBillingEnv } from '@/lib/admin/billing';
 import { parseBillingSearchParams } from '@/lib/admin/billing-search-params';
-import { getStripeEnvironment } from '@/lib/stripe/environment';
+import { getStripeEnvironment } from '@/lib/stripe-client';
 
 export default function BillingHealthPage() {
   const [searchParamsRaw] = useSearchParams();

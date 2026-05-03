@@ -3,8 +3,7 @@
 
 import { ReactNode, Suspense, useEffect } from 'react';
 import { Link } from 'wouter';
-// @ts-ignore
-import Image from 'next/image';
+import Image from '@/components/shared/NativeImage';
 import { usePathname, useRouter, useSearchParams } from '@/lib/navigation-compat';
 import { useAuth } from '@/contexts/AuthContext';
 import { resolveAppRole } from '@/lib/auth/navigation';

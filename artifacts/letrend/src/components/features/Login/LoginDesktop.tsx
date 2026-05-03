@@ -1,7 +1,6 @@
 'use client'
 
-// @ts-ignore
-import Image from 'next/image'
+import Image from '@/components/shared/NativeImage'
 import { useLoginForm } from '@/hooks/useLoginForm'
 import { getAuthCallbackUrl } from '@/lib/url/public'
 

@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-// @ts-ignore
-import Image from 'next/image';
+import Image from '@/components/shared/NativeImage';
 import { Trash2 } from 'lucide-react';
 import type { TikTokProfilePreview } from '@/lib/tiktok/profile';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';

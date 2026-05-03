@@ -1,6 +1,6 @@
 import React from 'react';
 
-type NextImageProps = {
+type NativeImageProps = {
   src: string | { src: string };
   alt: string;
   width?: number;
@@ -18,10 +18,26 @@ type NextImageProps = {
   onError?: () => void;
 };
 
-export default function Image({ src, alt, width, height, fill, className, style, ...rest }: NextImageProps) {
-  const resolvedSrc = typeof src === 'object' && 'src' in src ? src.src : src as string;
+export default function NativeImage({
+  src,
+  alt,
+  width,
+  height,
+  fill,
+  className,
+  style,
+}: NativeImageProps) {
+  const resolvedSrc =
+    typeof src === 'object' && 'src' in src ? src.src : (src as string);
   const imgStyle: React.CSSProperties = fill
-    ? { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', ...style }
+    ? {
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        ...style,
+      }
     : style || {};
   return (
     <img

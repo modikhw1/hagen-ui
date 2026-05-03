@@ -1,5 +1,4 @@
-// @ts-ignore
-import Image from 'next/image';
+import Image from '@/components/shared/NativeImage';
 
 export function Logo({ size = 32 }: { size?: number }) {
   return (

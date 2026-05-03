@@ -9,7 +9,6 @@
     "dist",
     "**/*.test.ts",
     "src/app/api/**",
-    "src/lib/stripe/**",
     "src/jobs/**",
     "src/lib/admin/customer-billing-store.ts",
     "src/lib/admin/auth.ts",
@@ -19,12 +18,9 @@
     "src/lib/admin/customer-actions/**",
     "src/lib/admin/customer-detail/**",
     "src/lib/admin/customers/list.server.ts",
-    "src/lib/admin/server/**",
     "src/lib/admin/with-admin.ts",
     "src/lib/auth/api-auth.ts",
-    "src/lib/auth/shared-auth.ts",
-    "src/lib/server/**",
-    "src/stubs/**"
+    "src/lib/auth/shared-auth.ts"
   ],
   "compilerOptions": {
     "noEmit": true,

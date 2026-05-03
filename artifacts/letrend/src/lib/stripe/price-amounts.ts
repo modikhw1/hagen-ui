@@ -1,53 +1,24 @@
-// @ts-nocheck
-import type Stripe from 'stripe';
+export type RecurringInterval = 'month' | 'year' | 'week' | 'day';
 
-export function recurringUnitAmountFromMonthlySek(params: {
-  monthlyPriceSek: number;
-  interval: Stripe.Price.Recurring.Interval;
-  intervalCount?: number | null;
-}) {
-  const monthlyOre = Math.round((Number(params.monthlyPriceSek) || 0) * 100);
-  return recurringUnitAmountFromMonthlyOre({
-    monthlyPriceOre: monthlyOre,
-    interval: params.interval,
-    intervalCount: params.intervalCount,
-  });
-}
-
-export function recurringUnitAmountFromMonthlyOre(params: {
-  monthlyPriceOre: number;
-  interval: Stripe.Price.Recurring.Interval;
-  intervalCount?: number | null;
-}) {
-  const monthlyOre = Math.round(Number(params.monthlyPriceOre) || 0);
-  const intervalCount = Math.max(1, Number(params.intervalCount) || 1);
-
-  if (params.interval === 'month') {
-    return monthlyOre * intervalCount;
-  }
-
-  if (params.interval === 'year') {
-    return monthlyOre * 12 * intervalCount;
-  }
-
-  return monthlyOre * intervalCount;
-}
-
-export function monthlyAmountOreFromRecurringUnit(params: {
+export interface RecurringUnitAmount {
   unitAmountOre: number;
-  interval: Stripe.Price.Recurring.Interval;
-  intervalCount?: number | null;
-}) {
-  const unitAmountOre = Math.round(Number(params.unitAmountOre) || 0);
-  const intervalCount = Math.max(1, Number(params.intervalCount) || 1);
+  interval: RecurringInterval;
+  intervalCount: number;
+}
 
-  if (params.interval === 'month') {
-    return Math.round(unitAmountOre / intervalCount);
-  }
+export function monthlyAmountOreFromRecurringUnit({
+  unitAmountOre,
+  interval,
+  intervalCount,
+}: RecurringUnitAmount): number {
+  const count = Math.max(1, intervalCount);
+  if (interval === 'month') return Math.round(unitAmountOre / count);
+  if (interval === 'year') return Math.round(unitAmountOre / (count * 12));
+  if (interval === 'week') return Math.round((unitAmountOre * 52) / (count * 12));
+  if (interval === 'day') return Math.round((unitAmountOre * 365) / (count * 12));
+  return Math.round(unitAmountOre / count);
+}
 
-  if (params.interval === 'year') {
-    return Math.round(unitAmountOre / (12 * intervalCount));
-  }
-
-  return Math.round(unitAmountOre / intervalCount);
+export function recurringUnitAmountFromMonthlySek(monthlySek: number): number {
+  return Math.round(monthlySek * 100);
 }

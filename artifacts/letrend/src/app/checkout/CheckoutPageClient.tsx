@@ -2,8 +2,7 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-// @ts-ignore
-import Image from 'next/image';
+import Image from '@/components/shared/NativeImage';
 import { useRouter } from '@/lib/navigation-compat';
 import { getOnboardingProfileId } from '@/lib/onboarding/session';
 import { loadStripe } from '@stripe/stripe-js';

@@ -2,8 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter } from '@/lib/navigation-compat'
-// @ts-ignore
-import Image from 'next/image'
+import Image from '@/components/shared/NativeImage'
 import {
   useDashboardData,
   DashboardConceptCardViewModel,

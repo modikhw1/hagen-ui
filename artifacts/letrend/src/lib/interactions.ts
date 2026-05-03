@@ -23,13 +23,8 @@ type DatabaseClient = SupabaseClient<Database>;
 const teamMemberCache = new Map<string, string | null>();
 
 async function getDefaultClient(): Promise<DatabaseClient> {
-  if (typeof window !== 'undefined') {
-    const { supabase } = await import('@/lib/supabase/client');
-    return supabase as DatabaseClient;
-  }
-
-  const { createSupabaseAdmin } = await import('@/lib/server/supabase-admin');
-  return createSupabaseAdmin();
+  const { supabase } = await import('@/lib/supabase/client');
+  return supabase as DatabaseClient;
 }
 
 export async function resolveTeamMemberIdForProfile(

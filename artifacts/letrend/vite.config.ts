@@ -82,13 +82,6 @@ if (!exports.useEffectEvent) {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
-      "stripe": path.resolve(import.meta.dirname, "src/stubs/stripe.ts"),
-      "next/cache": path.resolve(import.meta.dirname, "src/stubs/next-cache.ts"),
-      "next/server": path.resolve(import.meta.dirname, "src/stubs/next-server.ts"),
-      "next/navigation": path.resolve(import.meta.dirname, "src/stubs/next-navigation.ts"),
-      "next/headers": path.resolve(import.meta.dirname, "src/stubs/next-headers.ts"),
-      "next/image": path.resolve(import.meta.dirname, "src/stubs/next-image.tsx"),
-      "server-only": path.resolve(import.meta.dirname, "src/stubs/server-only.ts"),
     },
     dedupe: ["react", "react-dom"],
   },

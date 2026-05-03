@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import BillingShellTabs from '@/components/admin/billing/BillingShellTabs';
-import { getStripeEnvironment } from '@/lib/stripe/environment';
+import { getStripeEnvironment } from '@/lib/stripe-client';
 
 export default function BillingLayout({ children }: { children: ReactNode }) {
   const defaultHealthEnv = getStripeEnvironment();
