@@ -1,0 +1,79 @@
+{
+  "description": "Mechanism label corrections for long-form gold_standard entries",
+  "date": "2025-12-31",
+  "corrections": [
+    {
+      "line": 37,
+      "video_id": "7554147919415266582",
+      "current_mechanism": "Transformation, humor, igenkänning",
+      "issue": "'humor' is not a mechanism, 'transformation' is vague",
+      "description": "Staff in work clothes, hand covers camera, 'weekend clothes' text - reveal: same clothes. No one gets weekends.",
+      "corrected_mechanism": "Subversion av förväntan, ironi",
+      "reasoning": "Setup creates expectation of casual clothes, reality subverts this"
+    },
+    {
+      "line": 85,
+      "video_id": "7556204297718074647",
+      "current_mechanism": "Subversion, humor",
+      "issue": "'humor' is not a mechanism",
+      "description": "Stressed barista, kind customer says 'take your time', barista kisses camera (representing customer)",
+      "corrected_mechanism": "Överdrift, absurdism",
+      "reasoning": "Gratitude reaction is absurdly exaggerated beyond any realistic response"
+    },
+    {
+      "line": 230,
+      "video_id": "7571077830440783126",
+      "current_mechanism": "Humor, subversion",
+      "issue": "'humor' is not a mechanism",
+      "description": "Four levels of chef pan-shaking skill, final level pan shakes itself magically",
+      "corrected_mechanism": "Eskalering, absurdism",
+      "reasoning": "Escalating skill levels culminate in physically impossible absurd finale"
+    },
+    {
+      "line": 231,
+      "video_id": "7587090524037795094",
+      "current_mechanism": "NOT_FOUND",
+      "issue": "Missing mechanism field entirely",
+      "description": "Customer orders julbord for 52 people day before Christmas with endless allergies",
+      "corrected_mechanism": "Igenkänning, eskalering, frustration",
+      "reasoning": "Relatable service nightmare with escalating absurd demands"
+    },
+    {
+      "line": 232,
+      "video_id": "7551418647751789846",
+      "current_mechanism": "NOT_FOUND",
+      "issue": "Missing mechanism field entirely",
+      "description": "Customer on phone with earpiece, employee thinks customer is talking to them",
+      "corrected_mechanism": "Missförstånd, situationskomik",
+      "reasoning": "Classic misunderstanding from ambiguous context (earpiece not visible)"
+    },
+    {
+      "line": 692,
+      "video_id": "7560423971225603330",
+      "current_mechanism": "NOT_FOUND",
+      "issue": "Missing mechanism field entirely",
+      "description": "Cashier pretends to ask colleague for price, makes up high price, gives 'discounted' real price",
+      "corrected_mechanism": "Subversion, bedrägeri som charm",
+      "reasoning": "Fake negotiation/price reveal - the 'scam' is played for laughs"
+    },
+    {
+      "line": 695,
+      "video_id": "7586719632040398102",
+      "current_mechanism": "NOT_FOUND",
+      "issue": "Missing mechanism field entirely",
+      "description": "Customer takes too many anchovies during shortage, treated like criminal",
+      "corrected_mechanism": "Eskalering, överdrift",
+      "reasoning": "Mundane rule violation escalates to absurd criminal treatment"
+    },
+    {
+      "line": 704,
+      "video_id": "7576004386866990358",
+      "current_mechanism": "TRUNCATED - 'The humor uses'",
+      "issue": "Mechanism field got cut off mid-sentence",
+      "description": "Workers dread announcing order 67, three kids go absolutely wild when called",
+      "corrected_mechanism": "Uppbyggnad med payoff, situationsironi",
+      "reasoning": "Dread build-up subverted by wholesome but chaotic reveal"
+    }
+  ],
+  "overused_subversion_note": "24 entries use 'Subversion' - many are correct, but some may be using it as catch-all. Review needed: is 'Subversion' accurate or is there a more specific mechanism?"
+}

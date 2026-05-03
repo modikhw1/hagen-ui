@@ -1,0 +1,29 @@
+kind = "api"
+previewPath = "/hagen"
+title = "Hagen (read-only mirror)"
+version = "1.0.0"
+id = "hagen_readonly_mirror"
+
+# NOTE: Hagen is the upstream video-analysis service that ships separately
+# (deployed to its own Railway/Vercel instance against its own Supabase
+# project). This artifact entry exists only so the source code is browsable
+# inside the workspace for audit and reference. It is intentionally NOT
+# wired up to run locally — hagen needs Vertex AI service-account
+# credentials, GCS, the hagen Supabase project, and a RapidAPI/Supadata key,
+# none of which are provisioned in this Replit. The dev command below is a
+# no-op placeholder so the workflow stays idle instead of crash-looping.
+# To actually run hagen, deploy from its own repo:
+#   https://github.com/modikhw1/hagen
+
+[[services]]
+localPort = 3100
+name = "Hagen (idle)"
+paths = ["/hagen"]
+
+[services.development]
+run = "echo 'Hagen artifact is source-only in this workspace — see .local/audits/hagen-letrend-ingestion-audit.md' && tail -f /dev/null"
+
+[services.production]
+
+[services.production.run]
+args = ["true"]

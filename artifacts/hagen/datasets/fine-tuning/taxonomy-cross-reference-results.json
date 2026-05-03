@@ -1,0 +1,145 @@
+{
+  "date": "2025-12-31",
+  "title": "Taxonomy Cross-Reference Analysis Results",
+
+  "summary": {
+    "total_taxonomy_patterns": 39,
+    "found_in_simpsons": 22,
+    "found_in_tiktok": 31,
+    "unique_to_simpsons": 5,
+    "unique_to_tiktok": 14,
+    "coverage_percentage": "82%"
+  },
+
+  "simpsons_coverage": {
+    "well_represented": {
+      "patterns": [
+        {"name": "callback_payoff", "count": 69, "source": "callback mechanism"},
+        {"name": "delayed_punchline", "count": 171, "source": "timing"},
+        {"name": "non_reaction", "count": 98, "source": "reaction_shot + deadpan_context"},
+        {"name": "absurd_escalation", "count": 106, "source": "physical_comedy + escalation"},
+        {"name": "lampshading", "count": 50, "source": "direct_address"},
+        {"name": "format_awareness", "count": 50, "source": "direct_address"},
+        {"name": "accumulation_comedy", "count": 50, "source": "physical_commitment"},
+        {"name": "oblivious_protagonist", "count": 40, "source": "reaction_shot"}
+      ],
+      "insight": "Simpsons excels at STRUCTURAL patterns - callbacks, timing, character archetypes"
+    },
+    "not_found_in_simpsons": [
+      "literal_interpretation",
+      "wordplay_disambiguation",
+      "hidden_motive_reveal",
+      "pov_perspective_subversion",
+      "task_interpretation_ambiguity",
+      "social_script_exploitation",
+      "role_reversal",
+      "status_inversion",
+      "competence_mismatch",
+      "circular_logic_loop",
+      "pedantic_correction_loop",
+      "unfalsifiable_logic",
+      "collective_delusion_acknowledgment",
+      "solidarity_through_suffering",
+      "wrong_lesson_learned",
+      "selective_professional_amnesia",
+      "recursive_commentary"
+    ],
+    "insight": "Simpsons lacks SHORT-FORM patterns - wordplay, social scripts, POV tricks"
+  },
+
+  "tiktok_coverage": {
+    "well_represented": {
+      "patterns": [
+        {"name": "literal_interpretation", "estimated_count": 15, "evidence": "Multiple 'bokstavlig tolkning' entries"},
+        {"name": "wordplay_disambiguation", "estimated_count": 8, "evidence": "Ordvits mechanisms"},
+        {"name": "social_script_exploitation", "estimated_count": 53, "evidence": "Social/polite keyword matches"},
+        {"name": "solidarity_through_suffering", "estimated_count": 158, "evidence": "Igenkänning/relaterbar matches"},
+        {"name": "pov_perspective_subversion", "estimated_count": 17, "evidence": "POV/perspektiv matches"},
+        {"name": "hidden_motive_reveal", "estimated_count": 12, "evidence": "Egentligen/avslöja matches"}
+      ],
+      "insight": "TikTok excels at SOCIAL patterns - recognition humor, in-group bonding, workplace reality"
+    },
+    "sparse_in_tiktok": [
+      "rule_of_three_subversion",
+      "anticlimactic_resolution",
+      "circular_logic_loop",
+      "unfalsifiable_logic",
+      "recursive_commentary",
+      "one_upmanship_spiral"
+    ],
+    "insight": "TikTok lacks COMPLEX STRUCTURE patterns - these require longer format"
+  },
+
+  "specific_simpsons_examples": {
+    "callback_payoff": {
+      "episode": "7G11 - Life on the Fast Lane",
+      "description": "Marge's bowling ball always hits exactly pin 7",
+      "structural_formula": "PLANT specific detail → BUILD expectation → RETURN with confirmation"
+    },
+    "non_reaction_deadpan": {
+      "episode": "3F22 - Summer of 4 Ft 2",
+      "description": "Homer sees kitchen chaos, pauses, walks out",
+      "structural_formula": "ABSURD situation → EXPECTED reaction → NO reaction (contrast)"
+    },
+    "lampshading": {
+      "episode": "3F23 - You Only Move Twice",
+      "description": "Hank Scorpio breaks fourth wall with knowing look",
+      "structural_formula": "ABSURD element → CHARACTER acknowledges → CONTINUES anyway"
+    },
+    "escalation_subversion": {
+      "episode": "8F22 - Bart's Friend Falls in Love",
+      "description": "Bart passes dangerous objects, picks Magic 8-Ball as weapon",
+      "structural_formula": "BUILD escalation → EXPECT continuation → ANTICLIMACTIC choice"
+    }
+  },
+
+  "new_tiktok_pattern_discoveries": {
+    "from_user_notes": {
+      "tone_dependent_interpretation": {
+        "description": "Same structure reads differently based on acting/dialogue tone",
+        "examples": ["take-your-time (playful not malicious)", "hurry-chant (mean-spirited)"],
+        "tiktok_count": "Many - tone is pervasive differentiator"
+      },
+      "cinematic_interiority": {
+        "description": "POV + sound perspective implies internal thoughts without narration",
+        "examples": ["tip-pov-flip"],
+        "tiktok_count": 17
+      },
+      "social_invitation_violation": {
+        "description": "Breaking implicit contracts within social rituals",
+        "examples": ["rigged-bottle-flip", "tack-detsamma"],
+        "tiktok_count": 53
+      },
+      "empathetic_humor": {
+        "description": "Humor through viewer sympathy, not just surprise",
+        "examples": ["regular-walks-past", "extreme-gratitude"],
+        "tiktok_count": "Subset of solidarity patterns"
+      },
+      "coherent_absurdist_world": {
+        "description": "World-building where different rules apply consistently",
+        "examples": ["colleague-gets-extra", "elderly-makes-own"],
+        "tiktok_count": "Many - absurdism category"
+      }
+    }
+  },
+
+  "training_recommendations": {
+    "priority_1_simpsons_mining": {
+      "patterns": ["callback_payoff", "timing_beat", "non_reaction", "escalation_subversion"],
+      "reason": "Rich structural examples that teach HOW patterns work",
+      "action": "Already created 5 structural reasoning-chain examples"
+    },
+    "priority_2_tiktok_relabeling": {
+      "patterns": ["social_script_exploitation", "solidarity_through_suffering", "tone_dependent"],
+      "reason": "Many examples exist but labeled with generic mechanisms",
+      "action": "Relabel using expanded taxonomy vocabulary"
+    },
+    "priority_3_gap_filling": {
+      "patterns": ["rule_of_three_subversion", "circular_logic_loop", "unfalsifiable_logic"],
+      "reason": "Sparse in both datasets - fundamental comedy structures",
+      "action": "Create synthetic examples or find external sources"
+    }
+  },
+
+  "key_insight": "Simpsons teaches STRUCTURAL MECHANICS (timing, callbacks, escalation). TikTok teaches SOCIAL RECOGNITION (workplace reality, in-group bonding). Combined training creates model that understands both HOW patterns work and WHAT they look like in modern short-form."
+}

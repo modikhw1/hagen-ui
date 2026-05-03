@@ -1,0 +1,12 @@
+{
+  "trainUri": "gs://hagen-video-analysis/fine-tuning/humor-analysis-v7x/train_1767203039307.jsonl",
+  "validationUri": "gs://hagen-video-analysis/fine-tuning/humor-analysis-v7x/validation_1767203039307.jsonl",
+  "timestamp": "2025-12-31T17:44:00.753Z",
+  "stats": {
+    "total": 266,
+    "train": 226,
+    "validation": 40,
+    "excluded_simpsons": 413,
+    "excluded_no_gcs": 32
+  }
+}

@@ -1,0 +1,553 @@
+{
+  "computed_at": "2025-12-19T21:23:55.430Z",
+  "total_examples": 142,
+  "scored_count": 90,
+  "statistics": {
+    "average": 57.4,
+    "median": 59,
+    "min": 25,
+    "max": 71
+  },
+  "scores": {
+    "8c47360f-24fa-490c-a537-ee93cbd43003": {
+      "score": 62,
+      "video_summary": "A customer at a restaurant makes increasingly absurd requests, leading to exaggerated reactions from the employee.",
+      "gemini_original": "Humor Type: absurdist\nMechanism: The humor comes from the escalating absurdity of the customer's requests and the employee's over-the-top reactions. The customer's sarcastic responses and unrealistic ",
+      "computed_at": "2025-12-19T21:23:09.113Z"
+    },
+    "fc10c40b-f8de-4272-be5d-c8d7a33361a0": {
+      "score": 56,
+      "video_summary": "A restaurant worker hopes to leave early due to a slow day, but ends up working extra hours when the restaurant gets busy.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation (leaving early) and then immediately breaks it with a contrasting reality (staying late).\nWhy Funny: It's funny because it's a relata",
+      "computed_at": "2025-12-19T21:23:09.561Z"
+    },
+    "c2d7785c-e197-4961-b0a5-064b9f038fa7": {
+      "score": 68,
+      "video_summary": "A restaurant employee comically struggles to find the customer whose burger they are holding because they've forgotten what the customer looks like.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and situational irony.\nWhy Funny: It's funny because it exaggerates a common, relatable experience for service industry workers. The idea of completely fo",
+      "computed_at": "2025-12-19T21:23:10.091Z"
+    },
+    "b47581f6-1f34-4281-aa2e-77a670dc9ee8": {
+      "score": 60,
+      "video_summary": "A waiter warns a customer not to touch a hot plate, and the customer immediately touches it.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from the immediate and direct violation of the waiter's warning. The expectation is that the customer would heed the warning, but instead, they do the",
+      "computed_at": "2025-12-19T21:23:10.582Z"
+    },
+    "b941a62d-e9cd-44de-ad48-d0f6c128271e": {
+      "score": 60,
+      "video_summary": "A skit depicting an entitled customer making unreasonable demands and causing a mess, while a service worker bends over backwards to accommodate her.",
+      "gemini_original": "Humor Type: Subversion and Relatable\nMechanism: The humor comes from the exaggerated and entitled behavior of the customer, contrasted with the overly accommodating service worker. It subverts expecta",
+      "computed_at": "2025-12-19T21:23:11.122Z"
+    },
+    "313a9515-f606-4f5d-8138-4fbfdb59e3e2": {
+      "score": 70,
+      "video_summary": "A stressed barista struggles to maintain composure while dealing with a customer who keeps changing and adding to their order.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and escalating frustration. The barista's reactions become increasingly over-the-top as the customer's order becomes more complicated and they forget inst",
+      "computed_at": "2025-12-19T21:23:11.576Z"
+    },
+    "cd1c747a-4a69-4182-91d2-4f030287c135": {
+      "score": 56,
+      "video_summary": "A person goes to their workplace on their day off and makes a burger for themselves.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Subversion of expectations and relatable work experience.\nWhy Funny: It's funny because it plays on the common experience of going into work even on your day off, ofte",
+      "computed_at": "2025-12-19T21:23:11.974Z"
+    },
+    "6a313278-84e8-43d2-9eb8-689fe1ecae41": {
+      "score": 68,
+      "video_summary": "The video humorously depicts the disconnect between how customers expect waitresses to act and the reality of the job.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and juxtaposition. The video exaggerates the demanding behavior of customers in restaurants and contrasts it with the reality of a busy waitress's experie",
+      "computed_at": "2025-12-19T21:23:12.398Z"
+    },
+    "29737791-87ec-42ba-9d29-718a9d3d0fd5": {
+      "score": 64,
+      "video_summary": "A worker desperately needs someone to cover their shift, but their colleagues are unwilling to help, resorting to ridiculous excuses.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of someone helping out, but subverts it by showing a colleague pretending to be blind to avoid the request.\nWhy Funny: It's funny bec",
+      "computed_at": "2025-12-19T21:23:13.368Z"
+    },
+    "cc35a45b-2daa-4b96-9e0d-9c06d5796213": {
+      "score": 61,
+      "video_summary": "A restaurant worker reacts to the return of a customer who previously left a bad review.",
+      "gemini_original": "Humor Type: relatable\nMechanism: The humor comes from the shared experience of service industry workers dealing with difficult customers, specifically those who have left negative reviews and then ret",
+      "computed_at": "2025-12-19T21:23:13.842Z"
+    },
+    "81541804-aa6b-4c15-8469-ed32e2a6fde5": {
+      "score": 59,
+      "video_summary": "Two coworkers comically dramatize saying goodbye after a long shift.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video subverts expectations by framing a work relationship as a 'paid play date' and exaggerating the emotional goodbye, implying a deeper connection than is like",
+      "computed_at": "2025-12-19T21:23:14.282Z"
+    },
+    "26b89606-502f-40bf-a0e9-fcdd3aa696ee": {
+      "score": 53,
+      "video_summary": "A restaurant worker goes to extreme lengths to avoid a particular customer.",
+      "gemini_original": "Humor Type: visual-reveal\nMechanism: The humor comes from the unexpected action of the worker crawling back into the kitchen to hide. The text sets up the expectation of a negative customer interactio",
+      "computed_at": "2025-12-19T21:23:14.716Z"
+    },
+    "b92004ef-4970-4aec-b140-b12dbaa8948a": {
+      "score": 53,
+      "video_summary": "A new male employee at a bar becomes comfortable enough to flirt with a female coworker, leading to a humorous exchange.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from the man's increasingly specific and pointed description of the woman, which escalates from hair color to height and accessories, implying he's di",
+      "computed_at": "2025-12-19T21:23:15.140Z"
+    },
+    "321c2ad1-adc7-4d46-a9e1-6ff7d1b7f37e": {
+      "score": 65,
+      "video_summary": "The video humorously portrays the stereotype of Gen Z restaurant staff being energetic and dance-loving.",
+      "gemini_original": "Humor Type: observational\nMechanism: Stereotyping and juxtaposition. The video plays on the stereotype of Gen Z being energetic, dance-loving, and peace-sign-happy, contrasting it with the more tradit",
+      "computed_at": "2025-12-19T21:23:15.574Z"
+    },
+    "9178d713-6a3f-4031-a0f2-780651cab08e": {
+      "score": 52,
+      "video_summary": "Restaurant employees comically demonstrate the stress and chaos of working in the industry.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and visual-reveal\nWhy Funny: The humor comes from the exaggerated reaction to a common question about a notoriously difficult job. The visual of putting a",
+      "computed_at": "2025-12-19T21:23:16.158Z"
+    },
+    "12cb9cf7-bd77-4cd9-87b4-7d1ac988f896": {
+      "score": 67,
+      "video_summary": "A customer requests no sprinkles on their ice cream, and the employee responds by throwing the ice cream away and getting a new one with sprinkles.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from the unexpected and inefficient solution to the customer's request. Instead of removing the sprinkles, the employee throws away the entire ice cre",
+      "computed_at": "2025-12-19T21:23:16.863Z"
+    },
+    "179f35e7-22dd-4bb9-8f1c-8f2b9827ded5": {
+      "score": 64,
+      "video_summary": "A waiter asks a customer how their food is in an unusually intimate and intense way.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up the expectation that the customer will give a verbal response to the waiter's question. Instead, the waiter leans in very close and whispers the que",
+      "computed_at": "2025-12-19T21:23:17.361Z"
+    },
+    "454e04e3-8275-4ad1-aac1-91ce5b9e4a71": {
+      "score": 60,
+      "video_summary": "A restaurant employee frantically searches for a manager during a busy Saturday night.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and frantic movement to depict the common experience of trying to find a manager during a busy shift.\nWhy Funny: It's funny because many people who have w",
+      "computed_at": "2025-12-19T21:23:17.875Z"
+    },
+    "6b4633c1-7b9a-4bc9-be2e-73177fbc1146": {
+      "score": 52,
+      "video_summary": "A humorous depiction of the struggle to enjoy a short break at work when the store is busy and time is running out.",
+      "gemini_original": "Humor Type: relatable\nMechanism: The humor comes from the relatable experience of being rushed during a break at work, especially when the store is busy and an alarm is going off.\nWhy Funny: Many peop",
+      "computed_at": "2025-12-19T21:23:18.514Z"
+    },
+    "cedf50a9-135d-4430-b186-0a6d0f2d752f": {
+      "score": 66,
+      "video_summary": "A restaurant employee offers a 'good-looking' discount, but the customer ends up being charged more.",
+      "gemini_original": "Humor Type: Subversion\nMechanism: The video sets up the expectation that the 'good-looking' discount will be a lower price. Instead, the coworker interaction leads to a much higher price, subverting t",
+      "computed_at": "2025-12-19T21:23:18.918Z"
+    },
+    "92562b2f-6328-44cf-94ea-16e3fa10d91d": {
+      "score": 52,
+      "video_summary": "A customer's internal monologue about tipping is interrupted by a rude outburst.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of a generous and thoughtful act (increasing the tip amount due to perceived need), then subverts it with an abrupt and rude outburst",
+      "computed_at": "2025-12-19T21:23:19.388Z"
+    },
+    "7ec1efc7-71cc-4a06-ab6f-3f60baacd302": {
+      "score": 58,
+      "video_summary": "A service worker's reaction to a difficult customer returning and acting like nothing happened.",
+      "gemini_original": "Humor Type: relatable\nMechanism: The humor comes from the shared experience of dealing with difficult customers in a service industry setting.\nWhy Funny: It's funny because many people who have worked",
+      "computed_at": "2025-12-19T21:23:19.994Z"
+    },
+    "60be1792-416c-41a4-b560-d4a4d8cd983a": {
+      "score": 53,
+      "video_summary": "A coworker who needs a ride home starts being extra helpful to the person who has a car.",
+      "gemini_original": "Humor Type: observational\nMechanism: The humor relies on a common workplace scenario where a coworker who needs a ride home will suddenly become extra helpful near closing time.\nWhy Funny: It's funny ",
+      "computed_at": "2025-12-19T21:23:20.446Z"
+    },
+    "80edb4eb-95bd-452f-9ce1-59222732cbe1": {
+      "score": 57,
+      "video_summary": "A person is told to look at someone discreetly but does the opposite in a very obvious way.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from the extreme literal interpretation of the instruction. The instruction is to be subtle, but the character does the opposite, creating an unexpect",
+      "computed_at": "2025-12-19T21:23:20.951Z"
+    },
+    "df968711-2620-44fb-837c-f585f9487e86": {
+      "score": 63,
+      "video_summary": "A worker diligently cleans while dreading an upcoming conversation with their boss.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and juxtaposition of mundane cleaning tasks with the ominous statement from the boss.\nWhy Funny: It's funny because many people can relate to the anxiety ",
+      "computed_at": "2025-12-19T21:23:21.474Z"
+    },
+    "f35aa89f-e01b-4f05-98c8-33b08e1dd0c2": {
+      "score": 62,
+      "video_summary": "A customer is short on cash for a salad, and the employee eats part of it to reduce the price.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of a normal transaction, but subverts it by having the employee literally eat part of the salad to reduce the price.\nWhy Funny: It's ",
+      "computed_at": "2025-12-19T21:23:21.903Z"
+    },
+    "25918e95-b8a6-4066-94e7-b4ce19288579": {
+      "score": 64,
+      "video_summary": "A customer suspects a restaurant employee ate part of their meal.",
+      "gemini_original": "Humor Type: visual-reveal\nMechanism: The humor comes from the visual of the server having food on his face, implying he took the missing bite.\nWhy Funny: It's funny because it's unexpected and a bit a",
+      "computed_at": "2025-12-19T21:23:22.631Z"
+    },
+    "487a6554-6f3d-4950-857e-e5e0c095b476": {
+      "score": 64,
+      "video_summary": "A tired restaurant worker, closing one night and opening the next morning, is so exhausted that he lies down on the floor with a baking sheet as a pillow.",
+      "gemini_original": "Humor Type: relatable\nMechanism: The humor comes from the absurd yet relatable situation of being so tired from closing a restaurant that you just want to sleep on the floor, even if it's uncomfortabl",
+      "computed_at": "2025-12-19T21:23:23.147Z"
+    },
+    "1ce620bc-7d18-4779-8ce2-d733d44b02df": {
+      "score": 58,
+      "video_summary": "A man uses violence to calm another man down by offering him poke bowls.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video subverts expectations by presenting a violent act (throwing someone against a wall) followed by an offer of food as a calming gesture. The escalation to thr",
+      "computed_at": "2025-12-19T21:23:23.562Z"
+    },
+    "da44d0b9-3017-485b-9013-829240821438": {
+      "score": 62,
+      "video_summary": "A woman orders a sweet drink for herself while implying her husband is too embarrassed to order it himself.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Subversion and situational irony. The setup implies the husband is embarrassed to order a sweet drink, but the punchline reveals the wife is the one ordering the sweet",
+      "computed_at": "2025-12-19T21:23:23.982Z"
+    },
+    "232fc174-f45a-4121-bc16-1dfefa878edf": {
+      "score": 67,
+      "video_summary": "A poke restaurant employee comically interprets a customer's request for a lower price by physically lowering himself to the ground.",
+      "gemini_original": "Humor Type: visual-reveal\nMechanism: The humor comes from the literal interpretation of the phrase \"go lower.\" The man physically lowers himself to the ground in response to the customer's request for",
+      "computed_at": "2025-12-19T21:23:24.447Z"
+    },
+    "302e9106-f681-4c30-a98c-50b5386ecd55": {
+      "score": 62,
+      "video_summary": "An employee takes his boss's instruction to 'use your head' literally, resulting in a humorous and absurd situation.",
+      "gemini_original": "Humor Type: wordplay\nMechanism: The humor relies on a literal interpretation of the idiom 'use your head,' which typically means to think intelligently. Instead, the employee physically uses his head ",
+      "computed_at": "2025-12-19T21:23:24.857Z"
+    },
+    "371f02fe-abb9-4cd7-aceb-57b3d0cb6c68": {
+      "score": 63,
+      "video_summary": "Restaurant employees shown doing busywork because their boss wants them to be working even when there are no customers. Staff cuts imaginary pizza, opens door for no one, takes order from empty table, adds invisible food to plate.",
+      "gemini_original": "Absurdist humor showing workers doing unnecessary tasks.",
+      "computed_at": "2025-12-19T21:23:25.373Z"
+    },
+    "ffbe3299-a17c-4b46-9129-4c6c19fe713c": {
+      "score": 59,
+      "video_summary": "A restaurant employee dreads telling the kitchen staff that she made a mistake.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and emotional reaction to a common work situation.\nWhy Funny: It's funny because many people can relate to the anxiety and dread of having to admit a mist",
+      "computed_at": "2025-12-19T21:23:25.940Z"
+    },
+    "77cad233-1b1e-4265-a802-c7629f77730d": {
+      "score": 58,
+      "video_summary": "A person is asked if they would slap a coworker for money, and they immediately say it's not about the money, implying they would do it regardless.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up the expectation that the person will consider the monetary incentive before making a decision. The punchline subverts this expectation by having the",
+      "computed_at": "2025-12-19T21:23:26.486Z"
+    },
+    "29c48865-8fe7-46b7-9ca6-f7004d1a4b1a": {
+      "score": 53,
+      "video_summary": "Two employees are caught slacking off at work by their boss, who is also the mother of one of the employees.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up the expectation of a typical boss-employee dynamic when someone is caught slacking off. The subversion comes from the reveal that the 'boss' is actu",
+      "computed_at": "2025-12-19T21:23:26.890Z"
+    },
+    "a5055d4f-efef-4ae9-9d38-48ac74c4a682": {
+      "score": 42,
+      "video_summary": "Making work fun and engaging.",
+      "gemini_original": "Key Message: Making work fun and engaging.\nEmotional Tone: humor, excitement, relief\nTranscript: Text: 'If the pen goes in we will stay at work.' [Pen attempt and miss] [Celebratory apron removal]",
+      "computed_at": "2025-12-19T21:23:27.514Z"
+    },
+    "43d4c295-2c75-4fa6-bde5-e848e49c9a6a": {
+      "score": 52,
+      "video_summary": "The video humorously portrays the intense heat of a commercial kitchen.",
+      "gemini_original": "Humor Type: wordplay\nMechanism: The humor comes from the unexpected and vulgar simile used to describe the heat.\nWhy Funny: The phrase is funny because it's an unexpected and crude comparison. The sho",
+      "computed_at": "2025-12-19T21:23:27.937Z"
+    },
+    "2a6a06d2-47de-4908-8394-1825a6a9d649": {
+      "score": 61,
+      "video_summary": "The video humorously depicts the feeling of pride a barista experiences when someone takes a photo of their latte art.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Juxtaposition of a common, mundane situation (taking a photo of latte art) with an exaggerated, energetic reaction (the child dancing).\nWhy Funny: It's funny because i",
+      "computed_at": "2025-12-19T21:23:28.376Z"
+    },
+    "eb09ff4a-d55a-44c3-923e-f4cc570eac51": {
+      "score": 57,
+      "video_summary": "A person is excited to share gossip at work.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Subversion of expectations and physical comedy.\nWhy Funny: The humor comes from the relatable experience of having juicy gossip to share at work, combined with the exa",
+      "computed_at": "2025-12-19T21:23:28.847Z"
+    },
+    "cd74c68b-a0b1-4c55-a081-a74d2281fcd5": {
+      "score": 62,
+      "video_summary": "A person wants to share gossip, but the other person refuses to engage, promoting a message of minding one's own business.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up the expectation of gossip or sharing scandalous information (\"tea\"), but then immediately subverts it by having the second woman refuse to engage in",
+      "computed_at": "2025-12-19T21:23:29.368Z"
+    },
+    "5d58194b-7ea5-4f42-9053-a1040aa546b3": {
+      "score": 54,
+      "video_summary": "A man is asked a serious question about prioritizing career or love, but he humorously prioritizes food.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from subverting the expected serious answer to a philosophical question with a mundane and relatable response.\nWhy Funny: It's funny because the quest",
+      "computed_at": "2025-12-19T21:23:29.830Z"
+    },
+    "8ad9f63f-2356-45f9-8e7b-b781634c9db0": {
+      "score": 61,
+      "video_summary": "A person named Steve is supposed to be doing administrative work but is caught on camera doing something else and comically denies being there.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from the unexpected reaction of the man, Steve, who is supposed to be doing admin duties. He's caught on camera not doing his job and comically tries ",
+      "computed_at": "2025-12-19T21:23:30.207Z"
+    },
+    "f1b49c14-70b0-48f0-9948-1920080efd39": {
+      "score": 63,
+      "video_summary": "A waitress and a man engage in a romantic sushi-feeding trend, but the waitress questions if the trend is outdated.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up a romantic scenario (being served, toasting, feeding each other) and then subverts it by the waitress breaking the fourth wall and questioning the t",
+      "computed_at": "2025-12-19T21:23:30.995Z"
+    },
+    "1466e4a1-a4a7-4bfb-aa55-8962c13d3a28": {
+      "score": 66,
+      "video_summary": "A barista asks a customer to finish making their own coffee because she's too busy.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video subverts the expectation of customer service. Instead of the barista serving the customer, the roles are reversed.\nWhy Funny: It's funny because it's unexpe",
+      "computed_at": "2025-12-19T21:23:31.482Z"
+    },
+    "17df2bc0-303b-4a05-8041-287d76f00a2c": {
+      "score": 58,
+      "video_summary": "A manager tries to check in with her team after a rush, but one employee is too busy to respond.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Subversion of expectations and relatable workplace experience.\nWhy Funny: It's funny because it's a common experience in service jobs. The manager is trying to be upbe",
+      "computed_at": "2025-12-19T21:23:31.979Z"
+    },
+    "c17ed2c8-c51a-42e5-a145-ac0afe863877": {
+      "score": 59,
+      "video_summary": "A customer is offered a promotion at a store, but when they fail, the price of their item increases.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of a fun, customer-friendly promotion, but then immediately undercuts it by increasing the price when the customer fails.\nWhy Funny: ",
+      "computed_at": "2025-12-19T21:23:32.417Z"
+    },
+    "613d2ce9-63eb-4c7c-a261-2a73680992e3": {
+      "score": 64,
+      "video_summary": "A poke bowl restaurant owner pretends it's his first day on the job to excuse slow service, but is revealed to be the owner.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up the expectation that the employee is new and inexperienced, then subverts this expectation with a visual reveal and text overlay indicating he's act",
+      "computed_at": "2025-12-19T21:23:32.936Z"
+    },
+    "fce2c7e4-0c38-46d4-995a-400ab21997c6": {
+      "score": 64,
+      "video_summary": "A man proposes to a woman with a poke bowl instead of a ring at a poke bar.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video subverts the expectation of a marriage proposal by replacing the traditional ring with a poke bowl.\nWhy Funny: It's funny because it plays on the seriousnes",
+      "computed_at": "2025-12-19T21:23:33.382Z"
+    },
+    "af0f8c15-b7e3-484a-95f6-ae114c9c2063": {
+      "score": 66,
+      "video_summary": "A woman complains that her food is cold, but a flashback reveals she spent an hour taking photos of it before eating.",
+      "gemini_original": "Humor Type: visual-reveal\nMechanism: The humor comes from the juxtaposition of the woman complaining about cold food with the reveal that she spent an hour taking photos of it before eating it.\nWhy Fu",
+      "computed_at": "2025-12-19T21:23:33.805Z"
+    },
+    "813d8d1b-3fce-4d5d-b2ab-ae162028eccf": {
+      "score": 53,
+      "video_summary": "A skit showing an employee excessively asking a customer if they want anything else, even after the customer has repeatedly declined.",
+      "gemini_original": "Humor Type: observational\nMechanism: Exaggeration and repetition. The employee's persistent questioning, despite the customer's clear and repeated 'no's, is an exaggeration of typical customer service",
+      "computed_at": "2025-12-19T21:23:34.200Z"
+    },
+    "ce8e92cd-c31e-4edf-a3db-d0562cc1c704": {
+      "score": 55,
+      "video_summary": "A woman overthinks the shapes of pizza and its packaging, leading to an absurd complaint.",
+      "gemini_original": "Humor Type: absurdist\nMechanism: The humor comes from the blonde woman's overthinking of the shapes of the pizza, box, and slice, escalating into a nonsensical complaint about the pizza becoming trian",
+      "computed_at": "2025-12-19T21:23:34.672Z"
+    },
+    "2fdb8b2b-7e29-4d2e-a962-ab1a2118a7f6": {
+      "score": 57,
+      "video_summary": "The video shows the excitement of seeing a work friend when you're scheduled for the same shift.",
+      "gemini_original": "Humor Type: relatable\nMechanism: The humor comes from the shared experience of being excited to work with a friend.\nWhy Funny: Many people can relate to the feeling of being happy when they get to wor",
+      "computed_at": "2025-12-19T21:23:35.157Z"
+    },
+    "e1972440-6d1c-4f3a-877e-e00a499e6e5c": {
+      "score": 60,
+      "video_summary": "A person asks if you can order pizza in a Domino's, despite there being a pizza visible.",
+      "gemini_original": "Humor Type: visual-reveal\nMechanism: The humor comes from the juxtaposition of asking if you can order pizza in a Domino's, followed by a shot of a pizza sitting on a table in the same Domino's.\nWhy F",
+      "computed_at": "2025-12-19T21:23:35.668Z"
+    },
+    "627995f9-09c3-4fd2-9bca-d5f4ff54a45c": {
+      "score": 56,
+      "video_summary": "A customer asks a restaurant employee to hurry up, leading to an absurd chain of events.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of fast service, but then subverts it with the employee's exaggerated reaction to the customer's request and the other employee sleep",
+      "computed_at": "2025-12-19T21:23:36.045Z"
+    },
+    "d595d3b5-e1a9-4da0-90d9-e2d0b2781a31": {
+      "score": 49,
+      "video_summary": "A customer's specific request for a burger without onions is hilariously undermined when the restaurant employee brings a massive bag of onions to the table.",
+      "gemini_original": "Humor Type: Subversion\nMechanism: The video sets up an expectation (a burger order without onions) and then completely violates it with an absurd twist (a bag of onions).\nWhy Funny: The humor comes fr",
+      "computed_at": "2025-12-19T21:23:36.457Z"
+    },
+    "d9a3439d-ede5-4841-9703-e9ff34e5c8ba": {
+      "score": 48,
+      "video_summary": "A customer at a cafe creates an absurd situation by asking for her 100 krona bill back after the cashier finds a 50 krona bill to make change.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from subverting expectations. The viewer expects the customer to use the 50 krona bill to pay, but instead, she asks for her 100 krona bill back after",
+      "computed_at": "2025-12-19T21:23:37.032Z"
+    },
+    "a37f57fe-fc47-403f-9aae-64f27c53e3d9": {
+      "score": 61,
+      "video_summary": "A man unexpectedly pays for a woman's dessert at a cafe, framed as an act of chivalry.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of a woman paying for her own dessert, but the man steps in to pay for it instead. This subverts the expectation of a woman paying fo",
+      "computed_at": "2025-12-19T21:23:37.689Z"
+    },
+    "35e6668f-d0f1-4188-b28f-4a57fd89703a": {
+      "score": 62,
+      "video_summary": "A restaurant worker is given a choice between a holiday and cleaning tables, and surprisingly chooses the latter, supposedly due to a language barrier.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from the unexpected choice. The setup implies the man would obviously choose the holiday, but he selects the cleaning task. The added layer is the sug",
+      "computed_at": "2025-12-19T21:23:38.236Z"
+    },
+    "63dd499d-e902-4634-9e04-dc17a65a1f8c": {
+      "score": 60,
+      "video_summary": "A humorous depiction of the common scenario where people argue over who will pay the bill, exaggerated for comedic effect.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and role reversal. The video exaggerates the common situation of friends or family members playfully arguing over who will pay the bill. The role reversal",
+      "computed_at": "2025-12-19T21:23:38.972Z"
+    },
+    "29a79d33-8100-46f7-b49b-e00421abaf5f": {
+      "score": 67,
+      "video_summary": "A barista's exaggerated reaction to a customer taking a picture of their latte.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Subversion and juxtaposition.\nWhy Funny: The humor comes from the juxtaposition of the barista's internal reaction (expressed through the song) to a seemingly mundane ",
+      "computed_at": "2025-12-19T21:23:39.495Z"
+    },
+    "13774caa-d09b-489b-87ab-18f24b4aa652": {
+      "score": 55,
+      "video_summary": "A comedic depiction of the common social situation where people compete to pay the bill.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and situational irony\nWhy Funny: It's funny because it exaggerates a common social situation where people politely argue over who will pay the bill. The m",
+      "computed_at": "2025-12-19T21:23:39.878Z"
+    },
+    "7021fbbd-c7d1-464b-982c-f1f07d167a03": {
+      "score": 42,
+      "video_summary": "A customer pretends not to know what they want at a burger restaurant but then gives a very specific order, leading to a humorous realization.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video subverts the expectation of a customer who doesn't know what to order. The customer claims ignorance but then provides a highly specific and detailed order,",
+      "computed_at": "2025-12-19T21:23:40.390Z"
+    },
+    "b05eb03a-da72-4261-988f-4b2cb26aa83f": {
+      "score": 59,
+      "video_summary": "A man is trying to decide where to eat, but he doesn't know what the burger place on his shirt is.",
+      "gemini_original": "Humor Type: Subversion\nMechanism: The humor comes from the unexpected twist. The man asks where to eat, then it's revealed that he is wearing a shirt for a burger place and then asks what that burger ",
+      "computed_at": "2025-12-19T21:23:40.910Z"
+    },
+    "8a46e06b-b59e-40b7-beea-61ea32b6e638": {
+      "score": 64,
+      "video_summary": "A person can't afford their restaurant bill and ends up working in the kitchen to pay it off.",
+      "gemini_original": "Humor Type: visual-reveal\nMechanism: The humor comes from the unexpected visual reveal of the man washing dishes after the setup of not being able to afford the bill. It's a classic 'paying off the de",
+      "computed_at": "2025-12-19T21:23:41.444Z"
+    },
+    "175c53c3-f62e-4613-b087-269becabf47c": {
+      "score": 53,
+      "video_summary": "A woman quizzes people on the price of a 12-taco meal, highlighting the high cost of the food and rewarding a correct guess with the meal itself.",
+      "gemini_original": "Humor Type: Subversion\nMechanism: The humor comes from the unexpected discrepancy between people's guesses and the actual price of the tacos. The audience expects the tacos to be cheaper, but the gues",
+      "computed_at": "2025-12-19T21:23:42.407Z"
+    },
+    "b8a893d1-d9e9-4300-8dd7-95bbe0842f02": {
+      "score": 52,
+      "video_summary": "A person eats a 'Unicorn Burger' and has an absurdly magical experience.",
+      "gemini_original": "Humor Type: absurdist\nMechanism: The humor comes from the unexpected and exaggerated reaction to eating the 'Unicorn Burger.' The transition to a magical, dreamlike state is completely out of proporti",
+      "computed_at": "2025-12-19T21:23:42.844Z"
+    },
+    "6149c6fa-22a2-4272-aafd-2fa759d8eb57": {
+      "score": 51,
+      "video_summary": "A woman writes a letter on a pizza with sauce and claims that the letter means someone owes you a pizza.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from subverting the expectation of what one would normally do with a pizza. Instead of eating it, she uses it as a canvas to write a letter with sauce",
+      "computed_at": "2025-12-19T21:23:43.266Z"
+    },
+    "48b397e2-5699-45c3-83ef-9f8010a6fc93": {
+      "score": 67,
+      "video_summary": "A woman and a man are at a restaurant, and they both insist on paying, but when the woman's card is declined, she quickly changes her mind and lets the man pay.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of chivalry and generosity, but then subverts it with the woman's quick change of heart when her card is declined.\nWhy Funny: It's fu",
+      "computed_at": "2025-12-19T21:23:43.693Z"
+    },
+    "f0df24a4-d4b1-4e0c-9774-821f999e3f37": {
+      "score": 35,
+      "video_summary": "A question is posed to the viewer about which food item they would eat first from a plate of fast food.",
+      "gemini_original": "Humor Type: observational\nMechanism: The humor comes from the relatable experience of deciding what to eat first when presented with a delicious-looking meal.\nWhy Funny: It's funny because everyone ha",
+      "computed_at": "2025-12-19T21:23:44.109Z"
+    },
+    "62570df0-d70f-44b3-9ab7-d8ae989f92b4": {
+      "score": 62,
+      "video_summary": "A skit contrasting the rude service given to one customer with the overly friendly and flirty service given to another, based on attractiveness.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of consistent customer service, then subverts it by showing drastically different treatment based on the customer's perceived attract",
+      "computed_at": "2025-12-19T21:23:44.900Z"
+    },
+    "4f36e452-c923-4fa2-9b1f-e1e2f330d8c7": {
+      "score": 66,
+      "video_summary": "A restaurant worker's expectation of a quiet day is hilariously shattered by a sudden influx of dirty dishes, leading to an absurd attempt to hide from the work.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of a calm day, then immediately subverts it with the reality of a mountain of dishes. The hiding under the sink is an absurd reaction",
+      "computed_at": "2025-12-19T21:23:45.454Z"
+    },
+    "2c99af58-940c-4c0f-853a-5411c39ff677": {
+      "score": 71,
+      "video_summary": "A barista experiences an overly impatient customer who taps their card on the payment terminal before the transaction is ready.",
+      "gemini_original": "Humor Type: relatable\nMechanism: Exaggeration and relatable situation. The video exaggerates the impatience of a customer by having them tap their card before the transaction is even ready.\nWhy Funny:",
+      "computed_at": "2025-12-19T21:23:46.012Z"
+    },
+    "82492035-1477-4952-85ec-c6cd31a54df2": {
+      "score": 25,
+      "video_summary": "A restaurant worker tells a story about a rude customer and expresses her frustration with the lack of respect shown to service industry employees.",
+      "gemini_original": "Humor Type: Relatable/Observational/Subversion\nMechanism: The humor comes from the shared experience of working in the service industry and dealing with difficult customers. It also subverts expectati",
+      "computed_at": "2025-12-19T21:23:46.481Z"
+    },
+    "47c44f0d-7fc9-460c-9ed4-1c8a71bd803e": {
+      "score": 60,
+      "video_summary": "A restaurant worker describes a shift that went perfectly, which is unusual in the service industry.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video subverts expectations by having the woman describe a perfect shift, which is often not the reality in the service industry.\nWhy Funny: It's funny because it",
+      "computed_at": "2025-12-19T21:23:46.975Z"
+    },
+    "2a778489-4182-4da5-afa8-7d8f902f1fff": {
+      "score": 37,
+      "video_summary": "A man jokingly calls in a debt of two burgers from someone taller than him.",
+      "gemini_original": "Humor Type: relatable\nMechanism: The humor works by setting up a relatable scenario of owing someone a favor and then using height as a playful way to trigger that debt.\nWhy Funny: It's funny because ",
+      "computed_at": "2025-12-19T21:23:47.915Z"
+    },
+    "c43e6373-3fa4-4fac-b75c-63514f484024": {
+      "score": 55,
+      "video_summary": "A man is mistaken for an employee while mopping the floor at a restaurant, but he reveals he's just a very dedicated fan.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from subverting the expectation that someone mopping the floor in a restaurant is an employee. The punchline reveals he's just a very enthusiastic fan",
+      "computed_at": "2025-12-19T21:23:48.350Z"
+    },
+    "43f676aa-fe26-4684-a333-f41a0b9935f2": {
+      "score": 53,
+      "video_summary": "A lighthearted debate about the 'correct' order to eat a burger and fries.",
+      "gemini_original": "Humor Type: observational\nMechanism: The humor comes from the relatable debate about the 'correct' way to eat a burger and fries.\nWhy Funny: It's funny because many people have strong opinions about t",
+      "computed_at": "2025-12-19T21:23:48.967Z"
+    },
+    "a064ec9e-e077-4199-a75c-ccc65b6fbdba": {
+      "score": 50,
+      "video_summary": "Kitchen staff having fun and goofing off while lip-syncing to a song.",
+      "gemini_original": "Humor Type: absurdist\nMechanism: Juxtaposition of the mundane (working in a kitchen) with exaggerated behavior (lip-syncing, dancing, posing).\nWhy Funny: The humor comes from the unexpected and over-t",
+      "computed_at": "2025-12-19T21:23:49.425Z"
+    },
+    "ae9b725d-7b96-49f4-adf7-55e35c6a22f8": {
+      "score": 37,
+      "video_summary": "A wealthy-looking woman is surprisingly concerned about a 150€ bill.",
+      "gemini_original": "Humor Type: observational\nMechanism: Subversion of expectations. The humor comes from the contrast between the woman's appearance (expensive clothes, accessories, and location) and her reaction to the",
+      "computed_at": "2025-12-19T21:23:49.773Z"
+    },
+    "7eb5935a-5898-4302-a409-8970757284b8": {
+      "score": 64,
+      "video_summary": "A waitress subverts expectations by initially denying a violent reaction to a customer's complaint, only to then act violently.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of a certain type of behavior (throwing the plate or hitting the customer) based on common stereotypes or tropes, and then initially ",
+      "computed_at": "2025-12-19T21:23:50.273Z"
+    },
+    "bc4d81d4-b071-4b5b-9841-c0cc99602428": {
+      "score": 66,
+      "video_summary": "A woman tries to get a stranger to pay for her meal, leading to a humorous confrontation.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from the unexpected reversal of expectations. The woman assumes the man will pay, and when he denies it, she escalates the situation by accusing him o",
+      "computed_at": "2025-12-19T21:23:50.639Z"
+    },
+    "026dc161-fd0e-4334-a366-5989b5e90a11": {
+      "score": 49,
+      "video_summary": "A customer is surprised by the high price of a coffee, followed by an exaggerated display of workplace camaraderie.",
+      "gemini_original": "Humor Type: Subversion\nMechanism: The humor comes from the unexpected price discrepancy and the over-the-top reaction to a simple fist bump.\nWhy Funny: The price difference is absurd, highlighting the",
+      "computed_at": "2025-12-19T21:23:51.097Z"
+    },
+    "be674634-88c3-4c24-8ad0-76e05f56dde6": {
+      "score": 52,
+      "video_summary": "A man declares he will never admit anything, but immediately starts eating the food placed in front of him, even asking for his favorite burger to be removed.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The humor comes from the contrast between the man's initial declaration of never admitting anything and his immediate willingness to eat the food placed in front of h",
+      "computed_at": "2025-12-19T21:23:51.582Z"
+    },
+    "9bdfbb7b-e34a-454a-be67-64d9491f47d9": {
+      "score": 65,
+      "video_summary": "A woman craves snus, and her friend questions her sanity for not having it, but she claims to be fine.",
+      "gemini_original": "Humor Type: Relatable\nMechanism: Exaggeration and understatement. The first woman expresses a strong craving for snus, implying a dependence. The second woman exaggerates the impact of not having it b",
+      "computed_at": "2025-12-19T21:23:52.023Z"
+    },
+    "cf94f334-722e-4c60-888c-e250f2a76e68": {
+      "score": 58,
+      "video_summary": "Two boys order a specific dish called '67' at a restaurant, leading to a humorous misunderstanding with the server.",
+      "gemini_original": "Humor Type: wordplay\nMechanism: The humor comes from the double meaning of '67'. The boys are asking for a specific dish, but the woman initially interprets it literally as a plate with the number 67 ",
+      "computed_at": "2025-12-19T21:23:52.604Z"
+    },
+    "92ace9b2-528c-4cec-9ba8-d7e60c22d1e3": {
+      "score": 54,
+      "video_summary": "A woman is about to put ketchup on her food, but someone disapproves.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation of the woman using ketchup on her food, but then subverts it by having a man appear and disapprovingly say \"Don't Do Zat!\"\nWhy Funny:",
+      "computed_at": "2025-12-19T21:23:53.334Z"
+    },
+    "b0d49494-c6a1-49a5-ae50-3561aeece669": {
+      "score": 55,
+      "video_summary": "A customer asks for food to be served 'finer,' and the server interprets it as an opportunity to relax and enjoy a drink herself.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video sets up an expectation that the server will re-plate or improve the presentation of the food. Instead, she interprets 'finer' as meaning 'for myself' and pr",
+      "computed_at": "2025-12-19T21:23:54.199Z"
+    },
+    "f8123fd8-9d61-4ed7-aa96-d26be365969c": {
+      "score": 50,
+      "video_summary": "A video showcasing a recipe for loaded fries, claiming to be the best in Sweden, but the recipe is quite basic.",
+      "gemini_original": "Humor Type: Subversion\nMechanism: The video sets up an expectation of a complex or unique recipe for 'Sweden's best loaded fries,' but then presents a very standard, almost generic, loaded fries recip",
+      "computed_at": "2025-12-19T21:23:54.896Z"
+    },
+    "0b19b1d5-7f00-4415-9774-2bb422834041": {
+      "score": 33,
+      "video_summary": "A customer tells a busy restaurant employee to take their time, and the employee takes it literally, leading to humorous delays.",
+      "gemini_original": "Humor Type: subversion\nMechanism: The video subverts expectations by showing the employee taking the customer's 'take your time' comment literally and engaging in leisurely activities instead of worki",
+      "computed_at": "2025-12-19T21:23:55.331Z"
+    }
+  }
+}

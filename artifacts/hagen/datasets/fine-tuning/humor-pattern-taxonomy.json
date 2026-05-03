@@ -1,0 +1,531 @@
+{
+  "title": "Comprehensive Humor Pattern Taxonomy for Video Analysis",
+  "version": "1.0",
+  "date": "2025-12-31",
+  "purpose": "Master reference for training model to recognize and analyze humor mechanisms",
+
+  "summary": {
+    "total_patterns": 39,
+    "well_covered": 12,
+    "partial_coverage": 14,
+    "sparse_coverage": 13,
+    "tiktok_strength_patterns": ["literal_interpretation", "wordplay", "social_scripts", "passive_aggressive", "solidarity", "public_private", "expectation_reality"],
+    "simpsons_strength_patterns": ["callback", "delayed_punchline", "escalation", "oblivious_protagonist", "deadpan", "timing", "direct_address"]
+  },
+
+  "patterns": {
+    "original_8": {
+      "1_literal_interpretation": {
+        "name": "Literal Interpretation",
+        "swedish": "Bokstavlig tolkning",
+        "definition": "Taking figurative language, idioms, or expressions literally for comedic effect",
+        "structure": "Figurative statement → Literal enactment → Absurdity from mismatch",
+        "psychology": "Incongruity between intended meaning and executed meaning",
+        "coverage": "WELL_COVERED",
+        "best_source": "TikTok",
+        "tiktok_examples": 8,
+        "simpsons_examples": 3,
+        "subtypes": ["idiom_literal", "hyperbole_literal", "instruction_literal"],
+        "key_examples": [
+          "3-year-old coffee (hyperbole becomes fact)",
+          "Use your head (physical head use)",
+          "Compliments to chef (personal compliments)",
+          "Split the bill (gymnastics)"
+        ]
+      },
+      "2_wordplay_disambiguation": {
+        "name": "Wordplay/Disambiguation",
+        "swedish": "Ordlek, disambiguering",
+        "definition": "Puns, homophones, double meanings where visual context determines correct interpretation",
+        "structure": "Ambiguous word/phrase → Visual evidence → Unexpected meaning revealed",
+        "psychology": "Language ambiguity resolved through non-linguistic channel",
+        "coverage": "WELL_COVERED",
+        "best_source": "TikTok",
+        "tiktok_examples": 15,
+        "simpsons_examples": 2,
+        "subtypes": ["homophone", "polysemy", "mishearing"],
+        "key_examples": [
+          "Short staffed (physically short)",
+          "Go lower (crouch, not price)",
+          "Tea/gossip dual meaning"
+        ]
+      },
+      "3_audio_visual_contradiction": {
+        "name": "Audio-Visual Contradiction",
+        "swedish": "Kontrast mellan ljud och bild",
+        "definition": "What is shown visually contradicts what is said or heard",
+        "structure": "Audio channel (words/tone) → Visual channel (body/action) → Contradiction creates irony",
+        "psychology": "Forced to process conflicting information, irony emerges from gap",
+        "coverage": "WELL_COVERED",
+        "best_source": "Both",
+        "tiktok_examples": 20,
+        "simpsons_examples": 40,
+        "subtypes": ["voiceover_vs_visual", "tone_vs_content", "stated_vs_shown"],
+        "key_examples": [
+          "Perfect shift (robot voice vs exhausted body)",
+          "Behind-bar view vs customer view"
+        ]
+      },
+      "4_hidden_motive_reveal": {
+        "name": "Hidden Motive Reveal",
+        "swedish": "Avslöjad dold agenda",
+        "definition": "Character's true intention revealed unexpectedly, reframing previous actions",
+        "structure": "Apparent motive shown → Evidence accumulates → True motive revealed",
+        "psychology": "Recontextualization of behavior creates 'aha' moment",
+        "coverage": "PARTIAL",
+        "best_source": "TikTok",
+        "tiktok_examples": 10,
+        "simpsons_examples": 5,
+        "subtypes": ["coordinated_deception", "self_serving_action", "delayed_reveal"],
+        "key_examples": [
+          "Fake chase after overcharged customer",
+          "Coordinated price manipulation"
+        ]
+      },
+      "5_pov_perspective_subversion": {
+        "name": "POV/Perspective Subversion",
+        "swedish": "POV-vändning",
+        "definition": "Unexpected shift in viewpoint that reframes the situation",
+        "structure": "Establish POV → Trigger event → POV shifts, changes meaning",
+        "psychology": "Challenges assumption about whose perspective we share",
+        "coverage": "PARTIAL",
+        "best_source": "TikTok",
+        "tiktok_examples": 12,
+        "simpsons_examples": 3,
+        "subtypes": ["internal_to_external", "camera_angle_reveal", "voice_ownership_flip"],
+        "key_examples": [
+          "Tip deliberation is cashier speaking (not customer thinking)",
+          "Food approaches then swerves to other table"
+        ],
+        "notes": "Uses scenographic techniques - POV shot + sound perspective implies internal dialogue"
+      },
+      "6_absurd_escalation": {
+        "name": "Absurd Escalation",
+        "swedish": "Eskalering",
+        "definition": "Situation escalates beyond reasonable proportions",
+        "structure": "Normal situation → Trigger → Response exceeds appropriate level → Continues escalating",
+        "psychology": "Proportionality violation creates absurdist humor",
+        "coverage": "WELL_COVERED",
+        "best_source": "Both",
+        "tiktok_examples": 15,
+        "simpsons_examples": 20,
+        "subtypes": ["punishment_escalation", "skill_escalation", "conflict_escalation"],
+        "key_examples": [
+          "Pan shakes itself at max skill level",
+          "Spill → colleague in dumpster"
+        ]
+      },
+      "7_task_interpretation_ambiguity": {
+        "name": "Task Interpretation Ambiguity",
+        "swedish": "Uppdragstolkning",
+        "definition": "Ambiguous instruction leads to unexpected interpretation",
+        "structure": "Task given → Ambiguity in wording → Unexpected execution",
+        "psychology": "Gap between speaker intent and listener interpretation",
+        "coverage": "PARTIAL",
+        "best_source": "TikTok",
+        "tiktok_examples": 8,
+        "simpsons_examples": 2,
+        "subtypes": ["verb_ambiguity", "object_ambiguity", "completion_definition"],
+        "key_examples": [
+          "Finish it (drinks the beer)",
+          "Dice onion (gaming dice size)"
+        ]
+      },
+      "8_social_script_exploitation": {
+        "name": "Social Script Exploitation",
+        "swedish": "Social konvention-utnyttjande",
+        "definition": "Using social conventions/expectations against their intended purpose",
+        "structure": "Social script invoked → Exploited/subverted → Unexpected outcome",
+        "psychology": "Reveals arbitrariness of social conventions",
+        "coverage": "WELL_COVERED",
+        "best_source": "TikTok",
+        "tiktok_examples": 15,
+        "simpsons_examples": 5,
+        "subtypes": ["politeness_exploitation", "ritual_subversion", "expectation_weaponization"],
+        "key_examples": [
+          "Tack detsamma taken literally",
+          "Who-pays ritual frustration"
+        ]
+      }
+    },
+
+    "timing_structure": {
+      "9_rule_of_three_subversion": {
+        "name": "Rule of Three Subversion",
+        "definition": "Two examples establish pattern, third breaks it",
+        "structure": "A (normal) → B (reinforces) → C (subverts)",
+        "psychology": "Pattern recognition setup for violation payoff",
+        "coverage": "SPARSE",
+        "tiktok_examples": 3,
+        "simpsons_examples": 2,
+        "training_need": "HIGH - fundamental comedy structure underrepresented"
+      },
+      "10_callback_payoff": {
+        "name": "Callback Payoff",
+        "definition": "Earlier element returns with new meaning",
+        "structure": "Plant (seems innocuous) → Narrative → Return (now loaded)",
+        "psychology": "Rewards attention, recognition creates satisfaction",
+        "coverage": "WELL_COVERED",
+        "best_source": "Simpsons",
+        "tiktok_examples": 2,
+        "simpsons_examples": 25,
+        "training_need": "LOW - Simpsons provides strong structural examples"
+      },
+      "11_anticlimactic_resolution": {
+        "name": "Anticlimactic Resolution",
+        "definition": "Big buildup, mundane payoff",
+        "structure": "Tension builds → Dramatic framing → Underwhelming reveal",
+        "psychology": "Investment-payoff mismatch creates absurdist humor",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 5,
+        "simpsons_examples": 10
+      },
+      "12_delayed_punchline": {
+        "name": "Delayed Punchline",
+        "definition": "Extended pause before payoff amplifies release",
+        "structure": "Setup → Unusual pause → Punchline (stronger for wait)",
+        "psychology": "Tension-release theory; uncertainty amplifies resolution",
+        "coverage": "PARTIAL",
+        "best_source": "Simpsons",
+        "tiktok_examples": 3,
+        "simpsons_examples": 15
+      },
+      "13_premature_celebration_undercut": {
+        "name": "Premature Celebration Undercut",
+        "definition": "Victory celebrated moments before disaster",
+        "structure": "Achievement → Celebration begins → Immediate reversal",
+        "psychology": "Hubris recognition + instant karma satisfaction",
+        "coverage": "SPARSE",
+        "tiktok_examples": 3,
+        "simpsons_examples": 2,
+        "training_need": "MEDIUM"
+      }
+    },
+
+    "expectation_patterns": {
+      "14_role_reversal": {
+        "name": "Role Reversal",
+        "definition": "Characters swap expected power dynamics",
+        "structure": "Establish roles → Trigger → Roles flip",
+        "psychology": "Disrupts ingrained social scripts about power",
+        "coverage": "SPARSE",
+        "tiktok_examples": 5,
+        "simpsons_examples": 3,
+        "training_need": "MEDIUM"
+      },
+      "15_status_inversion": {
+        "name": "Status Inversion",
+        "definition": "Low-status reveals high-status (or vice versa)",
+        "structure": "Positioned low → Reveal/acquisition → Power shifts",
+        "psychology": "Challenges class assumptions",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 5,
+        "simpsons_examples": 5
+      },
+      "16_competence_mismatch": {
+        "name": "Competence Mismatch",
+        "definition": "Extreme competence in one area, failure in related area",
+        "structure": "Show competence → Reveal incompetence in adjacent domain",
+        "psychology": "Incongruity between expected skill transfer and reality",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 8,
+        "simpsons_examples": 5
+      },
+      "17_expectation_inversion_spiral": {
+        "name": "Expectation Inversion Spiral",
+        "definition": "Each fix creates new problem",
+        "structure": "Problem → Solution (new problem) → Solution (worse) → Repeat",
+        "psychology": "Compounding failures create absurdity",
+        "coverage": "SPARSE",
+        "tiktok_examples": 3,
+        "simpsons_examples": 5,
+        "training_need": "HIGH"
+      }
+    },
+
+    "logic_patterns": {
+      "18_circular_logic_loop": {
+        "name": "Circular Logic Loop",
+        "definition": "Argument returns to starting point through valid-seeming steps",
+        "structure": "A → B → C → implies A again",
+        "psychology": "Cognitive dissonance from recognizing the trap",
+        "coverage": "SPARSE",
+        "tiktok_examples": 2,
+        "simpsons_examples": 1,
+        "training_need": "HIGH"
+      },
+      "19_false_equivalence_comedy": {
+        "name": "False Equivalence Comedy",
+        "definition": "Treating vastly different things as equivalent",
+        "structure": "Present two things → Claim equivalence → Absurdity apparent",
+        "psychology": "Obvious incorrectness creates irony",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 5,
+        "simpsons_examples": 3
+      },
+      "20_pedantic_correction_loop": {
+        "name": "Pedantic Correction Loop",
+        "definition": "Technically correct responses that miss obvious intent",
+        "structure": "Clear intent statement → Over-precise correction → Repeat",
+        "psychology": "Tension between social understanding and literal truth",
+        "coverage": "SPARSE",
+        "tiktok_examples": 2,
+        "simpsons_examples": 2,
+        "training_need": "MEDIUM"
+      },
+      "21_unfalsifiable_logic": {
+        "name": "Unfalsifiable Logic",
+        "definition": "Logic that cannot be argued against despite being absurd",
+        "structure": "Absurd claim → Challenge → Technically valid justification",
+        "psychology": "Recognition of logical trap + its absurdity",
+        "coverage": "SPARSE",
+        "tiktok_examples": 1,
+        "simpsons_examples": 1,
+        "training_need": "HIGH"
+      }
+    },
+
+    "social_patterns": {
+      "22_passive_aggressive_compliance": {
+        "name": "Passive-Aggressive Compliance",
+        "definition": "Following rules in technically correct but socially aggressive way",
+        "structure": "Unreasonable request → Excessively literal compliance → Requester realizes",
+        "psychology": "Cathartic rebellion within constraints",
+        "coverage": "WELL_COVERED",
+        "best_source": "TikTok",
+        "tiktok_examples": 10,
+        "simpsons_examples": 2
+      },
+      "23_uncomfortable_truth_admission": {
+        "name": "Uncomfortable Truth Admission",
+        "definition": "Casually admitting what shouldn't be admitted",
+        "structure": "Normal interaction → Unexpected honesty → Uncomfortable reaction",
+        "psychology": "Violation of social performance norms",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 5,
+        "simpsons_examples": 3
+      },
+      "24_collective_delusion_acknowledgment": {
+        "name": "Collective Delusion Acknowledgment",
+        "definition": "Group mutually agrees to maintain obvious fiction",
+        "structure": "Establish fiction → Both acknowledge knowing → Continue anyway",
+        "psychology": "Meta-commentary on social performance",
+        "coverage": "SPARSE",
+        "tiktok_examples": 3,
+        "simpsons_examples": 2,
+        "training_need": "MEDIUM"
+      },
+      "25_solidarity_through_suffering": {
+        "name": "Solidarity Through Suffering",
+        "definition": "Bonding over shared misery",
+        "structure": "Individual suffering → Shared recognition → Cathartic connection",
+        "psychology": "In-group identification through gallows humor",
+        "coverage": "WELL_COVERED",
+        "best_source": "TikTok",
+        "tiktok_examples": 10,
+        "simpsons_examples": 2
+      }
+    },
+
+    "character_patterns": {
+      "26_self_sabotage_recognition": {
+        "name": "Self-Sabotage Recognition",
+        "definition": "Knowingly doing something against own interest while narrating awareness",
+        "structure": "Identify bad choice → Acknowledge → Do anyway → Consequence",
+        "psychology": "Relatability of knowing something is wrong but doing it",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 5,
+        "simpsons_examples": 3
+      },
+      "27_oblivious_protagonist": {
+        "name": "Oblivious Protagonist",
+        "definition": "Character misses what's obvious to everyone else",
+        "structure": "Set up irony → Character unaware → Others/audience see truth",
+        "psychology": "Dramatic irony creates superiority humor",
+        "coverage": "WELL_COVERED",
+        "best_source": "Simpsons",
+        "tiktok_examples": 5,
+        "simpsons_examples": 10
+      },
+      "28_wrong_lesson_learned": {
+        "name": "Wrong Lesson Learned",
+        "definition": "Character draws completely incorrect conclusion from experience",
+        "structure": "Experience → Reflection → Absurdly wrong takeaway",
+        "psychology": "Gap between logical and actual conclusion",
+        "coverage": "SPARSE",
+        "tiktok_examples": 2,
+        "simpsons_examples": 3,
+        "training_need": "MEDIUM"
+      },
+      "29_selective_professional_amnesia": {
+        "name": "Selective Professional Amnesia",
+        "definition": "Conveniently forgetting job skills when it suits",
+        "structure": "Complex task requested → Sudden incompetence → Competence returns after avoided",
+        "psychology": "Recognition of strategic incompetence",
+        "coverage": "SPARSE",
+        "tiktok_examples": 2,
+        "simpsons_examples": 2,
+        "training_need": "MEDIUM"
+      }
+    },
+
+    "meta_patterns": {
+      "30_lampshading": {
+        "name": "Lampshading",
+        "definition": "Explicitly calling attention to absurd/implausible element",
+        "structure": "Absurd element → Acknowledgment → Continues anyway",
+        "psychology": "Breaking fourth wall creates audience complicity",
+        "coverage": "PARTIAL",
+        "best_source": "Simpsons",
+        "tiktok_examples": 3,
+        "simpsons_examples": 5
+      },
+      "31_format_awareness": {
+        "name": "Format Awareness",
+        "definition": "Characters demonstrate knowledge they're in a video/show",
+        "structure": "Normal content → Format constraint acknowledged → Used comedically",
+        "psychology": "Meta-humor rewards media-literate audiences",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 5,
+        "simpsons_examples": 10
+      },
+      "32_trope_inversion": {
+        "name": "Trope Inversion",
+        "definition": "Deliberately defying established content tropes",
+        "structure": "Set up trope expectation → Subvert with opposite/absence",
+        "psychology": "Novelty of breaking convention",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 5,
+        "simpsons_examples": 5
+      },
+      "33_recursive_commentary": {
+        "name": "Recursive Commentary",
+        "definition": "Content comments on itself",
+        "structure": "Create content → Acknowledge what it's doing → Meta-layer",
+        "psychology": "Intellectual pleasure from recursion",
+        "coverage": "SPARSE",
+        "tiktok_examples": 2,
+        "simpsons_examples": 3,
+        "training_need": "LOW - niche pattern"
+      }
+    },
+
+    "contrast_patterns": {
+      "34_public_vs_private_persona": {
+        "name": "Public vs Private Persona",
+        "definition": "Juxtaposition between customer-facing and real self",
+        "structure": "Show public face → Reveal private reality → Contrast creates humor",
+        "psychology": "Recognition that everyone performs socially",
+        "coverage": "WELL_COVERED",
+        "best_source": "TikTok",
+        "tiktok_examples": 10,
+        "simpsons_examples": 5
+      },
+      "35_expectation_vs_reality": {
+        "name": "Expectation vs Reality",
+        "definition": "Direct comparison of imagined vs actual outcome",
+        "structure": "Expectation shown → Reality shown → Gap creates humor",
+        "psychology": "Universal disappointment experience shared",
+        "coverage": "WELL_COVERED",
+        "best_source": "TikTok",
+        "tiktok_examples": 15,
+        "simpsons_examples": 8
+      }
+    },
+
+    "escalation_patterns": {
+      "36_accumulation_comedy": {
+        "name": "Accumulation Comedy",
+        "definition": "Same small thing keeps happening until quantity becomes absurd",
+        "structure": "Thing once → Twice → N times (quantity is the joke)",
+        "psychology": "Individually reasonable becomes absurd in aggregate",
+        "coverage": "PARTIAL",
+        "tiktok_examples": 5,
+        "simpsons_examples": 5
+      },
+      "37_one_upmanship_spiral": {
+        "name": "One-Upmanship Spiral",
+        "definition": "Characters compete to outdo each other absurdly",
+        "structure": "A claims → B one-ups → A escalates → Spiral",
+        "psychology": "Competitive instinct taken to logical extreme",
+        "coverage": "SPARSE",
+        "tiktok_examples": 3,
+        "simpsons_examples": 2,
+        "training_need": "MEDIUM"
+      },
+      "38_diminishing_returns_comedy": {
+        "name": "Diminishing Returns Comedy",
+        "definition": "Each attempt produces progressively worse results",
+        "structure": "Attempt 1 (ok) → Attempt 2 (worse) → Attempt 3 (catastrophic)",
+        "psychology": "Futility of effort is tragicomic",
+        "coverage": "SPARSE",
+        "tiktok_examples": 2,
+        "simpsons_examples": 3,
+        "training_need": "MEDIUM"
+      }
+    },
+
+    "bonus_patterns": {
+      "39_non_reaction": {
+        "name": "The Non-Reaction",
+        "definition": "Absurd situation receives conspicuously no reaction",
+        "structure": "Absurd happens → Characters continue normally → Absurdity amplified",
+        "psychology": "Expected reaction missing forces audience to hold tension alone",
+        "coverage": "WELL_COVERED",
+        "best_source": "Simpsons",
+        "tiktok_examples": 8,
+        "simpsons_examples": 15
+      }
+    }
+  },
+
+  "training_recommendations": {
+    "immediate_priorities": {
+      "description": "Patterns with HIGH training need and sparse coverage",
+      "patterns": [
+        "9_rule_of_three_subversion",
+        "17_expectation_inversion_spiral",
+        "18_circular_logic_loop",
+        "21_unfalsifiable_logic"
+      ],
+      "action": "Create explicit reasoning-chain examples for these patterns"
+    },
+    "simpsons_mining_targets": {
+      "description": "Patterns where Simpsons is best source",
+      "patterns": [
+        "10_callback_payoff (25 examples)",
+        "12_delayed_punchline (15 examples)",
+        "27_oblivious_protagonist (10 examples)",
+        "39_non_reaction (15 examples with deadpan_context category)"
+      ],
+      "action": "Use Simpsons examples to teach structural principles"
+    },
+    "tiktok_strength_leverage": {
+      "description": "Patterns where TikTok excels - ensure well represented",
+      "patterns": [
+        "1_literal_interpretation",
+        "2_wordplay_disambiguation",
+        "22_passive_aggressive_compliance",
+        "25_solidarity_through_suffering",
+        "34_public_vs_private_persona"
+      ],
+      "action": "These are already strong - maintain representation"
+    }
+  },
+
+  "cross_reference_insights": {
+    "tiktok_unique_strengths": [
+      "Service industry specific social dynamics",
+      "POV format conventions",
+      "Quick-hit wordplay in video format",
+      "Workplace passive-aggression patterns"
+    ],
+    "simpsons_unique_strengths": [
+      "Extended narrative callbacks",
+      "Character-driven obliviousness (Homer archetype)",
+      "Timing-dependent delivery (deadpan, pauses)",
+      "Structured category labels (contrast, escalation, callback, deadpan_context)"
+    ],
+    "complementary_value": "TikTok teaches WHAT patterns look like in short-form video. Simpsons teaches HOW patterns unfold structurally over time."
+  }
+}

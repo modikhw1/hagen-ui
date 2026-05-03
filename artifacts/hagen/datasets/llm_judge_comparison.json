@@ -1,0 +1,369 @@
+{
+  "evaluated_at": "2025-12-22T13:56:55.566Z",
+  "sample_size": 13,
+  "statistics": {
+    "mechanism_match": 88.5,
+    "key_insight_captured": 69.2,
+    "error_avoided": 100,
+    "depth_of_analysis": 73.1,
+    "overall_score": 82.5,
+    "old_embedding_average": 43.6
+  },
+  "results": [
+    {
+      "id": "efa20a86-7ed9-424c-94a1-b62faece88e5",
+      "video_summary": "Highlighting an awkward dating scenario.",
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 50,
+        "error_avoided": 100,
+        "depth_of_analysis": 75,
+        "overall": 81
+      },
+      "explanation": "The AI accurately identifies the humor mechanism and avoids the original error, but it partially captures the social dynamics and nuances of the humor.",
+      "new_analysis": {
+        "deep_reasoning": {
+          "character_dynamic": "Two people on a date, one seemingly more oblivious or socially inept than the other.",
+          "setup_vs_reality": "The setup is a typical date scenario, but the reality is filled with awkward pauses, inappropriate comments, and a general lack of connection.",
+          "the_violation": "Social norms of dating are violated. One character says or does things that are considered rude, inappropriate, or simply 'off' in a dating context. This creates discomfort and humor.",
+          "format_editing": "The editing likely emphasizes the awkward pauses, facial expressions, and reactions to highlight the discomfort and comedic timing.",
+          "social_dynamic": "Embarrassment: One character is likely embarrassed by the other's behavior. Rejection: There's an implied rejection or lack of romantic interest due to the awkwardness.",
+          "quality_assessment": "Weak premise needing delivery",
+          "the_real_mechanism": "The humor comes from the audience recognizing the social faux pas and cringing at the awkwardness, finding humor in the relatable discomfort of bad dating experiences. The delivery (acting, timing) is crucial to making the awkwardness funny rather than just painful."
+        },
+        "humorType": "Cringe Comedy",
+        "humorMechanism": "The humor arises from the audience's discomfort and vicarious embarrassment at witnessing socially awkward or inappropriate behavior during a date. The gap between expected dating etiquette and the character's actions creates the comedic effect."
+      }
+    },
+    {
+      "id": "c43d3e95-b01a-4e29-af3f-dc542be870a4",
+      "video_summary": "POV customer at register, internal voice debates t",
+      "old_embedding_score": 55,
+      "new_scores": {
+        "mechanism_match": 50,
+        "key_insight_captured": 50,
+        "error_avoided": 100,
+        "depth_of_analysis": 50,
+        "overall": 62
+      },
+      "explanation": "The AI partially identifies the humor mechanism and insights but lacks the depth and specificity of the human analysis.",
+      "new_analysis": {
+        "deep_reasoning": {
+          "character_dynamic": "Cashier holds a service position relative to the customer, expected to be polite and unobtrusive.",
+          "setup_vs_reality": "Setup: We expect an internal monologue from the customer about tipping. Reality: The cashier is voicing their internal thoughts.",
+          "the_violation": "The cashier violates the expectation of professional silence and appropriate behavior by voicing internal thoughts about tipping, creating an awkward and inappropriate situation. The customer then violates social norms by telling the cashier to shut up.",
+          "format_editing": "POV focuses on the customer, reinforcing the expectation of their internal monologue. The reveal is auditory, heightening the surprise.",
+          "social_dynamic": "Specifically: The cashier is embarrassed by having their internal thoughts exposed and then being told to shut up. The customer is put in an awkward position.",
+          "quality_assessment": "Strong premise",
+          "the_real_mechanism": "The humor derives from the unexpected role reversal where the cashier voices their inner thoughts, combined with the awkwardness of the customer's reaction."
+        },
+        "humorType": "Unexpected Situation/Awkwardness",
+        "humorMechanism": "Subverts expectations by having the cashier, instead of the customer, voice internal thoughts about tipping, creating an uncomfortable and funny interaction."
+      }
+    },
+    {
+      "id": "dcf549d0-8144-4ffe-b31a-421739c0b257",
+      "video_summary": "Beauty discounts can be a confusing and comical ex",
+      "old_embedding_score": 53,
+      "new_scores": {
+        "mechanism_match": 50,
+        "key_insight_captured": 100,
+        "error_avoided": 100,
+        "depth_of_analysis": 75,
+        "overall": 81
+      },
+      "explanation": "The AI partially identifies the humor mechanism and captures the key insights about social dynamics and power dynamics, while also avoiding the original error, but lacks some depth in explaining the absurdity and emotional impact of the humor.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "Customer seeks service from a beauty professional. Unequal power dynamic as the professional holds the knowledge and service.",
+            "setup_vs_reality": "Setup: Expectation of clear, beneficial discounts. Reality: Confusing jargon and unexpected limitations.",
+            "the_violation": "The beauty professional uses confusing jargon and fine print to make the 'discount' seem less appealing than it initially appears. This violates the expectation of straightforward and honest advertising.",
+            "format_editing": "Likely uses editing to highlight the contrast between the advertised discount and the complicated reality, potentially with reaction shots of the customer's confusion.",
+            "social_dynamic": "Embarrassment: The customer may feel foolish for not understanding the terms or for being lured in by a misleading offer.",
+            "quality_assessment": "Strong premise",
+            "the_real_mechanism": "The humor comes from the relatable frustration of dealing with misleading advertising and the feeling of being tricked by fine print. The exaggeration of the jargon and limitations amplifies the absurdity."
+          },
+          "humorType": "Satire/Parody",
+          "humorMechanism": "Exaggeration of common marketing tactics and the use of technical language to obscure the true value of a deal."
+        }
+      ]
+    },
+    {
+      "id": "7f9ec1a1-e01e-4e43-9c96-6a77bb2b2252",
+      "video_summary": "Sometimes, the obvious is not always true.",
+      "old_embedding_score": 36,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 50,
+        "error_avoided": 100,
+        "depth_of_analysis": 50,
+        "overall": 75
+      },
+      "explanation": "The AI correctly identifies the humor mechanism of subversion but lacks depth in capturing the social dynamics and nuances of the humor's effectiveness.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "Two people in conversation, one trying to explain something to the other.",
+            "setup_vs_reality": "The setup implies a complex or hidden truth, but the reality is that the obvious answer is correct.",
+            "the_violation": "The expectation of a deeper meaning or hidden truth is violated when the speaker reveals the obvious answer. This is significant because it plays on the common tendency to overthink things.",
+            "format_editing": "The video likely uses editing to build suspense before revealing the obvious answer, enhancing the comedic effect.",
+            "social_dynamic": "none",
+            "quality_assessment": "Strong premise",
+            "the_real_mechanism": "The humor comes from the subversion of expectations. The audience anticipates a clever or insightful explanation, but instead receives a simple, self-evident statement. This contrast creates a humorous effect."
+          },
+          "humorType": "Subversion",
+          "humorMechanism": "Subverting the expectation of a complex answer with an obvious one."
+        }
+      ]
+    },
+    {
+      "id": "5908a069-616a-4e82-a85d-10630c15998d",
+      "video_summary": "Sometimes, the obvious is not always true.",
+      "old_embedding_score": 51,
+      "new_scores": {
+        "mechanism_match": 50,
+        "key_insight_captured": 50,
+        "error_avoided": 100,
+        "depth_of_analysis": 50,
+        "overall": 62
+      },
+      "explanation": "The AI partially captures the humor mechanism and key insights but lacks depth and precision in its analysis.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "Two people in conversation, one trying to explain something to the other.",
+            "setup_vs_reality": "The setup is that one person is explaining a simple concept, but the reality is that the other person misunderstands it in a humorous way.",
+            "the_violation": "The violation is the misunderstanding of a simple concept. The person explaining expects the other person to understand, but they take it in a completely different direction. This breaks the expectation of shared understanding.",
+            "format_editing": "The video likely uses editing to emphasize the misunderstanding, perhaps with reaction shots or visual cues.",
+            "social_dynamic": "Embarrassment: The person misunderstanding the concept may feel embarrassed when they realize their mistake.",
+            "quality_assessment": "Weak premise needing delivery",
+            "the_real_mechanism": "The humor comes from the unexpected and absurd interpretation of a simple concept. The audience laughs at the disconnect between what is said and how it is understood."
+          },
+          "humorType": "Misunderstanding",
+          "humorMechanism": "Literal interpretation of a statement leads to an absurd and incorrect conclusion, creating humor through the unexpected deviation from the intended meaning."
+        }
+      ]
+    },
+    {
+      "id": "4104fd27-4d69-48d2-9af1-65328413cadd",
+      "video_summary": "Humorous scenarios can arise from unexpected chefs",
+      "old_embedding_score": 32,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 50,
+        "error_avoided": 100,
+        "depth_of_analysis": 75,
+        "overall": 81
+      },
+      "explanation": "The AI accurately identifies the humor mechanism and avoids the original error, but it partially captures the social dynamics and lacks some depth in explaining the humor's nuances.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "The dynamic is based on the unexpected role reversal of who is cooking. The humor stems from the incongruity of someone not typically associated with cooking taking on the chef role.",
+            "setup_vs_reality": "The setup leads us to expect a typical cooking scenario, but the reality is that an unexpected character is the chef, creating a humorous contrast.",
+            "the_violation": "The norm that certain individuals or types of people are typically chefs is violated. This is significant because it challenges our expectations and creates surprise.",
+            "format_editing": "The video structure likely emphasizes the contrast between the expected and the unexpected chef, using editing to highlight the incongruity.",
+            "social_dynamic": "none",
+            "quality_assessment": "Strong premise",
+            "the_real_mechanism": "The humor comes from the surprise and absurdity of seeing someone completely unexpected in the role of a chef. The incongruity is inherently funny."
+          },
+          "humorType": "Incongruity",
+          "humorMechanism": "The humor arises from the unexpected juxtaposition of a character not typically associated with cooking taking on the role of a chef. This violates our expectations and creates a sense of absurdity."
+        }
+      ]
+    },
+    {
+      "id": "cc514ce1-a67b-4041-b282-bc45c2b0ad2d",
+      "video_summary": "Remember to shake your bubble tea before drinking.",
+      "old_embedding_score": 34,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 50,
+        "error_avoided": 100,
+        "depth_of_analysis": 50,
+        "overall": 75
+      },
+      "explanation": "The AI accurately identifies the humor mechanism but only partially captures the social dynamics and quality assessment, while avoiding the original error.",
+      "new_analysis": {
+        "deep_reasoning": {
+          "character_dynamic": "The video features a single character demonstrating a common mistake.",
+          "setup_vs_reality": "The setup is a person about to drink bubble tea. The reality is they haven't shaken it, resulting in a poor taste experience.",
+          "the_violation": "The violation is the failure to follow the implicit social norm of shaking bubble tea before drinking it. This leads to an unpleasant first taste, violating the expectation of a sweet and enjoyable drink.",
+          "format_editing": "The video is short and to the point, focusing on the immediate consequence of not shaking the drink. The editing likely emphasizes the initial sip and the reaction.",
+          "social_dynamic": "Specifically: who is embarrassed/rejected/put down and how, or 'none'",
+          "quality_assessment": "Relatable but not funny",
+          "the_real_mechanism": "The humor comes from the relatability of making a simple mistake that leads to a mildly unpleasant experience. It's a common frustration many people can identify with."
+        },
+        "humorType": "Observational Humor",
+        "humorMechanism": "The humor arises from recognizing a common, relatable mistake (not shaking bubble tea) and the resulting mild disappointment. It's a shared experience that many viewers can connect with."
+      }
+    },
+    {
+      "id": "4b5b4312-7d14-4a41-98c4-96f4e9424bfe",
+      "video_summary": "The video highlights the humorous interaction betw",
+      "old_embedding_score": 54,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 100,
+        "error_avoided": 100,
+        "depth_of_analysis": 100,
+        "overall": 100
+      },
+      "explanation": "The AI accurately identifies the humor mechanism, captures the key insights regarding social and power dynamics, avoids the original error, and provides a deep analysis of the underlying dynamics.",
+      "new_analysis": {
+        "deep_reasoning": {
+          "character_dynamic": "Unequal power dynamic: customer (perceived power) vs. employee (service role). The customer makes absurd requests, testing the employee's patience and professionalism.",
+          "setup_vs_reality": "Setup: A typical customer service interaction. Reality: The customer's request is illogical and impossible, leading to the employee's frustration.",
+          "the_violation": "The customer violates the implicit social contract of reasonable requests in a service setting. The employee is forced to maintain composure despite the absurdity, creating tension.",
+          "format_editing": "Editing likely emphasizes the customer's ridiculous request and the employee's increasingly exasperated facial expressions/reactions. Pacing can build the comedic tension.",
+          "social_dynamic": "Specifically: The employee is put down/demeaned by the customer's unreasonable request, which forces them into a subservient and absurd situation. There is potential for embarrassment if the employee reacts unprofessionally.",
+          "quality_assessment": "Strong premise",
+          "the_real_mechanism": "The humor comes from the juxtaposition of the mundane setting (customer service) with the completely absurd request. The employee's forced politeness in the face of the ridiculousness amplifies the comedic effect."
+        },
+        "humorType": "Absurdist humor",
+        "humorMechanism": "The incongruity between the expected norms of customer service and the customer's nonsensical request creates a humorous situation. The employee's reaction, likely a display of forced politeness masking growing frustration, is key to the humor."
+      }
+    },
+    {
+      "id": "255317ed-fa8b-45a0-b3c0-0794b577b727",
+      "video_summary": "Unexpectedly, the first person asks the second per",
+      "old_embedding_score": 20,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 100,
+        "error_avoided": 100,
+        "depth_of_analysis": 100,
+        "overall": 100
+      },
+      "explanation": "The AI accurately identifies the humor mechanism, captures the key insights regarding social dynamics, avoids the original error, and provides a deep analysis of the situation.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "A customer asks an employee for help, then the employee asks another employee to do the work.",
+            "setup_vs_reality": "The setup is a normal customer interaction. The reality is the first employee immediately passes the task to another, who is also working.",
+            "the_violation": "The first employee violates the expectation of doing their job by immediately delegating it to another employee. The second employee is also working and is surprised by being asked to do the first employee's job.",
+            "format_editing": "The video is short and to the point, emphasizing the unexpected delegation.",
+            "social_dynamic": "Specifically: The second employee is put in an awkward position, being asked to do someone else's work while already working. Mild embarrassment for the first employee who is trying to get out of doing their job.",
+            "quality_assessment": "Strong premise",
+            "the_real_mechanism": "The humor comes from the unexpected and immediate passing of responsibility, highlighting laziness and the awkwardness of putting another employee on the spot."
+          },
+          "humorType": "Situational Comedy",
+          "humorMechanism": "Subversion of expectations and awkwardness of delegation."
+        }
+      ]
+    },
+    {
+      "id": "5d78ca54-d068-4651-92aa-640f0bebe440",
+      "video_summary": "Fiume Italian Restaurant is celebrating its 10th a",
+      "old_embedding_score": 47,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 50,
+        "error_avoided": 100,
+        "depth_of_analysis": 75,
+        "overall": 81
+      },
+      "explanation": "The AI accurately identifies the humor mechanism and avoids the original error, but it partially captures the social dynamics and quality assessment nuances present in the human analysis.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "The video features employees of Fiume Italian Restaurant. The power dynamic is likely a mix of camaraderie and workplace hierarchy, though not explicitly shown.",
+            "setup_vs_reality": "The setup is that the restaurant is celebrating its 10th anniversary and can handle social media. The reality is that the humor comes from the perceived incompetence or unconventional approach to social media management.",
+            "the_violation": "The violation lies in the implied mismatch between professional social media practices and the restaurant's actual social media content. It breaks the expectation of polished, strategic online presence for a business.",
+            "format_editing": "The video's format likely involves showcasing examples of the restaurant's social media posts or actions, highlighting their absurdity or lack of professionalism. Editing would emphasize the contrast between the expected and the actual.",
+            "social_dynamic": "Specifically: none",
+            "quality_assessment": "Weak premise needing delivery",
+            "the_real_mechanism": "The humor relies on the audience's recognition of what constitutes 'good' social media practice and the restaurant's deviation from it. It's funny if the content is perceived as amateurish, out-of-touch, or unintentionally humorous."
+          },
+          "humorType": "Situational Irony",
+          "humorMechanism": "The humor arises from the incongruity between the restaurant's self-proclaimed ability to manage social media and the likely poor or unconventional execution, creating a gap between expectation and reality."
+        }
+      ]
+    },
+    {
+      "id": "50f1a673-3e9b-42b2-93c2-f9884ed17616",
+      "video_summary": "A humorous take on customer complaints and unexpec",
+      "old_embedding_score": 46,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 100,
+        "error_avoided": 100,
+        "depth_of_analysis": 100,
+        "overall": 100
+      },
+      "explanation": "The AI accurately identifies the humor mechanism, captures the key insights regarding social and power dynamics, avoids previous errors, and provides a deep analysis of the underlying dynamics.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "Customer vs. Barista. The customer expects a certain level of service and competence, while the barista subverts those expectations.",
+            "setup_vs_reality": "The setup is a typical customer complaint scenario. The reality is that the barista's responses are absurd and unhelpful, escalating the customer's frustration.",
+            "the_violation": "The barista violates the expectation of providing helpful and competent customer service. This is significant because it creates a disconnect between what the customer expects and what they receive.",
+            "format_editing": "The video likely uses quick cuts and reaction shots to emphasize the customer's growing frustration and the barista's nonchalant attitude. Sound effects might be used to highlight the absurdity of the situation.",
+            "social_dynamic": "Specifically: who is embarrassed/rejected/put down and how, or 'none'",
+            "quality_assessment": "Strong premise",
+            "the_real_mechanism": "The humor comes from the unexpected and inappropriate responses of the barista, which contrast sharply with the customer's reasonable expectations. The escalation of the customer's frustration, combined with the barista's obliviousness, creates a comedic effect."
+          },
+          "humorType": "Parody/Satire",
+          "humorMechanism": "Exaggerated incompetence and absurd responses to customer complaints create humor by subverting expectations of customer service."
+        }
+      ]
+    },
+    {
+      "id": "3dff9f31-9005-481e-b623-64f7a42cbb2e",
+      "video_summary": "A lighthearted interaction between a patron and a ",
+      "old_embedding_score": 37,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 100,
+        "error_avoided": 100,
+        "depth_of_analysis": 100,
+        "overall": 100
+      },
+      "explanation": "The AI accurately identifies the humor mechanism, captures the human's insights on social and power dynamics, avoids the original error, and provides a deep analysis of the underlying dynamics.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "Customer and service provider; unequal power dynamic as the bartender controls access to the product.",
+            "setup_vs_reality": "The setup is a typical bar interaction, but the reality is that the bartender is overly literal and pedantic.",
+            "the_violation": "The bartender violates the expectation of normal, efficient service by being overly precise and difficult. This is significant because it subverts the customer's expectation of a simple transaction.",
+            "format_editing": "The video likely uses quick cuts to emphasize the awkwardness and the bartender's unwavering commitment to the bit.",
+            "social_dynamic": "Specifically: who is embarrassed/rejected/put down and how, or 'none'",
+            "quality_assessment": "Strong premise",
+            "the_real_mechanism": "The humor comes from the unexpected and escalating absurdity of the bartender's behavior. It's funny because it's a mundane situation taken to an extreme."
+          },
+          "humorType": "Absurdist",
+          "humorMechanism": "Exaggerated literal interpretation of a request, creating an illogical and frustrating scenario for the customer."
+        }
+      ]
+    },
+    {
+      "id": "67eaafb3-9c66-46f2-b748-9dc57b8c95b8",
+      "video_summary": "The bartender playfully deflects a question with a",
+      "old_embedding_score": 58,
+      "new_scores": {
+        "mechanism_match": 100,
+        "key_insight_captured": 50,
+        "error_avoided": 100,
+        "depth_of_analysis": 50,
+        "overall": 75
+      },
+      "explanation": "The AI accurately identifies the humor mechanism and avoids the original error, but it only partially captures the social and power dynamics involved in the humor.",
+      "new_analysis": [
+        {
+          "deep_reasoning": {
+            "character_dynamic": "Bartender holds a service position, customer seeks information. A playful, flirty dynamic is introduced by the bartender.",
+            "setup_vs_reality": "Setup: Customer asks a straightforward question expecting a direct answer. Reality: Bartender responds flirtatiously, avoiding a direct answer.",
+            "the_violation": "The bartender violates the expected professional boundary by responding flirtatiously instead of directly answering the question. This is significant because it subverts the transactional nature of the interaction.",
+            "format_editing": "The video likely relies on timing and the bartender's delivery to enhance the comedic effect. Editing could emphasize the unexpectedness of the response.",
+            "social_dynamic": "Specifically: none",
+            "quality_assessment": "Weak premise needing delivery",
+            "the_real_mechanism": "The humor comes from the unexpected and inappropriate (but playful) response of the bartender. It's funny because it's a deviation from the norm and creates a brief moment of awkwardness and amusement."
+          },
+          "humorType": "Incongruity",
+          "humorMechanism": "The bartender's flirty response is incongruous with the expected professional interaction, creating a humorous surprise."
+        }
+      ]
+    }
+  ]
+}

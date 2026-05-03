@@ -1,0 +1,55 @@
+{
+  "current_phase": "step_1",
+  "last_updated": "2026-01-03",
+  "phases": {
+    "step_1": {
+      "name": "Model Reliability",
+      "focus": ["humor_model", "replicability_model", "analyze_rate_v1"],
+      "blocked": ["brand_fingerprint", "matching_engine", "concept_generation"],
+      "goal": "High reliability: matches human judgment, consistent, low edit rate"
+    },
+    "step_2a": {
+      "name": "Simple Brand Matching",
+      "focus": ["brand_matching", "relationality_system"],
+      "blocked": ["brand_fingerprint_complexity"],
+      "goal": "Basic brand-to-content matching"
+    },
+    "step_2b": {
+      "name": "Brand Fingerprint Complexity",
+      "focus": ["brand_fingerprint", "profile_analysis"],
+      "blocked": ["matching_engine"],
+      "goal": "Intuitive brand understanding from clips"
+    }
+  },
+  "constraints": {
+    "does": [
+      "Analyze existing TikTok videos",
+      "Explain WHY content is funny",
+      "Match videos to brand profiles",
+      "Guide recreation (not rewrite)"
+    ],
+    "does_not": [
+      "Generate new concepts",
+      "Predict view counts",
+      "Chase trends",
+      "Rewrite scripts creatively"
+    ]
+  },
+  "reliability_targets": {
+    "humor_model": {
+      "current": 0.5,
+      "target": 0.85,
+      "notes": "Works for some clips, off for others"
+    },
+    "replicability_model": {
+      "current": 0.4,
+      "target": 0.8,
+      "notes": "Only 60 training values, complex inference"
+    },
+    "analyze_rate_v1": {
+      "current": 0.6,
+      "target": 0.8,
+      "notes": "Showable but mix of assumptions/noise"
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "trainUri": "gs://hagen-video-analysis/fine-tuning/replicability/replicability_train_v1-multimodal.jsonl",
+  "valUri": "gs://hagen-video-analysis/fine-tuning/replicability/replicability_validation_v1-multimodal.jsonl"
+}

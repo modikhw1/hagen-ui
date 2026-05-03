@@ -1,0 +1,992 @@
+[
+  {
+    "index": 0,
+    "episode": "3F14",
+    "title": "Homer the Smithers",
+    "mechanism": "timing",
+    "action_line": "an involuntary shudder, then stands up straight and walks in.",
+    "context": "Homer walks up to the plant gate. He hesitates, suppresses [ACTION] MONTAGE",
+    "humor_explanation": "Homer närmar sig arbetsplatsen, något han innerst inne avskyr. Pausen, den ofrivilliga rysningen, bygger upp förväntan om ett större utbrott eller motstånd, men istället tvingar han sig själv att agera normalt. Kontrasten mellan den interna känslan och den påklistrade fasaden är vad som gör det roligt - det är relaterbart i vardagen men överdrivet i sitt uttryck.",
+    "focus_element": "Den 'ofrivilliga rysningen' som kontrasteras mot beslutet att 'stå rak' och gå in, vilket antyder en intern kamp och en yttre fasad."
+  },
+  {
+    "index": 1,
+    "episode": "3F14",
+    "title": "Homer the Smithers",
+    "mechanism": "timing",
+    "action_line": "and POPS it, then throws a glass of water on them. The brawl",
+    "context": "Burns pokes at them with a yardstick, blows up a paper bag [ACTION] continues unabated.",
+    "humor_explanation": "Burns' handlingar eskalerar från ofarliga plågsamheter (peta, smälla papperspåse) till en mer fysisk 'attack' (vatten), men effekten på slagsmålet är noll. Kontrasten mellan Burns' ansträngning och det faktum att bråket 'continues unabated' understryker hans totala irrelevans och brist på kontroll, vilket är roligt eftersom det antyder att han är både ondskefull och ineffektiv.",
+    "focus_element": "Beskrivningen 'continues unabated' direkt efter att Burns kastat vattnet. Timing-mässigt ger det ingen paus; hans agerande gör ingen skillnad alls."
+  },
+  {
+    "index": 2,
+    "episode": "4F02",
+    "title": "Treehouse of Horror VII",
+    "mechanism": "timing",
+    "action_line": "Lisa wakes up and looks at the margarine tub, then sees that",
+    "context": " [ACTION] a mossy mold-like substance has coated her experiment .",
+    "humor_explanation": "Lisas vaknar och hoppet om ett vetenskapligt genombrott kraschar. Pausen innan hon ser möglet bygger upp spänningen och förväntan på något positivt, vilket sedan brutalt punkteras av den äckliga synen. Kontrasten mellan förväntan och verklighet, förstärkt av tystnaden, är det som gör det roligt.",
+    "focus_element": "Lisas optimistiska blick först, sedan den långsamma kamerapanoreringen till det mossbelagda margarinet tillsammans med en kort tystnad."
+  },
+  {
+    "index": 3,
+    "episode": "4F21",
+    "title": "The Secret War of Lisa Simpson",
+    "mechanism": "timing",
+    "action_line": "The cadets stand in stunned -silence. Bart runs up to Lisa.",
+    "context": "do it again let’s do it again! [ACTION] BART",
+    "humor_explanation": "Tystnaden efter det upprepade kommandot skapar en förväntan på mer drill, men istället levereras oväntat ett syskonögonblick. Kontrasten mellan den militära disciplinen och Barts barnsliga entusiasm, förstärkt av pausen, gör det absurt roligt.",
+    "focus_element": "Kadetternas förstenade tystnad som bryts av Barts glada framrusning till Lisa."
+  },
+  {
+    "index": 4,
+    "episode": "7F20",
+    "title": "The War of the Simpsons",
+    "mechanism": "timing",
+    "action_line": "Maude looks at him quizzically, then bends over and reaches",
+    "context": "handful of peanuts... Maude? [ACTION] into the peanut bowl.",
+    "humor_explanation": "Förväntan byggs upp kring om Maude kommer förstå frågan, men istället tar hon den bokstavligt. Pausen innan hon böjer sig ner förstärker kontrasten mellan Homers pinsamhet och hennes okomplicerade handling.",
+    "focus_element": "Maudes frågande blick, följt av den långsamma, målmedvetna rörelsen mot jordnötsskålen."
+  },
+  {
+    "index": 5,
+    "episode": "7G05",
+    "title": "Bart the General",
+    "mechanism": "timing",
+    "action_line": "disappears for a moment, then Bart runs out from behind the",
+    "context": "When we get close enough to see that it is Bart, it [ACTION] building. SFX: RAPID PATTERING FOOTSTEPS (WAY OFF MIKE).",
+    "humor_explanation": "Skämtet bygger på förväntan och antiklimax. Klockan som visar 15:15 bygger upp spänningen kring Barts troliga skolkning, men pausen innan han dyker upp, och de dämpade fotstegen, antyder att han misslyckas med att fly obemärkt. Kontrasten mellan den förväntade dramatiska flykten och den diskreta ankomsten är det roliga.",
+    "focus_element": "De svaga fotstegen \"WAY OFF MIKE\" – det implicerar att Bart försöker smyga, vilket understryker hans misslyckade försök att undvika upptäckt."
+  },
+  {
+    "index": 6,
+    "episode": "7G05",
+    "title": "Bart the General",
+    "mechanism": "timing",
+    "action_line": "garbage cans, then runs out across a bare stretch of ground",
+    "context": "backstop, then darts over to hunch down behind a row of [ACTION] using other students as momentary cover,",
+    "humor_explanation": "Humorn ligger i den överdrivna spionliknande sekvensen. Den minutiösa planeringen och det krypande beteendet för en så trivial uppgift (att hämta något på en lekplats) skapar en absurd kontrast, förstärkt av den klockslagsdetalj som betonar tidens ringa värde.",
+    "focus_element": "Klockan som visar 15:15 - den exakta, onödigt specifika tiden som visas förstärker det parodiska i den annars vanliga situationen."
+  },
+  {
+    "index": 7,
+    "episode": "7G05",
+    "title": "Bart the General",
+    "mechanism": "timing",
+    "action_line": "Herman looks at both of them suspiciously again, then nods.",
+    "context": "Let me in, you idiot. [ACTION] HERMAN",
+    "humor_explanation": "Herman, som driver en militärantikvitetsbutik, borde rimligen vara van vid, eller åtminstone inte chockad av, udda typer. Pausen mellan kravet 'Släpp in mig, din idiot' och hans nick förstärker absurditeten i situationen – han tar sig *väldigt* lång tid att komma till en slutsats som borde vara självklar (eller avvisande). Tystnaden säljer hans underliggande tvekan och misstänksamhet.",
+    "focus_element": "Hermans överdrivet misstänksamma blickar och den långsamma nicken, vilket antyder en komplicerad process av (icke-)beslutsfattande."
+  },
+  {
+    "index": 8,
+    "episode": "3F18",
+    "title": "22 Short Films About Springfield",
+    "mechanism": "timing",
+    "action_line": "awkward moment as Mr. Van Houten looks around for the first",
+    "context": "Milhouse rushes to the back of the store. There is an [ACTION] time, noticing Wiggum and Jailbird, who are frantically",
+    "humor_explanation": "Tystnaden och Mr. Van Houtens osäkra blick förlänger väntan på vad som ska hända härnäst. Det understryker kontrasten mellan hans förväntningar (en vanlig butik) och den faktiska, underliga situationen med Wiggum och Jailbird, vilket skapar spänning och absurd komedi.",
+    "focus_element": "Mr. Van Houtens osäkra blick som sveper över lokalen."
+  },
+  {
+    "index": 9,
+    "episode": "7G09",
+    "title": "The Call of the Simpsons",
+    "mechanism": "timing",
+    "action_line": "It falls, hits the ground, rolls over twice, then is shaken",
+    "context": "CAMERA TRACKS WITH VAN [ACTION] repeatedly by several internal EXPLOSIONS.",
+    "humor_explanation": "Det roliga ligger i den förlängda, förväntansfulla pausen efter att skåpbilen kraschat. Vi förväntar oss en explosion direkt, men istället får vi en pinsamt långsam, mekanisk kullerbytta. Kontrasten mellan den våldsamma kraschen och den därefter följande fåniga, fördröjda rörelsen förstärker absurditeten.",
+    "focus_element": "Kullerbyttorna - den utdragna sekvensen av den förstörda bilen som hopplöst rullar runt innan explosionerna."
+  },
+  {
+    "index": 10,
+    "episode": "3F14",
+    "title": "Homer the Smithers",
+    "mechanism": "timing",
+    "action_line": "on the wall TICKING. Then Homer WHIMPERS with fear and runs",
+    "context": "stunned moment, in which the only sound we hear is the clock [ACTION] out the door.",
+    "humor_explanation": "Tystnaden som bryts först av klockan, och SEDAN Homers ynkliga gnäll, skapar en förväntan som byggs upp och bryts ned. Timingen fördröjer reaktionen och låter publiken känna av den fulla vidden av hans panik inför en ny arbetsdag innan han agerar.",
+    "focus_element": "Kontrasten mellan den monotona klockan och Homers plötsliga, jämmerliga 'whimper'."
+  },
+  {
+    "index": 11,
+    "episode": "9F19",
+    "title": "Krusty Gets Kancelled",
+    "mechanism": "timing",
+    "action_line": "Bart puts his locomotive on the racetrack. After a beat it",
+    "context": "It says here, do! [ACTION] starts to melt.",
+    "humor_explanation": "Den fördröjda reaktionen, \"after a beat\", bygger upp förväntan om att Barts leksakståg ska fungera. Kontrasten mellan den normala användningen av en leksak (racetrack) och det absurda (direkt smältning) blir därmed desto starkare. Vi förväntar oss rörelse, vi får förintelse.",
+    "focus_element": "Texten \"After a beat it starts to melt.\" Timing är nyckeln, men orden konkretiserar absurditeten."
+  },
+  {
+    "index": 12,
+    "episode": "4F02",
+    "title": "Treehouse of Horror VII",
+    "mechanism": "timing",
+    "action_line": "LAUGHING GLEEFULLY. Then he suddenly turns serious, KISSES",
+    "context": "Hugo picks up a jar full of screws and RATTLES it fondly, [ACTION] it, and slowly puts it back on the floor.",
+    "humor_explanation": "Ögonblickets humor ligger i den oväntade och abrupta förändringen i Hugos beteende. Först en manisk glädje över en skruvsamling, som följs av en plötslig, nästan religiös, vördnad. Pausen mellan dessa två extrema känslouttryck förstärker det absurda och ger publiken tid att bearbeta kontrasten.",
+    "focus_element": "Kyssen på burken. Den fysiska handlingen att kyssa en burk med skruvar är det som verkligen \"säljer\" skämtet och cementerar Hugos udda karaktär."
+  },
+  {
+    "index": 13,
+    "episode": "1F06",
+    "title": "Boy Scoutz N the Hood",
+    "mechanism": "timing",
+    "action_line": "The woman turns back into Flanders, then into an ice cream",
+    "context": "You’re hungry. Not horny: Hungry. [ACTION] sundae.",
+    "humor_explanation": "Skämtet bygger på den oväntade förvandlingen från en attraktiv kvinna till Flanders, en figur som för publiken signalerar det rakt motsatta. Pausen innan glassdesserten låter publiken processa den konstiga vändningen och ökar överraskningsmomentet när hungern tar över fullständigt, vilket reducerar även Flanders till en åtråvärd ätbarhet.",
+    "focus_element": "Övergången *till* Flanders, specifikt. Inte bara en obehaglig person, utan *Flanders*. Glassdesserten är mer en punchline på punchlinen."
+  },
+  {
+    "index": 14,
+    "episode": "7G09",
+    "title": "The Call of the Simpsons",
+    "mechanism": "timing",
+    "action_line": "Homer dives back underwater. A moment later he resurfaces,",
+    "context": "God! No. Bart! No! [ACTION] SPUTTERING. He drags himself onto the rock and SOBSs.",
+    "humor_explanation": "Homer skriker panikslaget efter Bart. Pausen *efter* dyket och *innan* han återvänder skapar förväntan – vi tror att han kommer att utföra en heroisk räddning. Istället återvänder han snabbt, vilket punkterar hjältemodet med en slapstick-betonad misslyckande.",
+    "focus_element": "Att Homer gråtande drar sig upp på stenen direkt efter dyket. Kontrasten mellan heroisk räddningsaktion och fullständig kollaps är nyckeln."
+  },
+  {
+    "index": 15,
+    "episode": "2F07",
+    "title": "Grampa vs Sexual Inadequacy",
+    "mechanism": "timing",
+    "action_line": "After a beat, a bathtub falls through the hole and SMASHES",
+    "context": "(RUDE DERISIVE LAUGH) [ACTION] on top of Homer.",
+    "humor_explanation": "Tystnaden efter det hånfulla skrattet bygger upp förväntan - vad ska hända nu? Kontrasten mellan det förväntade och den totalt oväntade, absurda våldsamheten i att ett badkar faller ner, är det som ger smällen extra kraft. Timingen gör att publiken hinner tänka 'det kan inte bli värre' precis innan det blir det.",
+    "focus_element": "Badkaret som slår ner på Homer."
+  },
+  {
+    "index": 16,
+    "episode": "8F22",
+    "title": "Barts Friend Falls in Love",
+    "mechanism": "timing",
+    "action_line": "brick, until finally he grabs the Magic 8-Ball and SMASHES",
+    "context": "passes by a pair of sharp scissors, a broken bottle, a [ACTION] Milhouse in the side of the head with it. Milhouse",
+    "humor_explanation": "Humorn ligger i den förväntan som byggs upp kring det potentiella våldet. Istället för att omedelbart använda ett uppenbart farligt objekt, väljer Bart Magic 8-Ballen, som är ett otroligt osannolikt och därmed absurdt vapen. Pausen innan slaget förstärker det oväntade och låter publiken registrera den stegvisa eskaleringen från potentiellt farligt till totalt dumt.",
+    "focus_element": "Valet av Magic 8-Ball som vapen efter att ha passerat betydligt mer 'logiska' alternativ."
+  },
+  {
+    "index": 18,
+    "episode": "2F02",
+    "title": "Sideshow Bob Roberts",
+    "mechanism": "timing",
+    "action_line": "a beat, one GUY runs back in, grabs a case of whiskey, and",
+    "context": "(except for the Simpsons and a stunned Mayor Quimby.) After [ACTION] runs back out. The Simpsons turn back to the TV, worried.",
+    "humor_explanation": "Tystnaden och pausen efter Quimbys eventuella förlust låter tittaren absorbera magnituden av hans nederlag, och kombinerat med den desperata handlingen att en person rusar in och snor en låda whisky skapar en oväntad och komisk bild av kaos och uppgivenhet. Kontrasten mellan den seriösa politiska situationen och det drastiska agerandet förstärker humorn.",
+    "focus_element": "Att personen rusar IN, inte ut, FÖR att ta whisken, samt att det är en hel låda, inte bara en flaska."
+  },
+  {
+    "index": 19,
+    "episode": "3F18",
+    "title": "22 Short Films About Springfield",
+    "mechanism": "timing",
+    "action_line": "Herman out with the mace, then opens the face plate of the",
+    "context": "wearing a medieval helmet and waving a mace. He KNOCKS [ACTION] helmet .",
+    "humor_explanation": "Timingen skapar en förväntan på vem som bär hjälmen. Att Herman, den välkände vapenhandlaren, är den som gömmer sig där, och inte någon riddare, bryter förväntan och gör själva presentationen absurd. Pausen ger publiken tid att mentalt bygga upp en mer spännande bild innan avslöjandet.",
+    "focus_element": "Att Herman, med sin vanliga utstyrsel, öppnar visiret istället för en potentiell riddare eller annan 'passande' karaktär."
+  },
+  {
+    "index": 20,
+    "episode": "8F03",
+    "title": "Bart the Murderer",
+    "mechanism": "timing",
+    "action_line": "Fat Tony looks at Bart thoughtfully, then holds out a copy",
+    "context": "He’s got spunk. [ACTION] of the Daily Racing News. Bart is still struggling to get",
+    "humor_explanation": "Tonys uppriktiga, kontemplativa blick efter uttalandet om Barts \"spunk\" skapar en förväntan på något storslaget eller hotfullt. Kontrasten mellan denna förväntan och det banala i att han erbjuder Bart en tidning om hästkapplöpning är det som får skämtet att landa – det är en antiklimax som förlöser spänningen på ett oväntat och därmed roligt sätt.",
+    "focus_element": "Den utdragna pausen där Tony bara tittar på Bart innan han räcker fram tidningen. Det är i *den* pausen som publiken bygger upp fel förväntan."
+  },
+  {
+    "index": 21,
+    "episode": "9F14",
+    "title": "Duffless",
+    "mechanism": "timing",
+    "action_line": "Homer sips his beer then looks in the bathroom mirror. His",
+    "context": "Do you ever drink to escape from reality? [ACTION] reflection is now a MUSCLE MAN making his pecs dance.",
+    "humor_explanation": "Skämtet bygger på den absurda kontrasten mellan Homers deprimerande fråga och den omedelbara, fantasifulla verklighetsflykten. Pausen låter publiken hinna ta in Homers självömkan innan spegelbilden avslöjar den patetiska, osammanhängande illusionen han skapar.",
+    "focus_element": "Övergången från Homer som tittar trött i spegeln till spegelbilden som en överdriven muskelbyggare som dansar med sina bröstmuskler."
+  },
+  {
+    "index": 22,
+    "episode": "3F23",
+    "title": "You Only Move Twice",
+    "mechanism": "timing",
+    "action_line": "falls, then looks up and sees a chipmunk a few inches from",
+    "context": "knocking more pollen out of everything. She trips and [ACTION] her face, peering out from behind a dandelion puff.",
+    "humor_explanation": "Komiken ligger i pausen. Först förväntar vi oss en reaktion på fallet, kanske smärta eller förvåning. Istället får vi en oväntad närbild av en ekorre och en maskros, vilket bryter rytmen och förstärker det absurda i situationen. Kontrasten mellan det potentiellt pinsamma fallet och den stillsamma, vardagliga bilden av ekorren skapar humor.",
+    "focus_element": "Närbilden på ekorren bakom maskrosen, direkt efter fallet, är det som 'säljer' skämtet."
+  },
+  {
+    "index": 23,
+    "episode": "7G10",
+    "title": "Homers Night Out",
+    "mechanism": "timing",
+    "action_line": "Everyone stops eating and stares in shock. Two beats later",
+    "context": "coming home? [ACTION] they bow their headss and resume SLURPING joylessly.",
+    "humor_explanation": "Chocken och tystnaden efter frågan om någon faktiskt kommer hem skapar en absurd kontrast till familjens vanliga dysfunktion. Beatet förstärker det faktum att deras liv så uppenbart är sämre när någon är hemma, vilket är en oväntad och mörk komisk sanning.",
+    "focus_element": "Den totala frånvaron av ett direkt svar och det påföljande, sorglösa slurpandet."
+  },
+  {
+    "index": 24,
+    "episode": "7F17",
+    "title": "Old Money",
+    "mechanism": "timing",
+    "action_line": "Grampa sits alone. The silence is broken by LIONEL HUTZ, a",
+    "context": "reveal the ceiling is cracked and dripping rain water as [ACTION] brash young lawyer, who enters the roon.",
+    "humor_explanation": "Tystnaden efter det deprimerande avslöjandet av Grampas läckande rum skapar en förväntan. Hutz's entusiastiska entré bryter denna melankoli med en fullständigt malplacerad energi, vilket gör kontrasten mellan situationen och hans attityd komisk. Tajmingen förstärker galenskapen i att en skrupelfri advokat dyker upp just i detta ögonblick.",
+    "focus_element": "Kontrasten mellan den tysta, sorgliga scenen och Lionel Hutz's plötsliga, överdrivna entré och okänsliga attityd."
+  },
+  {
+    "index": 25,
+    "episode": "1F01",
+    "title": "Rosebud",
+    "mechanism": "physical_comedy",
+    "action_line": "piece of plaster falls from the ceiling, exposing a spewing",
+    "context": "Suddenly a section of wallpaper starts to peel off. A. [ACTION] pipe. Through the window, we see the MAILMAN approach. He",
+    "humor_explanation": "Skämtet bygger på en överdrift av vardagliga problem. Tapeten lossnar, sedan puts, och till slut sprutar det vatten - en absurd eskalering av husets förfall i en rasande takt, som kontrasterar kraftigt mot det triviala att brevbäraren närmar sig helt ovetande.",
+    "focus_element": "Den sprutande vattenledningen som fullständigt ignorerar situationens potentiella fara."
+  },
+  {
+    "index": 26,
+    "episode": "8F15",
+    "title": "Separate Vocations",
+    "mechanism": "physical_comedy",
+    "action_line": "Skinner falls to his knees and runs his fingers through the",
+    "context": "(GASPS) The books! [ACTION] books.",
+    "humor_explanation": "Skinners överdrivna reaktion, att falla på knä och dramatiskt röra vid böckerna, är löjligt eftersom det kontrasterar kraftigt med böckernas låga status. Det är en parodi på heroiska gester, applicerad på ett banalt objekt.",
+    "focus_element": "Skinners knäfall och det patetiska i att han 'smeker' böckerna."
+  },
+  {
+    "index": 27,
+    "episode": "3F23",
+    "title": "You Only Move Twice",
+    "mechanism": "physical_comedy",
+    "action_line": "Homer closes his eyes and falls backwards into Hank's arms.",
+    "context": "trust. [ACTION] À panicked Hank strains visibly under the weight.",
+    "humor_explanation": "Skämtet bygger på en klassisk fysisk komedisk situation: den naiva karaktären litar blint på någon, och den personen misslyckas sedan monumentalt med att hantera situationen. Kontrasten mellan Homers tillitsfulla fall och Hanks panikfyllda ansträngning, förstärkt av hans tydliga fysiska svårighet att bära vikten, skapar skratt.",
+    "focus_element": "Hanks synliga ansträngning under Homers vikt - de spända ansiktsdragen och kampen för att inte falla, vilket bryter löftet om 'trust'."
+  },
+  {
+    "index": 28,
+    "episode": "3F06",
+    "title": "Mother Simpson",
+    "mechanism": "physical_comedy",
+    "action_line": "Homer falls into the river and is swiftly swept downstream.",
+    "context": "Ch no! The branch broke off! [ACTION] LENNY",
+    "humor_explanation": "Fallet är roligt eftersom det är överdrivet och oväntat. Istället för att bara plumsa i vattnet, sveps Homer med våld nedströms, vilket eskalerar situationen till en absurd nivå. Kontrasten mellan det potentiellt farliga läget och det komiska utförandet förstärker humorn.",
+    "focus_element": "Den accelererade hastigheten som Homer sveps med nedströms direkt efter fallet. Det antyder en överdriven, tecknad kraft i vattnet."
+  },
+  {
+    "index": 29,
+    "episode": "3F04",
+    "title": "Treehouse of Horror VI",
+    "mechanism": "physical_comedy",
+    "action_line": "Martin jerks violently and falls over with a THUD, toppling",
+    "context": "(SCREAMS IN HORROR) Aagh! Aaaaaaugh! [ACTION] his desk. Then he is still.",
+    "humor_explanation": "Martins överdrivna reaktion på något osynligt (och förmodligen banalt) skapar en plötslig, oväntad kontrast till den normala skolmiljön. Själva överdramatiseringen, kulminerande i ett våldsamt fall, är absurd och komisk. Tystnaden efteråt förstärker effekten.",
+    "focus_element": "The sudden 'THUD' ljudet när Martin faller - det fysiska utfallet av hans hysteri konkretiseras."
+  },
+  {
+    "index": 30,
+    "episode": "8F08",
+    "title": "Flaming Moes",
+    "mechanism": "physical_comedy",
+    "action_line": "falls forward revealing an ominous-looking Becky holding an",
+    "context": "door. Bart steps back from the door in fear -- the door [ACTION] electric screwdriver. The other girls are with her. A",
+    "humor_explanation": "Komisk överraskning: förväntan byggs upp kring något läskigt, och istället för ett monster eller en hotfull situation, presenteras Becky med en skruvdragare, vilket oväntat reducerar spänningen till en vardaglig, men hotfull, hushållssituation. Kontrasten mellan det förväntade hotet och den banala verkligheten är nyckeln.",
+    "focus_element": "Beckys allvarliga min och den hotfulla skruvdragaren i kombination med det faktum att hon leder en grupp flickor – överdrivet hotfullt för något så alldagligt."
+  },
+  {
+    "index": 31,
+    "episode": "8F11",
+    "title": "Radio Bart",
+    "mechanism": "physical_comedy",
+    "action_line": "door, and jumps down the well. As he falls, Itchy, standing",
+    "context": "well in the back yard. He reacts in horror, runs out the [ACTION] on an outcropping of the wall, waves to him. Scratchy",
+    "humor_explanation": "Skämtet bygger på en extrem, oväntad reaktion. Scratchys panik är överdriven, och handlingen att hoppa ner i en brunn är fullständigt irrationell. Itchys nonchalanta vinkande understryker den våldsamma humorn, som kontrast mot Scratchys dödsfara.",
+    "focus_element": "Itchys lugna vinkning när Scratchy faller. Den kalla beräkningen i Itchys reaktion får situationen att bli ännu mer absurd och rolig."
+  },
+  {
+    "index": 32,
+    "episode": "7G08",
+    "title": "Simpsons Roasting on an Open Fire",
+    "mechanism": "physical_comedy",
+    "action_line": "Homer falls off the roof and lands in the snow with a THUD.",
+    "context": "moth-eaten Santa dummy is leaning against the chimney. [ACTION] He connects two extension cords.",
+    "humor_explanation": "Homers fall är rolig för att den är oväntad och överdriven. Kontrasten mellan den festliga, om än illa åtgångna, jultomten och Homers plötsliga, brutala fall förstärker det komiska i olyckan. Ljudet (THUD) adderar till det fysiska och smärtsamma, vilket gör det lustigt istället för tragiskt.",
+    "focus_element": "Ljudet 'THUD' direkt efter fallet förstärker smällen och överraskningen, och signalerar att detta är menat att vara roligt och inte oroande."
+  },
+  {
+    "index": 33,
+    "episode": "7G11",
+    "title": "Life on the Fast Lane",
+    "mechanism": "physical_comedy",
+    "action_line": "Marge reaches for it, the bowling ball inside falls through",
+    "context": "He holds the box out over the table towards Marge. As [ACTION] the bottom of the box and imbeds itself like a cannonball",
+    "humor_explanation": "Skämtet bygger på en överraskande och absurd fysisk handling. Förväntningen är att Marge ska ta emot en lättare present, men istället åstadkommer tyngden och oförmågan att hantera bowlingklotet en våldsam och oproportionerlig konsekvens, vilket står i stark kontrast till den vardagliga handlingen att ta emot en gåva.",
+    "focus_element": "Bowlingklotets plötsliga fall genom botten på kartongen och den efterföljande inbäddningen i bordet, likt en kanonkula, är den centrala visuella punchlinen."
+  },
+  {
+    "index": 34,
+    "episode": "7F07",
+    "title": "Bart vs Thanksgiving",
+    "mechanism": "physical_comedy",
+    "action_line": "THUD, opens the door and Maggie falls in with another THUD.",
+    "context": "see paints, papier mache strips, glue, etc. She hears a [ACTION] LISA",
+    "humor_explanation": "Maggie, den ständigt lugna och behärskade bebisen, faller oväntat och osmidigt in i Lisas rum. Två smällar förstärker det plötsliga och klumpiga i situationen, vilket bryter mot hennes vanliga image och förväntningarna om hur en bebis 'ska' bete sig.",
+    "focus_element": "De två efterföljande 'THUD'-ljuden, som förstärker det osannolika i att Maggie, av alla karaktärer, ska snubbla så spektakulärt."
+  },
+  {
+    "index": 35,
+    "episode": "4F21",
+    "title": "The Secret War of Lisa Simpson",
+    "mechanism": "physical_comedy",
+    "action_line": "Lisa lets go of the line and falls one foot into a laundry",
+    "context": "Okay, let go. [ACTION] basket filled with freshly folded sheets and towels.",
+    "humor_explanation": "Lisas förväntan är att falla en längre sträcka efter att ha släppt taget om repet. Kontrasten mellan den förväntade långa fallet och det faktiska minimala fallet i en mjuk tvättkorg skapar en komisk disjunktion. Det oväntade, nästan anti-klimaktiska, utfallet av spänningen är vad som får oss att skratta.",
+    "focus_element": "Den visuella bilden av Lisa som oförhappandes, nästan anti-klimaktiskt, landar mjukt i tvättkorgen efter den uppbyggda spänningen."
+  },
+  {
+    "index": 36,
+    "episode": "4F21",
+    "title": "The Secret War of Lisa Simpson",
+    "mechanism": "physical_comedy",
+    "action_line": "Lisa moves her left hand and immediately slips partway off",
+    "context": "delirious! [ACTION] the rope. The cadets CHEER. As she hangs by her legs and",
+    "humor_explanation": "Lisas omedelbara, och delvisa, fall från repet kontrasterar kraftigt mot den förväntade militäriska precisionen och hennes tidigare självsäkerhet. Kadetternas glada jubel över Lisas misslyckande förstärker det oväntade och pinsamma.",
+    "focus_element": "Kadetternas CHEER, som kommer direkt efter att Lisa halkar, förvandlar ett potentiellt osympatiskt fall till ren komedi genom att fokusera på den skadeglada reaktionen."
+  },
+  {
+    "index": 37,
+    "episode": "4F02",
+    "title": "Treehouse of Horror VII",
+    "mechanism": "physical_comedy",
+    "action_line": "COLD-COCKS Hugo through the frame and the boy FALLS to the",
+    "context": "through what we now see is an empty frame. Dr. Hibbert [ACTION] floor. Just then, Marge, Homer and Lisa rush into the",
+    "humor_explanation": "Skämtet ligger i den oväntade och klumpiga leveransen av Hugo genom ramen. Benämningen \"COLD-COCKS\" förstärker det absurda och den plötsliga kontrasten mellan förväntan (efter Dr. Hibbert) och den oförutsedda utkastningen av Hugo skapar en överraskande fysisk komedi.",
+    "focus_element": "Hugos fall \"FALLS to the floor\" är den specifika rörelsen som levererar skämtet. Det abrupta och oceremoniella i fallet förstärker den fysiska komiken."
+  },
+  {
+    "index": 38,
+    "episode": "8F09",
+    "title": "Burns Verkaufen der Kraftwerk",
+    "mechanism": "physical_comedy",
+    "action_line": "Mr. Burns heaves the ball with a GRUNT. It falls far short",
+    "context": "supple... throw it, don’t aim it... [ACTION] of the target. The old men LAUGH at Mr. Burns.",
+    "humor_explanation": "Humorn ligger i kontrasten mellan Mr. Burns ålderdomliga försök att demonstrera atletisk förmåga och det patetiska resultatet. Själva knycket och stönandet indikerar en ansträngning som inte matchar utfallet, vilket understryker hans förfall och skapar en pinsam situation som de andra åldringarna hånar.",
+    "focus_element": "Mr. Burns stönande i kombination med det korta kastet som missar målet kapitaliserar på den fysiska komiken."
+  },
+  {
+    "index": 39,
+    "episode": "8F19",
+    "title": "Colonel Homer",
+    "mechanism": "physical_comedy",
+    "action_line": "The first hillbilly CACKLES and falls off the truck. On TV",
+    "context": "York City. [ACTION] we cut to PIP DIDDLER, a Buck Owens type, LAUGHING",
+    "humor_explanation": "Den överdrivna hillbilly-karikatyren förstärks av det plötsliga, osannolika fallet från lastbilen direkt efter ett kacklande skratt. Kombinationen av stereotypt beteende och abrupt fysisk missöde skapar en komisk effekt.",
+    "focus_element": "Det omedelbara fallet EFTER skrattet – timingen är nyckeln. Vi förväntar oss inte att det ska ske så snabbt efter det stereotypt 'glada' uttrycket."
+  },
+  {
+    "index": 40,
+    "episode": "7G09",
+    "title": "The Call of the Simpsons",
+    "mechanism": "physical_comedy",
+    "action_line": "Homer's head appears in the pool at the base of the falls.",
+    "context": " [ACTION] He swims, COUGHING AND GASPING.",
+    "humor_explanation": "Överraskningen och det oväntade. Vi förväntar oss antingen inget, eller något storslaget efter ett vattenfall, men får istället en simpel, oförberedd Homer. Kontrasten mellan det potentiellt farliga fallet och hans uppdykande, hostande och gaspandes, gör det löjligt.",
+    "focus_element": "Homer's uppdykande, hostande och gaspandes - en kraschlandning i miniatyrformat istället för ett episkt ögonblick."
+  },
+  {
+    "index": 41,
+    "episode": "9F22",
+    "title": "Cape Feare",
+    "mechanism": "physical_comedy",
+    "action_line": "underside of the car. He unstraps himself and falls to the",
+    "context": "CUT WIDE to reveal Sideshow Bob is strapped to the [ACTION] ground with a thud. He gets hit by the muffler as the car",
+    "humor_explanation": "Fallet i sig är inte oväntat, men det förlängda obehaget (mufflern träffar honom) eskalerar lidandet och omvandlar det till slapstick. Timingen är viktig: efter att Bob befriat sig tror tittaren att faran är över, men då kommer den oväntade smällen.",
+    "focus_element": "Ljudet av mufflern som träffar Bob kombinerat med Bobs överdrivna, tysta smärta i ansiktet."
+  },
+  {
+    "index": 42,
+    "episode": "7F21",
+    "title": "Three Men and a Comic Book",
+    "mechanism": "physical_comedy",
+    "action_line": "the edge again and Milhouse falls out the door. Bart grabs",
+    "context": "They roll back in, away from the door. Then, they roll to [ACTION] him by the pajama sleeve to keep him from falling to the",
+    "humor_explanation": "Milhouse faller ut genom dörren trots att Bart försöker rädda honom, vilket understryker Milhouses oförmåga och Barts misslyckade ansträngning. Den fysiska komedin ligger i den oväntade tyngdlagen och Milhouses passiva acceptans av sitt öde.",
+    "focus_element": "Milhouse som helt enkelt 'faller ut' (implied slack body) medan Bart krampaktigt håller i pyjamasen."
+  },
+  {
+    "index": 43,
+    "episode": "9F14",
+    "title": "Duffless",
+    "mechanism": "physical_comedy",
+    "action_line": "Skinner starts to run, but trips and falls. He looks up to",
+    "context": "Suddenly, a barrage of sniper FIRE erupts. [ACTION] see a Viet Cong soldier looming over him, holding a giant",
+    "humor_explanation": "Skämtet bygger på en oväntad och abrupt kontrast mellan den allvarliga krigssituationen (snipereld) och Skinners klumpiga fall. Den förväntade hjälteakten undermineras totalt av hans inkompetens, vilket förstärks av att han presenteras som ett lätt offer för 'fienden'.",
+    "focus_element": "Skinners fall - det är själva den fysiska handlingen att snubbla som levererar skämtet, snarare än en specifik replik."
+  },
+  {
+    "index": 44,
+    "episode": "1F04",
+    "title": "Treehouse of Horror IV",
+    "mechanism": "physical_comedy",
+    "action_line": "Homer HONKS the air horn in Bart’s ear. Bart falls off the",
+    "context": "great in here. [ACTION] chair.",
+    "humor_explanation": "Det oväntade och överdrivna våldet i Homers handling, en totalt opassande reaktion på Barts närvaro, skapar en absurd kontrast. Fallet från stolen förstärker den fysiska komedin genom att understryka kraften i Homers handling och Barts sårbarhet.",
+    "focus_element": "Ljudet av lufttutan kombinerat med Barts direkta fall. Ljudet är oväntat högt och Barts fall sker omedelbart och okontrollerat."
+  },
+  {
+    "index": 45,
+    "episode": "1F01",
+    "title": "Rosebud",
+    "mechanism": "physical_comedy",
+    "action_line": "the bear. Homer comes down the stairs, falls, and HITS his",
+    "context": "Knocks the lamp shade so there’s an aura of light around [ACTION] head hard on the floor. He looks up and sees the bear. —",
+    "humor_explanation": "Fallet kombinerar slapstick-humor (Homer faller) med en oväntad skräckfilmsreferens. Att han slår huvudet så hårt att han ser en björn som redan är där förstärker hans förvirring och den absurda situationen.",
+    "focus_element": "Att fallet är så klumpigt och resulterar i en huvudsmäll som 'avslöjar' björnen; timingen är viktig - fallet MÅSTE vara tillräckligt våldsamt."
+  },
+  {
+    "index": 46,
+    "episode": "7F08",
+    "title": "Dead Putting Society",
+    "mechanism": "physical_comedy",
+    "action_line": "She points to a spot on the sideboard. Bart hits the shot.",
+    "context": "TABLE DRAFT 5/23/90 PAGE 34. [ACTION] The ball bounces around and rolls right into the hole.",
+    "humor_explanation": "Skämtet ligger i den osannolika och överdrivna sekvensen av studs och rikoschetter som bollen gör innan den mirakulöst går i hålet. Det är en fysisk manifestation av extrem tur eller skicklighet (vilket är ironiskt eftersom Bart slår helt slumpmässigt).",
+    "focus_element": "Den utdragna sekvensen av studsanden och ljudet av bollen som studsar vilt innan den *äntligen* rullar i hålet, komplett med en antydan om att det är ren tur snarare än skicklighet."
+  },
+  {
+    "index": 47,
+    "episode": "7G05",
+    "title": "Bart the General",
+    "mechanism": "physical_comedy",
+    "action_line": "she picks up the box of cupcakes, one of them falls to the",
+    "context": "Bart does so. Lisa gets up to move to another seat. As [ACTION] floor. She reconsiders, and then puts the cupcake from the",
+    "humor_explanation": "Humorn ligger i Lisas korta tvekan - konflikten mellan att hon vet att hon borde slänga den tappade cupcaken och hennes snålhet/sug efter sött. Det blir extra roligt för att handlingen är snabb och subtil; hon hinner tänka om innan någon kan protestera.",
+    "focus_element": "Lisas *reconsideration* - den minimala pausen och hennes blick som säger 'äh, vafan' innan hon lägger tillbaka cupcaken."
+  },
+  {
+    "index": 48,
+    "episode": "8F08",
+    "title": "Flaming Moes",
+    "mechanism": "physical_comedy",
+    "action_line": "louder Aerosmith stops playing and the crowd falls SILENT.",
+    "context": "INSANE CACKLING coming from above the crowd. As it gets [ACTION] MOE",
+    "humor_explanation": "Komiken ligger i den oväntade, brutala kontrasten. Den galna skratt-uppbyggnaden, som antyder något storslaget eller skrämmande, möts av en patetisk, klumpig nedkomst. Effekten förstärks av den totala tystnaden - alla förväntar sig något episkt, men får ett pinsamt antiklimax.",
+    "focus_element": "Aerosmiths avbrutna musik i kombination med folkmassans plötsliga tystnad precis innan den klumpiga gestalten kraschar in."
+  },
+  {
+    "index": 49,
+    "episode": "7G01",
+    "title": "Some Enchanted Evening",
+    "mechanism": "physical_comedy",
+    "action_line": "ladder looking into a giant pot of honey. He falls in head",
+    "context": "We are CLOSE ON the television. Bubbles the Elf is ona [ACTION] first and comes up all goopy.",
+    "humor_explanation": "Skämtet ligger i den oväntade, och ganska groteska, synen av en liten alv täckt i tjock honung. Kontrasten mellan den söta, oskyldiga alven och den klibbiga, potentiellt kvävande situationen skapar fysisk komedi.",
+    "focus_element": "Bubbles alv, täckt i honung, dyker upp ur honungskrukan."
+  },
+  {
+    "index": 50,
+    "episode": "9F06",
+    "title": "New Kid on the Block",
+    "mechanism": "reaction_shot",
+    "action_line": "Maggie stares at a massive meat-pie on her plate, pokes it,",
+    "context": "Now that is good Labneh. [ACTION] then lies down and falls asleep on it.",
+    "humor_explanation": "Maggiess totala, barnsliga överreaktion på en alldeles för stor portion köttpaj är rolig eftersom den kombinerar det absurda (vem sover på en paj?) med det igenkännbara (barn som tröttnar på mat). Kontrasten mellan den gigantiska pajen och den lilla bebisens passiva motstånd förstärker effekten.",
+    "focus_element": "Maggies omedelbara övergång från att peta på pajen till att oförbehållsamt somna på den, utan någon tvekan eller gradvishet."
+  },
+  {
+    "index": 51,
+    "episode": "8F09",
+    "title": "Burns Verkaufen der Kraftwerk",
+    "mechanism": "reaction_shot",
+    "action_line": "twists in horror as he walks over and stares at the TV, his",
+    "context": "again, with Burns Worldwide closing at 52. Homer’s face [ACTION] nose against the screen.",
+    "humor_explanation": "Homer's reaktion överdriver kraftigt betydelsen av Burns Worldwide's aktiekurs för honom personligen. Kontrasten mellan det generiska börsnyheterna och Homers intensiva, personliga ångest skapar komisk distans. Ju mer han fokuserar, desto fånigare framstår hans reaktion.",
+    "focus_element": "Homer's 'nose against the screen' – den fysiska manifestationen av hans besatthet är både oväntad och absurd."
+  },
+  {
+    "index": 52,
+    "episode": "3F02",
+    "title": "Bart Sells His Soul",
+    "mechanism": "reaction_shot",
+    "action_line": "Lisa is LAUGHING hard. Bart stares at the screen, a little",
+    "context": "ANGLE ON BART AND LISA [ACTION] bewildered.",
+    "humor_explanation": "Skämtet ligger i den motsatta reaktionen. Lisa gapskrattar åt något som uppenbarligen inte är roligt för Bart, vilket understryker skillnaden i deras humor och intelligens. Det förstärks av Barts förvirring, som visar att han missar poängen, vilket gör Lisas överdrivna reaktion ännu mer absurd.",
+    "focus_element": "Barts 'förvirrade' blick som kontrasteras mot Lisas okontrollerade skratt."
+  },
+  {
+    "index": 53,
+    "episode": "7F14",
+    "title": "Barts Dog Gets an F",
+    "mechanism": "reaction_shot",
+    "action_line": "eating from a box of donuts. He stares sadly at his shoes,",
+    "context": "Homer is sitting with his feet up on a control console, [ACTION] which have \"Homer Simpson, All-Star\" written crudely on the",
+    "humor_explanation": "Kontrasten mellan den sorgsna minen och det faktum att Homer sitter bekvämt och äter donuts på jobbet etablerar en absurd situation. Han reagerar inte på något akut hot eller personlig tragedi, utan på att texten på hans skor är sorglig - vilket förhöjer den redan etablerade inkompetensen.",
+    "focus_element": "Homers ledsna blick på skorna och den implicita slutsatsen att hans \"All-Star\" status är en patetisk lögn."
+  },
+  {
+    "index": 54,
+    "episode": "7G06",
+    "title": "Moaning Lisa",
+    "mechanism": "reaction_shot",
+    "action_line": "LISA stands at the mirror, motionless. She sadly stares at",
+    "context": " [ACTION] her reflection. A clock TICKS loudly, 0.S. It is an",
+    "humor_explanation": "Lisans deprimerade stirrande på sig själv kombinerat med den överdrivet höga tickande klockan skapar en absurd kontrast mellan en barns perspektiv på tid och vuxnas ångest. Det är roligt för att det förstärker hur dramatiskt barn kan uppleva vanliga situationer, men också för att det känns igen från vuxenlivets press.",
+    "focus_element": "Den O.S. (off-screen) höga tickande klockan som understryker Lisas ångestladdade stirrande i spegeln."
+  },
+  {
+    "index": 55,
+    "episode": "7F05",
+    "title": "Dancin Homer",
+    "mechanism": "reaction_shot",
+    "action_line": "Homer holds back Bart, who has a very hurt expression on i",
+    "context": "stitched in Haiti. Read it and weep! [ACTION] his face.",
+    "humor_explanation": "Skämtet ligger i Bart's överdrivna reaktion på Homers spydiga kommentar. Kontrasten mellan Homers kaxighet och Barts sårbara ansiktsuttryck skapar humor, förstärkt av det faktum att Homer hindrar Bart från att agera ut sin smärta.",
+    "focus_element": "Bart's *hurt expression* combined with Homer *holding him back*, som om Bart var redo att storma planen p.g.a. 'stitched in Haiti'-kommentaren. Den kombinationen säljer idén att Bart faktiskt tar Homers elakhet på allvar."
+  },
+  {
+    "index": 56,
+    "episode": "2F17",
+    "title": "Radioactive Man",
+    "mechanism": "reaction_shot",
+    "action_line": "He points to a stunned Milhouse. Bart also looks stunned,",
+    "context": "there! [ACTION] then walks over in front of Milhouse so the finger is",
+    "humor_explanation": "Humorn ligger i den oväntade och fullständigt orättvisa utpekningen av Milhouse. Bart, som *borde* vara måltavlan, delar förvirringen, vilket förstärker det absurda i Skinners irrationalitet och dennes tendens att göra godtyckliga anklagelser.",
+    "focus_element": "Milhouse's mållösa, totalt överrumplade minspel direkt efter Skinners utpekning, kontrasterat mot Barts lika förvånade men mer subtila reaktion."
+  },
+  {
+    "index": 57,
+    "episode": "8F05",
+    "title": "Like Father Like Clown",
+    "mechanism": "reaction_shot",
+    "action_line": "The AUDIENCE CHEERS &amp; APPLAUDS WILDLY. Krusty reacts.",
+    "context": "I hold in my hand the final axe. [ACTION] SFX: DRUMROLL",
+    "humor_explanation": "Krustys reaktion är rolig för att den undergräver publikens förväntan. Medan alla jublar över 'den sista yxan' (vilket antyder ett avslutande, klimaktiskt moment), ser Krusty bara ut som han inser att han inte har en aning om vad som pågår, vilket skapar en absurd kontrast mellan publikens entusiasm och hans förvirring.",
+    "focus_element": "Krustys uttryck: en panikartad, osäker blick kombinerat med en lätt uppgiven axelryckning som säger 'jag har ingen aning om vad som händer'."
+  },
+  {
+    "index": 58,
+    "episode": "8F07",
+    "title": "Saturdays of Thunder",
+    "mechanism": "reaction_shot",
+    "action_line": "Bart’s listless expression turns to one of determination.",
+    "context": "BACK TO SCENE [ACTION] He motions to Martin.",
+    "humor_explanation": "Kontrasten mellan Barts tidigare apatiska uttryck och den plötsliga, överdrivna beslutsamheten är rolig. Det är en klassisk Simpsons-grej att vända känslor på en femöring, och här förstärks det av den orealistiska mängden fokus han plötsligt har för ett så dumt lopp.",
+    "focus_element": "Barts stela, nästan maniska blick. Han stirrar intensivt framåt, helt i kontrast till hans tidigare ointresse."
+  },
+  {
+    "index": 59,
+    "episode": "3F07",
+    "title": "Marge Be Not Proud",
+    "mechanism": "reaction_shot",
+    "action_line": "Bart stares at him for a second, then turns toward Marge.",
+    "context": "booze! [ACTION] BART",
+    "humor_explanation": "Bart, som precis hört sin far euforiskt utbrista \"booze!\", bryter den förväntade barnsliga glädjen eller neutraliteten med en osäker blick mot Marge. Kontrasten mellan Homers ansvarslösa entusiasm och Barts skeptiska reaktion skapar en komisk spänning och antyder en dysfunktionell familjedynamik.",
+    "focus_element": "Barts långsamma vändning mot Marge efter Homers utrop, och hans bekymrade minspel."
+  },
+  {
+    "index": 60,
+    "episode": "2F16",
+    "title": "Who Shot Mr Burns Part One",
+    "mechanism": "reaction_shot",
+    "action_line": "The crowd stares icily at Burns, MUTTERING darkly. Burns",
+    "context": "2F16 FINAL 1 9/9/94 Page 42. [ACTION] turns to exit.",
+    "humor_explanation": "Skämtet ligger i kontrasten mellan Burns fullständiga oförmåga att läsa av rummet och folkmassans uppenbara ilska. Reaktionerna förstärks av att de är *dunkelt* muttrande, vilket antyder ett hotande våld som Burns totalt missar, vilket gör hans brist på medvetenhet ännu roligare.",
+    "focus_element": "Den *iskalla* blicken och *dunkla* muttrandet från folkmassan, kontrasterat mot Burns ovetande agerande att vända sig bort."
+  },
+  {
+    "index": 61,
+    "episode": "7G01",
+    "title": "Some Enchanted Evening",
+    "mechanism": "reaction_shot",
+    "action_line": "Bart looks at the breakfast with a disgusted expression.",
+    "context": "saying good-bye. [ACTION] BART",
+    "humor_explanation": "Bart's överdrivna äckel inför frukosten spelar på kontrasten mellan förväntningarna på en barnslig aptit och den avsky han faktiskt känner. Det är en visuell punchline som antyder att frukosten är *verkligen* hemsk, utan att explicit säga det.",
+    "focus_element": "Bart's rynkade näsa och stirrande blick mot frukosten, kombinerat med en mikrosekunds paus innan nästa scen."
+  },
+  {
+    "index": 62,
+    "episode": "9F13",
+    "title": "I Love Lisa",
+    "mechanism": "reaction_shot",
+    "action_line": "Krusty picks up an oversized clown mallet. Raheem glares",
+    "context": "RAHEEM, a black militant, wears a dashiki and a beret. [ACTION] at him.",
+    "humor_explanation": "Krustys totala brist på självmedvetenhet och oförmåga att läsa av situationen skapar en absurd kontrast mot Raheems hotfulla framtoning. Hotet i kombination med det barnsliga clown-vapnet genererar spänning som löses i komisk absurditet.",
+    "focus_element": "Raheems isande blick (glare) kontrasterat med Krustys val av vapen: en överdimensionerad clown-klubba."
+  },
+  {
+    "index": 63,
+    "episode": "8F18",
+    "title": "A Streetcar Named Marge",
+    "mechanism": "reaction_shot",
+    "action_line": "Apu steps to the front of the stage as Marge freezes ina",
+    "context": "once, softly and sweetly on your mouth. [ACTION] clumsy stagey pose.",
+    "humor_explanation": "Skämtet bygger på den absurda kontrasten mellan den romantiska föreställningen och Apus plötsliga, malplacerade entré. Marges stelbent poserade, fångad mitt i vad som skulle vara ett kärleksfullt ögonblick, förstärker det oväntade avbrottet och får henne att se extra löjlig ut.",
+    "focus_element": "Marges frusna, klumpiga scenpose."
+  },
+  {
+    "index": 64,
+    "episode": "9F17",
+    "title": "So Its Come to This A Simpsons Clip Show",
+    "mechanism": "reaction_shot",
+    "action_line": "He walks out. Homer’s face falls. The reporters race toa",
+    "context": "(STARES, THEN) Sorry, kids only. [ACTION] bank of phone booths.",
+    "humor_explanation": "Skämtet bygger på Homers totala förväntan om att bli inkluderad, och den brutala, oväntade avvisningen. Kontrasten mellan hans hoppfulla ansikte och den omedelbara besvikelsen är det som gör det roligt. Timingen är perfekt: först förväntan, sedan den korta, dräpande kommentaren.",
+    "focus_element": "Homer’s face falls."
+  },
+  {
+    "index": 65,
+    "episode": "8F11",
+    "title": "Radio Bart",
+    "mechanism": "reaction_shot",
+    "action_line": "well in the back yard. He reacts in horror, runs out the",
+    "context": "world\". Out the window, Scratchy sees Itchy jump down a [ACTION] door, and jumps down the well. As he falls, Itchy, standing",
+    "humor_explanation": "Skämtet bygger på den absurda eskaleringen. Scratchy reagerar med överdriven skräck på en relativt harmlös händelse (Itchy hoppar ner i en brunn) och hans omedelbara impuls att följa efter, trots den uppenbara faran, är helt irrationell. Kontrasten mellan den lilla provokationen och den enorma reaktionen skapar komedin.",
+    "focus_element": "Scratchys extremt överdrivna skräckuttryck i kombination med hans omedelbara, beslutsamma hopp ner i brunnen."
+  },
+  {
+    "index": 66,
+    "episode": "1F22",
+    "title": "Bart of Darkness",
+    "mechanism": "reaction_shot",
+    "action_line": "Long pause. He stares at it, whistling happily. Finally:",
+    "context": "genuine pieces of the Berlin Wall. [ACTION] HOMER",
+    "humor_explanation": "Homer köper en bit av Berlinmuren (som troligen är falsk) och hans reaktion är inte att förstå dess historiska betydelse, utan ren okunnig glädje över att äga 'något'. Pausen bygger upp förväntan och bryts sedan av med en banal vissling, vilket understryker hans brist på intellektuell nyfikenhet.",
+    "focus_element": "Homer visslar glatt efter den långa pausen, helt oblivious till murens historiska kontext."
+  },
+  {
+    "index": 67,
+    "episode": "1F01",
+    "title": "Rosebud",
+    "mechanism": "reaction_shot",
+    "action_line": "Burns looks at Smithers for a moment, blinks, then looks",
+    "context": "aren’t connected to anything. [ACTION] behind the control panel. Then he straightens.",
+    "humor_explanation": "Skämtet bygger på Burns ålderdom och glömska. Han uppvisar en total avsaknad av sammanhangsförståelse trots att Smithers precis förklarat något grundläggande, vilket kontrasterar starkt mot den bild av makt och kontroll Burns försöker upprätthålla. Tystnaden och den långsamma reaktionen förstärker intrycket av senilitet.",
+    "focus_element": "Burns stirrande, tomma blick mot Smithers, följt av den lika tomma blicken mot kontrollpanelen. Det är en subtil men tydlig indikation på kognitiv svikt."
+  },
+  {
+    "index": 68,
+    "episode": "7G12",
+    "title": "Krusty Gets Busted",
+    "mechanism": "reaction_shot",
+    "action_line": "on the tip of one of his shoes. Sideshow Bob reacts just",
+    "context": "Bart reaches o.s. and grabs a mallet, SMACKING Sideshow Bob [ACTION] as he did in the Kwik-E-Mart.",
+    "humor_explanation": "Bob's överdrivna, teatraliska reaktion på en relativt mild smäll är det komiska här. Det är kontrasten mellan handlingen (en liten smäll på skon) och reaktionen (ett gigantiskt, lidande skrik och vridande) som driver skämtet. Dessutom är det en återgång till ett tidigare etablerat skämt, vilket förstärker effekten.",
+    "focus_element": "Sideshow Bobs fullständigt oproportionerliga skrik och smärtdemonstration, exakt likadan som i Kwik-E-Mart-scenen."
+  },
+  {
+    "index": 69,
+    "episode": "3F23",
+    "title": "You Only Move Twice",
+    "mechanism": "reaction_shot",
+    "action_line": "The street scene FREEZES. Step by step, it's transformed",
+    "context": "Somebody did. [ACTION] into an upscale showplace:",
+    "humor_explanation": "Humorn ligger i den överdrivna kontrasten. Scenen går från misär och brottslighet till perfekt överklassidyll. Homer's reaktion fångar publikens tanke – 'vad i hela friden?!' – och förstärker det absurda i transformationen.",
+    "focus_element": "Homer's gapande mun och förvirrade ögonblick när han ser grannskapet förvandlas. Uttrycket säljer chockeffekten och förstärker det bisarra i förändringen."
+  },
+  {
+    "index": 70,
+    "episode": "7F24",
+    "title": "Stark Raving Dad",
+    "mechanism": "reaction_shot",
+    "action_line": "Finally, Bart is alone on the lawn with Lisa. She stares",
+    "context": "kill you till she’s asleep. [ACTION] at him with cold fury in her eyes.",
+    "humor_explanation": "Skämtet ligger i kontrasterna: Barts hotfulla, nästan psykopatiska kommentar skapar en förväntan på någon form av fysisk aggressivitet. Istället möts han av Lisas iskalla blick, en icke-fysisk, men lika hotfull respons som avväpnar situationen och understryker det absurda i Barts 'hot'.",
+    "focus_element": "Lisas 'cold fury' i ögonen. Det är inte bara blicken i sig, utan också att den är så passiv-aggressiv i kontrast till det Barts upptrappade hot."
+  },
+  {
+    "index": 71,
+    "episode": "8F02",
+    "title": "Treehouse of Horror II",
+    "mechanism": "reaction_shot",
+    "action_line": "Smithers realizes what Burns’ is thinking and reacts in",
+    "context": "BACK TO WIDE SHOT [ACTION] horror.",
+    "humor_explanation": "Smithers' reaktion säljer skämtet. Vi vet inte exakt vad Burns plan är, men Smithers' omedelbara skräck antyder något så absurt och moraliskt förkastligt att det automatiskt blir roligt. Ju överdrivnare reaktionen är, desto roligare blir antydningen.",
+    "focus_element": "Smithers' ögonvitor, kombinerat med en stum, panikslagen min."
+  },
+  {
+    "index": 72,
+    "episode": "8F18",
+    "title": "A Streetcar Named Marge",
+    "mechanism": "reaction_shot",
+    "action_line": "Homer stares at her, wide-eyed. We don’t know what he’s",
+    "context": "dime... [ACTION] thinking.",
+    "humor_explanation": "Homer är totalt oförberedd på den potentiella implikationen av ordet \"dime\" (kanske sexuell anspelning eller något helt annat). Komiken ligger i den extremt överdrivna, naiva oskuldsfullheten i hans reaktion – en total avsaknad av förståelse som kontrasterar starkt mot det man *förväntar* sig.",
+    "focus_element": "Homers vidöppna ögon och tomma blick, som signalerar total förvirring och möjligen en underliggande, barnslig förundran."
+  },
+  {
+    "index": 73,
+    "episode": "2F06",
+    "title": "Homer Badman",
+    "mechanism": "reaction_shot",
+    "action_line": "Marge puts her hands on her hips and glares at Homer. A",
+    "context": "myself any further. [ACTION] pocket springs loose and gumballs flow forth like a",
+    "humor_explanation": "Marges klassiska \"arg mamma\"-blick kontrasteras kraftigt mot den absurda situationen med Homer och godisautomater. Det är kombinationen av en vardaglig reaktion och det fullständigt orimliga som gör det roligt. Hon reagerar på ett problem som är både hans fel och löjligt överdrivet.",
+    "focus_element": "Marges sammanbitna min, händerna på höfterna - den typiska kroppsspråket som signalerar \"jag är inte imponerad och du har skämt ut oss\" - utfört inför ett absurt hav av godis."
+  },
+  {
+    "index": 74,
+    "episode": "9F09",
+    "title": "Homers Triple Bypass",
+    "mechanism": "reaction_shot",
+    "action_line": "Homer stares uncomfortably at the kids for a beat. Lisa",
+    "context": "I’m no good at this. [ACTION] leans up to his ear and WHISPERS in.",
+    "humor_explanation": "Homer stirrar obekvämt på barnen, vilket skapar spänning och antyder hans oförmåga att vara en bra pappa. Humorn ligger i kontrasten mellan förväntningen på en meningsfull interaktion och den tydliga oförmågan som visas i Homers uttryck, förstärkt av den påföljande tystnaden.",
+    "focus_element": "Homers obekväma stirr. Den långa pausen och hans osäkra blick mot barnen förmedlar hela skämtet."
+  },
+  {
+    "index": 75,
+    "episode": "8F02",
+    "title": "Treehouse of Horror II",
+    "mechanism": "callback",
+    "action_line": "We hear an OMINOUS SNARE DRUM again as Bart turns Lisa into",
+    "context": "Did too! [ACTION] a ZOMBIE.",
+    "humor_explanation": "Återkomsten av den olycksbådande virveltrumman, som tidigare associerats med dramatiska och ofta överdrivna vändningar i vardagliga situationer, används här igen för att förstärka det löjliga i Bart och Lisas barnsliga gräl. Att förvandla Lisa till en zombie är en orimlig eskalering som kontrasterar kraftigt med den triviala konflikten, vilket gör den rolig.",
+    "focus_element": "Den OMINÖSA virveltrumman som ackompanjerar förvandlingen till en zombie."
+  },
+  {
+    "index": 76,
+    "episode": "7G11",
+    "title": "Life on the Fast Lane",
+    "mechanism": "callback",
+    "action_line": "Marge picks up her ball and heaves it. It follows the same",
+    "context": "All right. But I'm not very good. [ACTION] trajectory, and knocks over the \"7\" pin.",
+    "humor_explanation": "Skämtet bygger på en callback till Marges tidigare extremt dåliga bowling, där hon upprepade gånger träffade bara 7:an. Återkomsten av samma usla resultat, trots hennes försäkran om att inte vara bra, skapar igenkänning och en absurd förväntan som uppfylls.",
+    "focus_element": "Att *bara* 7:an faller, vilket visuellt bekräftar Marges inkompetens på ett specifikt och oväntat sätt."
+  },
+  {
+    "index": 77,
+    "episode": "3F02",
+    "title": "Bart Sells His Soul",
+    "mechanism": "callback",
+    "action_line": "We hear the birthday ALARM again. Moe turns and sees Patty",
+    "context": "guy's forehead. He's gonna blow. [ACTION] and Selma sitting at a table wearing birthday hats. They",
+    "humor_explanation": "Återkomsten till födelsedagsalarmet, kombinerat med att Patty och Selma nu bär hattar, förhöjer absurditeten. Den förväntade våldsamheten (Moes raseri) kontrasteras mot den bisarra och oförklarliga scenen, vilket skapar komisk spänning och avslappning.",
+    "focus_element": "Patty och Selmas födelsedagshattar: den oväntade visuella detaljen som antyder att de fullständigt ignorerar Moes känslor och konsekvenserna av sina handlingar."
+  },
+  {
+    "index": 78,
+    "episode": "7G04",
+    "title": "Theres No Disgrace Like Home",
+    "mechanism": "callback",
+    "action_line": "Bart tries to whack Dr. Monroe again, but the Doctor grabs",
+    "context": "Ow! [ACTION] the paddle.",
+    "humor_explanation": "Skämtet fungerar eftersom det är en upprepning av ett tidigare etablerat beteende: Bart försöker slå Dr. Monroe med något (antagligen en paddel som i tidigare scener), vilket redan i sig signalerar misslyckad terapi. Att Dr. Monroe nu, förutsägbart, tar ifrån Bart paddeln förstärker känslan av meningslöshet och Barts oförmåga att lära sig, vilket är absurt roligt.",
+    "focus_element": "Att Dr. Monroe 'grabs the paddle' antyder en maktförskjutning - läkaren tar kontrollen, men den komiska effekten ligger i att detta sker efter upprepade försök från Bart, vilket understryker terapisens ineffektivitet och Barts okontrollerbara impuls."
+  },
+  {
+    "index": 79,
+    "episode": "7G11",
+    "title": "Life on the Fast Lane",
+    "mechanism": "callback",
+    "action_line": "GROUPIES CHEER. Marge picks up her ball and tries again.",
+    "context": "hers as Jacques gets another strike and a small cluster of [ACTION] The ball goes exactly to the same spot. She then enters",
+    "humor_explanation": "Marge misslyckas med bowlingen gång på gång, trots sin beslutsamhet. Återupprepningen av misslyckandet, kombinerat med gruppiers hejarop på Jacques istället för henne, förstärker hennes frustration och kontrasten mellan hennes ansträngning och resultatet.",
+    "focus_element": "Att bowlingklotet går exakt till samma plats som tidigare, vilket betonar Marges inkompetens på ett visuellt konsekvent och humoristiskt sätt."
+  },
+  {
+    "index": 80,
+    "episode": "7F04",
+    "title": "Treehouse of Horror",
+    "mechanism": "callback",
+    "action_line": "Homer SCREAMS again. He looks around, then does a double",
+    "context": "Nevermore. [ACTION] take as he realizes the bird has spoken. Homer SNIFFS as",
+    "humor_explanation": "Skämtet landar på Homers fördröjda reaktion. Efter att ha skrikit en gång (förmodligen på grund av 'Nevermore') tar det honom tid att processa att fågeln faktiskt har talat. Fördröjningen skapar en komisk effekt eftersom publiken förväntar sig en omedelbar reaktion på det övernaturliga, men får istället Homers typiska tröghet, följt av en sniff som understryker hans disträhet.",
+    "focus_element": "Homers 'double take' kombinerat med sniffen. 'Double take' signalerar fördröjningen, och sniffen är en absurd, icke-logisk handling som understryker hans brist på förståelse för situationens allvar."
+  },
+  {
+    "index": 81,
+    "episode": "7F14",
+    "title": "Barts Dog Gets an F",
+    "mechanism": "callback",
+    "action_line": "The dog picks up the doll and smashes it against a tree.",
+    "context": "NEW ANGLE [ACTION] The head falls off. The dog drops the rest in the hole.",
+    "humor_explanation": "Hunden, Santa's Little Helper, agerar oväntat våldsamt mot dockan. Humorn ligger i kontrasten mellan hans 'snälla hund'-image och den plötsliga, destruktiva handlingen, vilket förstärks av dockans öde – ett brutalt slut som överträffar förväntningarna.",
+    "focus_element": "Att dockans huvud faller av precis efter smällen mot trädet, vilket cementerar det absurda och brutala i hundens agerande."
+  },
+  {
+    "index": 82,
+    "episode": "4F21",
+    "title": "The Secret War of Lisa Simpson",
+    "mechanism": "callback",
+    "action_line": "then looks back again. He looks at them a third time and",
+    "context": "then looks back. He looks at the bullhorns once again, [ACTION] finally gets an idea.",
+    "humor_explanation": "Humorn ligger i den övertydliga upprepningen. För varje gång Chief Wiggum tittar tillbaka på megafonerna blir det tydligare att han är trögfattad. Det skapar en förväntan om att han *ska* fatta, som kulminerar i en extra betoning när han till slut får en idé (vilken troligtvis kommer vara korkad).",
+    "focus_element": "Att Wiggum tittar tillbaka en *tredje* gång, vilket cementerar idiotin och förlöser spänningen kring hans bristande förståelse."
+  },
+  {
+    "index": 83,
+    "episode": "7G11",
+    "title": "Life on the Fast Lane",
+    "mechanism": "callback",
+    "action_line": "The ball goes exactly to the same spot. She then enters",
+    "context": "GROUPIES CHEER. Marge picks up her ball and tries again. [ACTION] her score on her scoresheet.",
+    "humor_explanation": "Skämtet fungerar genom repetition och förväntningsbrott. Vi etablerade just att Marge är usel på bowling. Att hon, trots ett försök till, upprepar samma dåliga resultat förstärker hennes inkompetens på ett komiskt vis, och understryker hopplösheten i hennes försök.",
+    "focus_element": "Att bollen går EXAKT till samma ställe. Den totala bristen på förbättring är nyckeln."
+  },
+  {
+    "index": 84,
+    "episode": "7F20",
+    "title": "The War of the Simpsons",
+    "mechanism": "callback",
+    "action_line": "Homer sits down on the opposite end of the same pew as.",
+    "context": "Sit down, Homer. [ACTION] Marge. He makes hand signals trying to get her attention.",
+    "humor_explanation": "Skämtet bygger på en 'callback' till en tidigare scen där Homer troligen agerade olämpligt i kyrkan. Nu sitter han i samma bänk och gör ångestfyllda, överdrivna handgester, vilket antyder att han är medveten om sitt tidigare beteende och försöker undvika liknande missöden, men misslyckas komiskt.",
+    "focus_element": "Homers desperata handgester mot Marge. Kontrasten mellan hans ansträngning att vara diskret och hans misslyckande förhöjer det komiska."
+  },
+  {
+    "index": 85,
+    "episode": "4F13",
+    "title": "My Sister My Sitter",
+    "mechanism": "callback",
+    "action_line": "She lunges again. He jumps backwards, further down the",
+    "context": "(ANGRY GROWL) [ACTION] hall.",
+    "humor_explanation": "Skämtet bygger på förväntan och eskalering. Vi har sett Marge vara passiv-aggressiv tidigare i avsnittet. Återkomsten till det 'ANGRY GROWL', nu kombinerat med fysisk attack, bryter denna förväntan på ett våldsamt och absurt sätt, vilket förstärker komiken.",
+    "focus_element": "Kontrasten mellan det hotfulla 'ANGRY GROWL' och den osannolika situationen att Marge faktiskt jagar Homer, vilket visuellt förstärks av att han tvingas backa."
+  },
+  {
+    "index": 86,
+    "episode": "4F13",
+    "title": "My Sister My Sitter",
+    "mechanism": "callback",
+    "action_line": "Lisa lunges. Bart jumps backwards again ~- and TUMBLES",
+    "context": "Ba-art! [ACTION] head over heels down the stairs. He rolls to a halt at the",
+    "humor_explanation": "Skämtet bygger på en visuell återkoppling (callback). Lisas aggressiva 'Ba-art!' följt av Barts panik och baklängeshopp har redan etablerats som en rutin. Nu eskalerar det till att han ramlar nedför trappan, vilket överdriver den tidigare situationen på ett komiskt sätt.",
+    "focus_element": "Barts överdrivna 'TUMBLES' nedför trappan. Att han inte bara snubblar, utan verkligen *tumlar* förstärker det absurda och oväntade i situationen jämfört med de tidigare, mindre dramatiska baklängeshoppen."
+  },
+  {
+    "index": 87,
+    "episode": "4F03",
+    "title": "The Homer They Fall",
+    "mechanism": "callback",
+    "action_line": "Moe looks over to see Homer leaning against the ropes,",
+    "context": "right. [ACTION] exhausted.",
+    "humor_explanation": "Det roliga ligger i hur snabbt Homers tidigare kaxiga självsäkerhet kollapsar. Tidigare i avsnittet har han uppvisat extremt självförtroende inför boxningsmatchen, men nu ser vi honom helt slutkörd innan matchen ens börjat. Kontrasten mellan förväntan och verklighet, plus den omedelbara nedbrytningen, är nyckeln.",
+    "focus_element": "Homers lutande mot repen och det uppgivna ansiktsuttrycket."
+  },
+  {
+    "index": 88,
+    "episode": "4F21",
+    "title": "The Secret War of Lisa Simpson",
+    "mechanism": "callback",
+    "action_line": "then looks back. He looks at the bullhorns once again,",
+    "context": "He looks up at the rack with the remaining bullhorns. He [ACTION] then looks back again. He looks at them a third time and",
+    "humor_explanation": "Humorn ligger i den överdrivna upprepningen. Att Chief Wiggum osäkert kastar blickar mot megafonerna, flera gånger i rad, drar ut på situationen och förstärker hans dumsnålhet. Det skapar förväntan hos publiken om att han ska göra något korkat, och ju längre det dras ut, desto roligare blir det.",
+    "focus_element": "Wiggums osäkra blickar, utförda tre gånger, etablerar mönstret och levererar den komiska poängen genom överdriven repitition."
+  },
+  {
+    "index": 89,
+    "episode": "1F01",
+    "title": "Rosebud",
+    "mechanism": "callback",
+    "action_line": "He grabs the bear, tugs on it, then tugs on it again.",
+    "context": "Homer wriggles out of the ropes, and walks over to Maggie. [ACTION] HOMER (CONT’D)",
+    "humor_explanation": "Homer's tidigare besatthet av Maggies nallebjörn, Bobo, etablerades tidigare i avsnittet. Den repetitiva dragningen visar Homers självupptagna brist på förståelse för situationens allvar (han är fastbunden!) och hans prioritering av barnsliga begär framför logik. Tittaren förväntar sig en seriös flyktplan men får istället en barnslig dragkamp.",
+    "focus_element": "Den dubbla dragningen på nallebjörnen. Timing och det faktum att han inte ens försöker något annat för att fly."
+  },
+  {
+    "index": 90,
+    "episode": "3F22",
+    "title": "Summer of 4 Ft 2",
+    "mechanism": "callback",
+    "action_line": "She falls and is tossed up again -- now she sees Bart",
+    "context": "(CONFUSED NOISE) [ACTION] coming over the hill.",
+    "humor_explanation": "Här får vi betalt för ett tidigare skämt där en karaktär (förmodligen Marge, baserat på handlingen) faller och kastas upp igen. Repetitionen i sig är rolig, men även förväntan att det ska hända igen och den absurda visualiseringen av händelsen.",
+    "focus_element": "Handling: \"She falls and is tossed up again\" – beskrivningen signalerar direkt att vi återvänder till det etablerade, lite våldsamma, gags."
+  },
+  {
+    "index": 91,
+    "episode": "1F04",
+    "title": "Treehouse of Horror IV",
+    "mechanism": "callback",
+    "action_line": "He HONKS the air horn again, then looks at the label.",
+    "context": "sitting in some guy’s boat! [ACTION] HOMER (CONT’D)",
+    "humor_explanation": "Skämtet bygger på repetition och eskalering. Vi har redan etablerat Homers okunnighet och hans besatthet av båtens signalhorn. Att han sedan inspekterar hornets etikett istället för att förstå sammanhanget (att han sitter i någon annans båt) förstärker hans dumhet på ett oväntat sätt.",
+    "focus_element": "Kontrasten mellan det höga, störande ljudet från signalhornet och Homers fokuserade, nästan vetenskapliga granskning av etiketten."
+  },
+  {
+    "index": 92,
+    "episode": "8F13",
+    "title": "Homer at the Bat",
+    "mechanism": "callback",
+    "action_line": "He then throws the ball and trots out of frame again.",
+    "context": "Yeah. [ACTION] BURNS",
+    "humor_explanation": "Skämtet är roligt tack vare repetitionen av Burns' bisarra beteende. Först ser vi honom kasta bollen, sedan den otidsenliga, märkliga avvikelsen från platsen. 'Yeah' och avsaknaden av sammanhang förstärker det absurda och oväntade i hans agerande.",
+    "focus_element": "Att Burns bara 'trots out of frame again' - det visuella i att han lämnar bilden på ett så konstigt sätt, utan förklaring, precis som tidigare - säljer skämtet."
+  },
+  {
+    "index": 93,
+    "episode": "9F04",
+    "title": "Treehouse of Horror III",
+    "mechanism": "callback",
+    "action_line": "Homer grabs Smithers, EATS him, and DOZES OFF again.",
+    "context": "back, I’m giving you a raise. [ACTION] BURNS (CONT’D)",
+    "humor_explanation": "Skämtet landar genom en extrem och absurd eskalering av Homers girighet och brist på konsekvenstänk. Han missförstår uppenbarligen innebörden av en löneförhöjning, bokstavligen 'äter' Smithers (som personifierar Burns löner), och somnar sedan om, vilket förstärker hans nonchalans och egoism. Callback-elementet ligger i den återkommande bilden av Homer som ansvarslös och matdriven.",
+    "focus_element": "Den visuella överraskningen i att Homer faktiskt *äter* Smithers istället för att ta emot en lön, och den abrupta övergången till att han somnar igen."
+  },
+  {
+    "index": 94,
+    "episode": "8F11",
+    "title": "Radio Bart",
+    "mechanism": "callback",
+    "action_line": "BART stands against the closet door WHISTLING \"Happy",
+    "context": "SUPER: SIX TO EIGHT WEEKS LATER [ACTION] Birthday to me\". He wears a \"Kiss Me, It’s My Birthday\"",
+    "humor_explanation": "Skämtet bygger på en tidshopps-punchline som bryter förväntningarna. Istället för att visa den utlovade tidsperiodens konsekvenser, fokuserar vi på Bart som firar sin försenade födelsedag ensam. Den desperata och lite skruvade ensamfirandet, kombinerat med hans uppenbara brist på självinsikt, är vad som driver humorn.",
+    "focus_element": "Barts 'Happy Birthday to me' vissling mot garderobsdörren och den patetiska 'Kiss Me, It's My Birthday'-knappen."
+  },
+  {
+    "index": 95,
+    "episode": "3F04",
+    "title": "Treehouse of Horror VI",
+    "mechanism": "callback",
+    "action_line": "returning. The doorbell RINGS again. Homer opens the",
+    "context": "We hear a house being torn apart, then heavy footsteps [ACTION] door, and Lard Lad peers down. In the background, we see a",
+    "humor_explanation": "Skämtet ligger i den absurda upptrappningen och den visuella återkopplingen. Lard Lad, den enorma munk-statyn, dyker upp vid dörren efter att ha skapat kaos inne i huset, vilket fullständigt undergräver förväntningen om att det skulle vara en person. Kontrasten mellan den vardagliga situationen (ringande dörrklocka) och den fullständigt ologiska upplösningen skapar komiken.",
+    "focus_element": "Lard Lads perspektiv ovanifrån, vilket förstärker hans enorma storlek och antyder det våld han precis orsakat."
+  },
+  {
+    "index": 96,
+    "episode": "7F18",
+    "title": "Brush with Greatness",
+    "mechanism": "callback",
+    "action_line": "He looks at his stomach, thinks again, grabs a rice",
+    "context": "¢) Int. Simpson Kitchen. Homer starts to grab a donut. [ACTION] cake, puts the donut on top of it and eats it.",
+    "humor_explanation": "Skämtet ligger i den totala bristen på självbehärskning. Homer försöker skenbart vara hälsosam (rispapper), men ger upp tanken direkt och placerar istället munk ovanpå. Kontrasten mellan intention och handling förstärks av det absurda i kombinationen.",
+    "focus_element": "Att Homer lägger munken *ovanpå* riskakan, inte bara äter den separat, visar den kompletta meningslösheten i hans försök till självbehärskning och den desperata glädjen i att ge upp."
+  },
+  {
+    "index": 97,
+    "episode": "2F16",
+    "title": "Who Shot Mr Burns Part One",
+    "mechanism": "callback",
+    "action_line": "doing the same. Then, a third. An AIDE WHISPERS to",
+    "context": "lovingly fondling a gun. We see a second pair of hands [ACTION] Quimby.",
+    "humor_explanation": "Skämtet bygger på en gradvis eskalering av något olämpligt. Att först se en person kärleksfullt hantera ett vapen är konstigt nog. Att sedan se flera händer göra samma sak skapar en absurd, obehaglig situation, där igenkänningen av samma beteende i en ny kontext förstärker det komiska i det groteska.",
+    "focus_element": "Antalet händer som successivt dyker upp, vilket visuellt förstärker det olämpliga beteendet och överraskningsmomentet i varje tillägg."
+  },
+  {
+    "index": 98,
+    "episode": "1F19",
+    "title": "The Boy Who Knew Too Much",
+    "mechanism": "callback",
+    "action_line": "floor, but just falls back down again and GROANS.",
+    "context": "ANGLE ON THE FRENCH WAITER [ACTION] BART",
+    "humor_explanation": "Skämtet fungerar som en callback. Den franske kyparens inkompetens, visat tidigare i avsnittet genom liknande klantighet, förstärks här genom repetition och eskalerar genom att han faktiskt försöker fly, vilket förväntas misslyckas. Ironin ligger i att han misslyckas *ännu* sämre än förväntat.",
+    "focus_element": "Kyparens stön \"GROANS\" efter att ha fallit tillbaka, vilket understryker hans totala oförmåga och bidrar till den slapstick-artade humorn."
+  },
+  {
+    "index": 99,
+    "episode": "1F01",
+    "title": "Rosebud",
+    "mechanism": "callback",
+    "action_line": "He looks behind the control panel again.",
+    "context": "I know that. [ACTION] ",
+    "humor_explanation": "Burns ihärdiga och upprepade letande bakom kontrollpanelen, trots att han precis *bekräftade* att han vet vad som pågår, driver med hans senilitet och hans försök att upprätthålla en image av kontroll. Komiken ligger i kontrasten mellan hans högtravande ambitioner och hans uppenbara förvirring.",
+    "focus_element": "Att han *direkt efter* att ha sagt 'I know that' återigen böjer sig ned och tittar bakom panelen – tajmingen understryker hans glömska."
+  }
+]

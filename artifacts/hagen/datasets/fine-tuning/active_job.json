@@ -1,0 +1,23 @@
+{
+  "name": "projects/1061681256498/locations/us-central1/tuningJobs/883912567393615872",
+  "displayName": "humor-analysis-v7X-video-only-2025-12-31T17-44-00-754Z",
+  "type": "v7.X-video-only",
+  "submittedAt": "2025-12-31T17:44:01.904Z",
+  "config": {
+    "baseModel": "gemini-2.5-flash",
+    "supervisedTuningSpec": {
+      "trainingDatasetUri": "gs://hagen-video-analysis/fine-tuning/humor-analysis-v7x/train_1767203039307.jsonl",
+      "validationDatasetUri": "gs://hagen-video-analysis/fine-tuning/humor-analysis-v7x/validation_1767203039307.jsonl",
+      "hyperParameters": {
+        "epochCount": 4,
+        "learningRateMultiplier": 1
+      }
+    },
+    "tunedModelDisplayName": "humor-analysis-v7X-video-only-2025-12-31T17-44-00-754Z"
+  },
+  "stats": {
+    "videoExamples": 266,
+    "excludedSimpsons": 413,
+    "excludedNoGcs": 32
+  }
+}

@@ -1,0 +1,264 @@
+{
+  "description": "Reasoning-chain examples for v7.A - structured for review",
+  "instructions": "Review each example. Add notes in 'reviewer_notes'. Set 'approved' to true/false. Adjust fields as needed.",
+  "date_created": "2025-12-31",
+  "examples": [
+    {
+      "id": 1,
+      "url": "https://www.tiktok.com/@chefofthepartie/video/7583035463624051990",
+      "short_name": "knee-creak",
+      "pattern_type": "deductive_elimination",
+
+      "video_description": {
+        "setting": "Professional kitchen, chef in work clothes",
+        "caption": "POV: Your knees creak louder than the fridge door",
+        "actions": [
+          "1. Squats down + opens fridge door → creak sound",
+          "2. Stands up, opens/closes door only → no/faint sound",
+          "3. Squats down WITHOUT touching door → same creak sound"
+        ]
+      },
+
+      "interpretation": {
+        "obvious": {
+          "description": "Fridge makes quiet sound, knees make loud sound - contrast/exaggeration humor",
+          "why_wrong": "If it was just contrast, why show THREE separate actions? The middle action (door only) produces NO creak. This is evidence, not decoration."
+        },
+        "correct": {
+          "description": "Diagnostic sequence - person systematically isolates variables to prove their body is the source",
+          "structure": [
+            "Action 1: Squat + door = creak (ambiguous source)",
+            "Action 2: Door only = no creak (eliminates door)",
+            "Action 3: Squat only = creak (confirms knees)"
+          ],
+          "humor_source": "Methodical, almost scientific approach to proving your own body is broken"
+        }
+      },
+
+      "mechanism": ["Deduktiv elimination", "Självironi"],
+      "target_audience": "Adults 30+ with physical ailments, people who appreciate subtle humor",
+
+      "review": {
+        "approved": true,
+        "confidence": 5,
+        "reviewer_notes": "The three actions are in the same scene, just to clarify. It's not three separate shots, but three separate moments as you've described",
+        "suggested_changes": ""
+      }
+    },
+
+    {
+      "id": 2,
+      "url": "https://www.tiktok.com/@dragonfly.burystedmunds/video/7560383205900061974",
+      "short_name": "squeaky-laugh",
+      "pattern_type": "sound_source_misdirection",
+
+      "video_description": {
+        "setting": "Bar/restaurant, man wiping counter",
+        "caption": "POV: those two people are on shift together",
+        "actions": [
+          "1. Man wipes bar counter - squeaky 'scrubbing' sound heard",
+          "2. Camera pans to two colleagues (man and woman) laughing",
+          "3. Their laughter is high-pitched and squeaky"
+        ]
+      },
+
+      "interpretation": {
+        "obvious": {
+          "description": "Man scrubs counter, colleagues laugh at something else - two separate events",
+          "why_wrong": "Why does the camera pan FROM the scrub sound TO the laughing colleagues? If separate events, why show them in sequence? The camera movement CONNECTS sound to source."
+        },
+        "correct": {
+          "description": "The 'scrubbing' sound IS the laugh. Colleagues' squeaky laughter sounds exactly like cloth on glass.",
+          "structure": [
+            "Setup: Viewer assumes sound = cleaning",
+            "Reveal: Sound actually = bizarre laugh",
+            "Meta-comment: POV text implies this is recurring experience"
+          ],
+          "humor_source": "Sound attribution misdirection - viewer's assumption (cleaning sound) is shattered by unexpected truth (laugh)"
+        }
+      },
+
+      "mechanism": ["Ljudkälla-misdirection", "Reveal"],
+      "target_audience": "Service staff who recognize colleague quirks, anyone who appreciates sound-based humor",
+
+      "review": {
+        "approved": true,
+        "confidence": 5,
+        "reviewer_notes": "",
+        "suggested_changes": ""
+      }
+    },
+
+    {
+      "id": 3,
+      "url": "https://www.tiktok.com/@cafeskafferiet/video/7589215806492347670",
+      "short_name": "salad-stare",
+      "pattern_type": "internal_monologue_misdirection",
+
+      "video_description": {
+        "setting": "Cafe, barista behind counter",
+        "caption_sequence": [
+          "Text 1: 'Undra varför den där kunden kollar så mycket på mig?'",
+          "Text 2: 'Han tycker nog att jag är snygg'",
+          "Sound: 'Splatt'",
+          "Text 3: 'F*N! Hans sallad!!'"
+        ],
+        "actions": [
+          "1. Barista looks at camera with flirty expression, covers mouth, smiles",
+          "2. 'Splatt' sound plays",
+          "3. Expression IMMEDIATELY shifts from flattered to shocked/annoyed"
+        ]
+      },
+
+      "interpretation": {
+        "obvious": {
+          "description": "Customer is staring because barista is attractive - standard flirt scenario",
+          "why_wrong": "Why does the 'splatt' sound exist? Why include text 3? These elements are the PUNCHLINE, not background decoration."
+        },
+        "correct": {
+          "description": "Barista's internal monologue (text 1 & 2) shows her MISINTERPRETATION. She projects romantic interest. The truth: customer was watching his salad fall.",
+          "structure": [
+            "Setup: Barista notices customer's gaze",
+            "False conclusion: 'He thinks I'm hot' (audience expectation confirmed)",
+            "Reveal: Salad falls (truth crushes fantasy)",
+            "Reaction: Immediate shift from flattered to annoyed"
+          ],
+          "humor_source": "Crash between self-centered interpretation and embarrassing reality. Viewer SHARES the misinterpretation initially."
+        }
+      },
+
+      "mechanism": ["Förväntanssubversion", "Intern monolog som misdirection"],
+      "target_audience": "Anyone who has misread social signals, service staff, people who appreciate self-deprecating humor",
+
+      "review": {
+        "approved": false,
+        "confidence": null,
+        "reviewer_notes": "No salad falls. The initial interpretation is correct. The barista is misreading the signals, and the sound in the middle is not a sallad falling, just a sudden realization and a type of 'child comic' movement (think tom & jerry) where the sound effect makes the turn more obvious/engaging. The first interpretation was pretty good.",
+        "suggested_changes": "REMOVE FROM TRAINING SET - not a good reasoning-chain example since the obvious interpretation IS correct. Need replacement example.",
+        "exclude_from_training": true
+      }
+    },
+
+    {
+      "id": 4,
+      "url": "https://www.tiktok.com/@feildensarmsmellor/video/7556722838745435414",
+      "short_name": "3-year-old-coffee",
+      "pattern_type": "accidental_truth",
+
+      "video_description": {
+        "setting": "Cafe counter",
+        "caption": null,
+        "dialogue": [
+          "Customer: 'This tastes like a 3-year-old made it!'",
+          "Barista looks confused, walks away, returns",
+          "Barista: 'Eh... it WAS a 3-year-old who made it.'",
+          "Camera shows/implies a small child behind the counter"
+        ]
+      },
+
+      "interpretation": {
+        "obvious": {
+          "description": "Customer exaggerates to complain. Barista acknowledges poor quality. Standard complaint humor.",
+          "why_wrong": "If just a complaint, why specify '3-year-old'? Why not 'amateur' or 'beginner'? The specific age is not random - it's setup for literal payoff."
+        },
+        "correct": {
+          "description": "Customer's complaint is HYPERBOLE ('tastes like a 3-year-old made it'). The twist: the hyperbole is LITERALLY TRUE. An actual child made the coffee.",
+          "structure": [
+            "Complaint with exaggeration (normally rhetorical)",
+            "Exaggeration turns out to be fact",
+            "Humor from collision between figurative and literal language"
+          ],
+          "humor_source": "'Accidental truth' structure - when exaggeration accidentally hits reality. Same as 'worst day of my life' → something terrible actually happens."
+        }
+      },
+
+      "mechanism": ["Bokstavlig tolkning av hyperbole", "Accidental truth"],
+      "target_audience": "People who appreciate wordplay, parents, service staff",
+
+      "review": {
+        "approved": true,
+        "confidence": 4,
+        "reviewer_notes": "This is a good interpretation. I would add that there is some humorous aspects of a customer describing the coffee as being made by a 5 year old (absurdist), but showing how the absurdist world the customer lives in is factual, makes the clip pop and delightful.",
+        "suggested_changes": ""
+      }
+    },
+
+    {
+      "id": 5,
+      "url": "multi-interpretation:hogre-upp",
+      "short_name": "hogre-upp",
+      "pattern_type": "multi_interpretation_wordplay",
+
+      "video_description": {
+        "setting": "Store/service location",
+        "caption": null,
+        "dialogue": [
+          "Customer: 'Jag vill prata med någon högre upp.'",
+          "Staff walks away, returns with colleague",
+          "Colleague: Holding vape, coughing, looks confused/slow, movements are sluggish"
+        ]
+      },
+
+      "interpretation": {
+        "obvious": {
+          "description": "'Högre upp' = boss/manager (hierarchical). Customer wants to escalate.",
+          "why_wrong": "If it was a manager, why show vape and coughing? These details are irrelevant for hierarchy interpretation."
+        },
+        "alternative_interpretations": [
+          {
+            "meaning": "Physically taller person",
+            "visual_evidence": "None - no height difference shown",
+            "fit": "weak"
+          },
+          {
+            "meaning": "Higher in hierarchy (manager)",
+            "visual_evidence": "Would be redundant - already mentioned boss",
+            "fit": "weak"
+          },
+          {
+            "meaning": "High on drugs",
+            "visual_evidence": "Vape in hand, coughing, confused look, slow movements",
+            "fit": "strong"
+          }
+        ],
+        "correct": {
+          "description": "Wordplay exploiting multiple meanings. Visual cues steer viewer to 'wrong' (intended) interpretation.",
+          "structure": [
+            "Customer requests 'högre upp' (intended: hierarchical)",
+            "Staff delivers literal interpretation (high/intoxicated person)",
+            "Every visual element supports the 'high' interpretation"
+          ],
+          "humor_source": "Joke works ONLY if viewer reads visual cues. Without them, it's just misunderstanding. With them, it's deliberate reinterpretation."
+        }
+      },
+
+      "mechanism": ["Ordlek med visuell disambiguering"],
+      "target_audience": "Swedish speakers who understand the wordplay, people who appreciate visual comedy",
+
+      "review": {
+        "approved": true,
+        "confidence": 5,
+        "reviewer_notes": "Just as an original song will have a remix, this concept is built on a strong theme of subversion. Other similar clips 'do' use the 'higher' to mean someone on a ladder, or one time, a muslim food shop gave a prayer mat and said 'the maghrib prayer starts in 5 minutes'. Meaning higher up would be god - the most high. In this video, it 'is' a man that looks like a stoner, so the meaning should be inffered to be this.",
+        "suggested_changes": ""
+      }
+    }
+  ],
+
+  "summary_for_training": {
+    "total_examples": 4,
+    "excluded": 1,
+    "pattern_types_covered": [
+      "deductive_elimination",
+      "sound_source_misdirection",
+      "accidental_truth",
+      "multi_interpretation_wordplay"
+    ],
+    "pattern_types_removed": ["internal_monologue_misdirection (salad-stare - obvious interpretation was correct)"],
+    "key_lesson": "Model must REJECT obvious interpretation before committing, using visual/audio evidence as verification"
+  },
+
+  "reviewer_overall_notes": "4/5 approved. salad-stare removed because obvious interpretation WAS correct - sound effect was just cartoon emphasis, not evidence of alternative meaning. Need replacement example for internal_monologue_misdirection pattern if we want to cover that type.",
+  "ready_for_training": true,
+  "approved_count": 4,
+  "review_date": "2025-12-31"
+}

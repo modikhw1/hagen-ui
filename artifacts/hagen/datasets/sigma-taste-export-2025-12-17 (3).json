@@ -1,0 +1,2567 @@
+{
+  "version": "1.0.0",
+  "comparisons": [
+    {
+      "id": "9a6ps746rp",
+      "video_a_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "video_b_id": "59fd28df-beda-45de-b490-6ca050893333",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "The content types are different. One is a slightly amusing and entertaining video (making the latté), that isn't exactly humorous but has a low energy flow to it, where the viewer may find it amusing to see a customer trying to make a latté. The other video has a format that is more accessible and easy to replicate, but also requires to have a good story, since the one retold in the video is specific to what the person is saying.",
+      "created_at": "2025-12-16T14:09:06.928Z"
+    },
+    {
+      "id": "h16d4zpsxr8",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "winner_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "The first video is easier to replicate, but the humour in itself is very simple and not the most amusing. The second video is harder to replicate, but has a more engaging and creative premise. The video of the barista requires some animated acting, which he does well. The acting in the first video is slightly less amusing.",
+      "created_at": "2025-12-16T14:11:20.442Z"
+    },
+    {
+      "id": "ikbygwb93g",
+      "video_a_id": "cf783359-047d-4e6d-bf7e-8af7ef0d0f6a",
+      "video_b_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "winner_id": "cf783359-047d-4e6d-bf7e-8af7ef0d0f6a",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "The first video has more engaging and fast paced editing, as well as a more engaging and creative premise. Both are playing on absurdism, but the first video has a tempo and also young attractive women playing out the sketch. The first one has a more fun premise, and the result of the misunderstanding is more fun than the other. ",
+      "created_at": "2025-12-16T14:14:21.506Z"
+    },
+    {
+      "id": "famcddudcmi",
+      "video_a_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "video_b_id": "ffbc9f08-7c9f-4031-bdd3-2f26e15266a0",
+      "winner_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both are somewhat amusing, but the premise in Video A (42887f4b) (Video A (42887f4b) (42887f4b), 42887f4b) (Steve's poke) is more clever. The idea of proposing with that type of camera reveal is clever. Video B (ffbc9f08) (Video B (ffbc9f08) (ffbc9f08), ffbc9f08) has a somewhat amusing premise, but the payoff isn't very strong in itself (The cashier taking the card due to feeling annoyed). Video B (ffbc9f08) (Video B (ffbc9f08) (ffbc9f08), ffbc9f08) is likely more replicable, since Video A (42887f4b) (Video A (42887f4b) (42887f4b), 42887f4b) needs to replace the product in question.",
+      "created_at": "2025-12-16T14:17:46.047Z"
+    },
+    {
+      "id": "leoet66i17b",
+      "video_a_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "video_b_id": "0c3565fa-9cc4-45f6-a868-4a2ce416b3ab",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (8e649975) (Video A (8e649975) (8e649975), 8e649975) featuring the barista is somewhat amusing, but isn't very humorous. It has a slow paced entertainment value, where the viewer wants to see how well the \"customer\" does a latté, which I assume is engaging for some viewers. Video B (0c3565fa) (Video B (0c3565fa) (0c3565fa), 0c3565fa) has the make up of a somewhat strong premise, but isn't very funny in the end. The idea of asking co workers in order to hurry up, ending with clapping, and seeing the customers confusion, isn't a very funny payoff. But the absurdism is there, just not performed great. No one stands out as very good.",
+      "created_at": "2025-12-16T14:20:10.430Z"
+    },
+    {
+      "id": "7la5tcjpbpa",
+      "video_a_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "video_b_id": "36912289-7df1-4da6-a4b0-eb07ab66af25",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both videos are amusing, and playing on simple observations/scenarios that has a visual feedback that is absurdist. Video A (f530b678) (Video A (f530b678) (f530b678), f530b678) has a slightly amusing premise, showing how a young employee will hide from a potentially tough discussion with his manager, and showing the unrealistic distracting tasks the person does to avoid the discussion. Video B (36912289) (Video B (36912289) (36912289), 36912289) has a similar premise, which is likely equally or slightly less fun on it's own, but is edited in a more engaging way. The actress (worker) in Video B (36912289) (Video B (36912289) (36912289), 36912289) is also a bit more animated, and more attractive which helps with engagement.",
+      "created_at": "2025-12-16T14:24:08.538Z"
+    },
+    {
+      "id": "6x3m2bvbjyc",
+      "video_a_id": "af5f10fd-07bc-475f-a983-07d41c8b6d8e",
+      "video_b_id": "408c91fc-35fd-44e7-b6b1-a290d5dc7cba",
+      "winner_id": "af5f10fd-07bc-475f-a983-07d41c8b6d8e",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both are not great or have a strong standalone premise. Video A (af5f10fd) (Video A (af5f10fd) (af5f10fd), af5f10fd) of the male staff singing into the camera has a lot of attitude, and feels funny because it's not expected. It also relies on a TikTok sound, which makes the premise not super good or clever. Video B (408c91fc) (Video B (408c91fc) (408c91fc), 408c91fc) is a bit simpler, the premise is amusing and can be replicated. But it also relies on a TikTok sound, and the payoff isn't the most satisfying.",
+      "created_at": "2025-12-16T14:38:45.751Z"
+    },
+    {
+      "id": "af5olfc2o3h",
+      "video_a_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "video_b_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "winner_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video A (8e649975) (Video A (8e649975) (8e649975), 8e649975) has a more slow paced payoff. More a visual satisfaction than a humorous payoff. Video B (08ec836f) (Video B (08ec836f) (08ec836f), 08ec836f) has a premise that has been trending for some time, but is fun to se recreated. The original shows a customer complaining that their item is being prepared incorrectly, and then the staffer asks \"did you say that when you ordered\", and after hearing 'no', they say \"then it's not your f***ing order\". This gives the Video A (8e649975) slightly shocking effect, but also leans on some of the expected \"fun\" that comes from seeing a somewhat easy going looking person swear. It has a better payoff and is more edgy. Video B (08ec836f) (Video B (08ec836f) (08ec836f), 08ec836f) is also well edited.",
+      "created_at": "2025-12-16T14:41:20.962Z"
+    },
+    {
+      "id": "tvyb6f0euh",
+      "video_a_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "video_b_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "winner_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "For the purpose of the algorithm Video A (5bca070f) (Video A (5bca070f) (5bca070f), 5bca070f) is better. It contains a sketch that is replicable, the humour is accessible and isn't reliant on a backdrop or some specific items. Despite not having any dialogue, Video A (5bca070f) (Video A (5bca070f) (5bca070f), 5bca070f) has a scene development making it a sketch. Video B (7269df3d) (Video B (7269df3d) (7269df3d), 7269df3d) isn't functional for the reason that it isn't a sketch or engaging premise/concept, but it has it in its own way. The comparison of what to eat Video A (5bca070f) (Video A (5bca070f) (5bca070f), 5bca070f) - fries or burger, is a known trope. The video looks more like a recording of two friends on their personal profile page. It's not exactly replicable in how it's now recorded, but the premise can be reused or recorded differently. But the core premise isn't the most strong still.",
+      "created_at": "2025-12-16T14:43:48.637Z"
+    },
+    {
+      "id": "caqb635tzml",
+      "video_a_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "video_b_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "winner_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Despite Video B (580e13cf) (Video B (580e13cf) (580e13cf), 580e13cf) is much simpler and doesn't fill most of the criteria of what normally makes a good video - it has a simple idea and is funny. Video A (f530b678) (Video A (f530b678) (f530b678), f530b678) has a sketch outline, with visual scenes that create absurdity and makes the video engaging and memorable. Video B (580e13cf) (Video B (580e13cf) (580e13cf), 580e13cf) plays on a pun, but it's simple and to the point. Video B (580e13cf) (Video B (580e13cf) (580e13cf), 580e13cf) videos premise can also be replicated a bit easier, although there is a need to exchange the item into something relevant to the business using the concept. Overall, the punchline of \"going lower\" (physically lower instead of price lower) has a neat little freshness to it. It's a bit in your face.",
+      "created_at": "2025-12-16T14:46:35.507Z"
+    },
+    {
+      "id": "406lvqt8wz",
+      "video_a_id": "7abe3bb9-aa31-4154-923a-4c54a42f12e6",
+      "video_b_id": "610f7e10-34d7-445a-b1d8-7ff58bbda990",
+      "winner_id": "7abe3bb9-aa31-4154-923a-4c54a42f12e6",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both videos are not excellent for different reasons. Video A (7abe3bb9) (Video A (7abe3bb9) (7abe3bb9), 7abe3bb9) has an engaging and a bit edgy premise, and the punchline talks about wanting to attack (while still maintaining absurdism) a co worker. It relies on a meme sound, where the punch-line is \"It's not about the money\", meaning there is underlying tension within the staff which can be a replicable and somewhat fun premise for Video B (610f7e10) (610f7e10) type of team (a bit edgier, taking risks).\n\nVideo B (610f7e10) (Video B (610f7e10) (610f7e10), 610f7e10) doesn't have as strong of a premise, and the punchline is simply a tiktok sound comparing the kitchen heat to animal genitalia. It's not very creative and just goes for a type of chock effect.",
+      "created_at": "2025-12-16T14:50:03.699Z"
+    },
+    {
+      "id": "d4cyvo7ehrk",
+      "video_a_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "video_b_id": "185a486a-a923-4513-84cd-51b0bd0f8a5d",
+      "winner_id": "185a486a-a923-4513-84cd-51b0bd0f8a5d",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both videos have simple premises, but Video B (185a486a) (Video B (185a486a) (185a486a), 185a486a) is slightly funnier and has a more engaging visual payoff. Seeing the customers discussing wildly who gets to pay (illustrated by the hands with cards trying to reach the payment terminal), while zooming in on the staff workers face, is a fun dynamic shot that says a lot in a simple shot. It's more clever than Video A (580e13cf) (Video A (580e13cf) (580e13cf), 580e13cf), which plays on a simple pun but still is somewhat amusing.",
+      "created_at": "2025-12-16T14:52:19.027Z"
+    },
+    {
+      "id": "04a0az0o3003",
+      "video_a_id": "7abe3bb9-aa31-4154-923a-4c54a42f12e6",
+      "video_b_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "winner_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both are equally not very good. Video B (464f01f2) (Video B (464f01f2) (464f01f2), 464f01f2) has a more dynamic and \"hooky\" beginning, with a staff member running through a kitchen in order to spill \"tea\", illustrating that there is a dynamic where gossip is spread between staffers. It's not very creative and the payoff isn't very big.\n\nVideo A (7abe3bb9) (Video A (7abe3bb9) (7abe3bb9), 7abe3bb9) is also a bit boring, but also contains themes that may be deemed a bit risky, talking about workplace disagreements and young people wanting to cause physical harm to each others.",
+      "created_at": "2025-12-16T14:54:13.925Z"
+    },
+    {
+      "id": "hcrovfud61h",
+      "video_a_id": "01b41059-d1e7-4261-acc3-fd33d9cf2c2a",
+      "video_b_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "winner_id": "01b41059-d1e7-4261-acc3-fd33d9cf2c2a",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "None of the videos are great, but Video A (01b41059) (Video A (01b41059) (01b41059), 01b41059) has a structure that can be replicated by other businesses, which is important in my gradation. The premise of Video A (01b41059) (Video A (01b41059) (01b41059), 01b41059) is simple, not the most creative or funny, but has a camera movement and facial expression that functions as a type of payoff. Video B (7269df3d) (Video B (7269df3d) (7269df3d), 7269df3d) is about answering the quesition of if fries or burgers go Video A (01b41059) (Video A (01b41059) (01b41059), 01b41059). It isn't a structure that has a standalone replicability that can be remade to expect virality or engagement.",
+      "created_at": "2025-12-16T14:56:47.048Z"
+    },
+    {
+      "id": "687iefivzud",
+      "video_a_id": "a1c1a481-4774-4840-9965-a35b6900a5e3",
+      "video_b_id": "01b41059-d1e7-4261-acc3-fd33d9cf2c2a",
+      "winner_id": "01b41059-d1e7-4261-acc3-fd33d9cf2c2a",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (01b41059) (Video B (01b41059) (01b41059), 01b41059) is a sketch that can be replicated. The premise of the Poke bar video isn't the most clever or engaging, but it has a sketch structure that works for other brands that want to replicate it. Video A (a1c1a481) (Video A (a1c1a481) (a1c1a481), a1c1a481) isn't very useful since it works more as an informative video showing of a new item. The video contains a person opening up a wrapper and going for a bite, which isn't a structure for a sketch or a premise that can be replicated by another brand aiming for viralability.",
+      "created_at": "2025-12-16T14:58:28.743Z"
+    },
+    {
+      "id": "6m4ydwtkjiw",
+      "video_a_id": "97e01077-4e0b-44a7-adf6-3220defbe60c",
+      "video_b_id": "ffbc9f08-7c9f-4031-bdd3-2f26e15266a0",
+      "winner_id": "97e01077-4e0b-44a7-adf6-3220defbe60c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (97e01077) (Video A (97e01077) (97e01077), 97e01077) has a script that creates more engagement, and generally plays on the absurdity factor quite well. It has two twists and turns, which also include the implied idea of a business worker physically hurting a customer asking for a modified food item. This is extreme and that can sometimes give an \"edge\" that is engaging. Payoffs with chock factors are usually stronger when the core concept is clever.\n\nVideo B (ffbc9f08) (Video B (ffbc9f08) (ffbc9f08), ffbc9f08) has a tighter structure, and the premise is more clear. But it's a bit shorter, not as ambition as Video B (ffbc9f08) (Video B (ffbc9f08) (ffbc9f08), ffbc9f08), and has one main beat, instead of Video A (97e01077) (Video A (97e01077) (97e01077), 97e01077) that has 2-3 beats. Video B (ffbc9f08) (Video B (ffbc9f08) (ffbc9f08), ffbc9f08) likely has better replicability than Video A (97e01077) (Video A (97e01077) (97e01077), 97e01077).",
+      "created_at": "2025-12-16T15:02:04.254Z"
+    },
+    {
+      "id": "ijr9uicjffb",
+      "video_a_id": "5ebac5d3-aa7e-49f0-ac19-f64926830ba5",
+      "video_b_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "winner_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both videos are somewhat amusing. Video B (da6815da) (Video B (da6815da) (da6815da), da6815da) plays more on an animated actor playing a trope of a really stressed and focused barista, which is a cultural understanding that some may get, and some may not care for as much. But the trope often has to do with flamboyant men, but mainly bossy women, which makes the entire premise quite funny. The video is longer, but the script has many creative beats and a funny incremental absurdism.\n\nVideo A (5ebac5d3) (Video A (5ebac5d3) (5ebac5d3), 5ebac5d3) is simpler, and likely much more accessible, not expecting cultural understanding or enjoyment of a different type of strange/weird humor that Video B (da6815da) (Video B (da6815da) (da6815da), da6815da) contains. Video A (5ebac5d3) (Video A (5ebac5d3) (5ebac5d3), 5ebac5d3), with the payoff of the staffer being revealed to have took a bite from the customers food, is fun but doesn't have a lot of effect or emotional resonanse.",
+      "created_at": "2025-12-16T15:05:25.456Z"
+    },
+    {
+      "id": "n4c6iqeu52g",
+      "video_a_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "video_b_id": "c6dcce7b-211a-4d55-88fe-e8f5d4dc3551",
+      "winner_id": "c6dcce7b-211a-4d55-88fe-e8f5d4dc3551",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video B (c6dcce7b) (Video B (c6dcce7b) (c6dcce7b), c6dcce7b) has a more evolved structure that is more useful for a business aiming to replicate the concept. It has more beats that create an engaging concept, and is more memorable than Video A (580e13cf) (Video A (580e13cf) (580e13cf), 580e13cf). The script in Video B (c6dcce7b) (Video B (c6dcce7b) (c6dcce7b), c6dcce7b) isn't the most clever, but the premise is somewhat engaging. A friend asking for a fry but then eating it all. The payoff isn't very clever, but rather feels like an expected continuation of the issue, someone taking too much liberty in what they are doing.\n\nVideo A (580e13cf) (Video A (580e13cf) (580e13cf), 580e13cf) is simple, and has a pun structure. It's funny, but would generally not elicit too much engagement due to the concept not carrying weight or not being the most memorable, despite it giving a nice little satisfying payoff.",
+      "created_at": "2025-12-16T15:08:42.007Z"
+    },
+    {
+      "id": "vx4oo4vb9m",
+      "video_a_id": "967f5700-83f6-43c8-aa6e-138cf962c80b",
+      "video_b_id": "a860739f-9e5b-475c-bca3-b54f98f04188",
+      "winner_id": "967f5700-83f6-43c8-aa6e-138cf962c80b",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both of these are funny. Video A (967f5700) (Video A (967f5700) (967f5700), 967f5700) has a nice edgy premise, cleverly presented as a worker talking into the camera and describing that any customer can eat where they want, without the worker being upset. While talking, she closes the trunk on a car with a woman tied up inside, implying that the real consequence is much graver. This juxtaposition is clever and funny, combining a visual payoff with a premise setup with a text overlay.\n\nVideo B (a860739f) (Video B (a860739f) (a860739f), a860739f) is somewhat clever as well, and keeps engagement by seeing how the sketch evolves, whiile staying aligned with the original premise setup in text. The premise isn't the most creative, but creates something of an implied backstory, talking about a dynamic where the staffer is a bit annoyed by how creative the manager is when it comes to making her life at work annoying. It tells a story, and that has some cleverness integrated.",
+      "created_at": "2025-12-16T15:12:27.189Z"
+    },
+    {
+      "id": "pxuatlcvbsf",
+      "video_a_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "video_b_id": "77ea6fbb-a868-485c-b19d-e324cd5d74a1",
+      "winner_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both clips are amusing, but for different audiences. Video A (1cd1e012) (Video A (1cd1e012) (1cd1e012), 1cd1e012) has a simple setup and payoff, and relies on animated acting. The target audience is a bit broader than Video B (77ea6fbb) (Video B (77ea6fbb) (77ea6fbb), 77ea6fbb), and has a safer enjoyment than Video B (77ea6fbb) (Video B (77ea6fbb) (77ea6fbb), 77ea6fbb).\n\nThe video of the woman in the kitchen is more clever, and amusing, but relies on a TikTok trend sound. Meaning that it borrows virality from something that isn't recorded or produced by the user. The juxtaposition of having an overlay talking very softly and kindly about \"what she really feels\", while freaking out with her body language, implies that it is actually the other way around. The premise is simple and fun, but isn't the most creative or memorable.",
+      "created_at": "2025-12-16T15:15:28.984Z"
+    },
+    {
+      "id": "7axgc7zb1fw",
+      "video_a_id": "e1ad2e56-e110-4d9d-9f0e-b9df18ff8b75",
+      "video_b_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "winner_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both of these videos have strong premises. Video A (e1ad2e56) (Video A (e1ad2e56) (e1ad2e56), e1ad2e56) is not set in a restaurant/service environment, but has a replicability that can be set in any type of place. The idea of missing snus to the extent that she is hallucinating the friend is clever and funny, using editing to make the payoff effective in the end. It's replicable but requires some good editing.\n\nVideo B (32d9345a) (Video B (32d9345a) (32d9345a), 32d9345a) is also clever, playing on the idea of a \"inner voice\" talking when the customer (POV view) is evaluating whether to provide a tip. The payoff is that the customer is actually not thinking that, but that it is the workers voice telling the customer what to do, which is a bit funny.",
+      "created_at": "2025-12-16T15:29:47.429Z"
+    },
+    {
+      "id": "zaoual445e",
+      "video_a_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "video_b_id": "75b798c1-24c9-4c28-a92d-a24ffc351dc0",
+      "winner_id": "75b798c1-24c9-4c28-a92d-a24ffc351dc0",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (75b798c1) (Video B (75b798c1) (75b798c1), 75b798c1) sketch is better because the payoff is more satisfying, and more clever. Video B (75b798c1) (Video B (75b798c1) (75b798c1), 75b798c1) plays on a more creative trope, the idea of a team inside of a kitchen having experienced a battle, like a war time squad, and having one person experiencing a type of PTSD, shown by the physical reveal in the end. It's clever and quite funny. This sketch relies on a TikTok sound which makes the video less replicable or easy to replicate.\n\nVideo A (580e13cf) (Video A (580e13cf) (580e13cf), 580e13cf) is simple and somewhat funny but not as memorable. The premise isn't as clever.",
+      "created_at": "2025-12-16T15:32:49.580Z"
+    },
+    {
+      "id": "s76h48d6dg9",
+      "video_a_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "video_b_id": "610f7e10-34d7-445a-b1d8-7ff58bbda990",
+      "winner_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "Video A (580e13cf) (Video A (580e13cf) (580e13cf), 580e13cf) is better due to the theme being more wholesome. The payoff in Video B (610f7e10) (Video B (610f7e10) (610f7e10), 610f7e10) just plays on a over the top TikTok sound, with somewhat of a vulgar tone.",
+      "created_at": "2025-12-16T15:33:58.280Z"
+    },
+    {
+      "id": "0n0jhg7umilr",
+      "video_a_id": "7208c328-cade-41c1-85e7-7c993fb62724",
+      "video_b_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "winner_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both of these videos are somewhat amusing, but have different profiles in how they function. Video A (7208c328) (Video A (7208c328) (7208c328), 7208c328) has a premise setup with a pun, beginning with a customer POV and then showing the punchline in a different camera angle. Video A (7208c328) (Video A (7208c328) (7208c328), 7208c328) isn't the most clever, but works as a standalone concept. The pun itself isn't the most clever, and it's not certain that most people would find it funny.\n\nVideo B (08ec836f) (Video B (08ec836f) (08ec836f), 08ec836f) has more snappy editing and the payoff is a bit more sharp, making it clear to the customer that she needs to tone it down, which is slightly amusing if the reference is known. Seeing someone swear can be funny, but is usually not enough without some type of engaging premise or situation setup beforehand.",
+      "created_at": "2025-12-16T15:36:52.536Z"
+    },
+    {
+      "id": "07owsy6r3ron",
+      "video_a_id": "3642d765-61a8-4bb9-a93f-ac370a377a59",
+      "video_b_id": "ff6e26f5-335e-456c-82c6-e77447d7c4bd",
+      "winner_id": "3642d765-61a8-4bb9-a93f-ac370a377a59",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (3642d765) (Video A (3642d765) (3642d765), 3642d765) works as a standalone sketch, but the payoff or structure is a bit tacky. The idea of throwing actual food on the co worker makes the business seem a bit unserious, despite the payoff being a bit funny in theory (extreme response to a normal request). The setup and payoff is too flat.\n\nBut in relation to Video B (ff6e26f5) (Video B (ff6e26f5) (ff6e26f5), ff6e26f5), Video A (3642d765) (Video A (3642d765) (3642d765), 3642d765) actually contains a structure that is useful for someone aiming to recreate the premise for their own profile. Video B (ff6e26f5) (Video B (ff6e26f5) (ff6e26f5), ff6e26f5) is good in itself, but it is an informative video rather than a humorous video. ",
+      "created_at": "2025-12-16T15:38:44.773Z"
+    },
+    {
+      "id": "vhrhtq6aj5e",
+      "video_a_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "video_b_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "winner_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video A (7012ae51) (Video A (7012ae51) (7012ae51), 7012ae51) has a sketch format that contains one payoff, which isn't the most clever but somewhat. Video B (7269df3d) (Video B (7269df3d) (7269df3d), 7269df3d) is more informative or informal, showing to young people just eating and an overlay posing the question if fries or burgers goes Video A (7012ae51) (Video A (7012ae51) (7012ae51), 7012ae51).",
+      "created_at": "2025-12-16T15:39:46.461Z"
+    },
+    {
+      "id": "agf4jk63rqv",
+      "video_a_id": "75b798c1-24c9-4c28-a92d-a24ffc351dc0",
+      "video_b_id": "b91e414c-deb4-4f75-ae6c-f9ca2d1a21a7",
+      "winner_id": "b91e414c-deb4-4f75-ae6c-f9ca2d1a21a7",
+      "dimension": "hook",
+      "confidence": "somewhat",
+      "reasoning": "The text overlay is easier to read and sets the stage with the backdrop and the main character shown entering the scene. Video B (b91e414c) (Video B (b91e414c) (b91e414c), b91e414c) has an interesting perspective (store customer camera) but not as visually engaging.",
+      "created_at": "2025-12-16T15:41:47.095Z"
+    },
+    {
+      "id": "pvcpsb71m88",
+      "video_a_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "video_b_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "winner_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "Video A (a781b192) (Video A (a781b192) (a781b192), a781b192) has more energy going into the scene, which includes the worker moving quickly through the restaurant with food. Video B (43dcb57c) (Video B (43dcb57c) (43dcb57c), 43dcb57c) shows the background worker simply enjoying himself while his colleague is working hard, creating a funny dynamic but not the most hooky. The composition in both shots (beginning) are both not superb, but both are decent.",
+      "created_at": "2025-12-16T15:43:13.345Z"
+    },
+    {
+      "id": "gu79erjqfv",
+      "video_a_id": "4e4f05e0-a0d8-4dbe-ba0b-7ec526895be5",
+      "video_b_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "winner_id": "4e4f05e0-a0d8-4dbe-ba0b-7ec526895be5",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "Both are somewhat funny and sets the stage for the theme. Video A (4e4f05e0) (Video A (4e4f05e0) (4e4f05e0), 4e4f05e0) sets the premise in simple terms with the text overlay, and Video A (4e4f05e0) (Video A (4e4f05e0) (4e4f05e0), 4e4f05e0) interaction between the cashier and customer begins quite rapidly. Video B (f3ed3256) (Video B (f3ed3256) (f3ed3256), f3ed3256) has a nice backdrop and dessert, but the main character doesn't draw the viewer in.",
+      "created_at": "2025-12-16T15:44:29.568Z"
+    },
+    {
+      "id": "4wjamhl2gk6",
+      "video_a_id": "967f5700-83f6-43c8-aa6e-138cf962c80b",
+      "video_b_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "winner_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "dimension": "hook",
+      "confidence": "somewhat",
+      "reasoning": "Video B (44bfe974) (Video B (44bfe974) (44bfe974), 44bfe974) shows some movement, and a clear well composed shot of a girl opening up a pizza box. But after Video A (967f5700) (Video A (967f5700) (967f5700), 967f5700) Video B (44bfe974) (Video B (44bfe974) (44bfe974), 44bfe974), the rest of the clip is a bit slow and not very dynamic. Video A (967f5700) (Video A (967f5700) (967f5700), 967f5700) has a less clear starting shot, and not the best composition or lighting, but gets into the main theme without too much time wasted. But the woman in Video A (967f5700) (Video A (967f5700) (967f5700), 967f5700) clip is attractive which helps.",
+      "created_at": "2025-12-16T15:46:36.170Z"
+    },
+    {
+      "id": "iyav3se369",
+      "video_a_id": "5cfd152d-0eea-4207-a703-c5b4eb1fac7c",
+      "video_b_id": "7b585825-ad83-4893-9e89-3cf360d3a129",
+      "winner_id": "7b585825-ad83-4893-9e89-3cf360d3a129",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "The initial shots for both videos are ok. Video A (5cfd152d) (Video A (5cfd152d) (5cfd152d), 5cfd152d) Video B (7b585825) (Video B (7b585825) (7b585825), 7b585825) in Video B (7b585825) (Video B (7b585825) (7b585825), 7b585825) clip is a bit stagnant, not moving quickly or drawing the viewer in. But the shot looks good and the backdrop and composition with characters is good.\n\nVideo A (5cfd152d) (Video A (5cfd152d) (5cfd152d), 5cfd152d) isn't bad either, but there isn't an inherent tempo to Video A (5cfd152d) (Video A (5cfd152d) (5cfd152d), 5cfd152d) beat. The text overlay also takes some time to read, which may not be as hooky as Video B (7b585825) (Video B (7b585825) (7b585825), 7b585825) clip.",
+      "created_at": "2025-12-16T15:48:31.053Z"
+    },
+    {
+      "id": "xe9j1i5d72n",
+      "video_a_id": "7c3d0150-d2ca-40dc-8597-c10cdda9ec72",
+      "video_b_id": "2b709fab-9196-4cee-9cc5-80cdd51425f0",
+      "winner_id": null,
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "Video A (7c3d0150) (Video A (7c3d0150) (7c3d0150), 7c3d0150) has more of an informative concept, but has movement and is engaging for the viewer. The text overlay and movement forward gives the video some momentum, but the composition isn't the best. Video B (2b709fab) (Video B (2b709fab) (2b709fab), 2b709fab) has good movement, but isn't the most steady and the backdrop/worker playing the role doesn't pull the viewer in.",
+      "created_at": "2025-12-16T15:50:28.396Z"
+    },
+    {
+      "id": "y9dol2u3w3",
+      "video_a_id": "7c3d0150-d2ca-40dc-8597-c10cdda9ec72",
+      "video_b_id": "75b798c1-24c9-4c28-a92d-a24ffc351dc0",
+      "winner_id": "75b798c1-24c9-4c28-a92d-a24ffc351dc0",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both are ok with good movement, and featuring an attractive young person. Video B (75b798c1) (Video B (75b798c1) (75b798c1), 75b798c1) clip is easier to understand and get a sense of the premise Video B (75b798c1) (75b798c1) away. Video A (7c3d0150) (Video A (7c3d0150) (7c3d0150), 7c3d0150), talking about a contest, is perhaps also engaging for a young crowd.",
+      "created_at": "2025-12-16T15:51:26.815Z"
+    },
+    {
+      "id": "gz7r9ofh0d7",
+      "video_a_id": "407ea6ae-24d9-420a-bcae-85f78c7befac",
+      "video_b_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "winner_id": "407ea6ae-24d9-420a-bcae-85f78c7befac",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (407ea6ae) (Video A (407ea6ae) (407ea6ae), 407ea6ae) has an ok opening, where the backdrop isn't the most visually appealing, and the editing not being the most direct and seamless into the sketch. But the attractive young girl helps to keep attention.\n\nVideo B (42887f4b) (Video B (42887f4b) (42887f4b), 42887f4b) doesn't waste time to get into the premise, but the overall colors are a bit unclear which makes the initial setting a bit unclear for the user to understand what they are looking at. There is also not a text overlay clarifying the meaning/premise of the concept.",
+      "created_at": "2025-12-16T15:53:44.708Z"
+    },
+    {
+      "id": "webosl9vew",
+      "video_a_id": "17adcf7a-012b-4add-8191-7f64d8385b80",
+      "video_b_id": "fa76f3de-8650-435f-92d6-fa7a37d8600d",
+      "winner_id": "fa76f3de-8650-435f-92d6-fa7a37d8600d",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "The opening shot of Video B (fa76f3de) (Video B (fa76f3de) (fa76f3de), fa76f3de) is a bit more clean, and well composed with nice clear colors. The actor also looks good and draws the viewer in.",
+      "created_at": "2025-12-16T15:54:56.962Z"
+    },
+    {
+      "id": "g9t0zlyizea",
+      "video_a_id": "80425a1d-0774-48f3-bfa1-81b7f17dbab2",
+      "video_b_id": "a20973fd-80b4-4818-ad9f-1f47ce8fdeff",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (80425a1d) (Video A (80425a1d) (80425a1d), 80425a1d) doesn't contain an engaging sketch or premise that has an inherent cleverness or structure that works on it's own. It's not informative per say, but doesn't rely on humor or a similar type of engagement. It's well produced.\n\nVideo B (a20973fd) (Video B (a20973fd) (a20973fd), a20973fd) actually has an engaging premise, and a fun twist, but the execution is not the strongest and the production does not sell or execute on the premise as well as it could.",
+      "created_at": "2025-12-16T15:57:50.308Z"
+    },
+    {
+      "id": "9v7sszajgi9",
+      "video_a_id": "8e16cfa4-6e41-4ae1-ab81-12aa03d53f85",
+      "video_b_id": "441efe36-4f11-4bae-b704-08c7e1c8bbf4",
+      "winner_id": "8e16cfa4-6e41-4ae1-ab81-12aa03d53f85",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both videos have some issues. Video A (8e16cfa4) (Video A (8e16cfa4) (8e16cfa4), 8e16cfa4) is well crafted, but the script isn't the most fun and the pacing in this video is a bit slow. The lines or delivery could be different to sell the premise, which has to do with a misunderstanding in the cash-register that makes the customer think they will get the food cheaper, while it really being a trick played by the staff. The tempo isn't the best, but there is a replicable premise that is somewhat accessible. It's not the most clever, but not bad and can be replicated.\n\nVideo B (441efe36) (Video B (441efe36) (441efe36), 441efe36) has a fun payoff, but the concept is very simple and is a single shot, which makes the concept not the most memorable. The humor gives a short and simple boost but it isn't the most memorable.",
+      "created_at": "2025-12-16T16:00:52.973Z"
+    },
+    {
+      "id": "00dcecdrmf55c",
+      "video_a_id": "60bd19a1-90fa-4f1d-8800-576d5633eb5b",
+      "video_b_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "winner_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (82f839c7) (Video B (82f839c7) (82f839c7), 82f839c7) has a more complete premise and execution than Video A (60bd19a1) (Video A (60bd19a1) (60bd19a1), 60bd19a1). Video B (82f839c7) (Video B (82f839c7) (82f839c7), 82f839c7) sets the premise with a TikTok sound that is somewhat trending, where a countdown goes from 8...1 to 7...1, to 6...1 etcetera. Combined with the visuals showing how money is leaving the owner, this creates an engaging and well made video that keeps engagement. The different shots are well composed and make sense in relation to the bigger message.\n\nVideo A (60bd19a1) (Video A (60bd19a1) (60bd19a1), 60bd19a1) is a bit simpler in it's concept, and is likely easier (or less time consuming) to reproduce. The humor comes from the visuals and the actors expressions.",
+      "created_at": "2025-12-16T16:04:41.048Z"
+    },
+    {
+      "id": "7n8rulnu1lq",
+      "video_a_id": "ae4475cc-054a-4a39-9662-2ff4f668761f",
+      "video_b_id": "610f7e10-34d7-445a-b1d8-7ff58bbda990",
+      "winner_id": "ae4475cc-054a-4a39-9662-2ff4f668761f",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video A (ae4475cc) (Video A (ae4475cc) (ae4475cc), ae4475cc) is amusing and has a sketch structure. It isn't too long, and shows off a dynamic between a couple in a restaurant, where the woman is expecting the man to pay. It's played out in a wholesome and easy going way. The sketch isn't set in a service environment, but the premise can be set in a service environment.\n\nVideo B (610f7e10) (Video B (610f7e10) (610f7e10), 610f7e10) sets up a slightly amusing idea, of a kitchen being hot (which is likely known for restaurant workers), and the worker exclaiming that it's hot as a *** genital. This is a bit vulgar and not a very creative payoff.",
+      "created_at": "2025-12-16T16:07:44.471Z"
+    },
+    {
+      "id": "mk1vptfgrzh",
+      "video_a_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "video_b_id": "db4d53a4-5b56-4be7-bb3f-447cd9cd759a",
+      "winner_id": "db4d53a4-5b56-4be7-bb3f-447cd9cd759a",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "Video B (db4d53a4) (Video B (db4d53a4) (db4d53a4), db4d53a4) is much better. The premise is much more clear, and plays on the idea of humans appraising themselves excessively because they enjoy the feeling. The idea of celebrating doing the job well is funny, implying that status comes from doing mundane or simple things well. Enjoyment comes from the visuals and absurdist implications of what's being said.\n\nVideo A (1ea5288b) (Video A (1ea5288b) (1ea5288b), 1ea5288b) in contrast doesn't say anything in particular, and relies on good editing. But in my eyes, that doesn't make a sketch and the script doesn't have a lot of standalone ability to be replicated.",
+      "created_at": "2025-12-16T16:12:07.555Z"
+    },
+    {
+      "id": "w7egmc33pg8",
+      "video_a_id": "185a486a-a923-4513-84cd-51b0bd0f8a5d",
+      "video_b_id": "2d05eec7-7eaf-453f-88ed-942688e2c5cb",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both are ok and take different forms and cater to different audiences. Video A (185a486a) (Video A (185a486a) (185a486a), 185a486a) is catering to slightly more developed audience, teenagers and young adults that are drawn into the cooler and more chic/attractive clothing/backdrop. The premise around being annoyed by customers, and the visual story being told, has somewhat of a clever structure.\n\nVideo B (2d05eec7) (Video B (2d05eec7) (2d05eec7), 2d05eec7) is a bit more wholesome and family oriented, painting the adult man in the sketch as a child seeking comfort from his mother (but in this case it's a woman assumed to be his wife. This script isn't the most clever, but it caters well towards its target audience which I assume to be younger kids 10-16 and more wholesome family oriented viewers.",
+      "created_at": "2025-12-16T16:27:56.659Z"
+    },
+    {
+      "id": "n9bwbowz2dq",
+      "video_a_id": "7abe3bb9-aa31-4154-923a-4c54a42f12e6",
+      "video_b_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "winner_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (f3ed3256) (Video B (f3ed3256) (f3ed3256), f3ed3256) has a more clever setup and the theme is a bit more accessible/not too vulgar/lowbrow. Video A (7abe3bb9) (Video A (7abe3bb9) (7abe3bb9), 7abe3bb9) feels like a caustic female worker talking about how men/boys are annoying, and Video B (f3ed3256) (Video B (f3ed3256) (f3ed3256), f3ed3256) takes a more friendly and very safe approach to humor. Video B (f3ed3256) (Video B (f3ed3256) (f3ed3256), f3ed3256) sketch actually has a somewhat clever premise/idea, but the editing and pacing is a little bit slow and takes to long to get to the point. The payoff is also not the best.",
+      "created_at": "2025-12-16T16:29:51.114Z"
+    },
+    {
+      "id": "0r34nbk1f34s",
+      "video_a_id": "540a7d2a-3916-4f6f-b3e0-9d06db021a0d",
+      "video_b_id": "ff57932e-7537-493d-8cba-187d36761263",
+      "winner_id": "ff57932e-7537-493d-8cba-187d36761263",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "Video B (ff57932e) (Video B (ff57932e) (ff57932e), ff57932e) sketch is really good. It has good pacing, it covers a fun theme and has a nice visual payoff in the end. Many service businesses can likely replicate this sketch in their own language, sitting in the facility and it's not too hard to replicate.\n\nVideo A (540a7d2a) (Video A (540a7d2a) (540a7d2a), 540a7d2a) isn't terrible, but doesn't have a setup as engaging or memorable.",
+      "created_at": "2025-12-16T16:31:18.903Z"
+    },
+    {
+      "id": "mwhzzwinro",
+      "video_a_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "video_b_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "winner_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video A (f530b678) (Video A (f530b678) (f530b678), f530b678) has a premise that can be replicated. The series of strange tasks being performed fits well into the core premise. It's not the most creative, and plays on a premise of \"a worker being in trouble\", which isn't the most fun, but overall acceptable.\n\nVideo B (1ea5288b) (Video B (1ea5288b) (1ea5288b), 1ea5288b) has good editing, a sketch structure, but doesn't have a clear idea or fun development. It's a bit surreal and doesn't really say anything.",
+      "created_at": "2025-12-16T16:33:00.218Z"
+    },
+    {
+      "id": "e4qws6tufm",
+      "video_a_id": "7c3d0150-d2ca-40dc-8597-c10cdda9ec72",
+      "video_b_id": "db4d53a4-5b56-4be7-bb3f-447cd9cd759a",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video B (db4d53a4) (Video B (db4d53a4) (db4d53a4), db4d53a4) has an interesting and engaging premise, but relies on a meme edited in, which makes the clip a bit less replicable. Video A (7c3d0150) (Video A (7c3d0150) (7c3d0150), 7c3d0150) reads as an informative clip, instead of a humorous premise. Both are ok, but not the most useful for a similar business aiming to replicate the premise.",
+      "created_at": "2025-12-16T16:37:06.197Z"
+    },
+    {
+      "id": "lt1dvt4y8b",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "winner_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both of these videos are very simple. The humor is simple an accessible in both, and can be deemed slightly amusing for many people, not expecting too much drama or extreme ideas. Video B (580e13cf) (Video B (580e13cf) (580e13cf), 580e13cf) has a pun that is somewhat clever, making the Video A (69e4bbea) bit clever in general. Video B (580e13cf) (Video B (580e13cf) (580e13cf), 580e13cf) has joke that is presented in text, that are somewhat amusing but also somewhat safe.",
+      "created_at": "2025-12-16T16:39:31.320Z"
+    },
+    {
+      "id": "s88n3za2oc7",
+      "video_a_id": "e8f32302-0ada-4c34-b1cc-60a4bd5b3604",
+      "video_b_id": "4d9d182f-2b03-4eed-8e2a-6231638d283b",
+      "winner_id": "4d9d182f-2b03-4eed-8e2a-6231638d283b",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (4d9d182f) (Video B (4d9d182f) (4d9d182f), 4d9d182f) is funnier than Video A (e8f32302) (Video A (e8f32302) (e8f32302), e8f32302), showing an unexpected human behaviour that results in a physical payoff. For any service business aiming to replicate the theme, it would have to use some other type of item, not desserts, if the service business in itself isn't a dessert/café vendor. The premise is quite simple and isn't the most clever, but the execution is fun.\n\nVideo A (e8f32302) (Video A (e8f32302) (e8f32302), e8f32302) is likely a bit more replicable, but puts the business in a somewhat casual and unprofessional light. The issue with this is that it cheapens the overall feeling towards the brand - conflating personal life with a really professional part of the business (the kitchen). This makes the sketch not the best, and there isn't a clever idea there other than the visual appeal of seeing a different view.",
+      "created_at": "2025-12-16T16:43:30.685Z"
+    },
+    {
+      "id": "vbv6ce4ja7r",
+      "video_a_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "video_b_id": "4422d8e6-3580-4e4c-a3f7-345b13d667fa",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both premises are ok, with scripts that keep the viewer somewhat engaged and has a slow payoff structure, without a clear payoff in either video. Rather it slowly moves deeper into absurdism with each shot. Video B (4422d8e6) (Video B (4422d8e6) (4422d8e6), 4422d8e6) is a bit more edgy, making the worker seem like a crazy person that mocks the customer who is simply shown to be enjoying herself. The humor is a bit edgy, and that could likely make it a bit more engaging than other types of content. But it becomes a bit much, as the \"fun\" aspect of the clip has to do with the workers reaction that is a bit extreme.\n\nVideo A (44bfe974) (Video A (44bfe974) (44bfe974), 44bfe974) clip has a simple dialogue structure, and doesn't have sharp editing or dynamic perspectives that keep the engagement going. It relies on a script that is amusing, but it's more of a slow dialogue type premise where the amusement comes from the two characters disagreeing. It's not strictly premise-heavy, so the overall engagement hangs on the dialogue.\n\nOverall, both clips are ok and Video A (44bfe974) (Video A (44bfe974) (44bfe974), 44bfe974) clip could likely be replicated, but it's focused around pizza since the script makes a point about how the pizza is sold.\n\nVideo B (4422d8e6) (Video B (4422d8e6) (4422d8e6), 4422d8e6) clip could perhaps work but it would have to be made shorter and perhaps less strange/dramatic.",
+      "created_at": "2025-12-16T16:49:19.871Z"
+    },
+    {
+      "id": "7r7we17xr9e",
+      "video_a_id": "50b7707b-1a29-4b35-af3c-10a5cc58a526",
+      "video_b_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "winner_id": "50b7707b-1a29-4b35-af3c-10a5cc58a526",
+      "dimension": "production",
+      "confidence": "somewhat",
+      "reasoning": "Both have production that seems intentional and planned. Video A (50b7707b) (Video A (50b7707b) (50b7707b), 50b7707b) (Brams) uses sharp editing, giving the clip a professional finish. Video B (7012ae51) (Video B (7012ae51) (7012ae51), 7012ae51) clip is also well made, and seems simpler to create as well as having less engaging editing.",
+      "created_at": "2025-12-17T12:05:04.112Z"
+    },
+    {
+      "id": "957zk20qp7i",
+      "video_a_id": "e305f947-3b53-4c28-8b0a-70689aa99ff0",
+      "video_b_id": "695e6525-c41d-4152-96b4-931a3d75da29",
+      "winner_id": "e305f947-3b53-4c28-8b0a-70689aa99ff0",
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "Video A (e305f947) (Video A (e305f947) (e305f947), e305f947) has good editing, tempo and good composition. The video quality/unclarity of the visuals makes it look slightly less polished. Video B (695e6525) (Video B (695e6525) (695e6525), 695e6525) looks spontaneously shot, with a blurry tone and a handheld recording making it seem spontaneous.",
+      "created_at": "2025-12-17T12:08:39.582Z"
+    },
+    {
+      "id": "mqxbey8s4t",
+      "video_a_id": "967f5700-83f6-43c8-aa6e-138cf962c80b",
+      "video_b_id": "75b798c1-24c9-4c28-a92d-a24ffc351dc0",
+      "winner_id": "75b798c1-24c9-4c28-a92d-a24ffc351dc0",
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "Both have video quality that isn't the best. Video B (75b798c1) (Video B (75b798c1) (75b798c1), 75b798c1) seems more intentional.",
+      "created_at": "2025-12-17T12:09:23.903Z"
+    },
+    {
+      "id": "wbbxh81kife",
+      "video_a_id": "967f5700-83f6-43c8-aa6e-138cf962c80b",
+      "video_b_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "winner_id": null,
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "Video B (6bdd73a2) (Video B (6bdd73a2) (6bdd73a2), 6bdd73a2) has more engaging editing.",
+      "created_at": "2025-12-17T12:10:14.619Z"
+    },
+    {
+      "id": "mvosl7xz69n",
+      "video_a_id": "87fea727-e058-462a-8264-3e0e2605909d",
+      "video_b_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "winner_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "dimension": "production",
+      "confidence": "somewhat",
+      "reasoning": "Video B (24305b54) (Video B (24305b54) (24305b54), 24305b54) has better lighting, and combines different shots and edits them sharply. Video B (24305b54) (Video B (24305b54) (24305b54), 24305b54) has better colors and composition, despite not being perfect. Video A (87fea727) (Video A (87fea727) (87fea727), 87fea727) has a more mellow color scheme, and isn't well composed visually.",
+      "created_at": "2025-12-17T12:11:21.694Z"
+    },
+    {
+      "id": "hfiipb1exu8",
+      "video_a_id": "2b709fab-9196-4cee-9cc5-80cdd51425f0",
+      "video_b_id": "57705dac-347e-41a6-92c3-127cb3fb956e",
+      "winner_id": "57705dac-347e-41a6-92c3-127cb3fb956e",
+      "dimension": "production",
+      "confidence": "certain",
+      "reasoning": "Video B (57705dac) (Video B (57705dac) (57705dac), 57705dac) has high production quality. The editing is sharp and the video quality is outstanding.",
+      "created_at": "2025-12-17T12:11:46.909Z"
+    },
+    {
+      "id": "bq03ymfahu",
+      "video_a_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "video_b_id": "4d9a4ccd-175f-427d-ba49-a6b89955a8c9",
+      "winner_id": "4d9a4ccd-175f-427d-ba49-a6b89955a8c9",
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "Video B (4d9a4ccd) (Video B (4d9a4ccd) (4d9a4ccd), 4d9a4ccd) has nice editing, and shows the backdrop in well composed shots. The tempo and colors in Video B (4d9a4ccd) (Video B (4d9a4ccd) (4d9a4ccd), 4d9a4ccd) is good. Video A (1ea5288b) (Video A (1ea5288b) (1ea5288b), 1ea5288b) is decent, and has tight and engaging editing. Video A (1ea5288b) (Video A (1ea5288b) (1ea5288b), 1ea5288b) has ok composition.",
+      "created_at": "2025-12-17T12:13:06.143Z"
+    },
+    {
+      "id": "l9bz9aopau",
+      "video_a_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "video_b_id": "59fd28df-beda-45de-b490-6ca050893333",
+      "winner_id": "59fd28df-beda-45de-b490-6ca050893333",
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "Both videos have low production value, and are one a single shot which makes the scenes static. Video B (59fd28df) (Video B (59fd28df) (59fd28df), 59fd28df) has a lower quality video recording, but the backdrop is decent and the main composition is decent. Video A (dfda328b) (Video A (dfda328b) (dfda328b), dfda328b) has bad lighting.",
+      "created_at": "2025-12-17T12:14:05.246Z"
+    },
+    {
+      "id": "8vnz2781y5y",
+      "video_a_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "video_b_id": "e3afbbf9-8b98-4739-b900-5df406da1c1f",
+      "winner_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "dimension": "production",
+      "confidence": "somewhat",
+      "reasoning": "Both videos have similar production in terms of quality of recording. Video A (82f839c7) (Video A (82f839c7) (82f839c7), 82f839c7) has more engaging editing, as well as well-composed shots and good movement within these shots.",
+      "created_at": "2025-12-17T12:15:22.772Z"
+    },
+    {
+      "id": "21bmpi5wrf5",
+      "video_a_id": "cf783359-047d-4e6d-bf7e-8af7ef0d0f6a",
+      "video_b_id": "80f27383-117e-4702-9044-179e5114a808",
+      "winner_id": "cf783359-047d-4e6d-bf7e-8af7ef0d0f6a",
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T12:16:37.925Z"
+    },
+    {
+      "id": "0xqfa6kp6ri",
+      "video_a_id": "7b585825-ad83-4893-9e89-3cf360d3a129",
+      "video_b_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "winner_id": "7b585825-ad83-4893-9e89-3cf360d3a129",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both sketches have a somewhat engaging premise, but Video A (7b585825) (Video A (7b585825) (7b585825), 7b585825) sketch has a richer premise and a more engaging flow, seeing how the employee handles scenarios in a bad way in front of the manager. Video B (69e4bbea) (Video B (69e4bbea) (69e4bbea), 69e4bbea) has an accessible premise, but isn't as memorable or engaging.",
+      "created_at": "2025-12-17T12:20:36.349Z"
+    },
+    {
+      "id": "fhq818lauoo",
+      "video_a_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "video_b_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both premises are decent, and would work decent for different audiences. Video A (fe313a6a) (Video A (fe313a6a) (fe313a6a), fe313a6a) has a premise that has an edge to it, making the staff look like kids playing at work, with the payoff of them wanting to avoid work. Video B (42887f4b) (Video B (42887f4b) (42887f4b), 42887f4b) has a slightly amusing premise, somewhat creative, but a joke setup (The camera shot from behind) and payoff (reveal that it's food, not a ring being proposed) that falls a bit flat. It's mildly amusing, but not great.",
+      "created_at": "2025-12-17T12:23:25.008Z"
+    },
+    {
+      "id": "qfa1od4t3n",
+      "video_a_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "video_b_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "winner_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (69e4bbea) (Video B (69e4bbea) (69e4bbea), 69e4bbea) clip has a sketch premise and decent editing. Video A (7269df3d) (Video A (7269df3d) (7269df3d), 7269df3d) clip reads more like a question posed towards the audience, showing the food items. ",
+      "created_at": "2025-12-17T12:24:11.001Z"
+    },
+    {
+      "id": "4x1szq4ba67",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "af210469-23ee-4c46-9e49-77c0572e7202",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both are decent, and don't give a big emotional reaction. Video A (69e4bbea) (Video A (69e4bbea) (69e4bbea), 69e4bbea) clip has a simple premise, and plays on the idea of not getting to relax due to responsibilities. Video B (af210469) (Video B (af210469) (af210469), af210469) leans partly on themes of the employee being happy that her manager is leaving (which makes the video absurdist), as well as a fun and cutesy dance (hand movements) that makes the young female employee look cute and excited that she gets to eat food on company time, now that the manager has Video A (69e4bbea) (69e4bbea). ",
+      "created_at": "2025-12-17T12:27:18.995Z"
+    },
+    {
+      "id": "c3igd2ed755",
+      "video_a_id": "fc5a19ea-b360-4d1b-9671-1ffe0e8546a0",
+      "video_b_id": "c6dcce7b-211a-4d55-88fe-e8f5d4dc3551",
+      "winner_id": "c6dcce7b-211a-4d55-88fe-e8f5d4dc3551",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video B (c6dcce7b) (Video B (c6dcce7b) (c6dcce7b), c6dcce7b) has a more engaging emotional theme, sharing and getting taken advantage of by a friend (despite it innocently being about food). Video A (fc5a19ea) (Video A (fc5a19ea) (fc5a19ea), fc5a19ea) premise is also somewhat clever, but leans mainly on the editing and creative shots. It's a simple premise and good execution.",
+      "created_at": "2025-12-17T12:44:00.075Z"
+    },
+    {
+      "id": "dl1xvoebawu",
+      "video_a_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "video_b_id": "610f7e10-34d7-445a-b1d8-7ff58bbda990",
+      "winner_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (44bfe974) (Video A (44bfe974) (44bfe974), 44bfe974) leans on having a funny conversation as the main premise, with the main point of it not being as simple or effective to replicate for any business within a service context. The conversation is engaging, and has an interesting \"huh\" moment, fun and a bit thought provoking, with the issue that it is stricktly about pizza. Video B (610f7e10) (Video B (610f7e10) (610f7e10), 610f7e10) is more replicable, but relies on a TikTok trend and is a bit too edgy/vulgar for the general audience.",
+      "created_at": "2025-12-17T12:48:58.163Z"
+    },
+    {
+      "id": "wn76u6num4h",
+      "video_a_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "video_b_id": "a860739f-9e5b-475c-bca3-b54f98f04188",
+      "winner_id": "a860739f-9e5b-475c-bca3-b54f98f04188",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (a860739f) (Video B (a860739f) (a860739f), a860739f) has a somewhat engaging premise and good pacing, with a couple of visual shots that feel like a decent payoff.  Video A (dfda328b) (Video A (dfda328b) (dfda328b), dfda328b) isn't a sketch or premise, but looks like an view into ordinary life in the restaurant, showing two workers flirting. Video B (a860739f) (Video B (a860739f) (a860739f), a860739f) has replicability and production value.",
+      "created_at": "2025-12-17T12:56:50.099Z"
+    },
+    {
+      "id": "96k7zycef3s",
+      "video_a_id": "575ad7b0-8f93-4ae8-9a0a-812493bc12b1",
+      "video_b_id": "80425a1d-0774-48f3-bfa1-81b7f17dbab2",
+      "winner_id": "575ad7b0-8f93-4ae8-9a0a-812493bc12b1",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (575ad7b0) (Video A (575ad7b0) (575ad7b0), 575ad7b0) has a sketch setup with a conversation between the two characters (same actor). It isn't a very strong standalone premise, but builds towards the ending which showcases the food. Video B (80425a1d) (Video B (80425a1d) (80425a1d), 80425a1d) has good production and a hook that is useful generally on TikTok, but isn't a sketch our a humorous premise.",
+      "created_at": "2025-12-17T13:00:11.001Z"
+    },
+    {
+      "id": "0irdctbhjw0n",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "eb5b9e93-ab95-4767-ba2d-38b1235a8402",
+      "winner_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both of these videos are decent, but the premise in Video A (69e4bbea) (Video A (69e4bbea) (69e4bbea), 69e4bbea) is a bit more accessible despite the humor being a bit more safe. Both clips are short and to the point, and Video A (69e4bbea) (Video A (69e4bbea) (69e4bbea), 69e4bbea) has an engaging backdrop. Video B (eb5b9e93) (Video B (eb5b9e93) (eb5b9e93), eb5b9e93) has a more emotionally resonant premise, despite it being a bit \"teenage\" in it's tone/premise. The idea of two people disagreeing and having a bit of a annoyance towards each others is a bit immature. The payoff, of the two guy's reconsiling by kissing, is strange and plays into absurdity. It is funny for people who like shock or strange absurdist moments, but the premise isn't as useful as a standalone skit.",
+      "created_at": "2025-12-17T13:03:33.656Z"
+    },
+    {
+      "id": "71yjwpat9ia",
+      "video_a_id": "e032dcf1-a6c4-4d4e-8723-0af055778253",
+      "video_b_id": "5cfd152d-0eea-4207-a703-c5b4eb1fac7c",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video A (e032dcf1) (Video A (e032dcf1) (e032dcf1), e032dcf1) doesn't have good production value or editing, but the premise is somewhat interesting and the tempo/length is decent. The premise is about an employee being tricked by a customer, which is a theme that people may find engaging. Video B (5cfd152d) (Video B (5cfd152d) (5cfd152d), 5cfd152d) plays on absurdism, is more simple in its structure, but likely attracts a more narrow young audience. ",
+      "created_at": "2025-12-17T13:06:08.741Z"
+    },
+    {
+      "id": "l4wo65yvlw",
+      "video_a_id": "6984e784-a979-4324-9500-86f0b4d3e0b8",
+      "video_b_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both videos have an absurdist premise, Video B (d48c0372) (Video B (d48c0372) (d48c0372), d48c0372) has a more accessible and a slightly safer theme to it. Video A (6984e784) (Video A (6984e784) (6984e784), 6984e784) is more clever, but has a riskier theme to it, and would also require a certain risk propensity and openness to play on sexual themes.",
+      "created_at": "2025-12-17T13:39:09.235Z"
+    },
+    {
+      "id": "zr2908alty",
+      "video_a_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "video_b_id": "c1fe47f6-0f2d-407e-8dd9-6504fd8cf861",
+      "winner_id": "c1fe47f6-0f2d-407e-8dd9-6504fd8cf861",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both clips have slightly amusing concepts. Video A (43dcb57c) (Video A (43dcb57c) (43dcb57c), 43dcb57c) has a simpler setup with a payoff that is more subtle, showing a contrast between the concept set up in text and the visual reveal. Video B (c1fe47f6) (Video B (c1fe47f6) (c1fe47f6), c1fe47f6) has nice production and backdrop, and plays on a slightly amusing pun/wordplay to set up the video.",
+      "created_at": "2025-12-17T13:46:15.322Z"
+    },
+    {
+      "id": "94o8v2lyn89",
+      "video_a_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "video_b_id": "cf783359-047d-4e6d-bf7e-8af7ef0d0f6a",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both videos have somewhat clever and amusing premises. Video A (477e9367) (Video A (477e9367) (477e9367), 477e9367) has a fun concept of a customer not having enough money, making the employee eat from the food in order to make it \"fair\", which is an absurdist and creative twist. Video B (cf783359) (Video B (cf783359) (cf783359), cf783359) has a similar idea, where a pun/willing misunderstanding leads to the customer getting bad customer service, in an absurdist and playful way.",
+      "created_at": "2025-12-17T13:50:06.920Z"
+    },
+    {
+      "id": "tptshdrbieq",
+      "video_a_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "video_b_id": "a860739f-9e5b-475c-bca3-b54f98f04188",
+      "winner_id": "a860739f-9e5b-475c-bca3-b54f98f04188",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both videos have somewhat strong premises. Video A (24305b54) (Video A (24305b54) (24305b54), 24305b54) clip has a simpler premise with a visual reveal, which is fun but not the most amusing. Video B (a860739f) (Video B (a860739f) (a860739f), a860739f) is a bit more visually engaging, showing different shots of the employee doing small tasks. Video A (24305b54) (Video A (24305b54) (24305b54), 24305b54) has better replicability, but Video A (24305b54) (Video A (24305b54) (24305b54), 24305b54) is more memorable and a richer meta context.",
+      "created_at": "2025-12-17T13:52:43.860Z"
+    },
+    {
+      "id": "javzcxi56aq",
+      "video_a_id": "af5f10fd-07bc-475f-a983-07d41c8b6d8e",
+      "video_b_id": "57705dac-347e-41a6-92c3-127cb3fb956e",
+      "winner_id": "57705dac-347e-41a6-92c3-127cb3fb956e",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (57705dac) (Video B (57705dac) (57705dac), 57705dac) feels planned, while Video A (af5f10fd) (Video A (af5f10fd) (af5f10fd), af5f10fd) seems more improvised. Video A (af5f10fd) (Video A (af5f10fd) (af5f10fd), af5f10fd) is engaging but mainly visual, without a sketch premise or a clever setup, rather it's a team of employees singing along to a TikTok sound which is visually engaging. Video B (57705dac) (Video B (57705dac) (57705dac), 57705dac) has a somewhat amusing premise, but not the most fun or creative. The humor is accessible in Video B (57705dac) (Video B (57705dac) (57705dac), 57705dac) clip, and somewhat \"safe\".",
+      "created_at": "2025-12-17T13:54:17.568Z"
+    },
+    {
+      "id": "zbgpv0l3tx",
+      "video_a_id": "2b709fab-9196-4cee-9cc5-80cdd51425f0",
+      "video_b_id": "ed72bbb2-a01e-4ed1-86d8-6519b179b033",
+      "winner_id": "ed72bbb2-a01e-4ed1-86d8-6519b179b033",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (2b709fab) (Video A (2b709fab) (2b709fab), 2b709fab) has a simple premise that relies on an implied dispute/disagreement with a customer beforehand. The video is simple showing a stare-off. Video A (2b709fab) (Video A (2b709fab) (2b709fab), 2b709fab) isn't the most clever, but the premise is somewhat engaging. Video B (ed72bbb2) (Video B (ed72bbb2) (ed72bbb2), ed72bbb2) relies on physical reveals, where each shot build on the initial premise, with a payoff. The clip can be replicable and feels memorable.",
+      "created_at": "2025-12-17T13:57:33.882Z"
+    },
+    {
+      "id": "rvwydlewdq8",
+      "video_a_id": "2d05eec7-7eaf-453f-88ed-942688e2c5cb",
+      "video_b_id": "be90b8c6-f1db-4b46-b8f5-370a9cc6f93f",
+      "winner_id": "be90b8c6-f1db-4b46-b8f5-370a9cc6f93f",
+      "dimension": "rewatchable",
+      "confidence": "barely",
+      "reasoning": "Video B (be90b8c6) (Video B (be90b8c6) (be90b8c6), be90b8c6) is slightly more rewatchable. The engaging jokes have more depth than Video A (2d05eec7) (Video A (2d05eec7) (2d05eec7), 2d05eec7), which is more of a funny idea/scenario of a person being embarrassed of buying a specific item. Both are short and not the most memorable.",
+      "created_at": "2025-12-17T13:59:18.056Z"
+    },
+    {
+      "id": "yr958eom2rs",
+      "video_a_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "video_b_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "winner_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "Video B (0630e54c) (Video B (0630e54c) (0630e54c), 0630e54c) is more memorable, and has a more clever joke that plays on a cultural misunderstanding, as well as fun visual misunderstandings that keeps the tempo throughout the video, with a climax of the misunderstanding being understood or realized. Video A (477e9367) (Video A (477e9367) (477e9367), 477e9367) is also fun, but the payoff isn't as smart or memorable.",
+      "created_at": "2025-12-17T14:01:04.870Z"
+    },
+    {
+      "id": "ic8y8sc052a",
+      "video_a_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "video_b_id": "307ac0c6-d7f4-44ba-9c34-74bc13475faa",
+      "winner_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "Video A (7012ae51) (Video A (7012ae51) (7012ae51), 7012ae51) has a simple premise that is performed well, with creative visual camera work to make the video engaging and interesting to look at. Video B (307ac0c6) (Video B (307ac0c6) (307ac0c6), 307ac0c6) has a premise set up in text, with fairly fun jokes that can be read on the screen, working as a payoff. But these jokes lose their fun after Video A (7012ae51) (Video A (7012ae51) (7012ae51), 7012ae51) time watching the clip, while Video A (7012ae51) (Video A (7012ae51) (7012ae51), 7012ae51) may have some more memorability.",
+      "created_at": "2025-12-17T14:02:57.899Z"
+    },
+    {
+      "id": "dvw64l5ji4",
+      "video_a_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "video_b_id": "4d9d182f-2b03-4eed-8e2a-6231638d283b",
+      "winner_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "Video A (82f839c7) (Video A (82f839c7) (82f839c7), 82f839c7) clip has multiple visually engaging humorous shots that keeps the tempo the entire video. The rewatchability is high because each shot contains entertainment that can be rewatched. The sound and the decreasing number representing income is also an engaging counterpoint to the visuals. Video B (4d9d182f) (Video B (4d9d182f) (4d9d182f), 4d9d182f) is somewhat rewatchable as well, since physical humour can be fun to rewatch.",
+      "created_at": "2025-12-17T14:04:44.605Z"
+    },
+    {
+      "id": "mdiyczlt58q",
+      "video_a_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "video_b_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "winner_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "Video B (0630e54c) (Video B (0630e54c) (0630e54c), 0630e54c) has a fun cultural premise that plays out the scenario of a misunderstanding, going further and further until frustration reaches a climax. The premise in Video B (0630e54c) (Video B (0630e54c) (0630e54c), 0630e54c) is engaging and keeps the viewer watching. Video A (08ec836f) (Video A (08ec836f) (08ec836f), 08ec836f) is about a service worker engaging with a customer that is \"confidently incorrect\", that implies that the worker is preparing an item incorrectly, where the payoff is of the worker telling the customer sternly that they are to be put in their place (this item isn't for you)",
+      "created_at": "2025-12-17T14:07:31.342Z"
+    },
+    {
+      "id": "kskiox8rvn",
+      "video_a_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "video_b_id": "12266442-dd30-4d93-92bb-1e2a2b98d2a1",
+      "winner_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "Video B (12266442) (Video B (12266442) (12266442), 12266442) clip shows an attractive young customer asking a somewhat unreasonable question, asking a pizza shop if they have pizza. The payoff is \"slow\" and doesn't reach a emotional high. Video A (a781b192) (Video A (a781b192) (a781b192), a781b192) plays on a commentary of how humans can have small ticks or strange behaviours, such as touching a plate despite being warned of it being hot. The specific commentary in this video has some depth.",
+      "created_at": "2025-12-17T14:11:34.434Z"
+    },
+    {
+      "id": "lwqjfr4lel",
+      "video_a_id": "2d05eec7-7eaf-453f-88ed-942688e2c5cb",
+      "video_b_id": "967f5700-83f6-43c8-aa6e-138cf962c80b",
+      "winner_id": "967f5700-83f6-43c8-aa6e-138cf962c80b",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "Video B (967f5700) (Video B (967f5700) (967f5700), 967f5700) has a visual reveal/payoff that has an emotional depth/impact, showing how the worker is using mafia-like strategies to intimidate customers (absurdist of course). This makes the video have a sort of crazy element to it, which makes it fun to rewatch. It's not the most memorable, but the payoff is unexpected. Video A (2d05eec7) (Video A (2d05eec7) (2d05eec7), 2d05eec7) may be memorable, but is more of a fun dynamic of seeing how a man acts like a young child, which isn't the most entertaining thing to see, but may be fun for parents or kids.",
+      "created_at": "2025-12-17T14:14:17.438Z"
+    },
+    {
+      "id": "8a8zllf8ev4",
+      "video_a_id": "612db729-9478-4638-8642-b23d59261d75",
+      "video_b_id": "e305f947-3b53-4c28-8b0a-70689aa99ff0",
+      "winner_id": "612db729-9478-4638-8642-b23d59261d75",
+      "dimension": "rewatchable",
+      "confidence": "certain",
+      "reasoning": "",
+      "created_at": "2025-12-17T14:14:26.706Z"
+    },
+    {
+      "id": "1j6bl3dn3s8",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "af210469-23ee-4c46-9e49-77c0572e7202",
+      "winner_id": null,
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "The videos don't have a very clever or increasing evolution throughout. Video A (69e4bbea) (Video A (69e4bbea) (69e4bbea), 69e4bbea) shows a scenario where a worker gets their expectations unmet, which isn't the most memorable. Video B (af210469) (Video B (af210469) (af210469), af210469) doesn't either have a lot of cleverness, but has a young female worker.",
+      "created_at": "2025-12-17T14:16:24.519Z"
+    },
+    {
+      "id": "0v90bkvwabs",
+      "video_a_id": "eb5b9e93-ab95-4767-ba2d-38b1235a8402",
+      "video_b_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "winner_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "dimension": "rewatchable",
+      "confidence": "barely",
+      "reasoning": "Video A (eb5b9e93) (Video A (eb5b9e93) (eb5b9e93), eb5b9e93) has a decent premise but not the most creative, with a high impact \"weird\" climax of two men unexpectedly kissing. This type of payoff is a bit cheap, that is fun but not creative or connected to the rest of the video. Video B (7012ae51) (Video B (7012ae51) (7012ae51), 7012ae51) is short, and doesn't contain a lot of memorable moments, but has a visually memorable shot of one of the characters taking their plate with dessert with him, making it so that the payoff is shown in how one person outmaneuvers the other.",
+      "created_at": "2025-12-17T14:18:51.101Z"
+    },
+    {
+      "id": "98s0og045cs",
+      "video_a_id": "ffbc9f08-7c9f-4031-bdd3-2f26e15266a0",
+      "video_b_id": "eb5b9e93-ab95-4767-ba2d-38b1235a8402",
+      "winner_id": "ffbc9f08-7c9f-4031-bdd3-2f26e15266a0",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (ffbc9f08) (Video A (ffbc9f08) (ffbc9f08), ffbc9f08) has a simple premise that takes an absurdist turn, where a service worker gets annoyed by a customer and takes initiative to grab the card (unprofessional) and pay for the customer. The clip is short and to the point, and the production looks decent. Video B (eb5b9e93) (Video B (eb5b9e93) (eb5b9e93), eb5b9e93) has a sketch structure, with a premise and an implied drama beforehand. The end is a bit unexpected, but a bit riskier and edgy in its humor.",
+      "created_at": "2025-12-17T14:21:59.187Z"
+    },
+    {
+      "id": "n32fl23jh6",
+      "video_a_id": "9d153139-740c-4ca3-8bcb-9c0a8a3e55dc",
+      "video_b_id": "20c4c5c0-d157-49a2-92f0-8b570bf123fe",
+      "winner_id": "20c4c5c0-d157-49a2-92f0-8b570bf123fe",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Neither of the clips have the best replicability for different reasons. Video A (9d153139) (Video A (9d153139) (9d153139), 9d153139) plays on a cultural meme that is type dependent (67), and isn't the most creative. Video B (20c4c5c0) (Video B (20c4c5c0) (20c4c5c0), 20c4c5c0) clip has a sketch structure, with editing that makes the viewer engaged in seeing the outcome. The script in itself isn't the most fun, with smart turns or dialogue, but rather plays on the animated style of the actors. The clip is slightly long, and the ending has a high impact moment of the customer screaming, which isn't a smart climax or the most fun.",
+      "created_at": "2025-12-17T14:24:37.610Z"
+    },
+    {
+      "id": "e6y2kdmgy3o",
+      "video_a_id": "5ebac5d3-aa7e-49f0-ac19-f64926830ba5",
+      "video_b_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (5ebac5d3) (Video A (5ebac5d3) (5ebac5d3), 5ebac5d3) has a simpler and accessible premise. The video has a reveal showing the employee having taken a bite of the food (seeing a smear around the workers mouth). If Video A (5ebac5d3) (Video A (5ebac5d3) (5ebac5d3), 5ebac5d3) had a more evolved script, or one or two more beats, it could be more memorable and strong. Video B (fe313a6a) (Video B (fe313a6a) (fe313a6a), fe313a6a) is somewhat amusing, setting an absurdist stage where two workers are attempting to avoid work, at work, by playing a game.",
+      "created_at": "2025-12-17T14:26:44.138Z"
+    },
+    {
+      "id": "semb1y0fv7k",
+      "video_a_id": "4422d8e6-3580-4e4c-a3f7-345b13d667fa",
+      "video_b_id": "2c8f0777-3fed-4ebc-a608-733613136bc1",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (2c8f0777) (Video B (2c8f0777) (2c8f0777), 2c8f0777) is stronger than Video A (4422d8e6) (Video A (4422d8e6) (4422d8e6), 4422d8e6), but the issue is that the joke in Video B (2c8f0777) (Video B (2c8f0777) (2c8f0777), 2c8f0777) (putting ketchup on shawarma) is an inside joke that the brand itself has established, meaning that replicability may be lower because of the narrowness of the joke (being seen as a copycat). Other than that, Video B (2c8f0777) (Video B (2c8f0777) (2c8f0777), 2c8f0777) has good editing, a fun premise, good length and a fun absurdist dynamic between the employee and customer.\n\nVideo A (4422d8e6) (Video A (4422d8e6) (4422d8e6), 4422d8e6) clip is slightly long, and relies on a cultural understanding/relatability to so called \"dad jokes\", which is more popular in certain countries rather than across borders/cultures. The reactions of the employee, the big exaggerated laughs, is fun but a bit \"vulgar\" or extreme, making the employee look passive aggressive which isn't the best image to present.",
+      "created_at": "2025-12-17T14:35:37.313Z"
+    },
+    {
+      "id": "1mkxy9ndxp5",
+      "video_a_id": "eb5b9e93-ab95-4767-ba2d-38b1235a8402",
+      "video_b_id": "3642d765-61a8-4bb9-a93f-ac370a377a59",
+      "winner_id": "eb5b9e93-ab95-4767-ba2d-38b1235a8402",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (eb5b9e93) (Video A (eb5b9e93) (eb5b9e93), eb5b9e93) has a backstory assumed, which sets the stage for the premise. Video A (eb5b9e93) (Video A (eb5b9e93) (eb5b9e93), eb5b9e93) clip isn't the strongest as a standalone sketch, but is decent. Video B (3642d765) (Video B (3642d765) (3642d765), 3642d765) isn't clever, it's simply a big \"stupid\" visual development of throwing food at a colleague, which in this case looks mean.",
+      "created_at": "2025-12-17T14:37:01.129Z"
+    },
+    {
+      "id": "6eyqsn9sdzw",
+      "video_a_id": "cd2fb456-9a5c-424d-9c4c-5d87a97fd814",
+      "video_b_id": "5cfd152d-0eea-4207-a703-c5b4eb1fac7c",
+      "winner_id": "5cfd152d-0eea-4207-a703-c5b4eb1fac7c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (cd2fb456) (Video A (cd2fb456) (cd2fb456), cd2fb456) has an engaging setup, with distinct shots that play of the initial premise. The issue with Video A (cd2fb456) (Video A (cd2fb456) (cd2fb456), cd2fb456) is that it plays on self-harm as the underlying funny mechanism, showing how employees view restaurant work as enough to want to self harm. The theme, although absurdist, is risky and implies bad things of the staff and restaurant.\n\nVideo B (5cfd152d) (Video B (5cfd152d) (5cfd152d), 5cfd152d) is a simple two shot clip, that shows a surprising edit where an employee goes against the implied instruction from the colleague (don't make it obvious, but look at the customer). The core premise, or underlying idea of observing customers isn't the strongest or most emotionally engaging.",
+      "created_at": "2025-12-17T14:40:09.211Z"
+    },
+    {
+      "id": "dokt2jvuodv",
+      "video_a_id": "20c4c5c0-d157-49a2-92f0-8b570bf123fe",
+      "video_b_id": "2325621d-0c39-43ee-9e4e-2e317337c4d1",
+      "winner_id": "2325621d-0c39-43ee-9e4e-2e317337c4d1",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (2325621d) (Video B (2325621d) (2325621d), 2325621d) clip has a fun premise, and is executed well with visual gags that keeps the viewer wanting to see how the employees are to comply with the instructions of the manager (work despite not having big tasks to perform), which creates an engaging juxtaposition. The production is good and any shots can be replicated, but perhaps need slight modifications.\n\nVideo A (20c4c5c0) (Video A (20c4c5c0) (20c4c5c0), 20c4c5c0) concept has a simpler setup, a customer ordering food that explicitly is to be without onions, with the end payoff of the worker throwing a bag filled with onions on the table.",
+      "created_at": "2025-12-17T14:44:45.702Z"
+    },
+    {
+      "id": "yyeweeks4a",
+      "video_a_id": "36912289-7df1-4da6-a4b0-eb07ab66af25",
+      "video_b_id": "5cfd152d-0eea-4207-a703-c5b4eb1fac7c",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both clips are decently creative",
+      "created_at": "2025-12-17T14:45:47.809Z"
+    },
+    {
+      "id": "z7dsg41ladn",
+      "video_a_id": "97e01077-4e0b-44a7-adf6-3220defbe60c",
+      "video_b_id": "a612632a-8892-431d-872f-379ec32eadf0",
+      "winner_id": "97e01077-4e0b-44a7-adf6-3220defbe60c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (97e01077) (Video A (97e01077) (97e01077), 97e01077) has two beats where the viewers expectations are unrealized. Video B (a612632a) (Video B (a612632a) (a612632a), a612632a) has an ok premise, that plays on the idea of making jokes about the typical priorities one could have as a person (career or love), choosing food. The visual payoff is not the most amusing.",
+      "created_at": "2025-12-17T14:49:59.547Z"
+    },
+    {
+      "id": "hzg7jvbvmsr",
+      "video_a_id": "e8f32302-0ada-4c34-b1cc-60a4bd5b3604",
+      "video_b_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "winner_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both clips have a mellow entertainment factor, that doesn't contain a big humorous element but rather has a slow burner tempo. Video A (e8f32302) (Video A (e8f32302) (e8f32302), e8f32302) clip shows an unexpected view into a kitchen environment, where the employee enters in ordinary clothes. The strangeness of this makes it a bit strange and amusing to view.\n\nVideo B (8e649975) (Video B (8e649975) (8e649975), 8e649975) clip shows the premise of a worker allowing the customer to make their own latté art, which is unexpected and strange, but seeing the customer succeed is pleasant.",
+      "created_at": "2025-12-17T15:12:18.101Z"
+    },
+    {
+      "id": "svg3s1vnlq9",
+      "video_a_id": "ff6e26f5-335e-456c-82c6-e77447d7c4bd",
+      "video_b_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "winner_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video A (ff6e26f5) (Video A (ff6e26f5) (ff6e26f5), ff6e26f5) clip poses a question towards the viewer, showing an appetizing plate of food to engage the viewer. Video B (8e649975) (Video B (8e649975) (8e649975), 8e649975) clip takes the form of a sketch, that isn't that useful to replicate.",
+      "created_at": "2025-12-17T15:15:01.942Z"
+    },
+    {
+      "id": "0bj0qfh48967",
+      "video_a_id": "2c8f0777-3fed-4ebc-a608-733613136bc1",
+      "video_b_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "winner_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:03:49.010Z"
+    },
+    {
+      "id": "xgirq92o5qn",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "winner_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:03:54.026Z"
+    },
+    {
+      "id": "114qghv56o3k",
+      "video_a_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "video_b_id": "01b41059-d1e7-4261-acc3-fd33d9cf2c2a",
+      "winner_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:03:59.491Z"
+    },
+    {
+      "id": "y4nq6nbn3gf",
+      "video_a_id": "1e4e4af4-2393-4483-8448-4b3bb6a1f7ab",
+      "video_b_id": "af210469-23ee-4c46-9e49-77c0572e7202",
+      "winner_id": "1e4e4af4-2393-4483-8448-4b3bb6a1f7ab",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:04:05.362Z"
+    },
+    {
+      "id": "yfbzrp3rods",
+      "video_a_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "video_b_id": "c6dcce7b-211a-4d55-88fe-e8f5d4dc3551",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:04:11.926Z"
+    },
+    {
+      "id": "xqrx95uzz2",
+      "video_a_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "video_b_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "winner_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:04:21.516Z"
+    },
+    {
+      "id": "91kwky9s42o",
+      "video_a_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "video_b_id": "e305f947-3b53-4c28-8b0a-70689aa99ff0",
+      "winner_id": "e305f947-3b53-4c28-8b0a-70689aa99ff0",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:04:28.854Z"
+    },
+    {
+      "id": "1xhr3u897u4",
+      "video_a_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "video_b_id": "4d9a4ccd-175f-427d-ba49-a6b89955a8c9",
+      "winner_id": "4d9a4ccd-175f-427d-ba49-a6b89955a8c9",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:04:42.813Z"
+    },
+    {
+      "id": "rzfv42pkjz",
+      "video_a_id": "eb5b9e93-ab95-4767-ba2d-38b1235a8402",
+      "video_b_id": "c1fe47f6-0f2d-407e-8dd9-6504fd8cf861",
+      "winner_id": "c1fe47f6-0f2d-407e-8dd9-6504fd8cf861",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:04:51.919Z"
+    },
+    {
+      "id": "ly8q6qz3z4g",
+      "video_a_id": "8a0e1ce2-b375-4f6c-9d93-5db253d60b4c",
+      "video_b_id": "2c8f0777-3fed-4ebc-a608-733613136bc1",
+      "winner_id": "8a0e1ce2-b375-4f6c-9d93-5db253d60b4c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (8a0e1ce2) (Video A (8a0e1ce2) (8a0e1ce2), 8a0e1ce2) is too long, and seems improvised. Video B (2c8f0777) (Video B (2c8f0777) (2c8f0777), 2c8f0777) clip has an inside joke that is too narrow and aligned with the business in question.",
+      "created_at": "2025-12-17T16:05:33.442Z"
+    },
+    {
+      "id": "mcvt8l2h21s",
+      "video_a_id": "f9ca4365-49e2-4e73-8f1e-db3649027322",
+      "video_b_id": "6922f2e3-3d6d-4f8c-9c22-ec4638ebe8d7",
+      "winner_id": "f9ca4365-49e2-4e73-8f1e-db3649027322",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both clips are engaging, but Video A (f9ca4365) (Video A (f9ca4365) (f9ca4365), f9ca4365) has a better replicable skit structure.",
+      "created_at": "2025-12-17T16:06:14.142Z"
+    },
+    {
+      "id": "psptwx0d2j",
+      "video_a_id": "812b954d-4baf-482e-893c-31ce1460b702",
+      "video_b_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:06:27.214Z"
+    },
+    {
+      "id": "vwive0jdjwh",
+      "video_a_id": "cf783359-047d-4e6d-bf7e-8af7ef0d0f6a",
+      "video_b_id": "59fd28df-beda-45de-b490-6ca050893333",
+      "winner_id": "cf783359-047d-4e6d-bf7e-8af7ef0d0f6a",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:06:33.613Z"
+    },
+    {
+      "id": "m03i6su2dkd",
+      "video_a_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "video_b_id": "db6b874c-795e-46a0-8131-77dfaa3956f4",
+      "winner_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Both clips are funny. The concept of Video A (32d9345a) (Video A (32d9345a) (32d9345a), 32d9345a) is clever, but the execution was not great. Video B (db6b874c) (Video B (db6b874c) (db6b874c), db6b874c) clip has simple idea, but performed well.",
+      "created_at": "2025-12-17T16:07:14.363Z"
+    },
+    {
+      "id": "f7fw840bf6h",
+      "video_a_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "video_b_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "winner_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:07:20.506Z"
+    },
+    {
+      "id": "gacddlsf31b",
+      "video_a_id": "db4d53a4-5b56-4be7-bb3f-447cd9cd759a",
+      "video_b_id": "a612632a-8892-431d-872f-379ec32eadf0",
+      "winner_id": "a612632a-8892-431d-872f-379ec32eadf0",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video A (db4d53a4) (Video A (db4d53a4) (db4d53a4), db4d53a4) clip relies on a edit of a kid dancing, which is fun, but not the most useful for a business aiming to replicate and maintain originality",
+      "created_at": "2025-12-17T16:07:58.784Z"
+    },
+    {
+      "id": "yim5ckk2s9",
+      "video_a_id": "8e649975-f660-442c-8581-eabaa335a26d",
+      "video_b_id": "ccdd28c8-f80a-4962-8951-7395ccd85b28",
+      "winner_id": "ccdd28c8-f80a-4962-8951-7395ccd85b28",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (ccdd28c8) (Video B (ccdd28c8) (ccdd28c8), ccdd28c8) is more of a replicable sketch, than Video A (8e649975) (Video A (8e649975) (8e649975), 8e649975).",
+      "created_at": "2025-12-17T16:08:28.512Z"
+    },
+    {
+      "id": "0yjr01cq3y5",
+      "video_a_id": "db6b874c-795e-46a0-8131-77dfaa3956f4",
+      "video_b_id": "1e4e4af4-2393-4483-8448-4b3bb6a1f7ab",
+      "winner_id": "db6b874c-795e-46a0-8131-77dfaa3956f4",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:08:34.645Z"
+    },
+    {
+      "id": "jwc9ztpjjdg",
+      "video_a_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "video_b_id": "4d9d182f-2b03-4eed-8e2a-6231638d283b",
+      "winner_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:08:41.872Z"
+    },
+    {
+      "id": "x1dt153owql",
+      "video_a_id": "fa76f3de-8650-435f-92d6-fa7a37d8600d",
+      "video_b_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "winner_id": "fa76f3de-8650-435f-92d6-fa7a37d8600d",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:08:47.411Z"
+    },
+    {
+      "id": "pfxl77y2gw",
+      "video_a_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "video_b_id": "60bd19a1-90fa-4f1d-8800-576d5633eb5b",
+      "winner_id": "60bd19a1-90fa-4f1d-8800-576d5633eb5b",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:08:55.098Z"
+    },
+    {
+      "id": "tg62qfsz4k9",
+      "video_a_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "video_b_id": "cd2fb456-9a5c-424d-9c4c-5d87a97fd814",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:09:09.425Z"
+    },
+    {
+      "id": "g4f4188x2cl",
+      "video_a_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "video_b_id": "7abe3bb9-aa31-4154-923a-4c54a42f12e6",
+      "winner_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:09:17.176Z"
+    },
+    {
+      "id": "5j9iz2r75y9",
+      "video_a_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "video_b_id": "98737573-3e1c-483c-9477-0e49398b72af",
+      "winner_id": "98737573-3e1c-483c-9477-0e49398b72af",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:09:22.202Z"
+    },
+    {
+      "id": "brqt7d8c2r9",
+      "video_a_id": "4d9a4ccd-175f-427d-ba49-a6b89955a8c9",
+      "video_b_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "winner_id": "4d9a4ccd-175f-427d-ba49-a6b89955a8c9",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:09:31.008Z"
+    },
+    {
+      "id": "xwimrpq9m6i",
+      "video_a_id": "db6b874c-795e-46a0-8131-77dfaa3956f4",
+      "video_b_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "winner_id": "db6b874c-795e-46a0-8131-77dfaa3956f4",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:09:39.071Z"
+    },
+    {
+      "id": "bb1p6k117iu",
+      "video_a_id": "80f27383-117e-4702-9044-179e5114a808",
+      "video_b_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:09:48.360Z"
+    },
+    {
+      "id": "fijnejrjrrv",
+      "video_a_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "video_b_id": "8a0e1ce2-b375-4f6c-9d93-5db253d60b4c",
+      "winner_id": "8a0e1ce2-b375-4f6c-9d93-5db253d60b4c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:09:59.645Z"
+    },
+    {
+      "id": "9wh9648hskc",
+      "video_a_id": "427690e6-f70b-49af-9211-92f576b7dc93",
+      "video_b_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "winner_id": "427690e6-f70b-49af-9211-92f576b7dc93",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:10:20.301Z"
+    },
+    {
+      "id": "6z9w45ob9wy",
+      "video_a_id": "87fea727-e058-462a-8264-3e0e2605909d",
+      "video_b_id": "f977f002-fe3d-4efa-ad42-1e4161960f3c",
+      "winner_id": "f977f002-fe3d-4efa-ad42-1e4161960f3c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:10:28.797Z"
+    },
+    {
+      "id": "ooylonoxpe",
+      "video_a_id": "d5404185-d6c5-4cb2-a660-87e1efe4de49",
+      "video_b_id": "0c3565fa-9cc4-45f6-a868-4a2ce416b3ab",
+      "winner_id": "d5404185-d6c5-4cb2-a660-87e1efe4de49",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:10:47.971Z"
+    },
+    {
+      "id": "ot04fhwdp",
+      "video_a_id": "441efe36-4f11-4bae-b704-08c7e1c8bbf4",
+      "video_b_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "winner_id": "441efe36-4f11-4bae-b704-08c7e1c8bbf4",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "The joke is a bit more clever",
+      "created_at": "2025-12-17T16:11:07.786Z"
+    },
+    {
+      "id": "6ntjzoibtou",
+      "video_a_id": "17adcf7a-012b-4add-8191-7f64d8385b80",
+      "video_b_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "winner_id": "17adcf7a-012b-4add-8191-7f64d8385b80",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "The premise in Video A (17adcf7a) (Video A (17adcf7a) (17adcf7a), 17adcf7a) is a bit better than Video B (f530b678) (Video B (f530b678) (f530b678), f530b678).",
+      "created_at": "2025-12-17T16:11:26.476Z"
+    },
+    {
+      "id": "b71iattz25h",
+      "video_a_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "video_b_id": "af5f10fd-07bc-475f-a983-07d41c8b6d8e",
+      "winner_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:11:33.448Z"
+    },
+    {
+      "id": "vlk7wmvjaoq",
+      "video_a_id": "427690e6-f70b-49af-9211-92f576b7dc93",
+      "video_b_id": "e032dcf1-a6c4-4d4e-8723-0af055778253",
+      "winner_id": "427690e6-f70b-49af-9211-92f576b7dc93",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:11:40.703Z"
+    },
+    {
+      "id": "tsjzhclqnik",
+      "video_a_id": "612db729-9478-4638-8642-b23d59261d75",
+      "video_b_id": "e3afbbf9-8b98-4739-b900-5df406da1c1f",
+      "winner_id": "612db729-9478-4638-8642-b23d59261d75",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "Video A (612db729) (Video A (612db729) (612db729), 612db729) is mean in a fun way, and with clever beats. Video B (e3afbbf9) (Video B (e3afbbf9) (e3afbbf9), e3afbbf9) is not as clever, but has some physical payoff with a big movement (throwing something on colleague).",
+      "created_at": "2025-12-17T16:12:40.951Z"
+    },
+    {
+      "id": "bcouveq9j28",
+      "video_a_id": "6922f2e3-3d6d-4f8c-9c22-ec4638ebe8d7",
+      "video_b_id": "0c3565fa-9cc4-45f6-a868-4a2ce416b3ab",
+      "winner_id": "6922f2e3-3d6d-4f8c-9c22-ec4638ebe8d7",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:12:47.588Z"
+    },
+    {
+      "id": "60m15rzq0ov",
+      "video_a_id": "4d9d182f-2b03-4eed-8e2a-6231638d283b",
+      "video_b_id": "1928d709-9563-4096-8d6a-d99f9f540651",
+      "winner_id": "4d9d182f-2b03-4eed-8e2a-6231638d283b",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video B (1928d709) (Video B (1928d709) (1928d709), 1928d709) is more fun, but it has a riskier theme.",
+      "created_at": "2025-12-17T16:13:18.384Z"
+    },
+    {
+      "id": "8i9r50zsmzi",
+      "video_a_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "video_b_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "winner_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:13:24.162Z"
+    },
+    {
+      "id": "xl8n6adfzb",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "57705dac-347e-41a6-92c3-127cb3fb956e",
+      "winner_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:13:31.390Z"
+    },
+    {
+      "id": "zg4imozl408",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "77ea6fbb-a868-485c-b19d-e324cd5d74a1",
+      "winner_id": "77ea6fbb-a868-485c-b19d-e324cd5d74a1",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:14:32.217Z"
+    },
+    {
+      "id": "acpm8p2gpxf",
+      "video_a_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "video_b_id": "2b709fab-9196-4cee-9cc5-80cdd51425f0",
+      "winner_id": "2b709fab-9196-4cee-9cc5-80cdd51425f0",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:14:40.572Z"
+    },
+    {
+      "id": "s0u951uug9",
+      "video_a_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "video_b_id": "e032dcf1-a6c4-4d4e-8723-0af055778253",
+      "winner_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:14:45.307Z"
+    },
+    {
+      "id": "wlu7bdau3wo",
+      "video_a_id": "af5f10fd-07bc-475f-a983-07d41c8b6d8e",
+      "video_b_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "winner_id": "af5f10fd-07bc-475f-a983-07d41c8b6d8e",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:14:51.084Z"
+    },
+    {
+      "id": "n1iufuzyuxd",
+      "video_a_id": "2d05eec7-7eaf-453f-88ed-942688e2c5cb",
+      "video_b_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "winner_id": "2d05eec7-7eaf-453f-88ed-942688e2c5cb",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:14:58.624Z"
+    },
+    {
+      "id": "hom5lqrwdm",
+      "video_a_id": "f1bf750c-669f-4b05-9929-005c74bc55e1",
+      "video_b_id": "01b41059-d1e7-4261-acc3-fd33d9cf2c2a",
+      "winner_id": "f1bf750c-669f-4b05-9929-005c74bc55e1",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:15:05.439Z"
+    },
+    {
+      "id": "lbuwnp1jh6l",
+      "video_a_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "video_b_id": "a860739f-9e5b-475c-bca3-b54f98f04188",
+      "winner_id": null,
+      "dimension": "hook",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:15:16.811Z"
+    },
+    {
+      "id": "64g9e40d9zc",
+      "video_a_id": "cd2fb456-9a5c-424d-9c4c-5d87a97fd814",
+      "video_b_id": "e305f947-3b53-4c28-8b0a-70689aa99ff0",
+      "winner_id": "cd2fb456-9a5c-424d-9c4c-5d87a97fd814",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:15:26.387Z"
+    },
+    {
+      "id": "8ke4opz3rro",
+      "video_a_id": "20c4c5c0-d157-49a2-92f0-8b570bf123fe",
+      "video_b_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "winner_id": "20c4c5c0-d157-49a2-92f0-8b570bf123fe",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:15:38.014Z"
+    },
+    {
+      "id": "800ug683c22",
+      "video_a_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "video_b_id": "fa76f3de-8650-435f-92d6-fa7a37d8600d",
+      "winner_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "dimension": "hook",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:15:46.396Z"
+    },
+    {
+      "id": "p489r2ymcwl",
+      "video_a_id": "575ad7b0-8f93-4ae8-9a0a-812493bc12b1",
+      "video_b_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "winner_id": "575ad7b0-8f93-4ae8-9a0a-812493bc12b1",
+      "dimension": "production",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:15:58.926Z"
+    },
+    {
+      "id": "ebnynwjvpta",
+      "video_a_id": "e3afbbf9-8b98-4739-b900-5df406da1c1f",
+      "video_b_id": "427690e6-f70b-49af-9211-92f576b7dc93",
+      "winner_id": "427690e6-f70b-49af-9211-92f576b7dc93",
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "Video B (427690e6) (Video B (427690e6) (427690e6), 427690e6) has better editing, but not similar video and recording quality.",
+      "created_at": "2025-12-17T16:16:29.097Z"
+    },
+    {
+      "id": "0p3m1znl333j",
+      "video_a_id": "af210469-23ee-4c46-9e49-77c0572e7202",
+      "video_b_id": "ccdd28c8-f80a-4962-8951-7395ccd85b28",
+      "winner_id": "ccdd28c8-f80a-4962-8951-7395ccd85b28",
+      "dimension": "production",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:16:36.665Z"
+    },
+    {
+      "id": "fezunvak67k",
+      "video_a_id": "f20e327b-4508-48ec-a12e-07536c3df422",
+      "video_b_id": "408c91fc-35fd-44e7-b6b1-a290d5dc7cba",
+      "winner_id": null,
+      "dimension": "production",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:16:45.848Z"
+    },
+    {
+      "id": "8tlhpj5xh1",
+      "video_a_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "video_b_id": "ae89564b-f026-4ffe-b54d-82992f84c6d6",
+      "winner_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "dimension": "production",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:16:52.859Z"
+    },
+    {
+      "id": "ipfc4sn6odm",
+      "video_a_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "video_b_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "winner_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:17:00.333Z"
+    },
+    {
+      "id": "ai4ob7o8tbm",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "winner_id": null,
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:17:07.139Z"
+    },
+    {
+      "id": "oka6ggdcoyd",
+      "video_a_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "video_b_id": "87fea727-e058-462a-8264-3e0e2605909d",
+      "winner_id": "87fea727-e058-462a-8264-3e0e2605909d",
+      "dimension": "production",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:17:11.507Z"
+    },
+    {
+      "id": "rvd4vg82ca8",
+      "video_a_id": "db4d53a4-5b56-4be7-bb3f-447cd9cd759a",
+      "video_b_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "winner_id": "db4d53a4-5b56-4be7-bb3f-447cd9cd759a",
+      "dimension": "production",
+      "confidence": "certain",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:17:17.044Z"
+    },
+    {
+      "id": "wpaozl82pmj",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "695e6525-c41d-4152-96b4-931a3d75da29",
+      "winner_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "dimension": "production",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:17:21.923Z"
+    },
+    {
+      "id": "2fzkomgl054",
+      "video_a_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "video_b_id": "e305f947-3b53-4c28-8b0a-70689aa99ff0",
+      "winner_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "dimension": "rewatchable",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:17:36.343Z"
+    },
+    {
+      "id": "rsl4q745cg",
+      "video_a_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "video_b_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "winner_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "dimension": "rewatchable",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:17:47.422Z"
+    },
+    {
+      "id": "grbcm01cl3q",
+      "video_a_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "video_b_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "winner_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:17:54.105Z"
+    },
+    {
+      "id": "13hiuza7vvd",
+      "video_a_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "video_b_id": "f9ca4365-49e2-4e73-8f1e-db3649027322",
+      "winner_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:18:10.379Z"
+    },
+    {
+      "id": "lzy1le7ceql",
+      "video_a_id": "8e16cfa4-6e41-4ae1-ab81-12aa03d53f85",
+      "video_b_id": "d5404185-d6c5-4cb2-a660-87e1efe4de49",
+      "winner_id": "8e16cfa4-6e41-4ae1-ab81-12aa03d53f85",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:18:18.707Z"
+    },
+    {
+      "id": "4rzq5gosbah",
+      "video_a_id": "ae4475cc-054a-4a39-9662-2ff4f668761f",
+      "video_b_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "winner_id": "ae4475cc-054a-4a39-9662-2ff4f668761f",
+      "dimension": "rewatchable",
+      "confidence": "certain",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:18:25.056Z"
+    },
+    {
+      "id": "8fygsyjt6eg",
+      "video_a_id": "612db729-9478-4638-8642-b23d59261d75",
+      "video_b_id": "e8f32302-0ada-4c34-b1cc-60a4bd5b3604",
+      "winner_id": "612db729-9478-4638-8642-b23d59261d75",
+      "dimension": "rewatchable",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:18:34.686Z"
+    },
+    {
+      "id": "063yr509ncst",
+      "video_a_id": "17adcf7a-012b-4add-8191-7f64d8385b80",
+      "video_b_id": "252ccda3-6b4c-4a83-9ac1-d30a587a2cd4",
+      "winner_id": null,
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:18:50.566Z"
+    },
+    {
+      "id": "29gk3vh48iq",
+      "video_a_id": "f20e327b-4508-48ec-a12e-07536c3df422",
+      "video_b_id": "c6dcce7b-211a-4d55-88fe-e8f5d4dc3551",
+      "winner_id": "f20e327b-4508-48ec-a12e-07536c3df422",
+      "dimension": "rewatchable",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:19:09.211Z"
+    },
+    {
+      "id": "66y3xpn0mjp",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "6984e784-a979-4324-9500-86f0b4d3e0b8",
+      "winner_id": "6984e784-a979-4324-9500-86f0b4d3e0b8",
+      "dimension": "rewatchable",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:19:18.528Z"
+    },
+    {
+      "id": "gmlip8jkrov",
+      "video_a_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "video_b_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "winner_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:19:34.043Z"
+    },
+    {
+      "id": "dxhi6aoumw",
+      "video_a_id": "ad8b25b2-3c22-4cd9-a667-17624c3e56bc",
+      "video_b_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "winner_id": "ad8b25b2-3c22-4cd9-a667-17624c3e56bc",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Both clips are good, but Video A (ad8b25b2) (Video A (ad8b25b2) (ad8b25b2), ad8b25b2) has a standalone premise that may be easier to replicate, despite the humor not being as clever",
+      "created_at": "2025-12-17T16:20:06.548Z"
+    },
+    {
+      "id": "85ly7nn2sml",
+      "video_a_id": "0c3565fa-9cc4-45f6-a868-4a2ce416b3ab",
+      "video_b_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "winner_id": "f530b678-6055-4d89-8775-39a3c6190d20",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:20:17.293Z"
+    },
+    {
+      "id": "1ft3sjsmcqe",
+      "video_a_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "video_b_id": "f977f002-fe3d-4efa-ad42-1e4161960f3c",
+      "winner_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:23:44.839Z"
+    },
+    {
+      "id": "2dji9laimfd",
+      "video_a_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "video_b_id": "e1ad2e56-e110-4d9d-9f0e-b9df18ff8b75",
+      "winner_id": "e1ad2e56-e110-4d9d-9f0e-b9df18ff8b75",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "Video B (e1ad2e56) (Video B (e1ad2e56) (e1ad2e56), e1ad2e56) is not set in a service environment, but is clever and accessible to many different ages. It can also be replicated",
+      "created_at": "2025-12-17T16:26:47.633Z"
+    },
+    {
+      "id": "cp4wnqt0ogj",
+      "video_a_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "video_b_id": "2d05eec7-7eaf-453f-88ed-942688e2c5cb",
+      "winner_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:26:58.417Z"
+    },
+    {
+      "id": "sbwzxzkjts",
+      "video_a_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "video_b_id": "1e4e4af4-2393-4483-8448-4b3bb6a1f7ab",
+      "winner_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:27:07.770Z"
+    },
+    {
+      "id": "uogr32q7lx",
+      "video_a_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "video_b_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "winner_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:27:18.979Z"
+    },
+    {
+      "id": "bzbycfk83sd",
+      "video_a_id": "f1bf750c-669f-4b05-9929-005c74bc55e1",
+      "video_b_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "winner_id": "f1bf750c-669f-4b05-9929-005c74bc55e1",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:27:30.637Z"
+    },
+    {
+      "id": "bvg1dpdpecj",
+      "video_a_id": "5ebac5d3-aa7e-49f0-ac19-f64926830ba5",
+      "video_b_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:27:41.834Z"
+    },
+    {
+      "id": "ovzq6t0cmwc",
+      "video_a_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "video_b_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "winner_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:28:35.520Z"
+    },
+    {
+      "id": "717c85iy36v",
+      "video_a_id": "db6b874c-795e-46a0-8131-77dfaa3956f4",
+      "video_b_id": "407ea6ae-24d9-420a-bcae-85f78c7befac",
+      "winner_id": "407ea6ae-24d9-420a-bcae-85f78c7befac",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:28:44.019Z"
+    },
+    {
+      "id": "flqswhex7ld",
+      "video_a_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "video_b_id": "575ad7b0-8f93-4ae8-9a0a-812493bc12b1",
+      "winner_id": "575ad7b0-8f93-4ae8-9a0a-812493bc12b1",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:28:56.629Z"
+    },
+    {
+      "id": "8tbs4fjfc8m",
+      "video_a_id": "a860739f-9e5b-475c-bca3-b54f98f04188",
+      "video_b_id": "60bd19a1-90fa-4f1d-8800-576d5633eb5b",
+      "winner_id": "60bd19a1-90fa-4f1d-8800-576d5633eb5b",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:29:02.722Z"
+    },
+    {
+      "id": "ndwm68w30ef",
+      "video_a_id": "3642d765-61a8-4bb9-a93f-ac370a377a59",
+      "video_b_id": "2c8f0777-3fed-4ebc-a608-733613136bc1",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:35:49.200Z"
+    },
+    {
+      "id": "zyp1zungisi",
+      "video_a_id": "98737573-3e1c-483c-9477-0e49398b72af",
+      "video_b_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "winner_id": "98737573-3e1c-483c-9477-0e49398b72af",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:35:55.648Z"
+    },
+    {
+      "id": "agfdg6hva2a",
+      "video_a_id": "fc5a19ea-b360-4d1b-9671-1ffe0e8546a0",
+      "video_b_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "winner_id": "fc5a19ea-b360-4d1b-9671-1ffe0e8546a0",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:36:01.083Z"
+    },
+    {
+      "id": "0bwd4x5b1nan",
+      "video_a_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "video_b_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "winner_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:36:06.725Z"
+    },
+    {
+      "id": "k8g259vds1",
+      "video_a_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "video_b_id": "eb5b9e93-ab95-4767-ba2d-38b1235a8402",
+      "winner_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:36:13.987Z"
+    },
+    {
+      "id": "nje1acdhw0m",
+      "video_a_id": "f20e327b-4508-48ec-a12e-07536c3df422",
+      "video_b_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "winner_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:36:25.849Z"
+    },
+    {
+      "id": "g5mi8ya1pr9",
+      "video_a_id": "69e4bbea-5f77-4785-bf06-40119eab25b0",
+      "video_b_id": "97e01077-4e0b-44a7-adf6-3220defbe60c",
+      "winner_id": "97e01077-4e0b-44a7-adf6-3220defbe60c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:36:36.990Z"
+    },
+    {
+      "id": "so4s4dk09n",
+      "video_a_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "video_b_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "winner_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:36:42.132Z"
+    },
+    {
+      "id": "x6ha2ivkuf",
+      "video_a_id": "1928d709-9563-4096-8d6a-d99f9f540651",
+      "video_b_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "winner_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:36:46.869Z"
+    },
+    {
+      "id": "vxnt8tpve5c",
+      "video_a_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "video_b_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "winner_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:36:53.067Z"
+    },
+    {
+      "id": "j0zpzpyz8if",
+      "video_a_id": "20c4c5c0-d157-49a2-92f0-8b570bf123fe",
+      "video_b_id": "2b709fab-9196-4cee-9cc5-80cdd51425f0",
+      "winner_id": "2b709fab-9196-4cee-9cc5-80cdd51425f0",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:37:00.925Z"
+    },
+    {
+      "id": "egxdbq6tbxj",
+      "video_a_id": "b91e414c-deb4-4f75-ae6c-f9ca2d1a21a7",
+      "video_b_id": "a612632a-8892-431d-872f-379ec32eadf0",
+      "winner_id": "b91e414c-deb4-4f75-ae6c-f9ca2d1a21a7",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:37:16.857Z"
+    },
+    {
+      "id": "n15huiszzj",
+      "video_a_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "video_b_id": "c1fe47f6-0f2d-407e-8dd9-6504fd8cf861",
+      "winner_id": "c1fe47f6-0f2d-407e-8dd9-6504fd8cf861",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:37:21.760Z"
+    },
+    {
+      "id": "z2h6rz8wkl",
+      "video_a_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "video_b_id": "695e6525-c41d-4152-96b4-931a3d75da29",
+      "winner_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:37:45.587Z"
+    },
+    {
+      "id": "1e3ptq9ypi9",
+      "video_a_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "video_b_id": "f20e327b-4508-48ec-a12e-07536c3df422",
+      "winner_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:37:54.849Z"
+    },
+    {
+      "id": "jxjok0wp4a",
+      "video_a_id": "610f7e10-34d7-445a-b1d8-7ff58bbda990",
+      "video_b_id": "361b244a-734b-48bf-98ce-c25bd0d0df98",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "Video B (361b244a) (Video B (361b244a) (361b244a), 361b244a) clip is not a sketch or a humorous video, but rather a short video to show off the food.",
+      "created_at": "2025-12-17T16:38:41.795Z"
+    },
+    {
+      "id": "ncp1amka94h",
+      "video_a_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "video_b_id": "17adcf7a-012b-4add-8191-7f64d8385b80",
+      "winner_id": "17adcf7a-012b-4add-8191-7f64d8385b80",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:38:48.922Z"
+    },
+    {
+      "id": "1i3rwuhp4ah",
+      "video_a_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "video_b_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "winner_id": "44bfe974-26f0-4956-8c8a-f7874357af1c",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:38:59.931Z"
+    },
+    {
+      "id": "boc9tnxymdg",
+      "video_a_id": "5ebac5d3-aa7e-49f0-ac19-f64926830ba5",
+      "video_b_id": "ae89564b-f026-4ffe-b54d-82992f84c6d6",
+      "winner_id": "ae89564b-f026-4ffe-b54d-82992f84c6d6",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:39:46.240Z"
+    },
+    {
+      "id": "42hylg5pr6i",
+      "video_a_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "video_b_id": "60bd19a1-90fa-4f1d-8800-576d5633eb5b",
+      "winner_id": "60bd19a1-90fa-4f1d-8800-576d5633eb5b",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:39:52.698Z"
+    },
+    {
+      "id": "5xc30znupth",
+      "video_a_id": "0c3565fa-9cc4-45f6-a868-4a2ce416b3ab",
+      "video_b_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "winner_id": "24305b54-0b71-4a66-a71e-d5e91eaeb54e",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:40:47.226Z"
+    },
+    {
+      "id": "u5catm6q8uj",
+      "video_a_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "video_b_id": "9d153139-740c-4ca3-8bcb-9c0a8a3e55dc",
+      "winner_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:41:00.040Z"
+    },
+    {
+      "id": "qs8f3lalwz9",
+      "video_a_id": "695e6525-c41d-4152-96b4-931a3d75da29",
+      "video_b_id": "db4d53a4-5b56-4be7-bb3f-447cd9cd759a",
+      "winner_id": "695e6525-c41d-4152-96b4-931a3d75da29",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:41:05.864Z"
+    },
+    {
+      "id": "jb3mtozxb",
+      "video_a_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "video_b_id": "7208c328-cade-41c1-85e7-7c993fb62724",
+      "winner_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:41:15.028Z"
+    },
+    {
+      "id": "s1h7rqwnewn",
+      "video_a_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "video_b_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:41:39.000Z"
+    },
+    {
+      "id": "io67ai93d",
+      "video_a_id": "57705dac-347e-41a6-92c3-127cb3fb956e",
+      "video_b_id": "7b585825-ad83-4893-9e89-3cf360d3a129",
+      "winner_id": "7b585825-ad83-4893-9e89-3cf360d3a129",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:41:44.271Z"
+    },
+    {
+      "id": "mzwuyiivzr",
+      "video_a_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "video_b_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "winner_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:41:49.086Z"
+    },
+    {
+      "id": "14rt19hojrk",
+      "video_a_id": "1928d709-9563-4096-8d6a-d99f9f540651",
+      "video_b_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "winner_id": "1928d709-9563-4096-8d6a-d99f9f540651",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:41:55.972Z"
+    },
+    {
+      "id": "v9gfeixtch",
+      "video_a_id": "1e4e4af4-2393-4483-8448-4b3bb6a1f7ab",
+      "video_b_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "winner_id": "1e4e4af4-2393-4483-8448-4b3bb6a1f7ab",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:42:06.860Z"
+    },
+    {
+      "id": "il9ykcedq5f",
+      "video_a_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "video_b_id": "e3afbbf9-8b98-4739-b900-5df406da1c1f",
+      "winner_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:42:12.921Z"
+    },
+    {
+      "id": "fawy4s4z51e",
+      "video_a_id": "a20973fd-80b4-4818-ad9f-1f47ce8fdeff",
+      "video_b_id": "307ac0c6-d7f4-44ba-9c34-74bc13475faa",
+      "winner_id": "a20973fd-80b4-4818-ad9f-1f47ce8fdeff",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:42:48.745Z"
+    },
+    {
+      "id": "9khz9p06fon",
+      "video_a_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "video_b_id": "db6b874c-795e-46a0-8131-77dfaa3956f4",
+      "winner_id": "db6b874c-795e-46a0-8131-77dfaa3956f4",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:42:55.097Z"
+    },
+    {
+      "id": "atzcq6oyu78",
+      "video_a_id": "80425a1d-0774-48f3-bfa1-81b7f17dbab2",
+      "video_b_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "winner_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:43:04.737Z"
+    },
+    {
+      "id": "hrz3yoht2l7",
+      "video_a_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "video_b_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "winner_id": "a781b192-4c6a-4130-ae1e-915138972529",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:43:09.612Z"
+    },
+    {
+      "id": "ypd1drukjo",
+      "video_a_id": "1928d709-9563-4096-8d6a-d99f9f540651",
+      "video_b_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "winner_id": "1928d709-9563-4096-8d6a-d99f9f540651",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:43:22.707Z"
+    },
+    {
+      "id": "2m9p47a2na2",
+      "video_a_id": "f20e327b-4508-48ec-a12e-07536c3df422",
+      "video_b_id": "da6815da-5a1f-48bc-a3ad-69f0757377cc",
+      "winner_id": "f20e327b-4508-48ec-a12e-07536c3df422",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:43:38.805Z"
+    },
+    {
+      "id": "qq0evbksh6m",
+      "video_a_id": "ff6e26f5-335e-456c-82c6-e77447d7c4bd",
+      "video_b_id": "612db729-9478-4638-8642-b23d59261d75",
+      "winner_id": "612db729-9478-4638-8642-b23d59261d75",
+      "dimension": "overall",
+      "confidence": "certain",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:43:44.279Z"
+    },
+    {
+      "id": "ajj0jp4sham",
+      "video_a_id": "b91e414c-deb4-4f75-ae6c-f9ca2d1a21a7",
+      "video_b_id": "f3ed3256-6f54-4d16-9cab-480d69cd5ebe",
+      "winner_id": "b91e414c-deb4-4f75-ae6c-f9ca2d1a21a7",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:43:51.194Z"
+    },
+    {
+      "id": "5z1m3zv8yc4",
+      "video_a_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "video_b_id": "2325621d-0c39-43ee-9e4e-2e317337c4d1",
+      "winner_id": "2325621d-0c39-43ee-9e4e-2e317337c4d1",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:43:56.398Z"
+    },
+    {
+      "id": "c77q1z13z3e",
+      "video_a_id": "17adcf7a-012b-4add-8191-7f64d8385b80",
+      "video_b_id": "252ccda3-6b4c-4a83-9ac1-d30a587a2cd4",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:44:05.822Z"
+    },
+    {
+      "id": "lf3tefmkdr",
+      "video_a_id": "f1bf750c-669f-4b05-9929-005c74bc55e1",
+      "video_b_id": "7c3d0150-d2ca-40dc-8597-c10cdda9ec72",
+      "winner_id": "f1bf750c-669f-4b05-9929-005c74bc55e1",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:44:14.645Z"
+    },
+    {
+      "id": "r4ohsw0e8o8",
+      "video_a_id": "e510f1b8-9c1b-412e-9965-29b82feb1b29",
+      "video_b_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "winner_id": "e510f1b8-9c1b-412e-9965-29b82feb1b29",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:44:30.878Z"
+    },
+    {
+      "id": "7c4vkuko8ys",
+      "video_a_id": "2c8f0777-3fed-4ebc-a608-733613136bc1",
+      "video_b_id": "407ea6ae-24d9-420a-bcae-85f78c7befac",
+      "winner_id": "407ea6ae-24d9-420a-bcae-85f78c7befac",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:44:37.244Z"
+    },
+    {
+      "id": "4c9pemzchxj",
+      "video_a_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "video_b_id": "fe313a6a-844d-4136-be7b-54387eca3b8f",
+      "winner_id": "7012ae51-16a9-46c0-9392-4ae41a998c7b",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:44:46.020Z"
+    },
+    {
+      "id": "cplze1zr3ta",
+      "video_a_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "video_b_id": "f9ca4365-49e2-4e73-8f1e-db3649027322",
+      "winner_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:45:01.669Z"
+    },
+    {
+      "id": "kwnhc351n6",
+      "video_a_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "video_b_id": "a20973fd-80b4-4818-ad9f-1f47ce8fdeff",
+      "winner_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:45:12.922Z"
+    },
+    {
+      "id": "cdb8g0qxwx5",
+      "video_a_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "video_b_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "winner_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:45:19.022Z"
+    },
+    {
+      "id": "12tpwmiljuzd",
+      "video_a_id": "1e4e4af4-2393-4483-8448-4b3bb6a1f7ab",
+      "video_b_id": "17adcf7a-012b-4add-8191-7f64d8385b80",
+      "winner_id": "1e4e4af4-2393-4483-8448-4b3bb6a1f7ab",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:45:33.753Z"
+    },
+    {
+      "id": "gfx5uu8tk39",
+      "video_a_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "video_b_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "winner_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:45:38.891Z"
+    },
+    {
+      "id": "tyh9dgo1w7o",
+      "video_a_id": "c1fe47f6-0f2d-407e-8dd9-6504fd8cf861",
+      "video_b_id": "e8f32302-0ada-4c34-b1cc-60a4bd5b3604",
+      "winner_id": "c1fe47f6-0f2d-407e-8dd9-6504fd8cf861",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:45:49.772Z"
+    },
+    {
+      "id": "i7dlykvafne",
+      "video_a_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "video_b_id": "ae4475cc-054a-4a39-9662-2ff4f668761f",
+      "winner_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:45:59.220Z"
+    },
+    {
+      "id": "ios5o3rxli8",
+      "video_a_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "video_b_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "winner_id": "82f839c7-4d0b-4943-8365-7f6bc18b3d47",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:46:07.943Z"
+    },
+    {
+      "id": "6kz0mg7as6v",
+      "video_a_id": "8e16cfa4-6e41-4ae1-ab81-12aa03d53f85",
+      "video_b_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "winner_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:46:13.442Z"
+    },
+    {
+      "id": "7di27qrwf7u",
+      "video_a_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "video_b_id": "dfda328b-985d-4eb8-ab6f-85add1f72d91",
+      "winner_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:46:22.372Z"
+    },
+    {
+      "id": "d3f6jo81kip",
+      "video_a_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "video_b_id": "464f01f2-659c-4b4a-9c00-e76b4cb6569f",
+      "winner_id": "580e13cf-e861-4c47-a98c-ea2c65438637",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:46:32.210Z"
+    },
+    {
+      "id": "7fttd59rm7x",
+      "video_a_id": "695e6525-c41d-4152-96b4-931a3d75da29",
+      "video_b_id": "43dcb57c-9dda-4db9-8055-f7e074978bf3",
+      "winner_id": "695e6525-c41d-4152-96b4-931a3d75da29",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:47:11.710Z"
+    },
+    {
+      "id": "320iwpg8xwh",
+      "video_a_id": "7ec8b07c-e712-4acb-9223-319160f6fb8b",
+      "video_b_id": "6984e784-a979-4324-9500-86f0b4d3e0b8",
+      "winner_id": "7ec8b07c-e712-4acb-9223-319160f6fb8b",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:47:25.289Z"
+    },
+    {
+      "id": "rqidj27g6q",
+      "video_a_id": "c6dcce7b-211a-4d55-88fe-e8f5d4dc3551",
+      "video_b_id": "87fea727-e058-462a-8264-3e0e2605909d",
+      "winner_id": "c6dcce7b-211a-4d55-88fe-e8f5d4dc3551",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:47:31.949Z"
+    },
+    {
+      "id": "ma2o2qqey1s",
+      "video_a_id": "fa76f3de-8650-435f-92d6-fa7a37d8600d",
+      "video_b_id": "477e9367-23ad-41c3-be1c-036a8ce46578",
+      "winner_id": "fa76f3de-8650-435f-92d6-fa7a37d8600d",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:47:45.670Z"
+    },
+    {
+      "id": "etjoc7ug41s",
+      "video_a_id": "408c91fc-35fd-44e7-b6b1-a290d5dc7cba",
+      "video_b_id": "a20973fd-80b4-4818-ad9f-1f47ce8fdeff",
+      "winner_id": "a20973fd-80b4-4818-ad9f-1f47ce8fdeff",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:47:51.938Z"
+    },
+    {
+      "id": "gim02vkh9ua",
+      "video_a_id": "407ea6ae-24d9-420a-bcae-85f78c7befac",
+      "video_b_id": "fa76f3de-8650-435f-92d6-fa7a37d8600d",
+      "winner_id": "407ea6ae-24d9-420a-bcae-85f78c7befac",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:48:01.865Z"
+    },
+    {
+      "id": "ds3fvvdlu9j",
+      "video_a_id": "ca3f6e66-50fa-448d-9064-12ebf0c4c22e",
+      "video_b_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:48:28.632Z"
+    },
+    {
+      "id": "731tg0o5dz",
+      "video_a_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "video_b_id": "4422d8e6-3580-4e4c-a3f7-345b13d667fa",
+      "winner_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:48:39.888Z"
+    },
+    {
+      "id": "ff76edhqwvl",
+      "video_a_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "video_b_id": "d5404185-d6c5-4cb2-a660-87e1efe4de49",
+      "winner_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:48:48.462Z"
+    },
+    {
+      "id": "fipuqdvzi6k",
+      "video_a_id": "20c4c5c0-d157-49a2-92f0-8b570bf123fe",
+      "video_b_id": "08ec836f-d7a9-4674-a482-20d7e6145f76",
+      "winner_id": "20c4c5c0-d157-49a2-92f0-8b570bf123fe",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:48:57.222Z"
+    },
+    {
+      "id": "soy0g3lvvi",
+      "video_a_id": "4d9d182f-2b03-4eed-8e2a-6231638d283b",
+      "video_b_id": "2d63b841-145c-45e8-94c9-c6a7286ab862",
+      "winner_id": "4d9d182f-2b03-4eed-8e2a-6231638d283b",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:49:25.135Z"
+    },
+    {
+      "id": "4blred6nmyt",
+      "video_a_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "video_b_id": "cf783359-047d-4e6d-bf7e-8af7ef0d0f6a",
+      "winner_id": "6bdd73a2-69db-479d-a46a-cf23f896fb55",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:49:33.717Z"
+    },
+    {
+      "id": "w77xpheuz8",
+      "video_a_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "video_b_id": "42887f4b-7fb7-41be-bb7f-b1acba21ca5d",
+      "winner_id": "d48c0372-5a6f-4af1-827f-fcf4b02c0579",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:49:44.869Z"
+    },
+    {
+      "id": "o62nob9wa3d",
+      "video_a_id": "2c8f0777-3fed-4ebc-a608-733613136bc1",
+      "video_b_id": "7ec8b07c-e712-4acb-9223-319160f6fb8b",
+      "winner_id": "7ec8b07c-e712-4acb-9223-319160f6fb8b",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:49:50.761Z"
+    },
+    {
+      "id": "dz8htu8vezi",
+      "video_a_id": "2d05eec7-7eaf-453f-88ed-942688e2c5cb",
+      "video_b_id": "a612632a-8892-431d-872f-379ec32eadf0",
+      "winner_id": "2d05eec7-7eaf-453f-88ed-942688e2c5cb",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:49:59.797Z"
+    },
+    {
+      "id": "z529zqzvlf",
+      "video_a_id": "ae89564b-f026-4ffe-b54d-82992f84c6d6",
+      "video_b_id": "36912289-7df1-4da6-a4b0-eb07ab66af25",
+      "winner_id": "ae89564b-f026-4ffe-b54d-82992f84c6d6",
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:50:48.318Z"
+    },
+    {
+      "id": "y8x2e8j8d7",
+      "video_a_id": "7269df3d-3e8d-40cf-a919-b77f9387b724",
+      "video_b_id": "f1bf750c-669f-4b05-9929-005c74bc55e1",
+      "winner_id": null,
+      "dimension": "overall",
+      "confidence": "barely",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:50:59.695Z"
+    },
+    {
+      "id": "8pl7fbeqsn5",
+      "video_a_id": "1ea5288b-5bc0-458b-b723-61e512de0206",
+      "video_b_id": "7ec8b07c-e712-4acb-9223-319160f6fb8b",
+      "winner_id": "7ec8b07c-e712-4acb-9223-319160f6fb8b",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:51:07.886Z"
+    },
+    {
+      "id": "uapz5p3czjg",
+      "video_a_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "video_b_id": "5bca070f-bece-4627-a88a-7bab3035c604",
+      "winner_id": "1cd1e012-c906-45a6-b5cd-c78125dd3b79",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:51:22.593Z"
+    },
+    {
+      "id": "bqk6ewi4epf",
+      "video_a_id": "0630e54c-8e7b-4468-9fc6-18bb64e9b9a2",
+      "video_b_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "winner_id": "32d9345a-40e4-4f2d-9067-42e665b75e90",
+      "dimension": "overall",
+      "confidence": "somewhat",
+      "reasoning": "",
+      "created_at": "2025-12-17T16:51:32.453Z"
+    }
+  ],
+  "cluster_corrections": [],
+  "hidden_variables": [],
+  "weights": {
+    "audience_alignment": 0.25,
+    "tone_personality_match": 0.25,
+    "format_appropriateness": 0.25,
+    "aspiration_alignment": 0.25,
+    "custom_dimensions": {}
+  },
+  "stats": {
+    "total_comparisons": 254,
+    "by_dimension": {
+      "overall": 198,
+      "hook": 16,
+      "production": 20,
+      "rewatchable": 20
+    },
+    "video_count": 0,
+    "rated_count": 0,
+    "average_score": 0
+  },
+  "clusters": []
+}

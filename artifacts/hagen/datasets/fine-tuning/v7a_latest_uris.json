@@ -1,0 +1,12 @@
+{
+  "trainUri": "gs://hagen-video-analysis/fine-tuning/humor-analysis-v7a/train_1767200437968.jsonl",
+  "validationUri": "gs://hagen-video-analysis/fine-tuning/humor-analysis-v7a/validation_1767200437968.jsonl",
+  "timestamp": 1767200437968,
+  "stats": {
+    "total": 37,
+    "train": 31,
+    "validation": 6,
+    "textOnly": 37,
+    "videoNeeded": 38
+  }
+}

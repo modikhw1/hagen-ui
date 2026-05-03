@@ -1,0 +1,100 @@
+{
+  "date": "2025-12-31",
+  "source": "User notes from reasoning-chain-candidates-full.json",
+
+  "key_insights": {
+    "1_tone_matters": {
+      "insight": "Same structure can be playful OR malicious depending on tone, acting, dialogue",
+      "examples": [
+        "take-your-time: NOT malicious compliance, playful/absurdist with soft inviting tone",
+        "hurry-chant: Pettiness shown through strange clapping, mean-spirited undertone"
+      ],
+      "training_implication": "Model must read TONE not just STRUCTURE"
+    },
+
+    "2_scenographic_techniques": {
+      "insight": "POV shots + sound perspective changes imply internal dialogue without explicit narration",
+      "examples": [
+        "tip-pov-flip: Camera POV + sound perspective shift = viewer assumes internal thoughts"
+      ],
+      "training_implication": "Teach model to recognize cinematic conventions that imply interiority"
+    },
+
+    "3_social_invitation_violation": {
+      "insight": "Humor from unexpected violation of implicit social contracts/invitations",
+      "examples": [
+        "rigged-bottle-flip: Fun game invitation → surprising physical sabotage + meanness",
+        "tack-detsamma: Polite ritual → absurdist literal acceptance (like someone who doesn't understand boundaries)"
+      ],
+      "training_implication": "Social scripts have implicit 'invitations' that can be violated"
+    },
+
+    "4_viewer_emotional_engagement": {
+      "insight": "Some humor works by creating viewer sympathy/disappointment, not just surprise",
+      "examples": [
+        "regular-walks-past: Viewer feels bad for server's wasted hopeful gesture",
+        "extreme-gratitude: Camera = viewer POV, kiss feels literally directed at viewer"
+      ],
+      "training_implication": "Not all humor is intellectual - some is empathetic"
+    },
+
+    "5_world_building_absurdism": {
+      "insight": "Some clips create 'dream-like' worlds where normal rules don't apply",
+      "examples": [
+        "colleague-gets-extra: Nonchalant rule-breaking frames business as 'opportunistic wonderland'",
+        "elderly-makes-own: Acting + tempo + escalation creates engaging absurdist world"
+      ],
+      "training_implication": "Absurdism isn't just 'weird' - it's coherent world-building with different rules"
+    },
+
+    "6_inference_requirements": {
+      "insight": "Some patterns require multi-step inference, not just recognition",
+      "examples": [
+        "flip-container: Must infer that flipping reveals hidden chicken",
+        "gen-z-quit-trigger: Requires cultural inference about generational stereotypes"
+      ],
+      "training_implication": "Model needs to show REASONING PATH, not just conclusion"
+    },
+
+    "7_character_framing": {
+      "insight": "Same action can frame character as clever OR stupid depending on context",
+      "examples": [
+        "pays-with-her-card: Frames man as stupid, not just 'inversion'",
+        "waitress-hammer: Absurdist reaction to frustration, not threat"
+      ],
+      "training_implication": "Character interpretation depends on surrounding context"
+    },
+
+    "8_acting_and_execution": {
+      "insight": "Physical comedy quality depends heavily on acting, tempo, slapstick execution",
+      "examples": [
+        "elderly-makes-own: Funny because of acting quality and escalating wildness",
+        "pizza-not-finished: Chef's 'funny small scream like a bird' is key to tone"
+      ],
+      "training_implication": "Some humor is performance-dependent, not just structure-dependent"
+    }
+  },
+
+  "corrected_interpretations": {
+    "waitress-hammer": {
+      "original": "Tool appearance changes interpretation",
+      "corrected": "Sketch about service rejection → complaint → absurdist frustration reaction (hammer as hypothetical confrontation symbol)"
+    },
+    "take-your-time-malicious": {
+      "original": "Malicious compliance",
+      "corrected": "Playful/absurdist reaction to polite phrase, NOT malicious"
+    },
+    "creature-hunt-beer": {
+      "original": "Hunting pose suggests pest",
+      "corrected": "Responsible action toward 'found' animal (like bird in kitchen), beer reveal adds silliness"
+    }
+  },
+
+  "new_pattern_suggestions": {
+    "tone_dependent_interpretation": "Same structure reads differently based on acting/dialogue tone",
+    "cinematic_interiority": "POV + sound perspective implies internal thoughts",
+    "social_invitation_violation": "Breaking implicit contracts within social rituals",
+    "empathetic_humor": "Humor through viewer sympathy, not just surprise",
+    "coherent_absurdist_world": "World-building where different rules apply consistently"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "versions": {
+    "v5": {
+      "model": "projects/1061681256498/locations/us-central1/models/3842017983379537920@1",
+      "endpoint": "projects/1061681256498/locations/us-central1/endpoints/442002574854324224",
+      "description": "345 examples (246 TikTok video + 99 Simpsons text)",
+      "trainedAt": "2025-12-30T16:22:37.963Z",
+      "examples": 345
+    },
+    "v6": {
+      "model": "projects/1061681256498/locations/us-central1/models/8219516821183660032@1",
+      "endpoint": "projects/1061681256498/locations/us-central1/endpoints/1135556917469380608",
+      "description": "659 examples (246 TikTok video + 413 Simpsons text)",
+      "trainedAt": "2025-12-30T17:22:28.145Z",
+      "examples": 659
+    },
+    "v7.B": {
+      "model": "projects/1061681256498/locations/us-central1/models/7213243779443064832@1",
+      "endpoint": "projects/1061681256498/locations/us-central1/endpoints/6056865410278490112",
+      "description": "675 examples (262 TikTok video + 413 Simpsons text) - corrected mechanisms",
+      "trainedAt": "2025-12-31T14:38:59.055Z",
+      "examples": 675,
+      "changes": [
+        "Fixed 8 mechanism labels (removed 'humor' as mechanism, fixed vague labels)",
+        "Added missing newline in gold_standard.jsonl line 692"
+      ]
+    },
+    "v7.A": {
+      "jobName": "projects/1061681256498/locations/us-central1/tuningJobs/3778953071606890496",
+      "status": "training",
+      "description": "75 reasoning chain examples - teaches reject/evidence/correct pattern",
+      "submittedAt": "2025-12-31T17:00:41.162Z",
+      "examples": 75,
+      "method": "reasoning_chain"
+    },
+    "v7.X": {
+      "model": "projects/1061681256498/locations/us-central1/models/6716440445548756992@1",
+      "endpoint": "projects/1061681256498/locations/us-central1/endpoints/6305407814713999360",
+      "description": "266 VIDEO-ONLY examples (zero Simpsons text)",
+      "trainedAt": "2025-12-31T18:15:28.876Z",
+      "examples": 266,
+      "method": "video_only_hypothesis_test",
+      "hypothesis": "Testing if text data dilutes video analysis"
+    }
+  },
+  "default": "v6",
+  "latest": "v7.X"
+}
