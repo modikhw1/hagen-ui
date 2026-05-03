@@ -30,16 +30,32 @@ function parseMetadataDate(value: unknown): Date | null {
   return parsed;
 }
 
-async function resolveRoleDestination(userId: string): Promise<string> {
-  const { data: profileData } = await supabase
-    .from('profiles')
-    .select('is_admin, role')
-    .eq('id', userId)
-    .maybeSingle();
+async function resolveRoleDestination(_userId: string, accessToken?: string | null): Promise<string> {
+  // Use the API server's /api/me endpoint which uses the service-role key to
+  // bypass RLS — required for admin / content_manager profiles which the
+  // anon key cannot read due to RLS policies on the profiles table.
+  // Falling back to a direct supabase.from('profiles').select() here would
+  // return null for those users and route them to /welcome by mistake.
+  try {
+    if (!accessToken) {
+      const { data: { session } } = await supabase.auth.getSession();
+      accessToken = session?.access_token ?? null;
+    }
+    if (!accessToken) return '/welcome';
 
-  // No profile row yet → send to onboarding, not the customer feed
-  if (!profileData) return '/welcome';
-  return getPrimaryRouteForRole(profileData, { fallback: '/welcome' });
+    const res = await fetch('/api/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: 'no-store',
+    });
+    if (res.status === 404) return '/welcome';
+    if (!res.ok) return '/welcome';
+    const profileData = await res.json() as { role?: string | null; is_admin?: boolean | null } | null;
+    if (!profileData) return '/welcome';
+    return getPrimaryRouteForRole(profileData, { fallback: '/welcome' });
+  } catch (err) {
+    console.error('[auth/callback] resolveRoleDestination failed:', err);
+    return '/welcome';
+  }
 }
 
 function AuthCallbackContent() {
@@ -115,7 +131,7 @@ function AuthCallbackContent() {
       if (profileData.hasProfile) {
         // User already has a profile and no invite flag - they're returning
         console.log('[SESSION] User already has profile, redirecting to dashboard');
-        const destination = await resolveRoleDestination(session.user.id);
+        const destination = await resolveRoleDestination(session.user.id, session.access_token);
         const joiner = destination.includes('?') ? '&' : '?';
         router.replace(`${destination}${joiner}already_registered=true`);
         return;
@@ -137,7 +153,7 @@ function AuthCallbackContent() {
     // Normal login - redirect (isInviteFlow paths already returned above)
     console.log('[SESSION] Setting status to success, redirecting');
     updateState({ status: 'success' });
-    const destination = await resolveRoleDestination(session.user.id);
+    const destination = await resolveRoleDestination(session.user.id, session.access_token);
     router.replace(destination);
   }, [router, updateState]);
 
@@ -269,7 +285,7 @@ function AuthCallbackContent() {
         // Only redirect if we're in loading state (not yet handled)
         if (statusRef.current === 'loading') {
           console.log('User updated, redirecting...');
-          const destination = await resolveRoleDestination(session.user.id);
+          const destination = await resolveRoleDestination(session.user.id, session.access_token);
           router.replace(destination);
         }
         return;

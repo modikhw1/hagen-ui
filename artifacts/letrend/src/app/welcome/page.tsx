@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from '@/lib/navigation-compat';
 import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { getPrimaryRouteForRole, resolveAppRole } from '@/lib/auth/navigation';
 import { onboardingTheme as t } from '@/lib/onboarding/theme';
 import { getOnboardingProfileId, clearOnboardingSession } from '@/lib/onboarding/session';
 import { WelcomeHero } from '@/components/onboarding/WelcomeHero';
@@ -36,11 +38,36 @@ interface WelcomeContext {
 
 export default function WelcomePage() {
   const router = useRouter();
+  const { profile: authProfile, loading: authLoading } = useAuth();
   const [context, setContext] = useState<WelcomeContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Hard guard: admin / content_manager users must never sit on /welcome.
+  // Route them straight to their primary destination from the auth context
+  // (no bouncing through /feed → CustomerFeedShell → /admin, which races
+  // against lazy-import HMR and can leave the user stuck on a broken page).
   useEffect(() => {
+    if (authLoading || !authProfile) return;
+    const role = resolveAppRole(authProfile);
+    if (role === 'admin' || role === 'content_manager') {
+      router.replace(getPrimaryRouteForRole(authProfile));
+    }
+  }, [authLoading, authProfile, router]);
+
+  useEffect(() => {
+    // Wait for AuthContext to resolve before doing any onboarding-flow
+    // redirects. Otherwise admin/CM users can race past the role guard
+    // above and end up bounced through /feed.
+    if (authLoading) return;
+
+    // If a role-bound user (admin/CM) is here, the guard effect above is
+    // already routing them to their primary destination — don't run init.
+    if (authProfile) {
+      const role = resolveAppRole(authProfile);
+      if (role === 'admin' || role === 'content_manager') return;
+    }
+
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -72,7 +99,7 @@ export default function WelcomePage() {
     };
 
     void init();
-  }, [router]);
+  }, [router, authLoading, authProfile]);
 
   const handleCheckout = () => {
     router.push('/checkout');
