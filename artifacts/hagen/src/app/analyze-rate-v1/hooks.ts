@@ -298,10 +298,8 @@ export function buildApiPayload(
       noise_tolerance: null
     },
     target_audience_signals: {
-      age_range: signals.targetAudience.primaryAges.length > 0 ? { 
-        primary: signals.targetAudience.primaryAges[0], 
-        secondary: signals.targetAudience.primaryAges[1] || null 
-      } : null,
+      // Send the full multi-range array; the API persists every selected age range.
+      primary_ages: signals.targetAudience.primaryAges,
       income_level: signals.targetAudience.incomeLevel,
       lifestyle_tags: signals.targetAudience.lifestyleTags,
       primary_occasion: null,

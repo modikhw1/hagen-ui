@@ -134,27 +134,124 @@ export async function POST(request: NextRequest) {
       analysis_notes ? `Analysis Notes: ${analysis_notes}` : null
     ].filter(Boolean).join('\n\n');
 
-    // Add structured overrides if provided by user
+    // Map UI replicability enums into the σTaste replicability_decomposed shape.
+    // We only fill fields the user actually selected — no hardcoded defaults so
+    // we never silently downgrade richer values the AI extracted.
+    const actorCountMap: Record<string, 'solo' | 'duo' | 'small_group' | 'crowd'> = {
+      solo: 'solo',
+      duo: 'duo',
+      small_team: 'small_group',
+      large_team: 'crowd',
+    };
+    const skillMap: Record<string, 'anyone' | 'comfortable_on_camera' | 'acting_required' | 'professional'> = {
+      anyone: 'anyone',
+      basic_editing: 'comfortable_on_camera',
+      intermediate: 'acting_required',
+      professional: 'professional',
+      // Pass-through for σTaste-native values
+      comfortable_on_camera: 'comfortable_on_camera',
+      acting_required: 'acting_required',
+    };
+    const setupMap: Record<string, 'point_and_shoot' | 'basic_tripod' | 'multi_location' | 'elaborate_staging'> = {
+      phone_only: 'point_and_shoot',
+      basic_tripod: 'basic_tripod',
+      lighting_setup: 'multi_location',
+      full_studio: 'elaborate_staging',
+      // Pass-through
+      point_and_shoot: 'point_and_shoot',
+      multi_location: 'multi_location',
+      elaborate_staging: 'elaborate_staging',
+    };
+
+    // Helper: deep-merge plain objects so we never erase sibling fields the AI
+    // already extracted. Arrays/scalars are replaced wholesale (intended for
+    // human edits like "the actual primary_ages list is X").
+    const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+      typeof v === 'object' && v !== null && !Array.isArray(v);
+    const deepMerge = (
+      base: Record<string, unknown>,
+      patch: Record<string, unknown>
+    ): Record<string, unknown> => {
+      const out: Record<string, unknown> = { ...base };
+      for (const [k, v] of Object.entries(patch)) {
+        if (isPlainObject(v) && isPlainObject(out[k])) {
+          out[k] = deepMerge(out[k] as Record<string, unknown>, v);
+        } else {
+          out[k] = v;
+        }
+      }
+      return out;
+    };
+
     if (structured_replicability) {
-      humanOverrides.replicability_signals = {
-        equipment_requirements: structured_replicability.equipment_needed?.length > 0 ? 5 : 2,
-        skill_requirements: structured_replicability.skill_required === 'anyone' ? 2 : 
-                           structured_replicability.skill_required === 'comfortable_on_camera' ? 4 :
-                           structured_replicability.skill_required === 'acting_required' ? 7 : 9,
-        time_investment: structured_replicability.estimated_time === 'under_15min' ? 2 :
-                        structured_replicability.estimated_time === 'under_1hr' ? 4 :
-                        structured_replicability.estimated_time === 'half_day' ? 7 : 9,
-        budget_requirements: 3, // Default moderate
-      };
+      const rep = structured_replicability;
+      const actorReq: Record<string, unknown> = {};
+      if (rep.actor_count && actorCountMap[rep.actor_count]) {
+        actorReq.count = actorCountMap[rep.actor_count];
+      }
+      if (rep.skill_required && skillMap[rep.skill_required]) {
+        actorReq.skill_level = skillMap[rep.skill_required];
+      }
+
+      const envReq: Record<string, unknown> = {};
+      if (rep.setup_complexity && setupMap[rep.setup_complexity]) {
+        envReq.setup_complexity = setupMap[rep.setup_complexity];
+      }
+      if (Array.isArray(rep.equipment_needed) && rep.equipment_needed.length > 0) {
+        envReq.prop_dependency = {
+          level: 'specific_props',
+          items: rep.equipment_needed,
+        };
+      }
+
+      const prodReq: Record<string, unknown> = {};
+      if (rep.estimated_time) {
+        prodReq.estimated_time = rep.estimated_time;
+      }
+
+      const replicabilityPatch: Record<string, unknown> = {};
+      if (Object.keys(actorReq).length) replicabilityPatch.actor_requirements = actorReq;
+      if (Object.keys(envReq).length) replicabilityPatch.environment_requirements = envReq;
+      if (Object.keys(prodReq).length) replicabilityPatch.production_requirements = prodReq;
+
+      if (Object.keys(replicabilityPatch).length > 0) {
+        // Deep-merge into the extracted sigma_taste so unspecified subfields
+        // (skill_level, social_risk_required, etc.) the AI found are preserved.
+        const baseSigma = (extractedSignals.sigma_taste || {}) as Record<string, unknown>;
+        const mergedSigma = deepMerge(baseSigma, {
+          replicability_decomposed: replicabilityPatch,
+        });
+        humanOverrides.sigma_taste = mergedSigma as unknown as VideoSignals['sigma_taste'];
+      }
     }
 
     if (target_audience_signals) {
-      humanOverrides.audience_signals = {
-        primary_ages: target_audience_signals.age_range ? [target_audience_signals.age_range] : undefined,
-        vibe_alignments: target_audience_signals.lifestyle_tags,
-        engagement_style: 'passive',
-        niche_specificity: 5,
-      };
+      const aud = target_audience_signals;
+      // Accept both the new multi-range shape (primary_ages: string[]) and the
+      // legacy single age_range object so older callers don't break.
+      let primaryAges: string[] | undefined;
+      if (Array.isArray(aud.primary_ages) && aud.primary_ages.length > 0) {
+        primaryAges = aud.primary_ages.filter((a: unknown): a is string => typeof a === 'string');
+      } else if (aud.age_range?.primary) {
+        primaryAges = [aud.age_range.primary, aud.age_range.secondary]
+          .filter((a: unknown): a is string => typeof a === 'string' && a !== 'none');
+      }
+
+      const audiencePatch: Record<string, unknown> = {};
+      if (primaryAges && primaryAges.length > 0) audiencePatch.primary_ages = primaryAges;
+      if (Array.isArray(aud.vibe_alignment) && aud.vibe_alignment.length > 0) {
+        audiencePatch.vibe_alignments = aud.vibe_alignment;
+      } else if (Array.isArray(aud.lifestyle_tags) && aud.lifestyle_tags.length > 0) {
+        // Lifestyle tags are not vibes; only fall back if no vibes were selected.
+        audiencePatch.vibe_alignments = aud.lifestyle_tags;
+      }
+      if (Object.keys(audiencePatch).length > 0) {
+        // Deep-merge with extracted audience_signals so engagement_style /
+        // niche_specificity / other AI-extracted fields aren't blown away by a
+        // shallow JSONB merge in get_merged_signals.
+        const baseAud = (extractedSignals.audience_signals || {}) as Record<string, unknown>;
+        humanOverrides.audience_signals = deepMerge(baseAud, audiencePatch) as VideoSignals['audience_signals'];
+      }
     }
 
     // Step 4: Convert quality tier to numeric rating (1-10)
@@ -189,12 +286,13 @@ export async function POST(request: NextRequest) {
     
     // Generate embedding (with error handling)
     let embedding: number[] | undefined;
+    let embeddingError: string | undefined;
     try {
       embedding = await generateEmbedding(embeddingText);
-    } catch (embeddingError) {
-      console.error('Error generating embedding:', embeddingError);
-      // Continue without embedding - can be generated later
+    } catch (err) {
+      console.error('Error generating embedding:', err);
       embedding = undefined;
+      embeddingError = err instanceof Error ? err.message : 'Unknown embedding error';
     }
 
     // Step 6: Upsert into video_signals (NEW unified table)
@@ -211,30 +309,41 @@ export async function POST(request: NextRequest) {
       source: 'manual' as const,
     };
 
-    // Check if signal record exists for this video
-    const { data: existingSignal } = await supabase
+    // Upsert against the (video_id, brand_id) unique constraint. Migration 026
+    // makes that constraint NULLS NOT DISTINCT so brand_id IS NULL rows are
+    // unique per video and concurrent confirms can't create duplicates.
+    let signalResult = await supabase
       .from('video_signals')
+      .upsert(videoSignalsData, { onConflict: 'video_id,brand_id' })
       .select('id')
-      .eq('video_id', videoId)
-      .is('brand_id', null)
       .single();
 
-    let signalResult;
-    if (existingSignal) {
-      // Update existing
-      signalResult = await supabase
+    if (signalResult.error) {
+      // Fallback for environments where migration 026 hasn't been applied yet:
+      // do an explicit select-then-update/insert. Still race-prone there, but
+      // matches prior behavior so we don't regress.
+      console.warn('Upsert failed, falling back to select+update/insert:', signalResult.error.message);
+      const { data: existingSignal } = await supabase
         .from('video_signals')
-        .update(videoSignalsData)
-        .eq('id', existingSignal.id)
         .select('id')
-        .single();
-    } else {
-      // Insert new
-      signalResult = await supabase
-        .from('video_signals')
-        .insert(videoSignalsData)
-        .select('id')
-        .single();
+        .eq('video_id', videoId)
+        .is('brand_id', null)
+        .maybeSingle();
+
+      if (existingSignal) {
+        signalResult = await supabase
+          .from('video_signals')
+          .update(videoSignalsData)
+          .eq('id', existingSignal.id)
+          .select('id')
+          .single();
+      } else {
+        signalResult = await supabase
+          .from('video_signals')
+          .insert(videoSignalsData)
+          .select('id')
+          .single();
+      }
     }
 
     if (signalResult.error) {
@@ -262,7 +371,11 @@ export async function POST(request: NextRequest) {
       quality_tier,
       schema_version: CURRENT_SCHEMA_VERSION,
       extraction_coverage: extractionResult.coverage,
-      message: 'Rating saved to video_signals with v1.1 schema'
+      embedding_saved: embedding !== undefined,
+      embedding_error: embeddingError,
+      message: embeddingError
+        ? 'Rating saved, but embedding generation failed. Re-submit to retry.'
+        : 'Rating saved to video_signals with v1.1 schema'
     });
 
   } catch (error) {

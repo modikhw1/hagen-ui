@@ -29,6 +29,7 @@ export default function AnalyzeRateV1Page() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [editingAnalysis, setEditingAnalysis] = useState(false);
+  const [embeddingWarning, setEmbeddingWarning] = useState<string | null>(null);
   
   // UI section expansion state
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
@@ -192,6 +193,7 @@ export default function AnalyzeRateV1Page() {
     if (!result || !qualityRating.qualityTier) return;
     
     setSubmitting(true);
+    setEmbeddingWarning(null);
     try {
       const payload = buildApiPayload(
         result.url,
@@ -206,10 +208,21 @@ export default function AnalyzeRateV1Page() {
         body: JSON.stringify(payload)
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (response.ok) {
-        setSubmitted(true);
+        if (data?.embedding_saved === false) {
+          // Surface embedding failure so the rater can retry instead of leaving
+          // an un-embedded row that's invisible to similarity search.
+          setEmbeddingWarning(
+            data.embedding_error
+              ? `Embedding generation failed: ${data.embedding_error}. Click Save again to retry.`
+              : 'Embedding generation failed. Click Save again to retry.'
+          );
+        } else {
+          setSubmitted(true);
+        }
       } else {
-        const data = await response.json();
         setError(data.error || 'Failed to save rating');
       }
     } catch (err) {
@@ -224,6 +237,7 @@ export default function AnalyzeRateV1Page() {
     setResult(null);
     setSubmitted(false);
     setError(null);
+    setEmbeddingWarning(null);
     resetAllSignals();
   };
 
@@ -504,13 +518,21 @@ export default function AnalyzeRateV1Page() {
                   targetAudience={targetAudience}
                 />
 
+                {/* Embedding failure warning */}
+                {embeddingWarning && (
+                  <div className="p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg text-yellow-200 text-sm">
+                    <div className="font-semibold mb-1">⚠️ Saved without embedding</div>
+                    <div>{embeddingWarning}</div>
+                  </div>
+                )}
+
                 {/* Submit */}
                 <button
                   onClick={handleSubmitRating}
                   disabled={!qualityRating.qualityTier || submitting}
                   className="w-full px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
                 >
-                  {submitting ? 'Saving...' : 'Save Complete Rating'}
+                  {submitting ? 'Saving...' : embeddingWarning ? 'Retry Save (with embedding)' : 'Save Complete Rating'}
                 </button>
               </div>
             ) : (
