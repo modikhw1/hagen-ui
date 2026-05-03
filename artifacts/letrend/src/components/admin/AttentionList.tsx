@@ -63,7 +63,7 @@ export default function AttentionList({
     [refresh],
   );
   const [sortMode, setSortMode] = useState<SortMode>('standard');
-  const parsedLastSeenAt = lastSeenAt ? new Date(lastSeenAt) : null;
+  const parsedLastSeenAt = mode === 'open' && lastSeenAt ? new Date(lastSeenAt) : null;
 
   const markSeenFiredRef = useRef(false);
   useEffect(() => {
