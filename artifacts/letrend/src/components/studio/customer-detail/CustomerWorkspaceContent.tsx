@@ -700,7 +700,7 @@ function CustomerWorkspacePageContent() {
         hasCachedState = true;
         if (isMounted) {
           setGamePlanSummary(cachedGamePlan.value.game_plan ?? null);
-          setGamePlanHtml(cachedGamePlan.value.game_plan?.html || '');
+          setGamePlanHtml(typeof cachedGamePlan.value.game_plan?.html === 'string' ? cachedGamePlan.value.game_plan.html : '');
         }
       }
 
@@ -1022,7 +1022,7 @@ function CustomerWorkspacePageContent() {
       );
 
       setGamePlanSummary(data.game_plan ?? null);
-      setGamePlanHtml(data.game_plan?.html || '');
+      setGamePlanHtml(typeof data.game_plan?.html === 'string' ? data.game_plan.html : '');
     } catch (err) {
       console.error('Error fetching game plan:', err);
       setGamePlanError('Kunde inte ladda Game Plan. Visar senaste kÃ¤nda version om den finns.');
@@ -2375,7 +2375,7 @@ function CustomerWorkspacePageContent() {
 
       const nextGamePlan = data as WorkspaceGamePlanResponse;
       setGamePlanSummary(nextGamePlan.game_plan ?? null);
-      setGamePlanHtml(nextGamePlan.game_plan?.html || '');
+      setGamePlanHtml(typeof nextGamePlan.game_plan?.html === 'string' ? nextGamePlan.game_plan.html : '');
       writeClientCache(gamePlanCacheKey, nextGamePlan, WORKSPACE_CACHE_TTL_MS);
       setEditingGamePlan(false);
       setGamePlanSaveMessage('Game Plan sparad.');
@@ -2394,13 +2394,13 @@ function CustomerWorkspacePageContent() {
   };
 
   const handleCancelGamePlanEdit = () => {
-    setGamePlanHtml(gamePlanSummary?.html || '');
+    setGamePlanHtml(typeof gamePlanSummary?.html === 'string' ? gamePlanSummary.html : '');
     setGamePlanError(null);
     setGamePlanSaveMessage(null);
     setEditingGamePlan(false);
   };
 
-  const hasUnsavedGamePlanChanges = gamePlanHtml !== (gamePlanSummary?.html || '');
+  const hasUnsavedGamePlanChanges = gamePlanHtml !== (typeof gamePlanSummary?.html === 'string' ? gamePlanSummary.html : '');
   const gamePlanAiDefaults = buildGamePlanAiDefaults(customer, brief, notes);
 
   const handleGenerateGamePlanAi = async (input: GamePlanGenerateInput): Promise<boolean> => {
