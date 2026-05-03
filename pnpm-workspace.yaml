@@ -75,6 +75,14 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
+  # Force a single @types/react / @types/react-dom version across the whole
+  # workspace. Without this, hagen pulls in @types/react@18.x and pnpm hoists
+  # it to node_modules/.pnpm/node_modules/@types/react, which TypeScript
+  # picks up alongside the 19.x copy. Two distinct ReactNode types caused
+  # spurious "bigint is not assignable to ReactNode" / "Suspense cannot be
+  # used as a JSX component" errors in letrend's tsc --noEmit output.
+  "@types/react": "19.2.14"
+  "@types/react-dom": "19.2.3"
   # replit uses linux-x64 only, we can exclude all other platforms
   "esbuild>@esbuild/darwin-arm64": "-"
   "esbuild>@esbuild/darwin-x64": "-"
