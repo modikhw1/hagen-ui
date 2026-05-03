@@ -4,7 +4,7 @@
 
 create table if not exists public.concept_field_regenerations (
   id uuid primary key default gen_random_uuid(),
-  concept_id uuid not null references public.concepts(id) on delete cascade,
+  concept_id text not null references public.concepts(id) on delete cascade,
   field text not null
     check (field in ('headline_sv', 'description_sv', 'whyItWorks_sv', 'script_sv')),
   model text not null,

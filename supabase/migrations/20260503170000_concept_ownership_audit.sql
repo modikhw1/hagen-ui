@@ -1,7 +1,7 @@
 -- Audit trail for concept ownership transfers (Ta över)
 create table if not exists public.concept_ownership_audit (
   id uuid primary key default gen_random_uuid(),
-  concept_id uuid not null references public.concepts(id) on delete cascade,
+  concept_id text not null references public.concepts(id) on delete cascade,
   previous_owner uuid,
   new_owner uuid not null,
   actor uuid not null,
