@@ -168,6 +168,21 @@ const cmLowActivityAttentionSchema = z.object({
   lastInteractionDays: z.number(),
 });
 
+const creditNoteFailedAttentionSchema = z.object({
+  kind: z.literal('credit_note_failed'),
+  id: z.string(),
+  subjectType: z.literal('credit_note_operation'),
+  subjectId: z.string(),
+  customerId: z.string(),
+  customerName: z.string(),
+  operationType: z.string(),
+  amount_ore: z.number(),
+  createdAt: z.coerce.date(),
+  errorMessage: z.string().nullable(),
+  attentionReason: z.string().nullable(),
+  cmName: z.string().optional(),
+});
+
 export const attentionItemSchema = z.discriminatedUnion('kind', [
   cmNotificationAttentionSchema,
   invoiceAttentionSchema,
@@ -177,6 +192,7 @@ export const attentionItemSchema = z.discriminatedUnion('kind', [
   cmChangeAttentionSchema,
   pauseResumeAttentionSchema,
   cmLowActivityAttentionSchema,
+  creditNoteFailedAttentionSchema,
 ]);
 
 export const overviewPayloadSchema = z.object({

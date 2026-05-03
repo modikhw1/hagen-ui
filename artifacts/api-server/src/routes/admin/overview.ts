@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import { deriveAttention } from '../../lib/admin-derive/attention.js';
+import { getLastSeenAt } from '../../lib/admin-derive/last-seen.js';
 
 const router = Router();
 const ADMIN_ONLY = requireRole(['admin']);
@@ -94,89 +96,22 @@ router.get('/metrics', requireAuth, ADMIN_ONLY, async (req, res) => {
 });
 
 // GET /api/admin/overview/attention
+// Returns AttentionItem-shaped rows from the shared derive so the overview
+// "Behöver hanteras" block stays in sync with /admin/notifications.
 router.get('/attention', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
-    const today = new Date().toISOString().slice(0, 10);
-
-    const [customersResult, snoozesResult, overdueInvoicesResult] = await Promise.all([
-      supabase
-        .from('customer_profiles')
-        .select('id, business_name, status, paused_until, agreed_at, monthly_price, account_manager, next_invoice_date, tiktok_handle, stripe_customer_id, stripe_subscription_id, invited_at, derived_status, cm_avatar_url, account_manager_profile_id')
-        .in('status', ['active', 'paused', 'invited'])
-        .order('business_name'),
-      supabase
-        .from('attention_snoozes')
-        .select('subject_type, subject_id, snoozed_until, released_at'),
-      supabase
-        .from('invoices')
-        .select('id, customer_profile_id, amount_due, due_date, status')
-        .eq('status', 'open')
-        .lt('due_date', today)
-        .order('due_date', { ascending: true })
-        .limit(500),
+    const adminId = req.user?.id ?? null;
+    const [{ open, snoozed }, lastSeenAt] = await Promise.all([
+      deriveAttention(supabase),
+      adminId ? getLastSeenAt(supabase, adminId, 'overview') : Promise.resolve(null),
     ]);
 
-    const now = new Date();
-    const snoozed = new Set(
-      (snoozesResult.data ?? [])
-        .filter((s: Record<string, string | null>) => {
-          const until = s['snoozed_until'] ? new Date(s['snoozed_until']) : null;
-          return until && until > now && !s['released_at'];
-        })
-        .map((s: Record<string, string>) => s['subject_id']),
-    );
-
-    const overdueByCustomer = new Map<string, number>();
-    for (const inv of overdueInvoicesResult.data ?? []) {
-      const cid = inv.customer_profile_id as string;
-      overdueByCustomer.set(cid, (overdueByCustomer.get(cid) ?? 0) + (inv.amount_due ?? 0));
-    }
-
-    const attentionItems: Array<Record<string, unknown>> = [];
-    const snoozedItems: Array<Record<string, unknown>> = [];
-
-    for (const customer of customersResult.data ?? []) {
-      const cid = customer.id as string;
-      const isOverdue = overdueByCustomer.has(cid);
-      const isPaused = customer.status === 'paused';
-      const isInvited = customer.status === 'invited';
-
-      if (!isOverdue && !isPaused && !isInvited) continue;
-
-      const item = {
-        id: cid,
-        business_name: customer.business_name,
-        status: customer.status,
-        derived_status: customer.derived_status ?? null,
-        monthly_price_ore: (customer.monthly_price ?? 0) * 100,
-        account_manager_name: customer.account_manager ?? null,
-        account_manager_id: customer.account_manager_profile_id ?? null,
-        account_manager_avatar_url: customer.cm_avatar_url ?? null,
-        paused_until: customer.paused_until ?? null,
-        stripe_customer_id: customer.stripe_customer_id ?? null,
-        stripe_subscription_id: customer.stripe_subscription_id ?? null,
-        invited_at: customer.invited_at ?? null,
-        overdue_amount_ore: overdueByCustomer.get(cid) ?? 0,
-        attention_reasons: [
-          ...(isOverdue ? ['overdue_invoice'] : []),
-          ...(isPaused ? ['paused'] : []),
-          ...(isInvited ? ['pending_invite'] : []),
-        ],
-      };
-
-      if (snoozed.has(cid)) {
-        snoozedItems.push(item);
-      } else {
-        attentionItems.push(item);
-      }
-    }
-
     res.json({
-      attentionItems,
-      snoozedAttentionItems: snoozedItems,
-      snoozedCount: snoozedItems.length,
-      attentionFeedSeenAt: null,
+      attentionItems: open,
+      snoozedAttentionItems: snoozed,
+      snoozedCount: snoozed.length,
+      attentionFeedSeenAt: lastSeenAt,
     });
   } catch (err) {
     logger.error(err, 'overview attention error');

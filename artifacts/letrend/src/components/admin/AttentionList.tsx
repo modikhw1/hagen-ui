@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'wouter';
 import { useMutation } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, ExternalLink, Filter } from 'lucide-react';
+import { ChevronRight, ExternalLink, Filter, BellOff, RotateCcw, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/admin/api-client';
 import { formatSek } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
@@ -255,19 +255,30 @@ function AttentionRow({
           </div>
         </div>
       </Link>
-      <div className="flex items-center gap-2 opacity-0 group-hover/row:opacity-100 transition-opacity">
-        <Link 
+      <div className="flex items-center gap-1.5 opacity-0 group-hover/row:opacity-100 transition-opacity">
+        <Link
           href={href}
-          className="rounded border border-border px-2 py-1 text-[10px] font-semibold uppercase hover:bg-background"
+          aria-label="Öppna"
+          title="Öppna"
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-border text-muted-foreground hover:bg-background hover:text-foreground"
         >
-          Öppna
+          <ExternalLink className="h-3.5 w-3.5" />
         </Link>
         <button
+          type="button"
           onClick={() => mutateAttention.mutate()}
           disabled={mutateAttention.isPending}
-          className="rounded border border-border px-2 py-1 text-[10px] font-semibold uppercase hover:bg-background disabled:opacity-50"
+          aria-label={mode === 'open' ? 'Markera som hanteras' : 'Släpp tillbaka till öppna'}
+          title={mode === 'open' ? 'Markera som hanteras' : 'Släpp tillbaka till öppna'}
+          className="inline-flex h-7 w-7 items-center justify-center rounded border border-border text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {mode === 'open' ? 'Hanteras' : 'Släpp'}
+          {mutateAttention.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : mode === 'open' ? (
+            <BellOff className="h-3.5 w-3.5" />
+          ) : (
+            <RotateCcw className="h-3.5 w-3.5" />
+          )}
         </button>
       </div>
     </div>
