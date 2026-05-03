@@ -2,6 +2,7 @@
 
 import { Link } from 'wouter';
 import { useEffect, useState } from 'react';
+import { useAdminPageHeader } from '@/admin-ui';
 import { getStudioCustomerStatusMeta } from '@/lib/studio/customer-status';
 import { buildStudioWorkspaceHref } from '@/lib/studio/navigation';
 import type { StudioCustomerListItem } from '@/types/studio-v2';
@@ -18,6 +19,7 @@ const CUSTOMER_STATUS_FILTERS: CustomerStatusFilter[] = [
 ];
 
 export default function StudioCustomersPage() {
+  useAdminPageHeader({ title: 'Kundarbete', eyebrow: 'LeTrend Studio' }, []);
   const [customers, setCustomers] = useState<StudioCustomerListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CustomerStatusFilter>('all');
@@ -110,11 +112,6 @@ export default function StudioCustomersPage() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          <Link to="/studio/concepts" style={headerActionStyle(false)}>
-            Konceptbibliotek
-          </Link>
-        </div>
       </div>
 
       <div
@@ -467,15 +464,3 @@ function WorkspaceLink({ href, label }: { href: string; label: string }) {
   );
 }
 
-function headerActionStyle(primary: boolean) {
-  return {
-    padding: '10px 14px',
-    borderRadius: '10px',
-    textDecoration: 'none',
-    fontSize: '13px',
-    fontWeight: 600,
-    color: primary ? '#fff' : '#1a1a2e',
-    background: primary ? '#4f46e5' : '#fff',
-    border: primary ? 'none' : '1px solid #e5e7eb',
-  } as const;
-}

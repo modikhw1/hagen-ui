@@ -1,4 +1,4 @@
-type PrefetchRouter = {
+export type PrefetchRouter = {
   prefetch: (href: string) => void;
 };
 

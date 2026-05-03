@@ -2,10 +2,12 @@
 
 import { Link } from 'wouter';
 import { useMemo } from 'react';
+import { useAdminPageHeader } from '@/admin-ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { resolveAppRole } from '@/lib/auth/navigation';
 
 export default function StudioInvoicesPage() {
+  useAdminPageHeader({ title: 'Fakturor', eyebrow: 'LeTrend Studio' }, []);
   const { user, profile, authLoading, profileLoading } = useAuth();
   const role = useMemo(() => resolveAppRole(profile), [profile]);
   const loading = authLoading || profileLoading;

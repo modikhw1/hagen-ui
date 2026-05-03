@@ -2,6 +2,7 @@
 
 import { Link } from 'wouter';
 import { useEffect, useState } from 'react';
+import { useAdminPageHeader } from '@/admin-ui';
 import { useAuth } from '@/contexts/AuthContext';
 import { buildStudioWorkspaceHref } from '@/lib/studio/navigation';
 import type { StudioCustomerListItem } from '@/types/studio-v2';
@@ -19,6 +20,7 @@ interface CmWorkloadRow {
 }
 
 export default function StudioDashboard() {
+  useAdminPageHeader({ title: 'Översikt', eyebrow: 'LeTrend Studio' }, []);
   const { user, profile } = useAuth();
   const [customers, setCustomers] = useState<StudioCustomerListItem[]>([]);
   const [loading, setLoading] = useState(true);

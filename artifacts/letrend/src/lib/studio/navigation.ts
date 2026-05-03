@@ -1,9 +1,11 @@
+import { Library, Users, type LucideIcon } from 'lucide-react';
 import type { Section } from '@/types/studio-v2';
 
 type StudioShellNavItem = {
   href: string;
   label: string;
   kind: 'primary' | 'utility';
+  icon: LucideIcon;
 };
 
 type StudioWorkspaceSectionItem = {
@@ -15,8 +17,8 @@ type StudioWorkspaceSectionItem = {
 };
 
 export const STUDIO_SHELL_NAV_ITEMS: StudioShellNavItem[] = [
-  { href: '/studio/customers', label: 'Kundarbete', kind: 'primary' },
-  { href: '/studio/concepts', label: 'Konceptbibliotek', kind: 'primary' },
+  { href: '/studio/customers', label: 'Kundarbete', kind: 'primary', icon: Users },
+  { href: '/studio/concepts', label: 'Konceptbibliotek', kind: 'primary', icon: Library },
 ];
 
 export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [

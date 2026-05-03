@@ -3,6 +3,7 @@
 import { Link } from 'wouter';
 import { useRouter, useSearchParams } from '@/lib/navigation-compat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useAdminPageHeader } from '@/admin-ui';
 import { UploadConceptModal } from '@/components/studio/UploadConceptModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { BUDGET_VALUES, BUSINESS_TYPE_VALUES, DIFFICULTY_VALUES, FILM_TIME_VALUES } from '@/lib/concept-enrichment';
@@ -717,6 +718,7 @@ async function fetchTikTokThumbnails(concepts: ConceptLibraryItem[]): Promise<Re
 }
 
 export default function StudioConceptsPage() {
+  useAdminPageHeader({ title: 'Konceptbibliotek', eyebrow: 'LeTrend Studio' }, []);
   const router = useRouter();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();

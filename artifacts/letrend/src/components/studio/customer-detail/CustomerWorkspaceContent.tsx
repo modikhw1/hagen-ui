@@ -25,6 +25,7 @@ import { loadConcepts as loadConceptsFromDB } from '@/lib/conceptLoaderDB';
 import type { TranslatedConcept } from '@/lib/translator';
 import { display } from '@/lib/display';
 import { FeedTimeline } from '@/components/studio/FeedTimeline';
+import { useAdminPageHeader } from '@/admin-ui';
 import { LeTrendColors, LeTrendGradients, LeTrendRadius, LeTrendShadows } from '@/styles/letrend-design-system';
 import { SidePanel } from '@/components/studio-v2/SidePanel';
 import { AutoSaveTextarea } from '@/components/studio-v2/AutoSaveTextarea';
@@ -2493,6 +2494,13 @@ function CustomerWorkspacePageContent() {
   }
 
   const draftCount = getDraftConcepts().length;
+  useAdminPageHeader(
+    {
+      title: customer?.business_name || 'Kund',
+      eyebrow: 'Kundarbete',
+    },
+    [customer?.business_name],
+  );
   const editingConcept = editingConceptId ? concepts.find((concept) => concept.id === editingConceptId) ?? null : null;
   const editingConceptDetails = getWorkspaceConceptDetails(editingConcept, getConceptDetails);
   const latestEmailJob = emailJobs[0] || null;
@@ -2517,6 +2525,109 @@ function CustomerWorkspacePageContent() {
         >
           Till kundarbete
         </Link>
+      </div>
+
+      {/* Sticky quick-switch tab strip */}
+      <div
+        style={{
+          position: 'sticky',
+          top: 56,
+          zIndex: 20,
+          background: '#FAF8F5',
+          padding: '8px 0',
+          marginBottom: 16,
+          borderBottom: `1px solid ${LeTrendColors.border}`,
+        }}
+      >
+        <div
+          role="tablist"
+          aria-label="Kundens arbetsytor"
+          style={{
+            display: 'flex',
+            gap: 6,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            background: '#fff',
+            padding: 6,
+            borderRadius: LeTrendRadius.md,
+            border: `1px solid ${LeTrendColors.border}`,
+          }}
+        >
+          {STUDIO_WORKSPACE_SECTIONS.filter((s) => s.kind === 'primary').map(({ key, short_label }) => {
+            const badge =
+              key === 'gameplan' ? notes.length :
+              key === 'koncept' ? draftCount :
+              undefined;
+            const isActive = activeSection === key;
+            return (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setWorkspaceSection(key)}
+                style={{
+                  background: isActive ? LeTrendColors.brownDark : 'transparent',
+                  color: isActive ? '#fff' : LeTrendColors.textSecondary,
+                  border: 'none',
+                  padding: '8px 14px',
+                  borderRadius: LeTrendRadius.sm,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s',
+                }}
+              >
+                <span>{short_label}</span>
+                {badge !== undefined && badge > 0 && (
+                  <span
+                    style={{
+                      background: isActive ? 'rgba(255,255,255,0.25)' : '#f59e0b',
+                      color: '#fff',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: 10,
+                      minWidth: 18,
+                      textAlign: 'center',
+                    }}
+                  >
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+          {STUDIO_WORKSPACE_SECTIONS.some((s) => s.kind === 'utility') && (
+            <div style={{ width: 1, alignSelf: 'stretch', background: LeTrendColors.border, margin: '0 4px' }} />
+          )}
+          {STUDIO_WORKSPACE_SECTIONS.filter((s) => s.kind === 'utility').map(({ key, short_label }) => {
+            const isActive = activeSection === key;
+            return (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setWorkspaceSection(key)}
+                style={{
+                  background: isActive ? LeTrendColors.surface : 'transparent',
+                  color: isActive ? LeTrendColors.brownDark : LeTrendColors.textMuted,
+                  border: 'none',
+                  padding: '8px 12px',
+                  borderRadius: LeTrendRadius.sm,
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: isActive ? 600 : 500,
+                  transition: 'all 0.15s',
+                }}
+              >
+                {short_label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Two column layout */}
@@ -2725,95 +2836,6 @@ function CustomerWorkspacePageContent() {
             )}
           </div>
 
-          {/* Section Navigation */}
-          <div style={{
-            background: '#fff',
-            borderRadius: LeTrendRadius.lg,
-            padding: 12,
-            border: `1px solid ${LeTrendColors.border}`,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 4
-          }}>
-            {STUDIO_WORKSPACE_SECTIONS.filter((s) => s.kind === 'primary').map(({ key, short_label, description }) => {
-              const badge =
-                key === 'gameplan' ? notes.length :
-                key === 'koncept' ? draftCount :
-                undefined;
-
-              return (
-              <button
-                key={key}
-                onClick={() => setWorkspaceSection(key)}
-                style={{
-                  background: activeSection === key ? LeTrendColors.surface : 'transparent',
-                  border: 'none',
-                  padding: '12px 16px',
-                  borderRadius: LeTrendRadius.md,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontSize: 14,
-                  fontWeight: activeSection === key ? 600 : 500,
-                  color: activeSection === key ? LeTrendColors.brownDark : LeTrendColors.textSecondary,
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
-                <span style={{ display: 'grid', gap: 2 }}>
-                  <span>{short_label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 400, color: LeTrendColors.textMuted }}>
-                    {description}
-                  </span>
-                </span>
-                {badge !== undefined && badge > 0 && (
-                  <span style={{
-                    background: '#f59e0b',
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    padding: '2px 6px',
-                    borderRadius: 10,
-                    minWidth: 20,
-                    textAlign: 'center'
-                  }}>
-                    {badge}
-                  </span>
-                )}
-              </button>
-              );
-            })}
-            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, margin: '4px 0' }} />
-            {STUDIO_WORKSPACE_SECTIONS.filter((s) => s.kind === 'utility').map(({ key, short_label, description }) => (
-              <button
-                key={key}
-                onClick={() => setWorkspaceSection(key)}
-                style={{
-                  background: activeSection === key ? LeTrendColors.surface : 'transparent',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: LeTrendRadius.md,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  fontSize: 12,
-                  fontWeight: activeSection === key ? 600 : 400,
-                  color: activeSection === key ? LeTrendColors.brownDark : LeTrendColors.textMuted,
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}
-              >
-                <span style={{ display: 'grid', gap: 1 }}>
-                  <span>{short_label}</span>
-                  <span style={{ fontSize: 10, fontWeight: 400, color: LeTrendColors.textMuted }}>
-                    {description}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* RIGHT COLUMN - Flexible content */}
