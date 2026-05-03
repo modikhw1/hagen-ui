@@ -12,6 +12,30 @@ import "@mantine/core/styles.css";
 
 const AdminAuthShell = lazy(() => import("@/app/admin/layout"));
 const StudioLayout = lazy(() => import("@/app/studio/layout"));
+const CustomerDetailLayout = lazy(() => import("@/app/admin/customers/[id]/layout"));
+
+function CustomerDetailRoutes() {
+  return (
+    <CustomerDetailLayout>
+      <Switch>
+        <Route path="/admin/customers/:id" component={lazy(() => import("@/app/admin/customers/[id]/page"))} />
+        <Route path="/admin/customers/:id/activity" component={lazy(() => import("@/app/admin/customers/[id]/activity/page"))} />
+        <Route path="/admin/customers/:id/billing/:invoiceId" component={lazy(() => import("@/app/admin/customers/[id]/billing/[invoiceId]/page"))} />
+        <Route path="/admin/customers/:id/billing/manual-invoice" component={lazy(() => import("@/app/admin/customers/[id]/billing/manual-invoice/page"))} />
+        <Route path="/admin/customers/:id/billing" component={lazy(() => import("@/app/admin/customers/[id]/billing/page"))} />
+        <Route path="/admin/customers/:id/contract" component={lazy(() => import("@/app/admin/customers/[id]/contract/page"))} />
+        <Route path="/admin/customers/:id/operations" component={lazy(() => import("@/app/admin/customers/[id]/operations/page"))} />
+        <Route path="/admin/customers/:id/organisation" component={lazy(() => import("@/app/admin/customers/[id]/organisation/page"))} />
+        <Route path="/admin/customers/:id/pulse" component={lazy(() => import("@/app/admin/customers/[id]/pulse/page"))} />
+        <Route path="/admin/customers/:id/subscription/price" component={lazy(() => import("@/app/admin/customers/[id]/subscription/price/page"))} />
+        <Route path="/admin/customers/:id/subscription" component={lazy(() => import("@/app/admin/customers/[id]/subscription/page"))} />
+        <Route path="/admin/customers/:id/avtal" component={lazy(() => import("@/app/admin/customers/[id]/avtal/page"))} />
+        <Route path="/admin/customers/:id/team/change" component={lazy(() => import("@/app/admin/customers/[id]/team/change/page"))} />
+        <Route path="/admin/customers/:id/team" component={lazy(() => import("@/app/admin/customers/[id]/team/page"))} />
+      </Switch>
+    </CustomerDetailLayout>
+  );
+}
 
 function AdminRoutes() {
   return (
@@ -19,20 +43,8 @@ function AdminRoutes() {
       <Switch>
         <Route path="/admin" component={lazy(() => import("@/app/admin/page"))} />
         <Route path="/admin/customers" component={lazy(() => import("@/app/admin/customers/page"))} />
-        <Route path="/admin/customers/:id" component={lazy(() => import("@/app/admin/customers/[id]/page"))} />
-        <Route path="/admin/customers/:id/activity" component={lazy(() => import("@/app/admin/customers/[id]/activity/page"))} />
-        <Route path="/admin/customers/:id/billing" component={lazy(() => import("@/app/admin/customers/[id]/billing/page"))} />
-        <Route path="/admin/customers/:id/billing/:invoiceId" component={lazy(() => import("@/app/admin/customers/[id]/billing/[invoiceId]/page"))} />
-        <Route path="/admin/customers/:id/billing/manual-invoice" component={lazy(() => import("@/app/admin/customers/[id]/billing/manual-invoice/page"))} />
-        <Route path="/admin/customers/:id/contract" component={lazy(() => import("@/app/admin/customers/[id]/contract/page"))} />
-        <Route path="/admin/customers/:id/operations" component={lazy(() => import("@/app/admin/customers/[id]/operations/page"))} />
-        <Route path="/admin/customers/:id/organisation" component={lazy(() => import("@/app/admin/customers/[id]/organisation/page"))} />
-        <Route path="/admin/customers/:id/pulse" component={lazy(() => import("@/app/admin/customers/[id]/pulse/page"))} />
-        <Route path="/admin/customers/:id/subscription" component={lazy(() => import("@/app/admin/customers/[id]/subscription/page"))} />
-        <Route path="/admin/customers/:id/subscription/price" component={lazy(() => import("@/app/admin/customers/[id]/subscription/price/page"))} />
-        <Route path="/admin/customers/:id/avtal" component={lazy(() => import("@/app/admin/customers/[id]/avtal/page"))} />
-        <Route path="/admin/customers/:id/team" component={lazy(() => import("@/app/admin/customers/[id]/team/page"))} />
-        <Route path="/admin/customers/:id/team/change" component={lazy(() => import("@/app/admin/customers/[id]/team/change/page"))} />
+        <Route path="/admin/customers/:id/:rest*" component={CustomerDetailRoutes} />
+        <Route path="/admin/customers/:id" component={CustomerDetailRoutes} />
         <Route path="/admin/billing" component={lazy(() => import("@/app/admin/billing/page"))} />
         <Route path="/admin/billing/health" component={lazy(() => import("@/app/admin/billing/health/page"))} />
         <Route path="/admin/billing/invoices" component={lazy(() => import("@/app/admin/billing/invoices/page"))} />
