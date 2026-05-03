@@ -5,15 +5,15 @@ import { useForm, useWatch, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
+import { AdminModalShell } from '@/components/admin/ui/AdminModalShell';
 import {
-  Modal,
-  Button,
-  TextInput,
-  NumberInput,
-  Stack,
-  Group,
-  Textarea,
-} from '@mantine/core';
+  adminModalInputStyle,
+  adminModalLabelStyle,
+  adminModalPrimaryButtonStyle,
+  adminModalSecondaryButtonStyle,
+  adminModalSectionStyle,
+} from '@/components/admin/ui/adminModalTokens';
+import { LeTrendColors } from '@/styles/letrend-design-system';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { AvatarUploader } from '@/components/admin/shared/AvatarUploader';
 
@@ -35,6 +35,16 @@ export interface CMEditProfileDialogProps {
   onOpenChange: (open: boolean) => void;
   cmId: string;
   initialValues: FormValues;
+}
+
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div style={adminModalSectionStyle}>
+      <div style={adminModalLabelStyle}>{label}</div>
+      {children}
+      {error ? <div style={{ fontSize: 11, color: LeTrendColors.error }}>{error}</div> : null}
+    </div>
+  );
 }
 
 export function CMEditProfileDialog({
@@ -64,8 +74,6 @@ export function CMEditProfileDialog({
   const watchedName = useWatch({ control, name: 'name' }) ?? '';
   const watchedAvatarUrl = useWatch({ control, name: 'avatar_url' }) ?? '';
   const watchedRole = useWatch({ control, name: 'role' }) ?? 'content_manager';
-  const watchedCommissionRatePct =
-    useWatch({ control, name: 'commission_rate_pct' }) ?? 0;
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
     try {
@@ -97,84 +105,71 @@ export function CMEditProfileDialog({
   };
 
   return (
-    <Modal
-      opened={open}
+    <AdminModalShell
+      open={open}
       onClose={() => onOpenChange(false)}
       title="Redigera CM-profil"
       size="lg"
-      centered
+      disableClose={isSubmitting}
+      footer={
+        <>
+          <button
+            type="button"
+            style={{ ...adminModalSecondaryButtonStyle, opacity: isSubmitting ? 0.5 : 1 }}
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
+            Avbryt
+          </button>
+          <button
+            type="button"
+            style={adminModalPrimaryButtonStyle(!isSubmitting)}
+            onClick={handleSubmit(onSubmit)}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Sparar…' : 'Spara'}
+          </button>
+        </>
+      }
     >
-      <form onSubmit={handleSubmit(onSubmit)}>
-        <Stack gap="md">
-          <AvatarUploader
-            name={watchedName}
-            value={watchedAvatarUrl}
-            onChange={(value) => setValue('avatar_url', value, { shouldDirty: true })}
-            error={errors.avatar_url?.message ?? null}
-          />
+      <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <AvatarUploader
+          name={watchedName}
+          value={watchedAvatarUrl}
+          onChange={(value) => setValue('avatar_url', value, { shouldDirty: true })}
+          error={errors.avatar_url?.message ?? null}
+        />
 
-          <TextInput
-            label="Namn"
-            {...register('name')}
-            error={errors.name?.message}
-          />
-          <TextInput
-            label="E-post"
-            type="email"
-            {...register('email')}
-            error={errors.email?.message}
-          />
-          <Group grow align="start">
-            <TextInput
-              label="Telefon"
-              {...register('phone')}
-              error={errors.phone?.message}
-            />
-            <TextInput
-              label="Ort"
-              {...register('city')}
-              error={errors.city?.message}
-            />
-          </Group>
-          <Textarea
-            label="Bio"
-            autosize
-            minRows={3}
-            maxRows={6}
-            {...register('bio')}
-            error={errors.bio?.message}
-          />
-          {watchedRole !== 'admin' ? (
-            <NumberInput
-              label="Kommission (%)"
+        <Field label="Namn" error={errors.name?.message}>
+          <input style={adminModalInputStyle} {...register('name')} />
+        </Field>
+        <Field label="E-post" error={errors.email?.message}>
+          <input type="email" style={adminModalInputStyle} {...register('email')} />
+        </Field>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="Telefon" error={errors.phone?.message}>
+            <input style={adminModalInputStyle} {...register('phone')} />
+          </Field>
+          <Field label="Ort" error={errors.city?.message}>
+            <input style={adminModalInputStyle} {...register('city')} />
+          </Field>
+        </div>
+        <Field label="Bio" error={errors.bio?.message}>
+          <textarea rows={3} style={{ ...adminModalInputStyle, resize: 'vertical', lineHeight: 1.5 }} {...register('bio')} />
+        </Field>
+        {watchedRole !== 'admin' ? (
+          <Field label="Kommission (%)" error={errors.commission_rate_pct?.message}>
+            <input
+              type="number"
               min={0}
               max={50}
-              value={watchedCommissionRatePct}
-              onChange={(value) =>
-                setValue(
-                  'commission_rate_pct',
-                  typeof value === 'number' ? value : 0,
-                  { shouldDirty: true },
-                )
-              }
-              error={errors.commission_rate_pct?.message}
+              step={1}
+              style={adminModalInputStyle}
+              {...register('commission_rate_pct', { valueAsNumber: true })}
             />
-          ) : null}
-
-          <Group justify="flex-end" mt="xl">
-            <Button
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Avbryt
-            </Button>
-            <Button type="submit" loading={isSubmitting}>
-              Spara
-            </Button>
-          </Group>
-        </Stack>
+          </Field>
+        ) : null}
       </form>
-    </Modal>
+    </AdminModalShell>
   );
 }

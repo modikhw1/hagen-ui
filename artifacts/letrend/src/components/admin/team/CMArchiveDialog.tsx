@@ -1,20 +1,19 @@
-// app/src/components/admin/team/CMArchiveDialog.tsx
-
 'use client';
 
 import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { AdminModalShell } from '@/components/admin/ui/AdminModalShell';
 import {
-  Modal,
-  Button,
-  Alert,
-  TextInput,
-  Text,
-  Group,
-} from '@mantine/core';
-
+  adminModalAlertStyle,
+  adminModalInputStyle,
+  adminModalLabelStyle,
+  adminModalPrimaryButtonStyle,
+  adminModalSecondaryButtonStyle,
+  adminModalSectionStyle,
+} from '@/components/admin/ui/adminModalTokens';
+import { LeTrendColors } from '@/styles/letrend-design-system';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 
 export interface CMArchiveDialogProps {
@@ -61,58 +60,61 @@ export function CMArchiveDialog({
   };
 
   return (
-    <Modal
-      opened={open}
+    <AdminModalShell
+      open={open}
       onClose={() => onOpenChange(false)}
-      title={
-        <div className="flex items-center gap-2 font-semibold text-lg">
-          <AlertTriangle className="h-5 w-5 text-red-600" />
-          Arkivera {cmName}?
-        </div>
+      title={`Arkivera ${cmName}?`}
+      size="sm"
+      disableClose={submitting}
+      footer={
+        <>
+          <button
+            type="button"
+            style={{ ...adminModalSecondaryButtonStyle, opacity: submitting ? 0.5 : 1 }}
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
+          >
+            Avbryt
+          </button>
+          <button
+            type="button"
+            style={adminModalPrimaryButtonStyle(canArchive && !submitting, 'danger')}
+            onClick={handleArchive}
+            disabled={!canArchive || submitting}
+          >
+            {submitting ? 'Arkiverar…' : 'Arkivera permanent'}
+          </button>
+        </>
       }
     >
-      <div className="space-y-4">
-        <Text size="sm" c="dimmed">
-          Arkivering deaktiverar inloggning och tar bort CM:en från
-          tilldelningar. Historisk data behålls.
-        </Text>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ fontSize: 12.5, color: LeTrendColors.brownDark, lineHeight: 1.5 }}>
+          Arkivering deaktiverar inloggning och tar bort CM:en från tilldelningar. Historisk data behålls.
+        </div>
 
         {activeCustomerCount > 0 ? (
-          <Alert color="red" icon={<AlertTriangle className="h-4 w-4" />}>
-            {cmName} har {activeCustomerCount} aktiva kunder. Flytta dem till
-            en annan CM via &quot;Hantera kundportfölj&quot; innan arkivering.
-          </Alert>
+          <div style={adminModalAlertStyle('danger')}>
+            <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span>
+              {cmName} har {activeCustomerCount} aktiva kunder. Flytta dem till en annan CM via &quot;Hantera kundportfölj&quot; innan arkivering.
+            </span>
+          </div>
         ) : (
-          <div className="space-y-2">
-            <TextInput
-              label={
-                <Text size="sm">
-                  Skriv <strong>{cmName}</strong> för att bekräfta:
-                </Text>
-              }
+          <div style={adminModalSectionStyle}>
+            <div style={adminModalLabelStyle}>
+              Skriv {cmName} för att bekräfta
+            </div>
+            <input
               id="confirm-name"
               value={confirmText}
               onChange={(e) => setConfirmText(e.currentTarget.value)}
               placeholder={cmName}
               autoComplete="off"
+              style={adminModalInputStyle}
             />
           </div>
         )}
-
-        <Group justify="flex-end" mt="xl">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
-            Avbryt
-          </Button>
-          <Button
-            color="red"
-            onClick={handleArchive}
-            disabled={!canArchive || submitting}
-            loading={submitting}
-          >
-            Arkivera permanent
-          </Button>
-        </Group>
       </div>
-    </Modal>
+    </AdminModalShell>
   );
 }

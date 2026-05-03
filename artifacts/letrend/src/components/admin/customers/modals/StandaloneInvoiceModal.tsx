@@ -4,17 +4,17 @@
 import { useMemo, useState } from 'react';
 import { Info, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Alert,
-  Button,
-  Group,
-  Modal,
-  NumberInput,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core';
 
+import { AdminModalShell } from '@/components/admin/ui/AdminModalShell';
+import {
+  adminModalAlertStyle,
+  adminModalInputStyle,
+  adminModalLabelStyle,
+  adminModalPrimaryButtonStyle,
+  adminModalSecondaryButtonStyle,
+  adminModalSectionStyle,
+} from '@/components/admin/ui/adminModalTokens';
+import { LeTrendColors } from '@/styles/letrend-design-system';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 
 export interface StandaloneInvoiceModalProps {
@@ -39,7 +39,7 @@ export interface StandaloneInvoiceModalProps {
 type DraftInvoiceLine = {
   id: string;
   description: string;
-  amountKr: string | number;
+  amountKr: string;
 };
 
 function createDraftLine(): DraftInvoiceLine {
@@ -65,7 +65,7 @@ export function StandaloneInvoiceModal({
   onCreated,
 }: StandaloneInvoiceModalProps) {
   const [lines, setLines] = useState<DraftInvoiceLine[]>([createDraftLine()]);
-  const [daysUntilDue, setDaysUntilDue] = useState<string | number>(14);
+  const [daysUntilDue, setDaysUntilDue] = useState<string>('14');
   const [submitting, setSubmitting] = useState(false);
 
   const refresh = useAdminRefresh();
@@ -73,7 +73,7 @@ export function StandaloneInvoiceModal({
 
   function resetForm() {
     setLines([createDraftLine()]);
-    setDaysUntilDue(14);
+    setDaysUntilDue('14');
   }
 
   function updateLine(
@@ -91,10 +91,7 @@ export function StandaloneInvoiceModal({
 
   function removeLine(lineId: string) {
     setLines((current) => {
-      if (current.length === 1) {
-        return [createDraftLine()];
-      }
-
+      if (current.length === 1) return [createDraftLine()];
       return current.filter((line) => line.id !== lineId);
     });
   }
@@ -109,7 +106,7 @@ export function StandaloneInvoiceModal({
       .filter((line) => line.description.length > 0 || line.amount > 0);
 
     if (normalizedLines.length === 0) {
-      toast.error('Lagg till minst en fakturarad.');
+      toast.error('Lägg till minst en fakturarad.');
       return;
     }
 
@@ -118,12 +115,12 @@ export function StandaloneInvoiceModal({
         (line) => !line.description || !Number.isFinite(line.amount) || line.amount <= 0,
       )
     ) {
-      toast.error('Varje rad maste ha beskrivning och belopp over 0.');
+      toast.error('Varje rad måste ha beskrivning och belopp över 0.');
       return;
     }
 
     if (!Number.isFinite(parsedDays) || parsedDays < 1 || parsedDays > 90) {
-      toast.error('Ange forfallodagar mellan 1 och 90.');
+      toast.error('Ange förfallodagar mellan 1 och 90.');
       return;
     }
 
@@ -146,18 +143,7 @@ export function StandaloneInvoiceModal({
         return;
       }
 
-      const createdInvoice = body.invoice as
-        | {
-            id: string;
-            number?: string | null;
-            status?: string | null;
-            amount_due?: number | null;
-            amount_paid?: number | null;
-            currency?: string | null;
-            created?: number | null;
-            hosted_invoice_url?: string | null;
-          }
-        | undefined;
+      const createdInvoice = body.invoice;
 
       if (createdInvoice?.id && onCreated) {
         onCreated({
@@ -179,109 +165,125 @@ export function StandaloneInvoiceModal({
         });
       }
 
-      toast.success(`Engangsfaktura skapad for ${customerName}.`);
+      toast.success(`Engångsfaktura skapad för ${customerName}.`);
       resetForm();
       await refresh([{ type: 'customer-billing', customerId }, 'billing']);
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Natverksfel');
+      toast.error(err instanceof Error ? err.message : 'Nätverksfel');
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Modal
-      opened={open}
+    <AdminModalShell
+      open={open}
       onClose={() => onOpenChange(false)}
-      title="Skapa engangsfaktura"
-      centered
+      title="Skapa engångsfaktura"
+      description="Faktureras separat och skickas direkt via Stripe. Pending invoice items dras inte in i detta flöde."
       size="lg"
-    >
-      <Stack gap="md">
-        <Text size="sm" c="dimmed">
-          Faktureras separat och skickas direkt via Stripe. Pending invoice items
-          dras inte in i detta flode.
-        </Text>
-
-        <Alert icon={<Info size={16} />} color="blue">
-          For tillagg till nasta abonnemangsfaktura, anvand <strong>Lagg till rad</strong> i
-          vantande poster i stallet.
-        </Alert>
-
-        <Stack gap="sm">
-          {lines.map((line, index) => (
-            <Group key={line.id} align="flex-end" wrap="nowrap">
-              <TextInput
-                label={index === 0 ? 'Beskrivning' : undefined}
-                value={line.description}
-                onChange={(event) =>
-                  updateLine(line.id, { description: event.currentTarget.value })
-                }
-                maxLength={200}
-                placeholder="Installationsavgift"
-                required
-                style={{ flex: 1 }}
-              />
-              <NumberInput
-                label={index === 0 ? 'Belopp (kr)' : undefined}
-                min={1}
-                step={1}
-                value={line.amountKr}
-                onChange={(value) => updateLine(line.id, { amountKr: value })}
-                required
-                style={{ width: 140 }}
-              />
-              <Button
-                variant="subtle"
-                color="gray"
-                onClick={() => removeLine(line.id)}
-                aria-label={`Ta bort rad ${index + 1}`}
-                disabled={submitting}
-              >
-                <Trash2 size={16} />
-              </Button>
-            </Group>
-          ))}
-        </Stack>
-
-        <Group justify="space-between">
-          <Button
-            variant="light"
-            leftSection={<Plus size={16} />}
-            onClick={addLine}
-            disabled={submitting}
-          >
-            Lagg till rad
-          </Button>
-          <Text size="sm" fw={600}>
-            Total: {totalKr.toLocaleString('sv-SE')} kr
-          </Text>
-        </Group>
-
-        <NumberInput
-          label="Forfaller om (dagar)"
-          min={1}
-          max={90}
-          step={1}
-          value={daysUntilDue}
-          onChange={setDaysUntilDue}
-          required
-        />
-
-        <Group justify="flex-end" mt="md">
-          <Button
-            variant="outline"
+      disableClose={submitting}
+      footer={
+        <>
+          <button
+            type="button"
+            style={{ ...adminModalSecondaryButtonStyle, opacity: submitting ? 0.5 : 1 }}
             onClick={() => onOpenChange(false)}
             disabled={submitting}
           >
             Avbryt
-          </Button>
-          <Button onClick={handleSubmit} disabled={submitting} loading={submitting}>
-            Skapa och skicka
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
+          </button>
+          <button
+            type="button"
+            style={adminModalPrimaryButtonStyle(!submitting)}
+            onClick={handleSubmit}
+            disabled={submitting}
+          >
+            {submitting ? 'Skapar…' : 'Skapa och skicka'}
+          </button>
+        </>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={adminModalAlertStyle('info')}>
+          <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            För tillägg till nästa abonnemangsfaktura, använd <strong>Lägg till rad</strong> i väntande poster i stället.
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {lines.map((line, index) => (
+            <div key={line.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+              <div style={{ ...adminModalSectionStyle, flex: 1 }}>
+                {index === 0 ? <div style={adminModalLabelStyle}>Beskrivning</div> : null}
+                <input
+                  value={line.description}
+                  onChange={(event) =>
+                    updateLine(line.id, { description: event.currentTarget.value })
+                  }
+                  maxLength={200}
+                  placeholder="Installationsavgift"
+                  style={adminModalInputStyle}
+                />
+              </div>
+              <div style={{ ...adminModalSectionStyle, width: 130 }}>
+                {index === 0 ? <div style={adminModalLabelStyle}>Belopp (kr)</div> : null}
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={line.amountKr}
+                  onChange={(event) => updateLine(line.id, { amountKr: event.currentTarget.value })}
+                  style={adminModalInputStyle}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removeLine(line.id)}
+                aria-label={`Ta bort rad ${index + 1}`}
+                disabled={submitting}
+                style={{
+                  ...adminModalSecondaryButtonStyle,
+                  padding: '8px 10px',
+                  minHeight: 34,
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={addLine}
+            disabled={submitting}
+            style={{ ...adminModalSecondaryButtonStyle }}
+          >
+            <Plus size={14} />
+            Lägg till rad
+          </button>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: LeTrendColors.brownDark }}>
+            Total: {totalKr.toLocaleString('sv-SE')} kr
+          </div>
+        </div>
+
+        <div style={adminModalSectionStyle}>
+          <div style={adminModalLabelStyle}>Förfaller om (dagar)</div>
+          <input
+            type="number"
+            min={1}
+            max={90}
+            step={1}
+            value={daysUntilDue}
+            onChange={(event) => setDaysUntilDue(event.currentTarget.value)}
+            style={adminModalInputStyle}
+          />
+        </div>
+      </div>
+    </AdminModalShell>
   );
 }

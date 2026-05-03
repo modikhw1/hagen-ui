@@ -1,8 +1,9 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { Modal, Text, Box, Alert, Button, Group } from '@mantine/core';
 import { AlertCircle, AlertTriangle } from 'lucide-react';
+import { AdminModalShell } from '@/components/admin/ui/AdminModalShell';
+import { adminModalAlertStyle } from '@/components/admin/ui/adminModalTokens';
 
 type Size = 'sm' | 'md' | 'lg' | 'xl';
 
@@ -13,7 +14,7 @@ export interface AdminFormDialogProps {
   description?: ReactNode;
   size?: Size;
   children: ReactNode;
-  footer: ReactNode;
+  footer?: ReactNode;
   error?: string | null;
   warning?: string | null;
   loading?: boolean;
@@ -32,50 +33,30 @@ export function AdminFormDialog({
   loading,
 }: AdminFormDialogProps) {
   return (
-    <Modal
-      opened={open}
+    <AdminModalShell
+      open={open}
       onClose={onClose}
       title={title}
+      description={description}
       size={size}
-      padding={0}
-      centered
-      withCloseButton={!loading}
-      closeOnClickOutside={!loading}
-      closeOnEscape={!loading}
+      disableClose={loading}
+      footer={footer}
     >
-      <Box p="md">
-        {description && (
-          <Text size="sm" color="dimmed" mb="md">
-            {description}
-          </Text>
+      <div>
+        {children}
+        {error && (
+          <div role="alert" style={{ ...adminModalAlertStyle('danger'), marginTop: 12 }}>
+            <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span><strong style={{ marginRight: 6 }}>Fel.</strong>{error}</span>
+          </div>
         )}
-
-        <Box>
-          {children}
-          {error && (
-            <Alert icon={<AlertCircle size={16} />} title="Fel" color="red" mt="md">
-              {error}
-            </Alert>
-          )}
-          {warning && (
-            <Alert icon={<AlertTriangle size={16} />} title="Varning" color="yellow" mt="md">
-              {warning}
-            </Alert>
-          )}
-        </Box>
-      </Box>
-
-      <Box
-        p="md"
-        style={(theme) => ({
-          borderTop: `1px solid ${theme.colors.gray[2]}`,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          gap: theme.spacing.sm,
-        })}
-      >
-        {footer}
-      </Box>
-    </Modal>
+        {warning && (
+          <div role="alert" style={{ ...adminModalAlertStyle('warning'), marginTop: 12 }}>
+            <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span><strong style={{ marginRight: 6 }}>Varning.</strong>{warning}</span>
+          </div>
+        )}
+      </div>
+    </AdminModalShell>
   );
 }

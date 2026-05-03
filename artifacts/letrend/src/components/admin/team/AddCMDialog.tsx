@@ -5,16 +5,15 @@ import { useForm, useWatch, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
+import { AdminModalShell } from '@/components/admin/ui/AdminModalShell';
 import {
-  Modal,
-  TextInput,
-  Button,
-  Text,
-  Group,
-  Stack,
-  NumberInput,
-  Textarea,
-} from '@mantine/core';
+  adminModalInputStyle,
+  adminModalLabelStyle,
+  adminModalPrimaryButtonStyle,
+  adminModalSecondaryButtonStyle,
+  adminModalSectionStyle,
+} from '@/components/admin/ui/adminModalTokens';
+import { LeTrendColors } from '@/styles/letrend-design-system';
 import { AvatarUploader } from '@/components/admin/shared/AvatarUploader';
 import { useCreateTeamMember } from '@/hooks/admin/useCreateTeamMember';
 
@@ -32,6 +31,21 @@ type FormValues = z.infer<typeof Schema>;
 
 export interface AddCMDialogProps {
   trigger?: React.ReactNode;
+}
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <div style={{ fontSize: 11, color: LeTrendColors.error }}>{message}</div>;
+}
+
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div style={adminModalSectionStyle}>
+      <div style={adminModalLabelStyle}>{label}</div>
+      {children}
+      <FieldError message={error} />
+    </div>
+  );
 }
 
 export function AddCMDialog({ trigger }: AddCMDialogProps) {
@@ -58,8 +72,6 @@ export function AddCMDialog({ trigger }: AddCMDialogProps) {
   });
   const watchedName = useWatch({ control, name: 'name' }) ?? '';
   const watchedAvatarUrl = useWatch({ control, name: 'avatar_url' }) ?? '';
-  const watchedCommissionRatePct =
-    useWatch({ control, name: 'commission_rate_pct' }) ?? 20;
 
   const onSubmit: SubmitHandler<FormValues> = async (values) => {
     try {
@@ -87,101 +99,91 @@ export function AddCMDialog({ trigger }: AddCMDialogProps) {
     }
   };
 
+  const submitting = isSubmitting || createTeamMember.isPending;
+
   return (
     <>
       <div onClick={() => setOpen(true)} className="inline-block">
-        {trigger ?? <Button>+ Lägg till CM</Button>}
+        {trigger ?? (
+          <button type="button" style={adminModalPrimaryButtonStyle(true)}>
+            + Lägg till CM
+          </button>
+        )}
       </div>
 
-      <Modal
-        opened={open}
+      <AdminModalShell
+        open={open}
         onClose={() => setOpen(false)}
-        title={<Text fw={600} size="lg">Lägg till content manager</Text>}
+        title="Lägg till content manager"
+        description="Skapar teammedlem och skickar inbjudan via e-post direkt."
         size="lg"
+        disableClose={submitting}
+        footer={
+          <>
+            <button
+              type="button"
+              style={{ ...adminModalSecondaryButtonStyle, opacity: submitting ? 0.5 : 1 }}
+              onClick={() => setOpen(false)}
+              disabled={submitting}
+            >
+              Avbryt
+            </button>
+            <button
+              type="button"
+              style={adminModalPrimaryButtonStyle(!submitting)}
+              onClick={handleSubmit(onSubmit)}
+              disabled={submitting}
+            >
+              {submitting ? 'Sparar…' : 'Lägg till CM'}
+            </button>
+          </>
+        }
       >
-        <Text size="sm" c="dimmed" mb="md">
-          Skapar teammedlem och skickar inbjudan via e-post direkt.
-        </Text>
+        <form onSubmit={handleSubmit(onSubmit)} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <AvatarUploader
+            name={watchedName}
+            value={watchedAvatarUrl}
+            onChange={(value) => setValue('avatar_url', value, { shouldDirty: true })}
+            error={errors.avatar_url?.message ?? null}
+          />
 
-        <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          <Stack gap="md">
-            <AvatarUploader
-              name={watchedName}
-              value={watchedAvatarUrl}
-              onChange={(value) => setValue('avatar_url', value, { shouldDirty: true })}
-              error={errors.avatar_url?.message ?? null}
-            />
+          <Field label="Fullständigt namn" error={errors.name?.message}>
+            <input style={adminModalInputStyle} placeholder="Anna Andersson" {...register('name')} />
+          </Field>
 
-            <TextInput
-              label="Fullständigt namn"
-              placeholder="Anna Andersson"
-              {...register('name')}
-              error={errors.name?.message}
-            />
+          <Field label="E-post" error={errors.email?.message}>
+            <input type="email" style={adminModalInputStyle} placeholder="anna@letrend.se" {...register('email')} />
+          </Field>
 
-            <TextInput
-              label="E-post"
-              type="email"
-              placeholder="anna@letrend.se"
-              {...register('email')}
-              error={errors.email?.message}
-            />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Telefon" error={errors.phone?.message}>
+              <input style={adminModalInputStyle} placeholder="070-123 45 67" {...register('phone')} />
+            </Field>
+            <Field label="Ort" error={errors.city?.message}>
+              <input style={adminModalInputStyle} placeholder="Stockholm" {...register('city')} />
+            </Field>
+          </div>
 
-            <Group grow align="start">
-              <TextInput
-                label="Telefon"
-                placeholder="070-123 45 67"
-                {...register('phone')}
-                error={errors.phone?.message}
-              />
-              <TextInput
-                label="Ort"
-                placeholder="Stockholm"
-                {...register('city')}
-                error={errors.city?.message}
-              />
-            </Group>
-
-            <Textarea
-              label="Bio"
-              autosize
-              minRows={3}
-              maxRows={6}
+          <Field label="Bio" error={errors.bio?.message}>
+            <textarea
+              rows={3}
+              style={{ ...adminModalInputStyle, resize: 'vertical', lineHeight: 1.5 }}
               {...register('bio')}
-              error={errors.bio?.message}
             />
+          </Field>
 
-            <NumberInput
-              label="Kommission (%)"
+          <Field label="Kommission (%)" error={errors.commission_rate_pct?.message}>
+            <input
+              type="number"
               min={0}
               max={50}
-              value={watchedCommissionRatePct}
-              onChange={(value) =>
-                setValue(
-                  'commission_rate_pct',
-                  typeof value === 'number' ? value : 0,
-                  { shouldDirty: true },
-                )
-              }
-              error={errors.commission_rate_pct?.message}
+              step={1}
+              style={adminModalInputStyle}
+              {...register('commission_rate_pct', { valueAsNumber: true })}
             />
-
-            <Group justify="flex-end" mt="xl">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setOpen(false)}
-                disabled={isSubmitting}
-              >
-                Avbryt
-              </Button>
-              <Button type="submit" loading={isSubmitting || createTeamMember.isPending}>
-                Lägg till CM
-              </Button>
-            </Group>
-          </Stack>
+          </Field>
         </form>
-      </Modal>
+      </AdminModalShell>
     </>
   );
 }

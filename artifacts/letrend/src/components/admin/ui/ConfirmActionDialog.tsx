@@ -1,7 +1,11 @@
 'use client';
 
-import { Modal, Button, Text, Group } from '@mantine/core';
-import { SHELL_COPY } from '@/lib/admin/copy/shell-strings';
+import { AdminModalShell } from '@/components/admin/ui/AdminModalShell';
+import {
+  adminModalPrimaryButtonStyle,
+  adminModalSecondaryButtonStyle,
+} from '@/components/admin/ui/adminModalTokens';
+import { LeTrendColors } from '@/styles/letrend-design-system';
 
 export default function ConfirmActionDialog({
   open,
@@ -25,27 +29,34 @@ export default function ConfirmActionDialog({
   tone?: 'default' | 'danger';
 }) {
   return (
-    <Modal
-      opened={open}
+    <AdminModalShell
+      open={open}
       onClose={() => onOpenChange(false)}
       title={title}
-      centered
+      size="sm"
+      disableClose={pending}
+      footer={
+        <>
+          <button
+            type="button"
+            style={{ ...adminModalSecondaryButtonStyle, opacity: pending ? 0.5 : 1 }}
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            {cancelLabel}
+          </button>
+          <button
+            type="button"
+            style={adminModalPrimaryButtonStyle(!pending, tone === 'danger' ? 'danger' : 'default')}
+            onClick={onConfirm}
+            disabled={pending}
+          >
+            {pending ? 'Bearbetar…' : confirmLabel}
+          </button>
+        </>
+      }
     >
-      <Text size="sm" mb="lg">
-        {description}
-      </Text>
-      <Group justify="flex-end">
-        <Button variant="subtle" onClick={() => onOpenChange(false)} disabled={pending}>
-          {cancelLabel}
-        </Button>
-        <Button
-          color={tone === 'danger' ? 'red' : 'blue'}
-          onClick={onConfirm}
-          loading={pending}
-        >
-          {confirmLabel}
-        </Button>
-      </Group>
-    </Modal>
+      <div style={{ fontSize: 12.5, lineHeight: 1.5, color: LeTrendColors.brownDark }}>{description}</div>
+    </AdminModalShell>
   );
 }

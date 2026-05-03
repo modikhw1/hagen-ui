@@ -8,13 +8,13 @@ import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import {
-  Modal,
   Accordion,
   Badge,
-  Alert,
   Divider,
 } from '@mantine/core';
 
+import { AdminModalShell } from '@/components/admin/ui/AdminModalShell';
+import { adminModalAlertStyle } from '@/components/admin/ui/adminModalTokens';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { InvoicePreview } from './InvoicePreview';
 import { CreditReissueWizard } from './CreditReissueWizard';
@@ -148,15 +148,15 @@ export function InvoiceDetailModal({
   };
 
   return (
-    <Modal
-      opened={open}
+    <AdminModalShell
+      open={open}
       onClose={() => onOpenChange(false)}
       size="xl"
       title={
-        <div className="flex items-center gap-3 text-lg font-semibold">
+        <span className="inline-flex items-center gap-2">
           Faktura {data?.number ?? invoiceId}
           {data?.status && <StatusBadge status={data.status} />}
-        </div>
+        </span>
       }
     >
       {isLoading && (
@@ -167,31 +167,34 @@ export function InvoiceDetailModal({
       )}
 
       {error && (
-        <Alert color="red" icon={<AlertTriangle className="h-4 w-4" />}>
-          Kunde inte ladda faktura:{' '}
-          {error instanceof Error ? error.message : 'Okänt fel'}
-        </Alert>
+        <div style={adminModalAlertStyle('danger')}>
+          <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <span>
+            Kunde inte ladda faktura:{' '}
+            {error instanceof Error ? error.message : 'Okänt fel'}
+          </span>
+        </div>
       )}
 
       {data && (
         <div className="space-y-5">
           {data.warning && (
-            <Alert
-              color="yellow"
-              title="Stripe-data kunde inte verifieras"
-              icon={<AlertTriangle className="h-4 w-4" />}
-            >
-              {data.warning.message}
-            </Alert>
+            <div style={adminModalAlertStyle('warning')}>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <div>
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                  Stripe-data kunde inte verifieras
+                </div>
+                <div>{data.warning.message}</div>
+              </div>
+            </div>
           )}
 
           {incompleteOp && (
-            <Alert
-              color="red"
-              title="Ofullständig kreditering"
-              icon={<AlertTriangle className="h-4 w-4" />}
-            >
+            <div style={adminModalAlertStyle('danger')}>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
               <div className="space-y-2">
+                <div style={{ fontWeight: 600 }}>Ofullständig kreditering</div>
                 <p>{incompleteOp.attention_reason}</p>
                 <p className="text-xs">
                   Operations-ID: <code>{incompleteOp.id}</code>
@@ -203,7 +206,7 @@ export function InvoiceDetailModal({
                   </p>
                 )}
               </div>
-            </Alert>
+            </div>
           )}
 
           <section className="grid grid-cols-2 gap-4 text-sm">
@@ -371,7 +374,7 @@ export function InvoiceDetailModal({
           )}
         </div>
       )}
-    </Modal>
+    </AdminModalShell>
   );
 }
 

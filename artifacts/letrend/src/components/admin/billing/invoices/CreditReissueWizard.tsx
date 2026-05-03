@@ -5,8 +5,6 @@ import { useMemo, useState } from 'react';
 import { Loader2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  Alert,
-  Button,
   NumberInput,
   Radio,
   Select,
@@ -15,6 +13,11 @@ import {
   TextInput,
   Textarea,
 } from '@mantine/core';
+import {
+  adminModalAlertStyle,
+  adminModalPrimaryButtonStyle,
+  adminModalSecondaryButtonStyle,
+} from '@/components/admin/ui/adminModalTokens';
 import { cn } from '@/lib/utils';
 
 type AdjustmentMode =
@@ -250,10 +253,10 @@ export function CreditReissueWizard({
                 className={cn(
                   'flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-medium',
                   isActive
-                    ? 'border-primary bg-primary text-primary-foreground'
+                    ? 'border-[#4A2F18] bg-[#4A2F18] text-[#FAF8F5]'
                     : isDone
-                      ? 'border-primary/40 bg-primary/10 text-primary'
-                      : 'border-border bg-background text-muted-foreground',
+                      ? 'border-[rgba(74,47,24,0.25)] bg-[rgba(74,47,24,0.08)] text-[#4A2F18]'
+                      : 'border-[rgba(74,47,24,0.1)] bg-[#FAF8F5] text-[#9D8E7D]',
                 )}
               >
                 {index + 1}
@@ -425,19 +428,25 @@ export function CreditReissueWizard({
           />
 
           {mode === 'cancel_subscription' ? (
-            <Alert color="yellow" icon={<AlertTriangle className="h-4 w-4" />}>
-              Detta avslutar kundens aktiva abonnemang direkt.
-            </Alert>
+            <div style={adminModalAlertStyle('warning')}>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>Detta avslutar kundens aktiva abonnemang direkt.</span>
+            </div>
           ) : isOpenInvoice ? (
-            <Alert color="blue">
-              På en öppen faktura minskar kreditnotan kvarvarande belopp. Blir
-              totalen 0 markeras fakturan som betald.
-            </Alert>
+            <div style={adminModalAlertStyle('info')}>
+              <span>
+                På en öppen faktura minskar kreditnotan kvarvarande belopp. Blir totalen 0
+                markeras fakturan som betald.
+              </span>
+            </div>
           ) : (
-            <Alert color="yellow" icon={<AlertTriangle className="h-4 w-4" />}>
-              På en betald faktura måste krediten landa som refund, kundsaldo
-              eller reglering utanför Stripe.
-            </Alert>
+            <div style={adminModalAlertStyle('warning')}>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span>
+                På en betald faktura måste krediten landa som refund, kundsaldo eller
+                reglering utanför Stripe.
+              </span>
+            </div>
           )}
         </div>
       )}
@@ -522,49 +531,59 @@ export function CreditReissueWizard({
             </div>
           )}
 
-          <Alert color="blue">
-            Klicka <em>Bekräfta</em> för att utföra åtgärden i Stripe. Det går
-            inte att ångra automatiskt — en ny kredit eller faktura krävs för
-            att rätta misstag.
-          </Alert>
+          <div style={adminModalAlertStyle('info')}>
+            <span>
+              Klicka <em>Bekräfta</em> för att utföra åtgärden i Stripe. Det går inte att
+              ångra automatiskt — en ny kredit eller faktura krävs för att rätta misstag.
+            </span>
+          </div>
         </div>
       )}
 
       {/* Navigation */}
       <div className="flex items-center justify-between border-t border-border pt-3">
-        <Button
-          variant="subtle"
-          size="sm"
+        <button
+          type="button"
+          style={{
+            ...adminModalSecondaryButtonStyle,
+            opacity: step === 0 || submitting ? 0.5 : 1,
+          }}
           disabled={step === 0 || submitting}
           onClick={() => setStep((s) => Math.max(0, s - 1) as 0 | 1 | 2)}
-          leftSection={<ChevronLeft className="h-4 w-4" />}
         >
+          <ChevronLeft className="h-3.5 w-3.5" />
           Tillbaka
-        </Button>
+        </button>
 
         {step < 2 ? (
-          <Button
-            size="sm"
+          <button
+            type="button"
+            style={adminModalPrimaryButtonStyle(
+              !((step === 0 && !step0Valid) || (step === 1 && !step1Valid)),
+            )}
             disabled={(step === 0 && !step0Valid) || (step === 1 && !step1Valid)}
             onClick={() => setStep((s) => Math.min(2, s + 1) as 0 | 1 | 2)}
-            rightSection={<ChevronRight className="h-4 w-4" />}
           >
             Nästa
-          </Button>
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
         ) : (
-          <Button
-            size="sm"
-            color={mode === 'cancel_subscription' ? 'red' : undefined}
+          <button
+            type="button"
+            style={adminModalPrimaryButtonStyle(
+              !submitting,
+              mode === 'cancel_subscription' ? 'danger' : 'default',
+            )}
             disabled={submitting}
             onClick={submit}
           >
-            {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {submitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             {mode === 'cancel_subscription'
               ? 'Bekräfta avslut + kredit'
               : mode === 'credit_and_reissue'
                 ? 'Bekräfta kredit + ny faktura'
                 : 'Bekräfta kreditnota'}
-          </Button>
+          </button>
         )}
       </div>
     </div>
