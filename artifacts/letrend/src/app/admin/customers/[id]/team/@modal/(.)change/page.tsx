@@ -1,6 +1,13 @@
-// @ts-nocheck
-import { redirect } from '@/lib/navigation-compat';
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  redirect(`/admin/customers/${id}#cm`);
+'use client';
+import { useEffect } from 'react';
+import { useParams } from 'wouter';
+import { useRouter } from '@/lib/navigation-compat';
+
+export default function Page() {
+  const { id = '' } = useParams<{ id: string }>();
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(`/admin/customers/${id}`);
+  }, [id]);
+  return null;
 }

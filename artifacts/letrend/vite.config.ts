@@ -56,6 +56,7 @@ export default defineConfig({
       "next/navigation": path.resolve(import.meta.dirname, "src/stubs/next-navigation.ts"),
       "next/headers": path.resolve(import.meta.dirname, "src/stubs/next-headers.ts"),
       "next/image": path.resolve(import.meta.dirname, "src/stubs/next-image.tsx"),
+      "server-only": path.resolve(import.meta.dirname, "src/stubs/server-only.ts"),
     },
     dedupe: ["react", "react-dom"],
   },

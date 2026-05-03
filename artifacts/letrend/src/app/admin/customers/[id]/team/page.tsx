@@ -1,7 +1,14 @@
-// @ts-nocheck
-import { permanentRedirect } from '@/lib/navigation-compat';
+import { useEffect } from 'react';
+import { useParams } from '@/lib/navigation-compat';
+import { useLocation } from 'wouter';
 
-export default async function Page({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  permanentRedirect(`/admin/customers/${id}#cm`);
+export default function Page() {
+  const { id } = useParams() as { id: string };
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (id) navigate(`/admin/customers/${id}#cm`, { replace: true });
+  }, [id, navigate]);
+
+  return null;
 }

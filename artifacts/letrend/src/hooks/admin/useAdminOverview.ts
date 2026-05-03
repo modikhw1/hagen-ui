@@ -11,22 +11,36 @@ export function useAdminOverview(sortMode: 'standard' | 'lowest_activity') {
         apiClient.get(`/api/admin/overview/attention?sort=${sortMode}`),
         apiClient.get('/api/admin/overview/metrics'),
         apiClient.get(`/api/admin/overview/cm-pulse?sort=${sortMode}`),
-        apiClient.get('/api/admin/service-costs'),
+        apiClient.get('/api/admin/overview/costs'),
       ]);
 
+      const attentionData = attention.status === 'fulfilled'
+        ? (attention.value as Record<string, unknown>)
+        : null;
+      const metricsData = metrics.status === 'fulfilled'
+        ? (metrics.value as Record<string, unknown>)
+        : null;
+      const cmPulseData = cmPulse.status === 'fulfilled'
+        ? (cmPulse.value as Record<string, unknown>)
+        : null;
+      const costsData = costs.status === 'fulfilled'
+        ? (costs.value as Record<string, unknown>)
+        : null;
+
       return {
-        attentionItems: attention.status === 'fulfilled' ? ((attention.value as { items: OverviewDerivedPayload['attentionItems'] }).items ?? []) : [],
+        attentionItems: (attentionData?.['attentionItems'] as OverviewDerivedPayload['attentionItems']) ?? [],
         topAttention: [],
-        snoozedAttentionItems: [],
-        snoozedCount: 0,
-        attentionFeedSeenAt: null,
-        metrics: metrics.status === 'fulfilled'
-          ? (metrics.value as OverviewDerivedPayload['metrics'])
-          : { revenueCard: { value: '–' }, activeCard: { value: '–' }, demosCard: { value: '–' }, costsCard: { value: '–' } } as OverviewDerivedPayload['metrics'],
-        cmPulse: cmPulse.status === 'fulfilled' ? (cmPulse.value as OverviewDerivedPayload['cmPulse']) ?? [] : [],
-        costs: costs.status === 'fulfilled' && costs.value
-          ? (costs.value as OverviewDerivedPayload['costs'])
-          : { entries: [], totalOre: 0 },
+        snoozedAttentionItems: (attentionData?.['snoozedAttentionItems'] as OverviewDerivedPayload['snoozedAttentionItems']) ?? [],
+        snoozedCount: (attentionData?.['snoozedCount'] as number) ?? 0,
+        attentionFeedSeenAt: (attentionData?.['attentionFeedSeenAt'] as string | null) ?? null,
+        metrics: (metricsData?.['metrics'] as OverviewDerivedPayload['metrics']) ?? ({
+          revenueCard: { label: 'MRR', value: '–' },
+          activeCard: { label: 'Kunder', value: '–' },
+          demosCard: { label: 'Demos', value: '–' },
+          costsCard: { label: 'Kostnader', value: '–' },
+        } as OverviewDerivedPayload['metrics']),
+        cmPulse: (cmPulseData?.['cmPulse'] as OverviewDerivedPayload['cmPulse']) ?? [],
+        costs: (costsData as OverviewDerivedPayload['costs'] | null) ?? { entries: [], totalOre: 0 },
       };
     },
     staleTime: 30_000,

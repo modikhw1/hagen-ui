@@ -26,7 +26,7 @@ import { shortDateSv } from '@/lib/admin/time';
 import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
 import KpiCard from '@/components/admin/ui/KpiCard';
 import EmptyState from '@/components/admin/ui/EmptyState';
-import { prepareDemoStudioAction } from '@/app/admin/_actions/demos';
+import { apiClient } from '@/lib/admin/api-client';
 
 const STAGE_FILTERS = [
   { key: 'all', label: 'Alla' },
@@ -182,7 +182,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     if (studioPendingId) return;
     setStudioPendingId(demo.id);
     try {
-      const result = await prepareDemoStudioAction(demo.id);
+      const result = await apiClient.post(`/api/admin/demos/${demo.id}/prepare-studio`, {}) as { success: boolean; customerId?: string; error?: string };
       if (result.success && result.customerId) {
         window.open(`/studio/customers/${result.customerId}`, '_blank');
       } else {

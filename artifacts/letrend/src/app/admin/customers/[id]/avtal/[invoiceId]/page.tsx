@@ -1,11 +1,13 @@
-// @ts-nocheck
-import { redirect } from '@/lib/navigation-compat';
+'use client';
+import { useEffect } from 'react';
+import { useParams } from 'wouter';
+import { useRouter } from '@/lib/navigation-compat';
 
-export default async function Page({
-  params,
-}: {
-  params: Promise<{ id: string; invoiceId: string }>;
-}) {
-  const { id, invoiceId } = await params;
-  redirect(`/admin/customers/${id}/avtal?invoice=${invoiceId}`);
+export default function Page() {
+  const { id = '', invoiceId = '' } = useParams<{ id: string; invoiceId: string }>();
+  const router = useRouter();
+  useEffect(() => {
+    router.replace(`/admin/customers/${id}/avtal?invoice=${invoiceId}`);
+  }, [id, invoiceId]);
+  return null;
 }

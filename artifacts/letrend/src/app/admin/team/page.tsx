@@ -1,29 +1,16 @@
 import TeamPageClient from '@/app/admin/team/TeamPageClient';
-import { loadAdminTeamOverview } from '@/lib/admin/server/team';
+import { useSearchParams } from '@/lib/navigation-compat';
 
-export default async function TeamPage({
-  searchParams,
-}: {
-  searchParams?: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const resolvedSearchParams = (await searchParams) ?? {};
-  const sortParam = resolvedSearchParams.sort;
-  const focusParam = resolvedSearchParams.focus;
-  const sortMode =
-    (Array.isArray(sortParam) ? sortParam[0] : sortParam) === 'anomalous'
-      ? 'anomalous'
-      : 'standard';
-  const focusedMemberId =
-    typeof focusParam === 'string'
-      ? focusParam
-      : Array.isArray(focusParam)
-        ? focusParam[0] ?? null
-        : null;
-  const initialData = await loadAdminTeamOverview(sortMode);
+export default function TeamPage() {
+  const [searchParams] = useSearchParams();
+  const sortParam = searchParams?.get('sort');
+  const focusParam = searchParams?.get('focus');
+  const sortMode: 'standard' | 'anomalous' = sortParam === 'anomalous' ? 'anomalous' : 'standard';
+  const focusedMemberId = focusParam ?? null;
 
   return (
     <TeamPageClient
-      initialTeam={initialData.members}
+      initialTeam={[]}
       initialSortMode={sortMode}
       initialFocusedMemberId={focusedMemberId}
     />

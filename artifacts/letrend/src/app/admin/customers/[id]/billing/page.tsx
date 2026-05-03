@@ -1,19 +1,22 @@
-// @ts-nocheck
-import { redirect } from '@/lib/navigation-compat';
+import { useEffect } from 'react';
+import { useParams, useSearchParams } from '@/lib/navigation-compat';
+import { useLocation } from 'wouter';
 
-export default async function CustomerBillingPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<{ invoice?: string; manualInvoice?: string }>;
-}) {
-  const { id } = await params;
-  const query = await searchParams;
-  const invoice = query?.invoice;
-  const manualInvoice = query?.manualInvoice === '1' ? '?manualInvoice=1' : '';
-  if (invoice) {
-    redirect(`/admin/customers/${id}/avtal?invoice=${invoice}`);
-  }
-  redirect(`/admin/customers/${id}/avtal${manualInvoice}`);
+export default function CustomerBillingPage() {
+  const { id } = useParams() as { id: string };
+  const [searchParams] = useSearchParams();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (!id) return;
+    const invoice = searchParams?.get('invoice');
+    const manualInvoice = searchParams?.get('manualInvoice') === '1' ? '?manualInvoice=1' : '';
+    if (invoice) {
+      navigate(`/admin/customers/${id}/avtal?invoice=${invoice}`, { replace: true });
+    } else {
+      navigate(`/admin/customers/${id}/avtal${manualInvoice}`, { replace: true });
+    }
+  }, [id, navigate, searchParams]);
+
+  return null;
 }

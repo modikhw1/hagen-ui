@@ -1,67 +1,28 @@
-import { dehydrate, HydrationBoundary, QueryClient } from '@tanstack/react-query';
 import { AuditLogScreen } from '@/components/admin/audit/AuditLogScreen';
-import { qk } from '@/lib/admin/queryKeys';
-import { type AuditLogFilter } from '@/lib/admin/schemas/audit';
-import { fetchAuditLogServer } from '@/lib/admin/server/audit';
+import { useSearchParams } from '@/lib/navigation-compat';
 
-import { getAdminActionSession } from '@/app/admin/_actions/shared';
+export default function AuditLogPage() {
+  const [searchParams] = useSearchParams();
 
-export const dynamic = 'force-dynamic';
-
-type AuditLogPageProps = {
-  searchParams: Promise<{
-    actor?: string;
-    action?: string;
-    entity?: string;
-    from?: string;
-    to?: string;
-    onlyErrors?: string;
-    billingOnly?: string;
-  }>;
-};
-
-export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
-  const sp = await searchParams;
-  const onlyErrors = sp.onlyErrors === '1' || sp.onlyErrors === 'true';
-  const billingOnly = sp.billingOnly === '1' || sp.billingOnly === 'true';
-  const filter: AuditLogFilter = {
-    actor: sp.actor,
-    action: sp.action,
-    entity: sp.entity,
-    from: sp.from,
-    to: sp.to,
-    onlyErrors,
-    billingOnly,
-    limit: 50,
-    cursor: null,
-  };
-  const queryClient = new QueryClient();
-
-  // Parallelize auth and infinite query prefetching
-  await Promise.all([
-    getAdminActionSession('audit.read' as any),
-    queryClient.prefetchInfiniteQuery({
-      queryKey: qk.auditLog.list(filter),
-      queryFn: ({ pageParam }) =>
-        fetchAuditLogServer({
-          ...filter,
-          cursor: typeof pageParam === 'string' ? pageParam : filter.cursor ?? null,
-        }),
-      initialPageParam: null,
-    }),
-  ]);
+  const actor = searchParams?.get('actor') ?? undefined;
+  const action = searchParams?.get('action') ?? undefined;
+  const entity = searchParams?.get('entity') ?? undefined;
+  const from = searchParams?.get('from') ?? undefined;
+  const to = searchParams?.get('to') ?? undefined;
+  const onlyErrors =
+    searchParams?.get('onlyErrors') === '1' || searchParams?.get('onlyErrors') === 'true';
+  const billingOnly =
+    searchParams?.get('billingOnly') === '1' || searchParams?.get('billingOnly') === 'true';
 
   return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <AuditLogScreen
-        actor={sp.actor}
-        action={sp.action}
-        entity={sp.entity}
-        from={sp.from}
-        to={sp.to}
-        onlyErrors={onlyErrors}
-        billingOnly={billingOnly}
-      />
-    </HydrationBoundary>
+    <AuditLogScreen
+      actor={actor}
+      action={action}
+      entity={entity}
+      from={from}
+      to={to}
+      onlyErrors={onlyErrors}
+      billingOnly={billingOnly}
+    />
   );
 }

@@ -1,22 +1,23 @@
-// @ts-nocheck
-import { redirect } from '@/lib/navigation-compat'
+'use client';
+import { useEffect } from 'react';
+import { useRouter } from '@/lib/navigation-compat';
 
-export default async function MobileEntryPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const params = await searchParams
-  const isLegacyDemo = params.demo === 'true' || params.auth === 'true'
+export default function MobileEntryPage() {
+  const router = useRouter();
 
-  if (isLegacyDemo) {
-    const next = new URLSearchParams()
-    if (params.auth === 'true') {
-      next.set('auth', 'true')
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const isLegacyDemo = sp.get('demo') === 'true' || sp.get('auth') === 'true';
+
+    if (isLegacyDemo) {
+      const next = new URLSearchParams();
+      if (sp.get('auth') === 'true') next.set('auth', 'true');
+      const suffix = next.size > 0 ? `?${next.toString()}` : '';
+      router.replace(`/m/legacy-demo${suffix}`);
+    } else {
+      router.replace('/m/feed');
     }
-    const suffix = next.size > 0 ? `?${next.toString()}` : ''
-    redirect(`/m/legacy-demo${suffix}`)
-  }
+  }, []);
 
-  redirect('/m/feed')
+  return null;
 }
