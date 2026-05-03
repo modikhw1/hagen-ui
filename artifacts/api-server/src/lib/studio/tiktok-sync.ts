@@ -193,14 +193,21 @@ export interface SyncOptions {
   mode: 'cron' | 'manual';
   pages?: number;
   pageSize?: number;
+  startCursor?: number;
 }
 
 export interface SyncResult {
   fetched: number;
   imported: number;
   statsUpdated: number;
+  /** Clips that existed and were already up-to-date (not new, not stat-changed). */
+  skipped: number;
   callsUsed: number;
   pages: number;
+  /** Whether the provider reports more pages beyond the last one we fetched. */
+  has_more: boolean;
+  /** Cursor to pass back for the next page, or null when exhausted. */
+  cursor: number | null;
   error?: string;
   rateLimited?: boolean;
   retryAfterMs?: number;
@@ -214,7 +221,7 @@ export async function syncCustomerHistory(
   opts: SyncOptions,
 ): Promise<SyncResult> {
   const cleanedHandle = handle.trim().replace(/^@/, '');
-  if (!cleanedHandle) return { fetched: 0, imported: 0, statsUpdated: 0, callsUsed: 0, pages: 0, error: 'no_handle' };
+  if (!cleanedHandle) return { fetched: 0, imported: 0, statsUpdated: 0, skipped: 0, callsUsed: 0, pages: 0, has_more: false, cursor: null, error: 'no_handle' };
 
   const now = new Date();
   const startedAt = now.toISOString();
@@ -229,9 +236,9 @@ export async function syncCustomerHistory(
     .eq('id', customerId)
     .or(`operation_lock_until.is.null,operation_lock_until.lt.${startedAt}`)
     .select('id');
-  if (lockError) return { fetched: 0, imported: 0, statsUpdated: 0, callsUsed: 0, pages: 0, error: `lock_error: ${lockError.message}` };
+  if (lockError) return { fetched: 0, imported: 0, statsUpdated: 0, skipped: 0, callsUsed: 0, pages: 0, has_more: false, cursor: null, error: `lock_error: ${lockError.message}` };
   if (!lockRows || lockRows.length === 0) {
-    return { fetched: 0, imported: 0, statsUpdated: 0, callsUsed: 0, pages: 0, error: 'already_locked' };
+    return { fetched: 0, imported: 0, statsUpdated: 0, skipped: 0, callsUsed: 0, pages: 0, has_more: false, cursor: null, error: 'already_locked' };
   }
 
   // Heartbeat: extend our lock every minute so long-running syncs aren't
@@ -264,7 +271,9 @@ export async function syncCustomerHistory(
   let totalStatsUpdated = 0;
   let callsUsed = 0;
   let pagesProcessed = 0;
-  let cursor: number | undefined;
+  let cursor: number | undefined = typeof opts.startCursor === 'number' ? opts.startCursor : undefined;
+  let lastCursor: number | null = null;
+  let lastHasMore = false;
   let errorMessage: string | undefined;
   let rateLimited = false;
   let retryAfterMs: number | undefined;
@@ -365,6 +374,8 @@ export async function syncCustomerHistory(
         }
       }
 
+      lastHasMore = page.has_more;
+      lastCursor = page.cursor;
       if (!page.has_more || page.cursor === null) break;
       cursor = page.cursor;
     }
@@ -410,9 +421,11 @@ export async function syncCustomerHistory(
       .eq('operation_lock_until', currentLockUntil);
   }
 
+  const skipped = Math.max(0, totalFetched - totalImported - totalStatsUpdated);
   return {
-    fetched: totalFetched, imported: totalImported, statsUpdated: totalStatsUpdated,
-    callsUsed, pages: pagesProcessed, error: errorMessage, rateLimited, retryAfterMs,
+    fetched: totalFetched, imported: totalImported, statsUpdated: totalStatsUpdated, skipped,
+    callsUsed, pages: pagesProcessed, has_more: lastHasMore, cursor: lastCursor,
+    error: errorMessage, rateLimited, retryAfterMs,
   };
 }
 

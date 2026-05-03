@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
-import { runHistorySyncBatch, syncCustomerHistory } from '../lib/studio/tiktok-sync.js';
+import { runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -131,6 +131,22 @@ router.patch('/customers/:customerId/profile', requireAuth, CM_ONLY, async (req,
       if (key in body) patch[key] = body[key];
     }
 
+    // Detect TikTok handle change so we can trigger a fresh initial backfill.
+    const { data: prev } = await supabase
+      .from('customer_profiles')
+      .select('tiktok_handle')
+      .eq('id', customerId)
+      .maybeSingle();
+    const prevHandleRaw = prev?.tiktok_handle as unknown;
+    const prevHandle = typeof prevHandleRaw === 'string' ? prevHandleRaw.trim().replace(/^@/, '') : '';
+    const nextHandleRaw = patch['tiktok_handle'];
+    const nextHandle = typeof nextHandleRaw === 'string' ? nextHandleRaw.trim().replace(/^@/, '') : '';
+    const handleChanged = nextHandleRaw !== undefined && nextHandle !== prevHandle && nextHandle !== '';
+    if (handleChanged) {
+      patch['last_history_sync_at'] = null;
+      patch['last_upload_at'] = null;
+    }
+
     const { data, error } = await supabase
       .from('customer_profiles')
       .update(patch)
@@ -142,6 +158,13 @@ router.patch('/customers/:customerId/profile', requireAuth, CM_ONLY, async (req,
       res.status(500).json({ error: error.message });
       return;
     }
+
+    if (handleChanged) {
+      triggerInitialTikTokSyncBackground({
+        customerId: String(customerId), tiktokHandle: nextHandle, source: 'profile_link',
+      });
+    }
+
     res.json(data);
   } catch (err) {
     logger.error(err, 'studio-v2 customer profile PATCH error');
@@ -547,14 +570,18 @@ router.post('/customers/:customerId/fetch-profile-history', requireAuth, CM_ONLY
       res.status(400).json({ error: 'Kunden saknar TikTok-handle' });
       return;
     }
-    // Validate pages: bounded 1..10, default 5.
-    const requested = Math.floor(Number(req.body?.pages));
-    const fallback = Math.floor(Number(process.env['SYNC_FULL_HISTORY_PAGES'])) || 5;
-    const pages = Number.isFinite(requested) && requested >= 1
-      ? Math.min(10, requested)
-      : Math.min(10, Math.max(1, fallback));
+    // Studio UI passes { count, cursor } for "Hämta historik" / load-more.
+    // We accept either { count, cursor } (single-page pagination) or { pages }
+    // (multi-page bulk fetch). Both are bounded for cost safety.
+    const body = (req.body ?? {}) as { count?: number; cursor?: number; pages?: number };
+    const rawCount = Math.floor(Number(body.count));
+    const count = Number.isFinite(rawCount) && rawCount >= 1 ? Math.min(50, rawCount) : 10;
+    const rawCursor = Math.floor(Number(body.cursor));
+    const startCursor = Number.isFinite(rawCursor) && rawCursor > 0 ? rawCursor : undefined;
+    const rawPages = Math.floor(Number(body.pages));
+    const pages = Number.isFinite(rawPages) && rawPages >= 1 ? Math.min(10, rawPages) : 1;
     const result = await syncCustomerHistory(supabase, customerId, handle, rapidApiKey, {
-      mode: 'manual', pages, pageSize: 50,
+      mode: 'manual', pages, pageSize: count, startCursor,
     });
     res.json(result);
   } catch (err) {
