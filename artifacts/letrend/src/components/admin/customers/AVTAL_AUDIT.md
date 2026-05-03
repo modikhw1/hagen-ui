@@ -40,7 +40,8 @@ Action enablement is computed from three primitives:
 ```
 hasStripeCustomer                = Boolean(data.stripe_customer_id)
 hasSubscriptionLink              = Boolean(data.stripe_subscription_id) ||
-                                   ['active','trialing','past_due','paused'].includes(data.subscription_status ?? '')
+                                   (hasStripeCustomer &&
+                                    ['active','trialing'].includes(data.subscription_status ?? ''))
 hasManageableBillingEnvironment  = !data.environment_warning
 ```
 
@@ -49,6 +50,15 @@ The fall-back inside `hasSubscriptionLink` exists because the local
 a subscription is created in test mode and webhooks haven't finished). When
 the live subscription status indicates an existing subscription we should
 still allow price changes, pause/resume, and pricing dialogs.
+
+The fall-back is **deliberately restricted** to `'active'` and `'trialing'`
+(the two statuses that, in `routes/admin/customers.ts`, are only set after a
+successful `stripe.subscriptions.retrieve`). Statuses such as `'paused'` and
+`'past_due'` are excluded because the same field can be produced by purely
+local derivation (lifecycle status / `paused_until`) and would otherwise let
+us enable destructive Stripe actions on customers with no real Stripe link.
+We additionally require `stripe_customer_id` to be present, so a customer
+with no Stripe relationship at all can never trigger the fall-back.
 
 | Action | Requires |
 |---|---|

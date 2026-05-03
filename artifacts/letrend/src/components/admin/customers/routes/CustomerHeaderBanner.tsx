@@ -104,7 +104,7 @@ export function deriveHeaderBanner(
   // A live Stripe subscription (stripe_subscription_id present) or a real
   // monthly_price_ore both count as evidence that pricing has been set, even
   // if the legacy `pricing_status` column is still 'unknown'.
-  const hasStripeSub = Boolean((customer as any).stripe_subscription_id);
+  const hasStripeSub = Boolean(customer.stripe_subscription_id);
   const hasRealMonthlyPrice = (customer.monthly_price_ore ?? 0) > 0;
   const pricingMissing =
     !hasStripeSub &&
