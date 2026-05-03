@@ -19,12 +19,33 @@ interface StripeSubscriptionLike {
   pause_collection?: { behavior?: string } | null;
 }
 
+interface StripeInvoiceLike {
+  id: string;
+  status: string;
+  amount_due: number;
+  amount_paid: number;
+  hosted_invoice_url: string | null;
+  invoice_pdf: string | null;
+  status_transitions?: {
+    paid_at?: number | null;
+    finalized_at?: number | null;
+    voided_at?: number | null;
+  };
+}
+
 interface StripeClient {
   subscriptions: {
     retrieve: (id: string) => Promise<StripeSubscriptionLike>;
   };
   charges: {
     retrieve: (id: string, opts?: { expand?: string[] }) => Promise<unknown>;
+  };
+  invoices: {
+    retrieve: (id: string) => Promise<StripeInvoiceLike>;
+    pay: (id: string) => Promise<StripeInvoiceLike>;
+    sendInvoice: (id: string) => Promise<StripeInvoiceLike>;
+    voidInvoice: (id: string) => Promise<StripeInvoiceLike>;
+    markUncollectible: (id: string) => Promise<StripeInvoiceLike>;
   };
 }
 
