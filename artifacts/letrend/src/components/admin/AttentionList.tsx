@@ -169,13 +169,13 @@ export default function AttentionList({
                 </div>
                 <div className="space-y-3">
                   {cmGroup.typeGroups.map((group: any) => (
-                    <AttentionGroup key={group.kind} group={group} mode={mode} surface={surface} refresh={refreshOverview} />
+                    <AttentionGroup key={group.kind} group={group} mode={mode} surface={surface} refresh={refreshOverview} lastSeenAt={parsedLastSeenAt} />
                   ))}
                 </div>
               </div>
             ))
           : (grouped as any[]).map((group) => (
-              <AttentionGroup key={group.kind} group={group} mode={mode} surface={surface} refresh={refreshOverview} />
+              <AttentionGroup key={group.kind} group={group} mode={mode} surface={surface} refresh={refreshOverview} lastSeenAt={parsedLastSeenAt} />
             ))
         }
       </div>
@@ -187,13 +187,21 @@ function AttentionGroup({
   group, 
   mode, 
   surface, 
-  refresh 
+  refresh,
+  lastSeenAt,
 }: { 
   group: { kind: string; items: AttentionItem[] }; 
   mode: 'open' | 'snoozed';
   surface: string;
   refresh: (cid?: string | null) => Promise<void>;
+  lastSeenAt: Date | null;
 }) {
+  const newCount = lastSeenAt
+    ? group.items.filter((it) => {
+        const ts = attentionTimestamp(it);
+        return ts ? ts > lastSeenAt : false;
+      }).length
+    : 0;
   return (
     <details className="group" open={group.items.length <= 3}>
       <summary className="flex cursor-pointer list-none items-center justify-between rounded-lg bg-secondary/20 px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-secondary/40">
@@ -201,18 +209,29 @@ function AttentionGroup({
           <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
           {OPERATOR_COPY.attention[group.kind as keyof typeof OPERATOR_COPY.attention] || group.kind}
           <span className="opacity-60">({group.items.length})</span>
+          {newCount > 0 ? (
+            <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-bold text-primary normal-case tracking-normal">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+              {newCount} ny{newCount === 1 ? '' : 'a'}
+            </span>
+          ) : null}
         </div>
       </summary>
       <div className="mt-2 space-y-1 pl-2 border-l-2 border-border ml-4">
-        {group.items.map((item) => (
-          <AttentionRow 
-            key={`${item.kind}-${item.id}`} 
-            item={item} 
-            mode={mode} 
-            surface={surface} 
-            refresh={refresh}
-          />
-        ))}
+        {group.items.map((item) => {
+          const ts = attentionTimestamp(item);
+          const isNew = Boolean(lastSeenAt && ts && ts > lastSeenAt);
+          return (
+            <AttentionRow 
+              key={`${item.kind}-${item.id}`} 
+              item={item} 
+              mode={mode} 
+              surface={surface} 
+              refresh={refresh}
+              isNew={isNew}
+            />
+          );
+        })}
       </div>
     </details>
   );
@@ -222,12 +241,14 @@ function AttentionRow({
   item, 
   mode, 
   surface,
-  refresh
+  refresh,
+  isNew,
 }: { 
   item: AttentionItem; 
   mode: 'open' | 'snoozed';
   surface: string;
   refresh: (cid?: string | null) => Promise<void>;
+  isNew?: boolean;
 }) {
   const mutateAttention = useMutation({
     mutationFn: async () => {
@@ -244,12 +265,25 @@ function AttentionRow({
   const severity = attentionSeverity(item);
 
   return (
-    <div className="flex items-center justify-between gap-4 py-2 hover:bg-accent/10 px-2 rounded-md transition-colors group/row">
+    <div
+      className={cn(
+        'relative flex items-center justify-between gap-4 py-2 hover:bg-accent/10 px-2 rounded-md transition-colors group/row',
+        isNew && 'bg-primary/5 border-l-2 border-primary -ml-0.5 pl-2.5',
+      )}
+    >
+      {isNew ? (
+        <span
+          className="absolute left-1 top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-primary"
+          aria-label="Ny sedan din senaste visning"
+          title="Ny sedan din senaste visning"
+        />
+      ) : null}
       <Link to={href} className="flex-1 min-w-0 flex items-center gap-3">
         <SeverityPill severity={severity} className="w-16 justify-center" />
         <div className="min-w-0">
           <div className="text-[13px] font-medium text-foreground truncate">
             {labelForItem(item)}
+            {isNew ? <span className="sr-only"> (Ny sedan din senaste visning)</span> : null}
             <span className="mx-2 text-muted-foreground font-normal">·</span>
             <span className="text-muted-foreground font-normal">{subLabelForItem(item)}</span>
           </div>
