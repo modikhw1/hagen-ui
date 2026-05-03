@@ -27,11 +27,3 @@ drop policy if exists cron_run_log_staff_select on public.cron_run_log;
 create policy cron_run_log_staff_select on public.cron_run_log
   for select to authenticated
   using (has_role(auth.uid(), 'admin'::app_role) or has_role(auth.uid(), 'content_manager'::app_role));
-[plugin:runtime-error-plugin] gamePlanHtml.trim is not a function
-/home/runner/workspace/artifacts/letrend/src/components/studio/customer-detail/GamePlanSection.tsx:180:31
-178|                  style={buttonBase(LeTrendColors.brownLight, '#fff')}
-179|                >
-180|                  {gamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
-   |                                ^
-181|                </button>
-182|              ) : null}

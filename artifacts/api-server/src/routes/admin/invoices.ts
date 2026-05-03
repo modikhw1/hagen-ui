@@ -438,18 +438,20 @@ router.post('/:id/actions', requireAuth, ADMIN_ONLY, async (req, res) => {
       }
 
       case 'pay_now': {
+        let payNowWarning: string | undefined;
         if (stripe) {
           try {
             await (stripe as any).invoices.pay(stripeInvoiceId);
             logger.info({ invoiceId: stripeInvoiceId, actor: adminEmail }, 'stripe pay_now succeeded');
           } catch (stripeErr) {
             const msg = stripeErr instanceof Error ? stripeErr.message : String(stripeErr);
-            logger.warn({ err: msg, invoiceId: stripeInvoiceId }, 'stripe pay_now failed');
-            res.status(422).json({ error: `Stripe-betalning misslyckades: ${msg}` });
-            return;
+            logger.warn({ err: msg, invoiceId: stripeInvoiceId }, 'stripe pay_now failed; returning graceful response');
+            payNowWarning = `Stripe-betalning misslyckades: ${msg}`;
           }
+        } else {
+          payNowWarning = 'Stripe ej konfigurerat — ingen betalning initierades';
         }
-        res.json({ success: true, warning: stripe ? undefined : 'Stripe ej konfigurerat — ingen betalning initierades' });
+        res.json({ success: true, warning: payNowWarning });
         return;
       }
 
