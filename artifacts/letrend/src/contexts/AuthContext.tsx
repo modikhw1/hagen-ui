@@ -38,6 +38,7 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   loading: boolean; // backward-compat: authLoading || profileLoading
+  profileNotFound: boolean; // true only when /api/me returned 404 (no profile row exists)
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, businessName: string) => Promise<{ error: Error | null; needsConfirmation?: boolean }>;
   signOut: () => Promise<void>;
@@ -62,8 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const profileCacheRef = useRef<{ userId: string; profile: Profile | null; ts: number } | null>(null);
   // Inflight dedup: only one fetch per userId at a time
   const inflightRef = useRef<Map<string, Promise<Profile | null>>>(new Map());
+  // Track whether the last profile fetch returned 404 (no row) vs. a real error
+  const profileNotFoundRef = useRef<boolean>(false);
 
-  const fetchProfile = useCallback(async (userId: string, opts?: { force?: boolean }): Promise<Profile | null> => {
+  const fetchProfile = useCallback(async (userId: string, opts?: { force?: boolean; token?: string }): Promise<Profile | null> => {
     const force = opts?.force ?? false;
 
     // Return cached profile if fresh
@@ -83,9 +86,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Use the API server's /api/me endpoint which uses the service-role key
         // to bypass RLS — required for admin/content_manager profiles which the
         // anon key cannot read due to RLS policies on the profiles table.
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (!token) return null;
+        // Prefer the token passed in directly (avoids a second getSession() call
+        // that might race against the session being written to storage).
+        const accessToken = opts?.token ?? (await supabase.auth.getSession()).data.session?.access_token;
+        if (!accessToken) {
+          profileNotFoundRef.current = false;
+          return null;
+        }
 
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
@@ -93,22 +100,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let data: unknown;
         try {
           const response = await fetch('/api/me', {
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { Authorization: `Bearer ${accessToken}` },
             signal: controller.signal,
           });
           clearTimeout(timeoutId);
 
           if (response.status === 404) {
+            // No profile row — genuine new user
             console.log('Profile does not exist yet for user:', userId);
+            profileNotFoundRef.current = true;
             return null;
           }
           if (!response.ok) {
+            // Server/network error — profile may exist but couldn't be fetched
             console.error('Error fetching profile, status:', response.status);
+            profileNotFoundRef.current = false;
             return null;
           }
+          profileNotFoundRef.current = false;
           data = await response.json();
         } catch (fetchErr) {
           clearTimeout(timeoutId);
+          profileNotFoundRef.current = false;
           throw fetchErr;
         }
 
@@ -176,20 +189,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isMounted) return;
 
         if (userError) {
-          console.error('Auth error:', userError);
+          // AuthSessionMissingError just means no active session — treat as
+          // unauthenticated, not a real error worth surfacing or logging loudly.
+          if (userError.name !== 'AuthSessionMissingError') {
+            console.error('Auth error:', userError);
+          }
+          clearOnboardingSession();
           setState(prev => ({
             ...prev,
+            user: null,
+            profile: null,
+            session: null,
             authLoading: false,
             profileLoading: false,
-            status: 'error',
-            error: userError as any,
+            status: 'unauthenticated',
+            error: null,
           }));
           return;
         }
 
         if (user) {
-          // Get the session too for backward compatibility if needed, 
-          // but we prioritize the user object for security.
+          // Get the session to extract the access token for the profile fetch
           const { data: { session } } = await supabase.auth.getSession();
           
           // Show authenticated immediately, then load profile
@@ -203,7 +223,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             error: null,
           }));
 
-          const profileData = await fetchProfile(user.id);
+          // Pass the token directly so fetchProfile doesn't re-read session storage
+          const profileData = await fetchProfile(user.id, { token: session?.access_token });
           if (!isMounted) return;
 
           setState({
@@ -273,7 +294,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const needsFetch = !profileCacheRef.current || profileCacheRef.current.userId !== session.user.id;
             if (!needsFetch) break;
 
-            const profileData = await fetchProfile(session.user.id);
+            // Pass token directly — avoids a race between SIGNED_IN firing and
+            // the session being written to localStorage/cookies.
+            const profileData = await fetchProfile(session.user.id, { token: session.access_token });
             if (!isMounted) return;
             setState({
               user: session.user,
@@ -316,7 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           case 'USER_UPDATED':
             if (session?.user) {
               setState(prev => ({ ...prev, user: session.user, session, profileLoading: true }));
-              const profileData = await fetchProfile(session.user.id, { force: true });
+              const profileData = await fetchProfile(session.user.id, { force: true, token: session.access_token });
               if (!isMounted) return;
               setState(prev => ({
                 ...prev,
@@ -422,6 +445,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         ...state,
         loading,
+        profileNotFound: profileNotFoundRef.current,
         signIn,
         signUp,
         signOut,

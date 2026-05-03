@@ -5,6 +5,7 @@ import {
   type CustomerAction,
   type CustomerActionSuccessResult,
 } from '@/lib/admin/schemas/customer-actions';
+import { supabase } from '@/lib/supabase/client';
 
 type QueryValue = string | number | boolean | null | undefined;
 
@@ -139,9 +140,21 @@ function resolveCode(payload: unknown) {
 
 async function requestJson<T>(path: string, options: RequestOptions): Promise<T> {
   const requestId = createRequestId();
+
+  // Attach the current Supabase session token so requireAuth middleware can verify it.
+  // supabase.auth.getSession() reads from memory/localStorage — essentially synchronous.
+  let authToken: string | undefined;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    authToken = session?.access_token ?? undefined;
+  } catch {
+    // Ignore — request proceeds without auth header
+  }
+
   const headers = new Headers({
     Accept: 'application/json',
     'x-request-id': requestId,
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...options.headers,
   });
 

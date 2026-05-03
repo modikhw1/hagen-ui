@@ -131,7 +131,7 @@ function LoadingScreen() {
 }
 
 function RootPage() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, profileNotFound, refreshProfile } = useAuth();
   const [, navigate] = useLocation();
 
   useEffect(() => {
@@ -141,10 +141,14 @@ function RootPage() {
       navigate("/login");
       return;
     }
-    // loading=false + profile=null means the fetch completed with no row →
-    // send to onboarding/welcome so the user gets a profile created.
     if (!profile) {
-      navigate("/welcome");
+      // Only send to /welcome when we're certain the profile row doesn't exist
+      // (new customer being onboarded). For transient fetch errors, stay here
+      // and show a retry UI — navigating to /welcome causes a bounce loop
+      // because /welcome redirects unauthenticated-seeming sessions to /login.
+      if (profileNotFound) {
+        navigate("/welcome");
+      }
       return;
     }
 
@@ -156,7 +160,24 @@ function RootPage() {
     } else {
       navigate("/feed");
     }
-  }, [loading, profile, user, navigate]);
+  }, [loading, profile, user, navigate, profileNotFound]);
+
+  // Authenticated but profile fetch failed — show retry instead of redirect loop
+  if (user && !profile && !loading && !profileNotFound) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#FAF8F5", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', -apple-system, sans-serif" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 16, color: "#7D6E5D", marginBottom: 16 }}>Kunde inte hämta din profil</div>
+          <button
+            onClick={() => void refreshProfile()}
+            style={{ padding: "8px 24px", background: "#4A2F18", color: "white", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 15 }}
+          >
+            Försök igen
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return <LoadingScreen />;
 }
