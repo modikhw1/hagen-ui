@@ -793,7 +793,7 @@ router.post('/customers/:customerId/game-plan/generate', requireAuth, CM_ONLY, a
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.85, maxOutputTokens: 1200 },
+          generationConfig: { temperature: 0.85, maxOutputTokens: 4096 },
         }),
         signal: AbortSignal.timeout(25000),
       });

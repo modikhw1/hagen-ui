@@ -79,9 +79,7 @@ export function GamePlanGenerateModal({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadingGroupId, setUploadingGroupId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [showReferensmaterial, setShowReferensmaterial] = useState(
-    groups.length > 0
-  );
+  const [showReferensmaterial, setShowReferensmaterial] = useState(false);
   const [pendingLinkUrls, setPendingLinkUrls] = useState<Record<string, string>>({});
 
   const handleClose = () => {

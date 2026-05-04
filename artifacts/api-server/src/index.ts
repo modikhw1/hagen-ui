@@ -22,4 +22,15 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  const geminiKey = process.env['REPLIT_AI_INTEGRATIONS_API_KEY']
+    ? 'REPLIT_AI_INTEGRATIONS_API_KEY'
+    : process.env['GEMINI_API_KEY']
+    ? 'GEMINI_API_KEY'
+    : null;
+  if (geminiKey) {
+    logger.info({ key: geminiKey, model: 'gemini-2.5-flash' }, 'Gemini integration active');
+  } else {
+    logger.warn('No Gemini API key found — game-plan/generate will use fallback');
+  }
 });
