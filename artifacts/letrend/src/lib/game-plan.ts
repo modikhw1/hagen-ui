@@ -44,14 +44,16 @@ export interface GamePlanDocumentResponse {
 export interface GamePlanGenerateInput {
   customer_name: string;
   niche: string;
-  audience: string;
   platform: string;
-  tone: string;
-  constraints: string;
-  focus: string;
+  character: string;
+  people: string;
+  aesthetic: string;
+  goals: string;
+  effort_level: string;
+  unique: string;
+  audience: string;
   references: GamePlanReferenceInput[];
   images: GamePlanImageInput[];
-  notes: string[];
 }
 
 export interface GamePlanReferenceInput {
@@ -418,13 +420,6 @@ function normalizeImageInput(image: GamePlanImageInput): GamePlanImageInput | nu
   };
 }
 
-function normalizeNotesInput(notes: string[]): string[] {
-  return notes
-    .map((note) => note.trim())
-    .filter(Boolean)
-    .slice(0, 12);
-}
-
 export function buildFallbackGeneratedGamePlanHtml(input: GamePlanGenerateInput): string {
   const references = input.references
     .map(normalizeReferenceInput)
@@ -432,7 +427,6 @@ export function buildFallbackGeneratedGamePlanHtml(input: GamePlanGenerateInput)
   const images = input.images
     .map(normalizeImageInput)
     .filter((image): image is GamePlanImageInput => Boolean(image));
-  const notes = normalizeNotesInput(input.notes);
 
   const referenceBlock = references.length > 0
     ? [
@@ -465,36 +459,30 @@ export function buildFallbackGeneratedGamePlanHtml(input: GamePlanGenerateInput)
       ].join('')
       : '';
 
-  const notesBlock = notes.length > 0
-    ? [
-      '<h3>CM-noter</h3>',
-      '<ul>',
-      ...notes.map((note) => `<li>${escapeHtml(note)}</li>`),
-      '</ul>',
-    ].join('')
-    : '';
-
   const profileParts = [
-    input.customer_name.trim() ? `${input.customer_name.trim()} ar kunden vi bygger planen for.` : 'Kunden ar fokus for planen.',
+    input.customer_name.trim() ? `${input.customer_name.trim()} är kunden vi bygger planen för.` : 'Kunden är fokus för planen.',
     input.niche.trim() ? `Nisch/bransch: ${input.niche.trim()}.` : '',
-    input.audience.trim() ? `Malgrupp: ${input.audience.trim()}.` : '',
-    input.platform.trim() ? `Primar plattform: ${input.platform.trim()}.` : '',
+    input.platform.trim() ? `Primär plattform: ${input.platform.trim()}.` : '',
   ].filter(Boolean).join(' ');
+
+  const contextParts = [
+    input.character.trim() ? `<h3>Verksamhetens karaktär</h3>${buildParagraph(input.character, '')}` : '',
+    input.people.trim() ? `<h3>Personalen</h3>${buildParagraph(input.people, '')}` : '',
+    input.aesthetic.trim() ? `<h3>Lokal och estetik</h3>${buildParagraph(input.aesthetic, '')}` : '',
+    input.goals.trim() ? `<h3>Mål</h3>${buildParagraph(input.goals, '')}` : '',
+    input.unique.trim() ? `<h3>Det unika</h3>${buildParagraph(input.unique, '')}` : '',
+    input.audience.trim() ? `<h3>Målgrupp</h3>${buildParagraph(input.audience, '')}` : '',
+    input.effort_level.trim() ? `<h3>Ambitionsnivå</h3>${buildParagraph(input.effort_level, '')}` : '',
+  ].filter(Boolean).join('');
 
   return sanitizeRichTextHtml([
     '<h3>Kundprofil</h3>',
-    buildParagraph(profileParts, 'Beskriv kunden, deras nisch, malgrupp och plattformshistorik.'),
-    '<h3>Ton och rost</h3>',
-    buildParagraph(input.tone, 'Beskriv vilken kansla innehallet ska ha och vad det inte ska vara.'),
-    '<h3>Begransningar</h3>',
-    buildParagraph(input.constraints, 'Beskriv vad som alltid eller aldrig ska finnas med i innehallet.'),
-    '<h3>Fokus just nu</h3>',
-    buildParagraph(input.focus, 'Beskriv den viktigaste strategiska prioriteten for den kommande perioden.'),
+    buildParagraph(profileParts, 'Beskriv kunden, deras nisch och plattform.'),
+    contextParts,
     referenceBlock,
     imageBlock,
-    notesBlock,
-    '<h3>Nasta steg</h3>',
-    '<p>Ga igenom planen, markera vad som kanns mest relevant just nu och svara med eventuella justeringar eller fler referenser som vi ska ta vidare.</p>',
+    '<h3>Nästa steg</h3>',
+    '<p>Gå igenom planen, markera vad som känns mest relevant just nu och svara med eventuella justeringar eller fler referenser som vi ska ta vidare.</p>',
   ].join(''));
 }
 
@@ -505,43 +493,51 @@ export function buildGamePlanGenerationPrompt(input: GamePlanGenerateInput): str
   const images = input.images
     .map(normalizeImageInput)
     .filter((image): image is GamePlanImageInput => Boolean(image));
-  const notes = normalizeNotesInput(input.notes);
 
-  const payload = {
-    customer_name: input.customer_name.trim(),
-    niche: input.niche.trim(),
-    audience: input.audience.trim(),
-    platform: input.platform.trim(),
-    tone: input.tone.trim(),
-    constraints: input.constraints.trim(),
-    focus: input.focus.trim(),
-    references,
-    images,
-    notes,
+  const customerContext = {
+    kund: input.customer_name.trim() || '(okänd)',
+    nisch_och_bransch: input.niche.trim() || null,
+    primar_plattform: input.platform.trim() || null,
+    verksamhetens_karaktar: input.character.trim() || null,
+    personalen: input.people.trim() || null,
+    lokal_och_estetik: input.aesthetic.trim() || null,
+    vad_kunden_vill_uppna: input.goals.trim() || null,
+    ambitionsniva: input.effort_level.trim() || null,
+    nagot_som_sticker_ut: input.unique.trim() || null,
+    malgrupp: input.audience.trim() || null,
+    referenser: references.length > 0 ? references : null,
+    bilder: images.length > 0 ? images : null,
   };
 
-  return [
-    'Skapa en svensk Game Plan som HTML for en kund i LeTrend.',
-    'Krav:',
-    '- Skriv som ett varmt, professionellt brev fran en erfaren content manager.',
-    '- Anvand endast H3-rubriker. Aldrig H1 eller H2.',
+  const part1 = [
+    'Du är en erfaren svensk content strategist på LeTrend.',
+    'Din uppgift är att skriva en Game Plan som HTML för den kund vars kontext ges nedan.',
+    '',
+    'Röst och ton:',
+    '- Skriv som ett varmt, professionellt brev från en content manager som verkligen känner kunden.',
+    '- Direkt, konkret och handlingsorienterat. Inga tomma fraser eller marknadsfluff.',
+    '- All text på svenska.',
+    '',
+    'HTML-krav:',
+    '- Returnera BARA ett HTML-fragment — ingen markdown, ingen förklaring, inga ```-block.',
+    '- Använd endast <h3>-rubriker. Aldrig H1 eller H2.',
     '- Max 6 rubriker totalt.',
-    '- Returnera endast HTML-fragment, ingen markdown och ingen forklaring.',
-    '- Om referenslankar finns: anvand <link-chip url="..." platform="tiktok|instagram|youtube|article|external" label="..."></link-chip>.',
-    '- Om en bild finns: anvand <image-figure src="..." caption="..."></image-figure>.',
-    '- Om flera bilder finns: anvand <image-gallery><image-item src="..." caption="..." /></image-gallery>.',
-    '- Väg in content managerns observationer, smak och arbetsnoter i planen.',
-    '- Om en referens har en label ska du behandla den som titel, placeholder eller arbetsrubrik for vad som känns rätt.',
-    '- Om en referens har en note ska du oversatta den smaken till tonalitet, struktur, pacing och kreativa rekommendationer i planen.',
-    '- Avsluta alltid med en sektion som heter "Nasta steg" eller "Sammanfattning" och uppmanar till dialog.',
+    '- Om referenslänkar finns: använd <link-chip url="..." platform="tiktok|instagram|youtube|article|external" label="..."></link-chip>.',
+    '- Om en bild finns: använd <image-figure src="..." caption="..."></image-figure>.',
+    '- Om flera bilder finns: använd <image-gallery><image-item src="..." caption="..." /></image-gallery>.',
     '',
-    'Tolkningshjalp:',
-    '- En input som "jag tycker att denna profil har en skon ton" betyder att du aktivt ska låta den smaken påverka hela utkastet.',
-    '- Referenserna ska inte bara namnges, utan användas for att förstå vilken riktning content managern är ute efter.',
-    '',
-    'Inputdata:',
-    JSON.stringify(payload, null, 2),
+    'Tolkningsregler:',
+    '- Om en referens har en "note" ska du översätta den smaken till tonalitet, pacing och kreativa rekommendationer i planen.',
+    '- Om en referens har en "label" ska du behandla den som titel eller arbetsrubrik.',
+    '- Avsluta alltid med en sektion som heter "Nästa steg" som uppmuntrar till dialog.',
   ].join('\n');
+
+  const part2 = [
+    'Kundkontext (JSON):',
+    JSON.stringify(customerContext, null, 2).slice(0, 5000),
+  ].join('\n');
+
+  return `${part1}\n\n${part2}`;
 }
 
 export function resolveLegacyGamePlan(legacyValue: unknown): ResolvedGamePlanDocument {

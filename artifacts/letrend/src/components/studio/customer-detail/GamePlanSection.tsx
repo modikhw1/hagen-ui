@@ -6,7 +6,7 @@ import { GamePlanEditor } from '@/components/gameplan-editor/GamePlanEditor';
 import { getCustomerNoteTypeMeta } from '@/lib/customer-notes';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import type { CMIdentity, GamePlanSectionProps } from './feedTypes';
-import { GamePlanAiSheet } from './GamePlanAiSheet';
+import { GamePlanGenerateModal } from './GamePlanGenerateModal';
 
 const GAME_PLAN_STARTER_TEMPLATE = [
   '<h3>Kundprofil</h3>',
@@ -573,7 +573,7 @@ export function GamePlanSection({
       </div>
 
       {showAiSheet ? (
-        <GamePlanAiSheet
+        <GamePlanGenerateModal
           customerId={customerId}
           loading={generatingGamePlanAi}
           initialValues={aiDefaults}

@@ -460,6 +460,172 @@ router.put('/customers/:customerId/game-plan', requireAuth, CM_ONLY, async (req,
   }
 });
 
+// POST /api/studio-v2/customers/:customerId/game-plan/generate
+router.post('/customers/:customerId/game-plan/generate', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const { customerId } = req.params;
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
+
+    const body = req.body as Record<string, unknown>;
+
+    function str(v: unknown): string {
+      return typeof v === 'string' ? v.trim() : '';
+    }
+
+    function safeReferenceArray(v: unknown): Array<{ url: string; label?: string; note?: string; platform?: string }> {
+      if (!Array.isArray(v)) return [];
+      return v
+        .filter((item) => item && typeof item === 'object' && typeof (item as Record<string, unknown>).url === 'string')
+        .slice(0, 8)
+        .map((item) => {
+          const r = item as Record<string, unknown>;
+          return {
+            url: str(r.url),
+            label: str(r.label) || undefined,
+            note: str(r.note) || undefined,
+            platform: str(r.platform) || undefined,
+          };
+        })
+        .filter((r) => r.url);
+    }
+
+    function safeImageArray(v: unknown): Array<{ url: string; caption?: string }> {
+      if (!Array.isArray(v)) return [];
+      return v
+        .filter((item) => item && typeof item === 'object' && typeof (item as Record<string, unknown>).url === 'string')
+        .slice(0, 4)
+        .map((item) => {
+          const i = item as Record<string, unknown>;
+          return { url: str(i.url), caption: str(i.caption) || undefined };
+        })
+        .filter((i) => i.url);
+    }
+
+    const input = {
+      customer_name: str(body.customer_name),
+      niche: str(body.niche),
+      platform: str(body.platform),
+      character: str(body.character),
+      people: str(body.people),
+      aesthetic: str(body.aesthetic),
+      goals: str(body.goals),
+      effort_level: str(body.effort_level),
+      unique: str(body.unique),
+      audience: str(body.audience),
+      references: safeReferenceArray(body.references),
+      images: safeImageArray(body.images),
+    };
+
+    // Build prompt (two-part structure)
+    const referenceLines = input.references.length > 0
+      ? input.references.map((r) => {
+          const parts = [`url: ${r.url}`];
+          if (r.label) parts.push(`label: ${r.label}`);
+          if (r.note) parts.push(`note: ${r.note}`);
+          if (r.platform) parts.push(`platform: ${r.platform}`);
+          return `  - ${parts.join(', ')}`;
+        }).join('\n')
+      : null;
+
+    const imageLines = input.images.length > 0
+      ? input.images.map((i) => `  - url: ${i.url}${i.caption ? `, caption: ${i.caption}` : ''}`).join('\n')
+      : null;
+
+    const customerContext = JSON.stringify({
+      kund: input.customer_name || '(okänd)',
+      nisch_och_bransch: input.niche || null,
+      primar_plattform: input.platform || null,
+      verksamhetens_karaktar: input.character || null,
+      personalen: input.people || null,
+      lokal_och_estetik: input.aesthetic || null,
+      vad_kunden_vill_uppna: input.goals || null,
+      ambitionsniva: input.effort_level || null,
+      nagot_som_sticker_ut: input.unique || null,
+      malgrupp: input.audience || null,
+      referenser: referenceLines,
+      bilder: imageLines,
+    }, null, 2).slice(0, 5000);
+
+    const prompt = [
+      'Du är en erfaren svensk content strategist på LeTrend.',
+      'Din uppgift är att skriva en Game Plan som HTML för den kund vars kontext ges nedan.',
+      '',
+      'Röst och ton:',
+      '- Skriv som ett varmt, professionellt brev från en content manager som verkligen känner kunden.',
+      '- Direkt, konkret och handlingsorienterat. Inga tomma fraser eller marknadsfluff.',
+      '- All text på svenska.',
+      '',
+      'HTML-krav:',
+      '- Returnera BARA ett HTML-fragment — ingen markdown, ingen förklaring, inga ```-block.',
+      '- Använd endast <h3>-rubriker. Aldrig H1 eller H2.',
+      '- Max 6 rubriker totalt.',
+      '- För att länka en referens: använd <a href="URL">Label</a> — systemet konverterar det automatiskt.',
+      '- Om en bild finns: lägg in <img src="URL" alt="caption" />.',
+      '- Avsluta alltid med en sektion som heter "Nästa steg" som uppmuntrar till dialog.',
+      '',
+      'Tolkningsregler:',
+      '- Om en referens har en "note" ska du översätta den smaken till tonalitet, pacing och kreativa rekommendationer i planen.',
+      '- Om en referens har en "label" ska du behandla den som titel eller arbetsrubrik.',
+      '',
+      'Kundkontext (JSON):',
+      customerContext,
+    ].join('\n');
+
+    // Call Gemini
+    const apiKey = process.env['REPLIT_AI_INTEGRATIONS_API_KEY'] ?? process.env['GEMINI_API_KEY'];
+    const baseUrl = process.env['REPLIT_AI_INTEGRATIONS_GEMINI_BASE_URL'] ?? 'https://generativelanguage.googleapis.com/v1beta';
+
+    if (!apiKey) {
+      logger.warn('game-plan/generate: no Gemini API key — returning fallback');
+      res.json({ html: '', source: 'fallback', reason: 'no_api_key' });
+      return;
+    }
+
+    let html = '';
+    let source = 'ai';
+    let errorReason = '';
+
+    try {
+      const upstream = await fetch(`${baseUrl}/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.75, maxOutputTokens: 2048 },
+        }),
+        signal: AbortSignal.timeout(25000),
+      });
+
+      if (!upstream.ok) {
+        const txt = await upstream.text().catch(() => '');
+        throw new Error(`Gemini ${upstream.status}: ${txt.slice(0, 200)}`);
+      }
+
+      const data = await upstream.json() as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+      };
+
+      const rawText = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+
+      // Strip code fences if present
+      const fenceMatch = rawText.match(/```(?:html)?\s*([\s\S]*?)```/i);
+      html = fenceMatch ? fenceMatch[1].trim() : rawText;
+
+      if (!html) throw new Error('empty_response');
+    } catch (err) {
+      logger.warn({ err }, 'game-plan/generate: Gemini call failed');
+      source = 'fallback';
+      errorReason = err instanceof Error ? err.message : String(err);
+      html = '';
+    }
+
+    res.json({ html, source, model: source === 'ai' ? 'gemini-1.5-flash' : undefined, reason: errorReason || undefined });
+  } catch (err) {
+    logger.error(err, 'game-plan generate error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
 // GET /api/studio-v2/customers/:customerId/notes
 router.get('/customers/:customerId/notes', requireAuth, CM_ONLY, async (req, res) => {
   try {

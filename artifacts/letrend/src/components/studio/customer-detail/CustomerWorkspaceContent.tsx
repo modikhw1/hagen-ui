@@ -65,7 +65,7 @@ import {
   isStudioAssignedCustomerConcept,
   normalizeStudioCustomerConcept,
 } from '@/lib/studio/customer-concepts';
-import { extractGamePlanEmailData, type GamePlanGenerateInput } from '@/lib/game-plan';
+import { extractGamePlanEmailData, normalizeAiGeneratedGamePlanHtml, type GamePlanGenerateInput } from '@/lib/game-plan';
 import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle';
 import {
   EMAIL_TEMPLATES,
@@ -372,17 +372,16 @@ function buildGamePlanAiDefaults(
   return {
     customer_name: customer?.business_name || '',
     niche: '',
-    audience: '',
     platform: customer?.tiktok_profile_url ? 'TikTok' : 'Content',
-    tone: brief.tone || '',
-    constraints: brief.constraints || '',
-    focus: brief.current_focus || '',
+    character: '',
+    people: '',
+    aesthetic: '',
+    goals: '',
+    effort_level: '',
+    unique: '',
+    audience: '',
     references: Array.from(referenceMap.values()).slice(0, 6),
     images: [],
-    notes: notes
-      .slice(0, 4)
-      .map((note) => getPlainTextFromNoteContent(note.content))
-      .filter(Boolean),
   };
 }
 
@@ -2553,11 +2552,12 @@ function CustomerWorkspacePageContent() {
         throw new Error(data.error || 'Failed to generate game plan');
       }
 
-      const nextHtml = typeof data.html === 'string' ? data.html : '';
-      if (!nextHtml.trim()) {
+      const rawHtml = typeof data.html === 'string' ? data.html : '';
+      if (!rawHtml.trim()) {
         throw new Error('Generated game plan was empty');
       }
 
+      const nextHtml = normalizeAiGeneratedGamePlanHtml(rawHtml);
       setGamePlanHtml(nextHtml);
       setEditingGamePlan(true);
       setGamePlanSaveMessage(
