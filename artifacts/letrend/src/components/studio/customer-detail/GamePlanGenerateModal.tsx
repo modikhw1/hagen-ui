@@ -222,6 +222,41 @@ export function GamePlanGenerateModal({
 
         <div style={{ padding: '20px 24px', display: 'grid', gap: 20 }}>
 
+          {(form.customer_name.trim() || form.platform.trim() || form.niche.trim()) ? (
+            <div
+              style={{
+                padding: '14px 16px',
+                borderRadius: 12,
+                background: '#F8F4EE',
+                border: '1px solid rgba(74,47,24,0.08)',
+              }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#6B4423', marginBottom: 8, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Kundöversikt
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {form.customer_name.trim() ? (
+                  <div style={{ padding: '6px 10px', borderRadius: 8, background: '#FFFFFF', border: '1px solid rgba(74,47,24,0.08)', fontSize: 12 }}>
+                    <span style={{ fontWeight: 700, color: '#9D8E7D', marginRight: 4 }}>Kund</span>
+                    <span style={{ color: '#4A4239' }}>{form.customer_name.trim()}</span>
+                  </div>
+                ) : null}
+                {form.platform.trim() ? (
+                  <div style={{ padding: '6px 10px', borderRadius: 8, background: '#FFFFFF', border: '1px solid rgba(74,47,24,0.08)', fontSize: 12 }}>
+                    <span style={{ fontWeight: 700, color: '#9D8E7D', marginRight: 4 }}>Plattform</span>
+                    <span style={{ color: '#4A4239' }}>{form.platform.trim()}</span>
+                  </div>
+                ) : null}
+                {form.niche.trim() ? (
+                  <div style={{ padding: '6px 10px', borderRadius: 8, background: '#FFFFFF', border: '1px solid rgba(74,47,24,0.08)', fontSize: 12 }}>
+                    <span style={{ fontWeight: 700, color: '#9D8E7D', marginRight: 4 }}>Nisch</span>
+                    <span style={{ color: '#4A4239' }}>{form.niche.trim()}</span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
           <FieldBlock
             label="Verksamhetens karaktär"
             hint="Vad gör de, hur länge har de funnits, vilken känsla utstrålar verksamheten?"

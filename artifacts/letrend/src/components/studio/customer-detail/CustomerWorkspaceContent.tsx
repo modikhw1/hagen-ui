@@ -65,7 +65,7 @@ import {
   isStudioAssignedCustomerConcept,
   normalizeStudioCustomerConcept,
 } from '@/lib/studio/customer-concepts';
-import { extractGamePlanEmailData, normalizeAiGeneratedGamePlanHtml, type GamePlanGenerateInput } from '@/lib/game-plan';
+import { buildFallbackGeneratedGamePlanHtml, extractGamePlanEmailData, normalizeAiGeneratedGamePlanHtml, type GamePlanGenerateInput } from '@/lib/game-plan';
 import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle';
 import {
   EMAIL_TEMPLATES,
@@ -2552,7 +2552,12 @@ function CustomerWorkspacePageContent() {
         throw new Error(data.error || 'Failed to generate game plan');
       }
 
-      const rawHtml = typeof data.html === 'string' ? data.html : '';
+      let rawHtml = typeof data.html === 'string' ? data.html : '';
+
+      if (!rawHtml.trim() && data.source === 'fallback') {
+        rawHtml = buildFallbackGeneratedGamePlanHtml(input);
+      }
+
       if (!rawHtml.trim()) {
         throw new Error('Generated game plan was empty');
       }
