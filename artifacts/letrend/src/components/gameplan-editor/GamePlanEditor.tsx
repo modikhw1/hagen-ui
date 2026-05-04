@@ -146,11 +146,6 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
           ' '
         ).trim();
 
-        const shouldConvert = window.confirm(`Gör om den här ${platform}-länken till ett länkchip i planen?`);
-        if (!shouldConvert) {
-          return false;
-        }
-
         event.preventDefault();
         const node = linkChipNode.create({
           href,

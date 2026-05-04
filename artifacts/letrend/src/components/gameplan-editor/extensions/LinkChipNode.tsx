@@ -115,6 +115,11 @@ function LinkChipView({ node }: NodeViewProps) {
       contentEditable={false}
       suppressContentEditableWarning
       style={{ display: 'inline' }}
+      data-drag-handle=""
+      draggable={true}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = 'move';
+      }}
     >
       <a
         href={href || undefined}

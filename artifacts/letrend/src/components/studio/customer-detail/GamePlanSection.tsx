@@ -132,20 +132,6 @@ export function GamePlanSection({
             flexWrap: 'wrap',
           }}
         >
-          {!editingGamePlan ? (
-            <button
-              type="button"
-              onClick={() => void handleReloadGamePlan(true)}
-              disabled={loadingGamePlan}
-              style={{
-                ...buttonBase('#FFFFFF', LeTrendColors.brownInk, `1px solid ${LeTrendColors.border}`),
-                cursor: loadingGamePlan ? 'not-allowed' : 'pointer',
-              }}
-            >
-              {loadingGamePlan ? 'Laddar...' : 'Ladda om'}
-            </button>
-          ) : null}
-
           <button
             type="button"
             onClick={() => setShowAiSheet(true)}
@@ -157,40 +143,27 @@ export function GamePlanSection({
           >
             {generatingGamePlanAi ? 'Genererar...' : 'Generera utkast'}
           </button>
-
-          {!editingGamePlan ? (
-            <button
-              type="button"
-              onClick={() => {
-                if (!safeGamePlanHtml.trim()) {
-                  setGamePlanHtml(GAME_PLAN_STARTER_TEMPLATE);
-                }
-                setEditingGamePlan(true);
-              }}
-              style={buttonBase(LeTrendColors.brownLight, '#fff')}
-            >
-              {safeGamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
-            </button>
-          ) : null}
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-          <span
-            style={{
-              padding: '5px 10px',
-              borderRadius: LeTrendRadius.pill,
-              background: LeTrendColors.surfaceHighlight,
-              color: LeTrendColors.textMuted,
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-            }}
-            title={customerName ? `${customerName} • ${sourceLabel}` : sourceLabel}
-          >
-            {sourceLabel}
-          </span>
-          {gamePlanSummary?.updated_at ? (
+          {sourceLabel === 'Äldre' ? (
+            <span
+              style={{
+                padding: '5px 10px',
+                borderRadius: LeTrendRadius.pill,
+                background: LeTrendColors.surfaceHighlight,
+                color: LeTrendColors.textMuted,
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+              }}
+              title={customerName ? `${customerName} • Äldre` : 'Äldre'}
+            >
+              Äldre
+            </span>
+          ) : null}
+          {sourceLabel !== 'Tom' && gamePlanSummary?.updated_at ? (
             <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
               Sparad {formatDateTime(gamePlanSummary.updated_at)}
             </span>
@@ -298,7 +271,35 @@ export function GamePlanSection({
             </div>
           </div>
         ) : (
-          <div style={{ minHeight: 100 }}>
+          <div style={{ position: 'relative', minHeight: 100 }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (!safeGamePlanHtml.trim()) {
+                  setGamePlanHtml(GAME_PLAN_STARTER_TEMPLATE);
+                }
+                setEditingGamePlan(true);
+              }}
+              style={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                zIndex: 2,
+                padding: '5px 10px',
+                borderRadius: LeTrendRadius.md,
+                border: `1px solid ${LeTrendColors.border}`,
+                background: '#fff',
+                color: LeTrendColors.brownLight,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              ✏ {safeGamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
+            </button>
             {safeGamePlanHtml.trim() ? (
               <GamePlanDisplay html={safeGamePlanHtml} />
             ) : (
