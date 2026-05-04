@@ -269,86 +269,35 @@ export function GamePlanEditor({ initialHtml, onChange, isFullscreen = false }: 
 
       {linkDialogOpen ? (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'rgba(26, 22, 18, 0.24)',
-            padding: 16,
-          }}
+          style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(26,22,18,0.24)', padding: 16 }}
           onClick={() => setLinkDialogOpen(false)}
         >
           <div
             onClick={(event) => event.stopPropagation()}
-            style={{
-              width: 'min(420px, 100%)',
-              background: '#FFFFFF',
-              borderRadius: 14,
-              padding: 20,
-              boxShadow: '0 8px 32px rgba(107, 68, 35, 0.25)',
-              border: '1px solid rgba(74, 47, 24, 0.08)',
-            }}
+            style={{ background: '#fff', borderRadius: 14, padding: 24, width: 'min(420px, 100%)', boxShadow: '0 8px 32px rgba(107,68,35,0.25)', border: '1px solid rgba(74,47,24,0.08)' }}
           >
-            <div
-              style={{
-                fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                fontSize: 16,
-                fontWeight: 600,
-                color: '#1A1612',
-                marginBottom: 12,
-              }}
-              >
-              Lägg till länk
-            </div>
+            <div style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 600, color: '#1A1612' }}>Lägg till länk</div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9D8E7D', marginBottom: 6 }}>URL</div>
             <input
               autoFocus
               value={linkValue}
               onChange={(event) => setLinkValue(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Enter') applyLink(); if (event.key === 'Escape') setLinkDialogOpen(false); }}
               placeholder="https://..."
-              style={{
-                width: '100%',
-                padding: '14px 16px',
-                borderRadius: 12,
-                border: '1px solid rgba(74,47,24,0.15)',
-                fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-                fontSize: 14,
-                color: '#4A4239',
-                outline: 'none',
-              }}
+              style={{ width: '100%', padding: '14px 16px', borderRadius: 12, border: '1px solid rgba(74,47,24,0.15)', fontSize: 14, marginBottom: 16 }}
             />
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button
                 type="button"
                 onClick={() => setLinkDialogOpen(false)}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  border: '1px solid rgba(74,47,24,0.08)',
-                  background: '#FFFFFF',
-                  color: '#1A1612',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                style={{ padding: '10px 16px', border: '1px solid rgba(74,47,24,0.08)', borderRadius: 8, background: '#fff', color: '#1A1612', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
               >
                 Avbryt
               </button>
               <button
                 type="button"
                 onClick={applyLink}
-                style={{
-                  padding: '10px 14px',
-                  borderRadius: 8,
-                  border: 'none',
-                  background: '#6B4423',
-                  color: '#FAF8F5',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
+                style={{ padding: '10px 16px', border: 'none', borderRadius: 8, background: '#6B4423', color: '#FAF8F5', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
               >
                 Spara länk
               </button>
