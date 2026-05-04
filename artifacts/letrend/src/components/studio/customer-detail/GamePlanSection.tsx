@@ -96,6 +96,7 @@ export function GamePlanSection({
   parseMarkdownLinks,
   formatDateTime,
   cmDisplayNames,
+  onCreateEmailDraft,
 }: GamePlanSectionProps) {
   // Defensive: API may return null/undefined/non-string in some legacy rows,
   // so always treat the value as a string before calling string methods.
@@ -456,6 +457,24 @@ export function GamePlanSection({
                       >
                         Redigera
                       </button>
+                      {onCreateEmailDraft ? (
+                        <button
+                          type="button"
+                          onClick={() => onCreateEmailDraft(note.content)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#2563eb',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            padding: 0,
+                          }}
+                          title="Skapa ett e-postutkast baserat på denna notering"
+                        >
+                          Mailutkast
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => void handleDeleteNote(note.id)}

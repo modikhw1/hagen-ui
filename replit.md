@@ -147,6 +147,22 @@ The following dead code has been removed:
 - `artifacts/letrend/src/app/api/` — 180 Next.js route.ts files (replaced by Express)
 - `artifacts/letrend/src/app/admin/_actions/` — 3 Next.js server action files (replaced by `apiClient` calls)
 
+## Studio UX — Role-Aware Workspace (Task #54)
+
+### Changes (steps 1–8 complete)
+- `/studio` redirects to `/studio/customers`
+- **Customer list** — status chips, CM filter chips (use `account_manager_display_name`), avatar display, no Arbetsyta column
+- **Tab order** — Koncept first, then Game Plan, Feed, Kommunikation
+- **Role-aware default tab** — Admins default to Game Plan; CMs default to Koncept. Runs once after profile loads; URL param and sessionStorage always win.
+- **KonceptSection DnD** — @dnd-kit drag-and-drop ordering; drag handle (⠿) + position labels (#1, +1, Nu); sorted IDs synced with activeConcepts; `onReorderConcepts` prop for optional persistence
+- **KonceptSection tags** — per-concept tag chips with inline add (+ Tagg) and remove (×); wired to `handleUpdateConceptTags` which PATCHes `tags` array to the API
+- **Concept PATCH API** — `tags` added to allowed fields (column already exists in DB as `tags ARRAY`)
+- **GamePlan contextual email** — "Mailutkast" button on each note (visible on hover); calls `onCreateEmailDraft` which pre-fills email form with note content and navigates to Kommunikation
+- **CM filter chips fix** — uses `account_manager_display_name` (enriched from `team_members`) for both chip keys and filtering; falls back to legacy `account_manager` field
+
+### No DB migrations required
+- `customer_concepts.tags` already exists as `ARRAY DEFAULT '{}'::text[]`
+
 ## TODO / Remaining Work
 
 1. **Set env vars** — `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY` ✅ (set in .replit userenv)

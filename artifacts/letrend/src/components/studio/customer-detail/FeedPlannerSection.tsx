@@ -111,6 +111,7 @@ export function FeedPlannerSection({
   onTempoWeekdaysChange,
   onOpenKonceptSection,
   onCancelPendingPlacement,
+  onCreateEmailDraft,
 }: FeedPlannerSectionProps) {
   const gridRef = React.useRef<HTMLDivElement>(null);
   const gridWrapperRef = React.useRef<HTMLDivElement>(null);
@@ -1764,6 +1765,7 @@ export function FeedPlannerSection({
                     onPatchConcept={handlePatchConcept}
                     onOpenConcept={onOpenConcept}
                     onSlotClick={onSlotClick}
+                    onCreateEmailDraft={onCreateEmailDraft}
                   />
                 );
               })}

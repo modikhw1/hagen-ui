@@ -398,10 +398,12 @@ function CustomerWorkspacePageContent() {
   const params = useParams();
   const router = useRouter();
   const [searchParams] = useSearchParams();
-  const { } = useAuth();
+  const { profile } = useAuth();
   const customerId = params?.id as string;
   const currentSectionParam = searchParams?.get('section');
   const justAddedParam = searchParams?.get('justAdded') ?? null;
+
+  const isAdmin = Boolean(profile?.is_admin || profile?.role === 'admin');
 
   // Data state
   const [customer, setCustomer] = useState<WorkspaceCustomerProfile | null>(null);
@@ -425,7 +427,10 @@ function CustomerWorkspacePageContent() {
       const stored = window.sessionStorage.getItem(`studio:workspace:last-section:${customerId}`);
       if (stored) return getStudioWorkspaceSection(stored);
     }
-    return 'gameplan';
+    // Role-aware default: CMs start in Koncept (their daily work),
+    // Admins start in Game Plan (strategic overview).
+    // Profile may not be loaded yet at init time — we handle that in a useEffect below.
+    return 'koncept';
   });
   const [loading, setLoading] = useState(true);
   const [editingBrief, setEditingBrief] = useState(false);
@@ -616,6 +621,25 @@ function CustomerWorkspacePageContent() {
       setActiveSection(getStudioWorkspaceSection(urlSection));
     }
   }, [searchParams]);
+
+  // Role-aware default: Admins start on Game Plan (strategic overview) when no explicit preference.
+  // CMs start on Koncept (their daily work). Runs once after profile loads.
+  const hasAppliedRoleDefault = useRef(false);
+  useEffect(() => {
+    if (!profile || hasAppliedRoleDefault.current) return;
+    hasAppliedRoleDefault.current = true;
+    // URL param and session storage always win over role default
+    const urlSection = searchParams?.get('section');
+    if (urlSection) return;
+    if (typeof window !== 'undefined' && customerId) {
+      const stored = window.sessionStorage.getItem(`studio:workspace:last-section:${customerId}`);
+      if (stored) return;
+    }
+    if (profile.is_admin || profile.role === 'admin') {
+      setActiveSection('gameplan');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   // Auto-populate email fields when template changes
   useEffect(() => {
@@ -1645,6 +1669,37 @@ function CustomerWorkspacePageContent() {
     await handleUpdateConcept(conceptId, { tags });
   };
 
+  const handleReorderConcepts = React.useCallback(async (newOrderIds: string[]) => {
+    const conceptMap = new Map(concepts.map((c) => [c.id, c]));
+    // Only placed concepts (those with a feed_order) need to be persisted
+    const placedInNewOrder = newOrderIds
+      .map((id) => conceptMap.get(id))
+      .filter((c): c is CustomerConcept => {
+        if (!c) return false;
+        const fo = (c as Record<string, unknown>)['feed_order'] ?? ((c as Record<string, unknown>)['placement'] as Record<string, unknown> | undefined)?.['feed_order'];
+        return fo != null;
+      });
+
+    if (placedInNewOrder.length === 0) return;
+
+    // Preserve the set of feed_order values; reassign them by new position
+    const sortedFeedOrders = placedInNewOrder
+      .map((c) => {
+        const fo = (c as Record<string, unknown>)['feed_order'] ?? ((c as Record<string, unknown>)['placement'] as Record<string, unknown> | undefined)?.['feed_order'];
+        return fo as number;
+      })
+      .sort((a, b) => a - b);
+
+    await Promise.all(
+      placedInNewOrder.map((concept, idx) => {
+        const curFo = (concept as Record<string, unknown>)['feed_order'] ?? ((concept as Record<string, unknown>)['placement'] as Record<string, unknown> | undefined)?.['feed_order'];
+        const newFo = sortedFeedOrders[idx];
+        if (newFo === curFo) return Promise.resolve();
+        return handleUpdateConcept(concept.id, { feed_order: newFo } as Partial<CustomerConcept>);
+      })
+    );
+  }, [concepts, handleUpdateConcept]);
+
   const handleUpdateCmNote = async (conceptId: string, note: string) => {
     await handleUpdateConcept(conceptId, { cm_note: note });
   };
@@ -1717,6 +1772,13 @@ function CustomerWorkspacePageContent() {
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(`studio:workspace:last-section:${customerId}`, section);
     }
+  };
+
+  const handleCreateEmailDraftFromNote = (noteContent: string) => {
+    setEmailType('custom');
+    setEmailSubject('');
+    setEmailIntro(noteContent);
+    setWorkspaceSection('kommunikation');
   };
 
   useEffect(() => {
@@ -2993,6 +3055,7 @@ function CustomerWorkspacePageContent() {
               parseMarkdownLinks={parseMarkdownLinks}
               formatDateTime={formatDateTime}
               cmDisplayNames={cmDisplayNames}
+              onCreateEmailDraft={handleCreateEmailDraftFromNote}
             />
           )}
 
@@ -3011,6 +3074,7 @@ function CustomerWorkspacePageContent() {
               onSendConcept={(conceptId) => openEmailComposer('new_concept', [conceptId])}
               handleUpdateCmNote={handleUpdateCmNote}
               handleUpdateWhyItFits={handleUpdateWhyItFits}
+              handleUpdateConceptTags={handleUpdateConceptTags}
               handleAddConceptNote={handleAddConceptNote}
               justAddedConceptId={justAddedConceptId}
               justProducedConceptId={justProducedConceptId}
@@ -3021,6 +3085,7 @@ function CustomerWorkspacePageContent() {
                 setHistoryOffset(gridConfig.currentSlotIndex - feedOrder);
               }}
               onBeginFeedPlacement={handleBeginFeedPlacement}
+              onReorderConcepts={handleReorderConcepts}
               onCreateCollaboration={handleCreateCollaboration}
               onUpdateCollaboration={handleUpdateCollaboration}
             />
@@ -3169,6 +3234,7 @@ function CustomerWorkspacePageContent() {
               onTempoWeekdaysChange={handleSaveTempoWeekdays}
               onOpenKonceptSection={() => setWorkspaceSection('koncept')}
               onCancelPendingPlacement={() => setPendingFeedPlacementConceptId(null)}
+              onCreateEmailDraft={handleCreateEmailDraftFromNote}
             />
             </>
           )}

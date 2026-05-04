@@ -23,17 +23,17 @@ export const STUDIO_SHELL_NAV_ITEMS: StudioShellNavItem[] = [
 
 export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [
   {
-    key: 'gameplan',
-    label: 'Game Plan och Notes',
-    short_label: 'Game Plan',
-    description: 'Strategi, brief och löpande notes till kunden.',
-    kind: 'primary',
-  },
-  {
     key: 'koncept',
     label: 'Konceptarbete',
     short_label: 'Koncept',
     description: 'Tilldelade koncept, redigering och handoff.',
+    kind: 'primary',
+  },
+  {
+    key: 'gameplan',
+    label: 'Game Plan och Notes',
+    short_label: 'Game Plan',
+    description: 'Strategi, brief och löpande notes till kunden.',
     kind: 'primary',
   },
   {
@@ -50,23 +50,12 @@ export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [
     description: 'Mailutkast, skickhistorik och kundkontakt.',
     kind: 'primary',
   },
-  // DEMO TAB: not a short-term priority.
-  // Feed plan (key: 'feed') is the primary planner surface.
-  // TikTok history import is accessible directly from the Feed plan section.
-  // Re-enable by uncommenting when demo prep is back in scope.
-  // {
-  //   key: 'demo',
-  //   label: 'Demo',
-  //   short_label: 'Demo',
-  //   description: 'Förbered demo och importera historik.',
-  //   kind: 'utility',
-  // },
 ];
 
 export function getStudioWorkspaceSection(value: string | null | undefined): Section {
   return STUDIO_WORKSPACE_SECTIONS.some((section) => section.key === value)
     ? (value as Section)
-    : 'gameplan';
+    : 'koncept';
 }
 
 export function getStudioWorkspaceSectionMeta(section: Section): StudioWorkspaceSectionItem {
@@ -77,7 +66,7 @@ export function getStudioWorkspaceSectionMeta(section: Section): StudioWorkspace
 }
 
 export function buildStudioWorkspaceHref(customerId: string, section?: Section): string {
-  if (!section || section === 'gameplan') {
+  if (!section || section === 'koncept') {
     return `/studio/customers/${customerId}`;
   }
 

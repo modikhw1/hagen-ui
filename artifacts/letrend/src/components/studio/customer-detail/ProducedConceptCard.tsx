@@ -31,6 +31,23 @@ function formatWatchTime(seconds: number | null): string | null {
   return `${seconds} s`;
 }
 
+function EngagementBar({ views, likes, comments }: { views: number; likes: number; comments: number | null }) {
+  const engagementRate = ((likes + (comments ?? 0)) / views) * 100;
+  const clamped = Math.min(engagementRate, 20); // cap at 20% for visual scale
+  const pct = (clamped / 20) * 100;
+  const color = engagementRate >= 5 ? '#16a34a' : engagementRate >= 2 ? '#d97706' : '#6b7280';
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+      <div style={{ width: 56, height: 6, borderRadius: 999, background: '#e5e7eb', overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 999, transition: 'width 0.3s' }} />
+      </div>
+      <span style={{ fontSize: 10, color, fontWeight: 700, minWidth: 34 }}>
+        {engagementRate.toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
 export function ProducedConceptCard({
   concept,
   conceptNotes,
@@ -130,7 +147,7 @@ export function ProducedConceptCard({
         </div>
 
         {stats.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, alignItems: 'center' }}>
             {stats.map((stat) => (
               <span
                 key={stat}
@@ -146,6 +163,13 @@ export function ProducedConceptCard({
                 {stat}
               </span>
             ))}
+            {concept.result.tiktok_views != null && concept.result.tiktok_likes != null && concept.result.tiktok_views > 0 ? (
+              <EngagementBar
+                views={concept.result.tiktok_views}
+                likes={concept.result.tiktok_likes}
+                comments={concept.result.tiktok_comments}
+              />
+            ) : null}
           </div>
         ) : null}
 

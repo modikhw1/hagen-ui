@@ -1,4 +1,19 @@
 import React from 'react';
+import {
+  DndContext,
+  type DragEndEvent,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import {
   getConceptPriority,
@@ -51,6 +66,259 @@ function toCollaborationFormValues(concept: CustomerConcept): CollaborationFormV
   };
 }
 
+function ProducedClipsSparkline({ concepts }: { concepts: CustomerConcept[] }) {
+  const sorted = [...concepts]
+    .filter((c) => c.result?.produced_at)
+    .sort((a, b) => new Date(a.result.produced_at!).getTime() - new Date(b.result.produced_at!).getTime())
+    .slice(-12);
+
+  if (sorted.length < 2) return null;
+
+  const W = 72;
+  const H = 24;
+  const gap = 2;
+  const barW = Math.max(2, Math.floor((W - gap * (sorted.length - 1)) / sorted.length));
+
+  const rates = sorted.map((c) => {
+    const views = c.result.tiktok_views ?? 0;
+    const likes = c.result.tiktok_likes ?? 0;
+    const comments = c.result.tiktok_comments ?? 0;
+    if (views === 0) return null;
+    return ((likes + comments) / views) * 100;
+  });
+
+  const maxRate = Math.max(1, ...rates.filter((r): r is number => r != null));
+
+  return (
+    <svg width={W} height={H} style={{ flexShrink: 0, display: 'block' }} aria-label="Engagemang per producerat klipp">
+      {sorted.map((c, i) => {
+        const rate = rates[i];
+        const pct = rate != null ? rate / maxRate : 0.08;
+        const barH = Math.max(2, Math.round(pct * (H - 2)));
+        const color = rate == null ? '#d1d5db' : rate >= 5 ? '#16a34a' : rate >= 2 ? '#d97706' : '#9ca3af';
+        return (
+          <rect
+            key={c.id}
+            x={i * (barW + gap)}
+            y={H - barH}
+            width={barW}
+            height={barH}
+            rx={1}
+            fill={color}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+interface SortableConceptRowProps {
+  id: string;
+  positionLabel: string;
+  concept: CustomerConcept;
+  tags: string[];
+  onUpdateTags?: (conceptId: string, newTags: string[]) => Promise<void>;
+  children: React.ReactNode;
+}
+
+function SortableConceptRow({
+  id,
+  positionLabel,
+  concept,
+  tags,
+  onUpdateTags,
+  children,
+}: SortableConceptRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.55 : 1,
+    position: 'relative',
+  };
+
+  const [editingTags, setEditingTags] = React.useState(false);
+  const [tagInput, setTagInput] = React.useState('');
+  const [savingTags, setSavingTags] = React.useState(false);
+
+  const addTag = async (tag: string) => {
+    const trimmed = tag.trim().toLowerCase().replace(/\s+/g, '-');
+    if (!trimmed || tags.includes(trimmed) || !onUpdateTags) return;
+    setSavingTags(true);
+    await onUpdateTags(id, [...tags, trimmed]);
+    setSavingTags(false);
+    setTagInput('');
+  };
+
+  const removeTag = async (tag: string) => {
+    if (!onUpdateTags) return;
+    setSavingTags(true);
+    await onUpdateTags(id, tags.filter((t) => t !== tag));
+    setSavingTags(false);
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      {/* Row header: drag handle + position label */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginBottom: 6,
+          userSelect: 'none',
+        }}
+      >
+        {/* Drag handle */}
+        <div
+          {...attributes}
+          {...listeners}
+          style={{
+            cursor: isDragging ? 'grabbing' : 'grab',
+            color: '#d1d5db',
+            fontSize: 16,
+            lineHeight: 1,
+            padding: '2px 4px',
+            borderRadius: 4,
+            flexShrink: 0,
+          }}
+          title="Dra för att ändra ordning"
+        >
+          ⠿
+        </div>
+
+        {/* Position indicator */}
+        {positionLabel && (
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: concept.placement.feed_order !== null ? '#1e40af' : '#9ca3af',
+              background: concept.placement.feed_order !== null ? '#dbeafe' : '#f9fafb',
+              border: `1px solid ${concept.placement.feed_order !== null ? '#bfdbfe' : '#e5e7eb'}`,
+              borderRadius: 999,
+              padding: '1px 7px',
+              flexShrink: 0,
+            }}
+          >
+            {positionLabel}
+          </span>
+        )}
+
+        {/* Tags row */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            flexWrap: 'wrap',
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#374151',
+                background: '#f3f4f6',
+                border: '1px solid #e5e7eb',
+                borderRadius: 999,
+                padding: '1px 7px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {tag}
+              {onUpdateTags && (
+                <button
+                  type="button"
+                  onClick={() => void removeTag(tag)}
+                  disabled={savingTags}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    color: '#9ca3af',
+                    fontSize: 11,
+                    lineHeight: 1,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+
+          {onUpdateTags && !editingTags && (
+            <button
+              type="button"
+              onClick={() => setEditingTags(true)}
+              style={{
+                fontSize: 11,
+                color: '#9ca3af',
+                background: 'none',
+                border: '1px dashed #d1d5db',
+                borderRadius: 999,
+                padding: '1px 7px',
+                cursor: 'pointer',
+                lineHeight: 1.4,
+              }}
+            >
+              + Tagg
+            </button>
+          )}
+
+          {onUpdateTags && editingTags && (
+            <input
+              autoFocus
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void addTag(tagInput);
+                }
+                if (e.key === 'Escape') {
+                  setEditingTags(false);
+                  setTagInput('');
+                }
+              }}
+              onBlur={() => {
+                if (tagInput.trim()) {
+                  void addTag(tagInput);
+                } else {
+                  setEditingTags(false);
+                  setTagInput('');
+                }
+              }}
+              placeholder="tagg-namn"
+              style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                border: `1px solid ${LeTrendColors.borderStrong}`,
+                borderRadius: 999,
+                outline: 'none',
+                width: 90,
+                background: '#fff',
+              }}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* Concept card */}
+      {children}
+    </div>
+  );
+}
+
 export const KonceptSection = React.memo(function KonceptSection({
   concepts,
   notes,
@@ -65,6 +333,7 @@ export const KonceptSection = React.memo(function KonceptSection({
   onSendConcept,
   handleUpdateCmNote,
   handleUpdateWhyItFits,
+  handleUpdateConceptTags,
   handleAddConceptNote,
   justAddedConceptId,
   justProducedConceptId,
@@ -72,6 +341,7 @@ export const KonceptSection = React.memo(function KonceptSection({
   brief,
   onNavigateToFeedSlot,
   onBeginFeedPlacement,
+  onReorderConcepts,
   onCreateCollaboration,
   onUpdateCollaboration,
 }: KonceptSectionProps) {
@@ -117,6 +387,52 @@ export const KonceptSection = React.memo(function KonceptSection({
         return rightTime - leftTime;
       }),
     [assignmentConcepts]
+  );
+
+  // DnD ordered IDs — kept in sync with activeConcepts
+  const [sortedIds, setSortedIds] = React.useState<string[]>(() =>
+    activeConcepts.map((c) => c.id)
+  );
+
+  // Sync sorted IDs when activeConcepts changes (concepts added/removed).
+  // Initialize prevIds to match sortedIds so the first effect run doesn't
+  // treat all existing IDs as "new" additions (which caused duplicate keys).
+  const prevIds = React.useRef<string[]>(activeConcepts.map((c) => c.id));
+  React.useEffect(() => {
+    const newIds = activeConcepts.map((c) => c.id);
+    const added = newIds.filter((id) => !prevIds.current.includes(id));
+    const removed = new Set(prevIds.current.filter((id) => !newIds.includes(id)));
+    if (added.length > 0 || removed.size > 0) {
+      setSortedIds((current) => [
+        ...current.filter((id) => !removed.has(id)),
+        ...added,
+      ]);
+    }
+    prevIds.current = newIds;
+  }, [activeConcepts]);
+
+  const orderedActiveConcepts = React.useMemo(() => {
+    const map = new Map(activeConcepts.map((c) => [c.id, c]));
+    return sortedIds.map((id) => map.get(id)).filter((c): c is typeof activeConcepts[0] => c !== undefined);
+  }, [sortedIds, activeConcepts]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  );
+
+  const handleDragEnd = React.useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const oldIndex = sortedIds.indexOf(active.id as string);
+      const newIndex = sortedIds.indexOf(over.id as string);
+      const newOrder = arrayMove(sortedIds, oldIndex, newIndex);
+      setSortedIds(newOrder);
+      if (onReorderConcepts) {
+        await onReorderConcepts(newOrder);
+      }
+    },
+    [sortedIds, onReorderConcepts]
   );
 
   React.useEffect(() => {
@@ -232,7 +548,7 @@ export const KonceptSection = React.memo(function KonceptSection({
           lineHeight: 1.6,
         }}
       >
-        Varje rad är ett kunduppdrag i CM-flödet. Här ser du vad som behöver göras nu, vad som redan är delat och vad som ligger placerat i planen.
+        Varje rad är ett kunduppdrag i CM-flödet. Dra i handtaget (⠿) för att ändra ordning. Taggar synkroniseras med feedplanen.
       </div>
 
       <div style={{ marginBottom: 16, fontSize: 12, lineHeight: 1.5 }}>
@@ -393,29 +709,54 @@ export const KonceptSection = React.memo(function KonceptSection({
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {activeConcepts.map((concept) => (
-            <ActiveConceptCard
-              key={concept.id}
-              concept={concept}
-              isExpanded={expandedConceptId === concept.id}
-              justAdded={justAddedConceptId === concept.id}
-              selected={selectedConceptIds.includes(concept.id)}
-              formatDate={formatDate}
-              getConceptDetails={getConceptDetails}
-              onToggleExpanded={() => setExpandedConceptId(expandedConceptId === concept.id ? null : concept.id)}
-              onToggleSelected={toggleSelectedConcept}
-              onDelete={handleDeleteConcept}
-              onChangeStatus={handleChangeStatus}
-              onOpenEditor={openConceptEditor}
-              onSendConcept={onSendConcept}
-              onUpdateCmNote={handleUpdateCmNote}
-              onUpdateWhyItFits={handleUpdateWhyItFits}
-              onAddConceptNote={handleAddConceptNote}
-              onNavigateToFeedSlot={onNavigateToFeedSlot}
-              onBeginFeedPlacement={onBeginFeedPlacement}
-              cmDisplayNames={cmDisplayNames}
-            />
-          ))}
+          {/* DnD-sortable active concepts */}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => void handleDragEnd(event)}
+          >
+            <SortableContext items={sortedIds} strategy={verticalListSortingStrategy}>
+              {orderedActiveConcepts.map((concept, index) => {
+                const feedOrder = concept.placement.feed_order;
+                const positionLabel = feedOrder !== null
+                  ? feedOrder === 0 ? 'Nu' : `+${feedOrder}`
+                  : `#${index + 1}`;
+                const tags = concept.markers.tags ?? [];
+
+                return (
+                  <SortableConceptRow
+                    key={concept.id}
+                    id={concept.id}
+                    positionLabel={positionLabel}
+                    concept={concept}
+                    tags={tags}
+                    onUpdateTags={handleUpdateConceptTags}
+                  >
+                    <ActiveConceptCard
+                      concept={concept}
+                      isExpanded={expandedConceptId === concept.id}
+                      justAdded={justAddedConceptId === concept.id}
+                      selected={selectedConceptIds.includes(concept.id)}
+                      formatDate={formatDate}
+                      getConceptDetails={getConceptDetails}
+                      onToggleExpanded={() => setExpandedConceptId(expandedConceptId === concept.id ? null : concept.id)}
+                      onToggleSelected={toggleSelectedConcept}
+                      onDelete={handleDeleteConcept}
+                      onChangeStatus={handleChangeStatus}
+                      onOpenEditor={openConceptEditor}
+                      onSendConcept={onSendConcept}
+                      onUpdateCmNote={handleUpdateCmNote}
+                      onUpdateWhyItFits={handleUpdateWhyItFits}
+                      onAddConceptNote={handleAddConceptNote}
+                      onNavigateToFeedSlot={onNavigateToFeedSlot}
+                      onBeginFeedPlacement={onBeginFeedPlacement}
+                      cmDisplayNames={cmDisplayNames}
+                    />
+                  </SortableConceptRow>
+                );
+              })}
+            </SortableContext>
+          </DndContext>
 
           {producedConcepts.length > 0 ? (
             <div style={{ marginTop: activeConcepts.length > 0 ? 8 : 0 }}>
@@ -438,6 +779,7 @@ export const KonceptSection = React.memo(function KonceptSection({
                 }}
               >
                 <span style={{ flex: 1 }}>Producerade och publicerade ({producedConcepts.length})</span>
+                <ProducedClipsSparkline concepts={producedConcepts} />
                 <span style={{ fontSize: 11 }}>{showProducedSection ? '▲' : '▼'}</span>
               </button>
 

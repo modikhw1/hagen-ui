@@ -34,6 +34,7 @@ export interface GamePlanSectionProps {
   customerId: string;
   notes: CustomerNote[];
   customerName: string;
+  onCreateEmailDraft?: (noteContent: string) => void;
   aiDefaults: GamePlanGenerateInput;
   gamePlanHtml: string;
   gamePlanSummary: CustomerGamePlanSummary | null;
@@ -103,6 +104,7 @@ export interface FeedPlannerSectionProps {
   onTempoWeekdaysChange: (weekdays: number[]) => Promise<void>;
   onOpenKonceptSection?: () => void;
   onCancelPendingPlacement?: () => void;
+  onCreateEmailDraft?: (noteContent: string) => void;
 }
 
 export interface FeedSlotProps {
@@ -116,6 +118,7 @@ export interface FeedSlotProps {
   showSpanCoverageLabels?: boolean;
   projectedDate?: Date | null;
   isFreshEvidence?: boolean;
+  onCreateEmailDraft?: (noteContent: string) => void;
   getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
   // Checks TikTok for a new clip before producing. Returns 'advanced' if a clip was found and
   // auto-reconcile already advanced the plan, or 'no_clip' if nothing new was found.
@@ -212,6 +215,7 @@ export interface KonceptSectionProps {
   onSendConcept: (conceptId: string) => void;
   handleUpdateCmNote: (conceptId: string, note: string) => Promise<void>;
   handleUpdateWhyItFits: (conceptId: string, text: string) => Promise<void>;
+  handleUpdateConceptTags?: (conceptId: string, tags: string[]) => Promise<void>;
   handleAddConceptNote: (conceptId: string, content: string) => Promise<void>;
   justAddedConceptId: string | null;
   justProducedConceptId: string | null;
@@ -219,6 +223,7 @@ export interface KonceptSectionProps {
   brief: { tone: string; constraints: string; current_focus: string };
   onNavigateToFeedSlot?: (feedOrder: number) => void;
   onBeginFeedPlacement?: (conceptId: string) => void;
+  onReorderConcepts?: (conceptIds: string[]) => Promise<void>;
   onCreateCollaboration?: (values: import('./CollaborationModal').CollaborationFormValues) => Promise<void>;
   onUpdateCollaboration?: (conceptId: string, values: import('./CollaborationModal').CollaborationFormValues) => Promise<void>;
 }

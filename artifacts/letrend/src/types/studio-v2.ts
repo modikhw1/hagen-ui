@@ -490,6 +490,8 @@ export interface StudioCustomerListItem {
   customer_contact_name: string | null;
   account_manager: string | null;
   account_manager_profile_id: string | null;
+  account_manager_display_name?: string | null;
+  account_manager_avatar_url?: string | null;
   monthly_price: number | null;
   status: 'pending' | 'active' | 'archived' | 'invited' | 'agreed';
   created_at: string | null;
@@ -499,6 +501,7 @@ export interface StudioCustomerListItem {
   tiktok_summary: StudioCustomerTikTokSummary | null;
   concept_stats: StudioCustomerConceptStats;
   last_email_at: string | null;
+  last_email_sent_at?: string | null;
   active_signal_count: number;
 }
 

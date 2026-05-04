@@ -23,6 +23,7 @@ function FeedSlot({
   showSpanCoverageLabels = true,
   projectedDate = null,
   isFreshEvidence = false,
+  onCreateEmailDraft,
   getConceptDetails,
   onMarkProduced,
   onOpenMarkProducedDialog,
@@ -1546,6 +1547,14 @@ function FeedSlot({
                 style={{ marginTop: 8, width: '100%', padding: 6, border: 'none', borderRadius: LeTrendRadius.sm, background: LeTrendColors.brownLight, color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 Spara notering
               </button>
+              {onCreateEmailDraft && localNote.trim() && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCreateEmailDraft(localNote.trim()); }}
+                  style={{ marginTop: 6, width: '100%', padding: 6, border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, background: '#fff', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Mailutkast
+                </button>
+              )}
             </div>
           )}
 

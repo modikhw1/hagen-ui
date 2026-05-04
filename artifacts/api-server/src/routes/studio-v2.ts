@@ -76,7 +76,16 @@ router.get('/customers', requireAuth, CM_ONLY, async (req, res) => {
       return;
     }
 
-    const [conceptsResult, emailsResult] = await Promise.all([
+    // Collect unique account_manager_profile_ids to enrich with team member data
+    const cmProfileIds = [
+      ...new Set(
+        (profiles ?? [])
+          .map((p) => p.account_manager_profile_id as string | null)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const [conceptsResult, emailsResult, teamMembersResult, nextPlannedResult] = await Promise.all([
       supabase
         .from('customer_concepts')
         .select('customer_profile_id, status')
@@ -87,8 +96,20 @@ router.get('/customers', requireAuth, CM_ONLY, async (req, res) => {
         .select('customer_id, sent_at')
         .in('customer_id', customerIds)
         .order('sent_at', { ascending: false })
-        .limit(customerIds.length * 5)
-,
+        .limit(customerIds.length * 5),
+      cmProfileIds.length > 0
+        ? supabase
+            .from('team_members')
+            .select('profile_id, name, avatar_url, city, region')
+            .in('profile_id', cmProfileIds)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from('customer_concepts')
+        .select('customer_profile_id, planned_publish_at')
+        .in('customer_profile_id', customerIds)
+        .not('planned_publish_at', 'is', null)
+        .gte('planned_publish_at', new Date().toISOString())
+        .order('planned_publish_at', { ascending: true }),
     ]);
 
     const conceptStatsMap = new Map<string, { draft: number; sent: number; produced: number }>();
@@ -114,11 +135,41 @@ router.get('/customers', requireAuth, CM_ONLY, async (req, res) => {
       if (!lastEmailMap.has(cid)) lastEmailMap.set(cid, e.sent_at as string);
     }
 
-    const customers = (profiles ?? []).map((p) => ({
-      ...p,
-      concept_stats: conceptStatsMap.get(p.id) ?? { draft: 0, sent: 0, produced: 0 },
-      last_email_sent_at: lastEmailMap.get(p.id) ?? null,
-    }));
+    // Build CM identity map keyed by profile_id
+    const cmIdentityMap = new Map<string, { name: string; avatar_url: string | null; city: string | null; region: string | null }>();
+    for (const member of (teamMembersResult.data ?? [])) {
+      if (member.profile_id) {
+        cmIdentityMap.set(member.profile_id as string, {
+          name: member.name as string,
+          avatar_url: (member.avatar_url as string | null) ?? null,
+          city: (member.city as string | null) ?? null,
+          region: (member.region as string | null) ?? null,
+        });
+      }
+    }
+
+    // Build next planned delivery map (earliest future planned_publish_at per customer)
+    const nextPlannedMap = new Map<string, string>();
+    for (const row of (nextPlannedResult.data ?? [])) {
+      const cid = row.customer_profile_id as string;
+      if (!nextPlannedMap.has(cid)) {
+        nextPlannedMap.set(cid, row.planned_publish_at as string);
+      }
+    }
+
+    const customers = (profiles ?? []).map((p) => {
+      const cmId = p.account_manager_profile_id as string | null;
+      const cmIdentity = cmId ? cmIdentityMap.get(cmId) : undefined;
+      return {
+        ...p,
+        concept_stats: conceptStatsMap.get(p.id) ?? { draft: 0, sent: 0, produced: 0 },
+        last_email_sent_at: lastEmailMap.get(p.id) ?? null,
+        account_manager_display_name: cmIdentity?.name ?? (p.account_manager as string | null) ?? null,
+        account_manager_avatar_url: cmIdentity?.avatar_url ?? null,
+        account_manager_city: cmIdentity?.city ?? cmIdentity?.region ?? null,
+        next_planned_at: nextPlannedMap.get(p.id) ?? null,
+      };
+    });
 
     res.json({ customers });
   } catch (err) {
@@ -1250,7 +1301,7 @@ router.patch('/concepts/:conceptId', requireAuth, CM_ONLY, async (req, res) => {
     const allowed = [
       'status', 'content_overrides', 'cm_note', 'tiktok_url', 'tiktok_thumbnail_url',
       'tiktok_views', 'tiktok_likes', 'published_at', 'produced_at', 'feed_order',
-      'planned_publish_at',
+      'planned_publish_at', 'tags',
       'partner_name', 'profile_name', 'profile_image_url', 'visual_variant',
       'collaborator_reach', 'collaborator_avatar_url', 'collaboration_note',
     ];
