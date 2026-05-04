@@ -326,15 +326,40 @@ export async function syncCustomerHistory(
       totalFetched += clips.length;
 
       if (clips.length > 0) {
-        const urls = clips.map((c) => normalizeTikTokUrl(c.tiktok_url));
         const { data: existing } = await supabase
           .from('customer_concepts')
-          .select('id, tiktok_url')
+          .select('id, tiktok_url, concept_id, reconciled_customer_concept_id')
           .eq('customer_profile_id', customerId)
           .in('tiktok_url', clips.map((c) => c.tiktok_url));
-        const existingByUrl = new Map<string, string>();
-        for (const row of (existing ?? []) as Array<{ id: string; tiktok_url: string }>) {
-          existingByUrl.set(normalizeTikTokUrl(row.tiktok_url), row.id);
+
+        // Build URL-to-row maps deterministically. After reconciliation copies
+        // tiktok_url to the assignment row, both the imported_history row and the
+        // assignment row may share the same URL. We must prefer the imported_history
+        // row in existingByUrl so it is always updated via the primary path; the
+        // reconciled assignment row then gets updated via reconciledAssignmentByRowId.
+        // Assignment rows with URLs that have no matching imported_history row are
+        // tracked separately so they also receive stats updates.
+        const importedByUrl = new Map<string, string>(); // url → imported_history id
+        const assignmentByUrl = new Map<string, string>(); // url → assignment id (no imported match)
+        // Map from imported_history row id → reconciled assignment row id for
+        // stats propagation after updating the imported_history row.
+        const reconciledAssignmentByRowId = new Map<string, string>();
+        for (const row of (existing ?? []) as Array<{ id: string; tiktok_url: string; concept_id: string | null; reconciled_customer_concept_id: string | null }>) {
+          const normalizedUrl = normalizeTikTokUrl(row.tiktok_url);
+          if (!row.concept_id) {
+            importedByUrl.set(normalizedUrl, row.id);
+            if (row.reconciled_customer_concept_id) {
+              reconciledAssignmentByRowId.set(row.id, row.reconciled_customer_concept_id);
+            }
+          } else {
+            assignmentByUrl.set(normalizedUrl, row.id);
+          }
+        }
+        // existingByUrl: imported_history rows take precedence; assignment rows fill
+        // in only when no imported_history row shares the URL.
+        const existingByUrl = new Map<string, string>(importedByUrl);
+        for (const [url, id] of assignmentByUrl) {
+          if (!existingByUrl.has(url)) existingByUrl.set(url, id);
         }
 
         const newClips = clips.filter((c) => !existingByUrl.has(normalizeTikTokUrl(c.tiktok_url)));
@@ -342,17 +367,34 @@ export async function syncCustomerHistory(
 
         // Update stats on existing rows — surface any DB error so the run
         // is correctly marked failed.
+        // Also propagate thumbnail + stats to any reconciled assignment row so
+        // the LeT history card shows the latest thumbnail without needing the
+        // read-time API overlay.
         if (updateClips.length > 0) {
-          const updateResults = await Promise.all(updateClips.map((c) => {
+          const updateResults = await Promise.all(updateClips.flatMap((c) => {
             const id = existingByUrl.get(normalizeTikTokUrl(c.tiktok_url))!;
-            return supabase.from('customer_concepts').update({
+            const statsPatch = {
               tiktok_views: c.tiktok_views,
               tiktok_likes: c.tiktok_likes,
               tiktok_comments: c.tiktok_comments,
               tiktok_thumbnail_url: c.tiktok_thumbnail_url ?? undefined,
               tiktok_last_synced_at: observedAt,
               last_observed_at: observedAt,
-            }).eq('id', id);
+            };
+            const updates = [supabase.from('customer_concepts').update(statsPatch).eq('id', id)];
+            // If this imported_history row is reconciled to an assignment row, mirror
+            // the thumbnail + stats onto the assignment row so the LeT card shows them.
+            const assignmentId = reconciledAssignmentByRowId.get(id);
+            if (assignmentId) {
+              updates.push(supabase.from('customer_concepts').update({
+                tiktok_thumbnail_url: c.tiktok_thumbnail_url ?? undefined,
+                tiktok_views: c.tiktok_views,
+                tiktok_likes: c.tiktok_likes,
+                tiktok_comments: c.tiktok_comments,
+                tiktok_last_synced_at: observedAt,
+              }).eq('id', assignmentId));
+            }
+            return updates;
           }));
           const firstError = updateResults.find((r) => r.error)?.error;
           if (firstError) throw new Error(`stats_update_failed: ${firstError.message}`);

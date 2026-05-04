@@ -1527,7 +1527,7 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
 
     const { data: historyRow, error: histErr } = await supabase
       .from('customer_concepts')
-      .select('id, customer_profile_id, concept_id')
+      .select('id, customer_profile_id, concept_id, tiktok_url, tiktok_thumbnail_url, tiktok_views, tiktok_likes, tiktok_comments, published_at')
       .eq('id', historyConceptId)
       .maybeSingle();
 
@@ -1570,6 +1570,33 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
       return;
     }
 
+    // Validate that the target assignment row belongs to the same customer and
+    // is an actual assignment (has concept_id). This prevents a CM with access
+    // to customer A from writing to an assignment row belonging to customer B.
+    const historyCustomerId = (historyRow as { customer_profile_id: string }).customer_profile_id;
+    const { data: assignmentRow, error: assignmentErr } = await supabase
+      .from('customer_concepts')
+      .select('id, customer_profile_id, concept_id')
+      .eq('id', resolvedLinkedConceptId)
+      .maybeSingle();
+    if (assignmentErr) {
+      res.status(500).json({ error: assignmentErr.message });
+      return;
+    }
+    if (!assignmentRow) {
+      res.status(404).json({ error: 'Target assignment concept not found' });
+      return;
+    }
+    const typedAssignmentRow = assignmentRow as { customer_profile_id: string; concept_id: unknown };
+    if (typedAssignmentRow.customer_profile_id !== historyCustomerId) {
+      res.status(403).json({ error: 'Target concept belongs to a different customer' });
+      return;
+    }
+    if (!typedAssignmentRow.concept_id) {
+      res.status(422).json({ error: 'Target concept is not an assignment row' });
+      return;
+    }
+
     const now = new Date().toISOString();
     const { error: reconcileError } = await supabase
       .from('customer_concepts')
@@ -1583,6 +1610,28 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
     if (reconcileError) {
       res.status(500).json({ error: reconcileError.message });
       return;
+    }
+
+    // Propagate thumbnail and TikTok stats from the imported_history row to the
+    // assignment row in the DB so the LeT history card shows the thumbnail
+    // without depending solely on the read-time overlay.
+    const typedHistoryRow = historyRow as Record<string, unknown>;
+    const assignmentPatch: Record<string, unknown> = {};
+    if (typedHistoryRow.tiktok_thumbnail_url) assignmentPatch.tiktok_thumbnail_url = typedHistoryRow.tiktok_thumbnail_url;
+    if (typedHistoryRow.tiktok_url) assignmentPatch.tiktok_url = typedHistoryRow.tiktok_url;
+    if (typedHistoryRow.tiktok_views != null) assignmentPatch.tiktok_views = typedHistoryRow.tiktok_views;
+    if (typedHistoryRow.tiktok_likes != null) assignmentPatch.tiktok_likes = typedHistoryRow.tiktok_likes;
+    if (typedHistoryRow.tiktok_comments != null) assignmentPatch.tiktok_comments = typedHistoryRow.tiktok_comments;
+    if (typedHistoryRow.published_at) assignmentPatch.published_at = typedHistoryRow.published_at;
+
+    if (Object.keys(assignmentPatch).length > 0) {
+      const { error: patchErr } = await supabase
+        .from('customer_concepts')
+        .update(assignmentPatch)
+        .eq('id', resolvedLinkedConceptId);
+      if (patchErr) {
+        logger.warn({ err: patchErr }, 'studio-v2 reconciliation: failed to propagate stats to assignment row');
+      }
     }
 
     res.json({ success: true });
@@ -1638,6 +1687,32 @@ router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) 
     if (clearError) {
       res.status(500).json({ error: clearError.message });
       return;
+    }
+
+    // Clear the thumbnail and stats that were propagated to the assignment row
+    // when reconciliation was established, so the LeT card reverts to its
+    // un-reconciled state (no TikTok thumbnail).
+    // Guard with both id AND customer_profile_id so this update can never
+    // accidentally touch a row belonging to a different customer.
+    const typedUndo = historyRow as Record<string, unknown>;
+    const assignmentId = typedUndo.reconciled_customer_concept_id as string | null;
+    const undoCustomerId = (historyRow as { customer_profile_id: string }).customer_profile_id;
+    if (assignmentId) {
+      const { error: undoPatchErr } = await supabase
+        .from('customer_concepts')
+        .update({
+          tiktok_thumbnail_url: null,
+          tiktok_url: null,
+          tiktok_views: null,
+          tiktok_likes: null,
+          tiktok_comments: null,
+          published_at: null,
+        })
+        .eq('id', assignmentId)
+        .eq('customer_profile_id', undoCustomerId);
+      if (undoPatchErr) {
+        logger.warn({ err: undoPatchErr }, 'studio-v2 reconciliation undo: failed to clear stats from assignment row');
+      }
     }
 
     res.json({ success: true });
