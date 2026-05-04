@@ -55,6 +55,9 @@ function FeedSlot({
   const [showReconciliationPicker, setShowReconciliationPicker] = React.useState(false);
   const [selectedReconciliationTargetId, setSelectedReconciliationTargetId] = React.useState('');
   const [savingReconciliation, setSavingReconciliation] = React.useState(false);
+  const [showClipPicker, setShowClipPicker] = React.useState(false);
+  const [selectedClipId, setSelectedClipId] = React.useState('');
+  const [savingClipLink, setSavingClipLink] = React.useState(false);
   const [localNote, setLocalNote] = React.useState('');
   const [localTikTokUrl, setLocalTikTokUrl] = React.useState('');
   const [localPlannedDate, setLocalPlannedDate] = React.useState('');
@@ -111,6 +114,14 @@ function FeedSlot({
             details?.headline_sv?.substring(0, 60) ?? details?.headline ?? null
           )
         : null;
+  const unreconciledClips = (allConcepts ?? [])
+    .filter((c) => c.row_kind === 'imported_history' && !c.reconciliation.is_reconciled)
+    .sort((a, b) => {
+      const dateA = a.result?.published_at ?? '';
+      const dateB = b.result?.published_at ?? '';
+      return dateB.localeCompare(dateA);
+    });
+
   const selectableHistoryTargets = historyReconciliationTargets
     .filter((item) => item.id !== concept?.id)
     .sort((a, b) => {
@@ -227,6 +238,8 @@ function FeedSlot({
     setEditingPlannedDate(false);
     setShowReconciliationPicker(false);
     setSelectedReconciliationTargetId(concept?.reconciliation.linked_customer_concept_id ?? '');
+    setShowClipPicker(false);
+    setSelectedClipId('');
     setShowTagPicker(false);
   }, [
     concept?.id,
@@ -328,6 +341,20 @@ function FeedSlot({
       setSelectedReconciliationTargetId('');
     } finally {
       setSavingReconciliation(false);
+    }
+  };
+
+  const handleSaveClipReconciliation = async () => {
+    if (!concept || concept.row_kind !== 'assignment' || !selectedClipId) return;
+    setSavingClipLink(true);
+    try {
+      await onReconcileHistory(selectedClipId, {
+        linkedCustomerConceptId: concept.id,
+      });
+      setShowClipPicker(false);
+      setSelectedClipId('');
+    } finally {
+      setSavingClipLink(false);
     }
   };
 
@@ -1418,6 +1445,17 @@ function FeedSlot({
                 {savingReconciliation ? 'Sparar...' : 'Ångra koppling (visa som TikTok)'}
               </button>
             )}
+            {concept.row_kind === 'assignment' && !concept.reconciliation.reconciled_clip_id && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowClipPicker((prev) => !prev);
+                }}
+                style={feedSlotMenuBtnStyle}
+              >
+                {showClipPicker ? 'Dölj klippval' : 'Koppla till TikTok-klipp'}
+              </button>
+            )}
             {concept.row_kind === 'imported_history' && (
               <button
                 onClick={(e) => {
@@ -1529,6 +1567,72 @@ function FeedSlot({
                     ? 'Spara ny koppling'
                     : 'Spara koppling'}
               </button>
+            </div>
+          )}
+
+          {showClipPicker && type === 'history' && concept.row_kind === 'assignment' && (
+            <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8, display: 'grid', gap: 8 }}>
+              <div style={{ fontSize: 11, color: LeTrendColors.textSecondary, lineHeight: 1.5 }}>
+                {unreconciledClips.length === 0
+                  ? 'Inga okopplade TikTok-klipp hittades för den här kunden.'
+                  : 'Välj ett importerat TikTok-klipp att koppla till den här tilldelningen.'}
+              </div>
+              {unreconciledClips.length > 0 && (
+                <>
+                  <select
+                    value={selectedClipId}
+                    onChange={(e) => setSelectedClipId(e.target.value)}
+                    style={{
+                      width: '100%',
+                      border: `1px solid ${LeTrendColors.border}`,
+                      borderRadius: LeTrendRadius.sm,
+                      padding: 6,
+                      fontSize: 12,
+                      background: '#fff',
+                    }}
+                  >
+                    <option value="">Välj klipp...</option>
+                    {unreconciledClips.map((clip) => {
+                      const clipDate = clip.result?.published_at
+                        ? new Date(clip.result.published_at).toLocaleDateString('sv-SE')
+                        : null;
+                      const clipDetails = getWorkspaceConceptDetails(clip, getConceptDetails) ?? null;
+                      const clipTitle = getStudioCustomerConceptDisplayTitle(
+                        clip,
+                        clipDetails?.headline_sv?.substring(0, 60) ?? clipDetails?.headline ?? null
+                      );
+                      return (
+                        <option key={clip.id} value={clip.id}>
+                          {clipDate ? `${clipDate} · ${clipTitle}` : clipTitle}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleSaveClipReconciliation();
+                    }}
+                    disabled={!selectedClipId || savingClipLink}
+                    style={{
+                      width: '100%',
+                      padding: 6,
+                      border: 'none',
+                      borderRadius: LeTrendRadius.sm,
+                      background:
+                        !selectedClipId || savingClipLink
+                          ? 'rgba(107,68,35,0.35)'
+                          : '#0f766e',
+                      color: 'white',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: !selectedClipId || savingClipLink ? 'default' : 'pointer',
+                    }}
+                  >
+                    {savingClipLink ? 'Sparar koppling...' : 'Spara koppling'}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
