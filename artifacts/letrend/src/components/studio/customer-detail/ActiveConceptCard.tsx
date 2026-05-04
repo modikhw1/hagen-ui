@@ -65,6 +65,19 @@ function CustomizeModal({
   );
   const [cmNote, setCmNote] = React.useState(concept.markers.assignment_note ?? concept.cm_note ?? '');
   const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    setHeadline(
+      (concept.content.content_overrides?.headline as string | undefined) ?? resolvedHeadline,
+    );
+    setWhyItFits(concept.content.why_it_fits ?? '');
+    setInstructions(
+      (concept.content.content_overrides?.filming_instructions as string | undefined) ??
+        concept.content.filming_instructions ??
+        resolvedInstructions,
+    );
+    setCmNote(concept.markers.assignment_note ?? concept.cm_note ?? '');
+  }, [concept.id]);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [showScript, setShowScript] = React.useState(false);
 
