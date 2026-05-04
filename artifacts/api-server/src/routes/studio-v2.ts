@@ -306,6 +306,10 @@ router.get('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, 
               tiktok_views: importedStats.tiktok_views ?? row.tiktok_views,
               tiktok_likes: importedStats.tiktok_likes ?? row.tiktok_likes,
               tiktok_comments: importedStats.tiktok_comments ?? row.tiktok_comments,
+              // Inject the imported clip's own ID so the frontend can surface
+              // "Ångra koppling" on the LeTrend (assignment) history card.
+              // The normalizer reads this as reconciliation.reconciled_clip_id.
+              reconciled_imported_clip_id: importedStats.id,
             };
           }
         }
@@ -1541,11 +1545,36 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
       return;
     }
 
+    // Resolve the target assignment concept ID.
+    // mode=use_now_slot: look up the assignment at feed_order=0 for this customer.
+    // mode=manual: use the explicitly provided linked_customer_concept_id.
+    let resolvedLinkedConceptId = linkedConceptId;
+    if (mode === 'use_now_slot') {
+      const customerId = (historyRow as { customer_profile_id: string }).customer_profile_id;
+      const { data: nowSlot } = await supabase
+        .from('customer_concepts')
+        .select('id')
+        .eq('customer_profile_id', customerId)
+        .eq('feed_order', 0)
+        .not('concept_id', 'is', null)
+        .maybeSingle();
+      if (!nowSlot) {
+        res.status(422).json({ error: 'Inget koncept i nu-slotten hittades. Välj manuellt.' });
+        return;
+      }
+      resolvedLinkedConceptId = (nowSlot as { id: string }).id;
+    }
+
+    if (!resolvedLinkedConceptId) {
+      res.status(400).json({ error: 'linked_customer_concept_id is required' });
+      return;
+    }
+
     const now = new Date().toISOString();
     const { error: reconcileError } = await supabase
       .from('customer_concepts')
       .update({
-        reconciled_customer_concept_id: linkedConceptId || null,
+        reconciled_customer_concept_id: resolvedLinkedConceptId,
         reconciled_by_cm_id: req.user!.id,
         reconciled_at: now,
       })
@@ -1559,6 +1588,61 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
     res.json({ success: true });
   } catch (err) {
     logger.error(err, 'studio-v2 history reconciliation error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// DELETE /api/studio-v2/history/reconciliation
+// Clears the reconciliation link on an imported_history row, returning it to
+// pure-TikTok status and removing the stats overlay from the linked assignment card.
+router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const body = req.body as Record<string, unknown>;
+    const supabase = createSupabaseAdmin();
+    const historyConceptId = typeof body.history_concept_id === 'string' ? body.history_concept_id.trim() : '';
+
+    if (!historyConceptId) {
+      res.status(400).json({ error: 'history_concept_id is required' });
+      return;
+    }
+
+    const { data: historyRow, error: histErr } = await supabase
+      .from('customer_concepts')
+      .select('id, customer_profile_id, concept_id, reconciled_customer_concept_id')
+      .eq('id', historyConceptId)
+      .maybeSingle();
+
+    if (histErr) {
+      res.status(500).json({ error: histErr.message });
+      return;
+    }
+    if (!historyRow) {
+      res.status(404).json({ error: 'Imported history row not found' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, (historyRow as { customer_profile_id: string }).customer_profile_id))) return;
+    if ((historyRow as Record<string, unknown>).concept_id) {
+      res.status(409).json({ error: 'Only imported TikTok history rows can have reconciliation cleared' });
+      return;
+    }
+
+    const { error: clearError } = await supabase
+      .from('customer_concepts')
+      .update({
+        reconciled_customer_concept_id: null,
+        reconciled_by_cm_id: null,
+        reconciled_at: null,
+      })
+      .eq('id', historyConceptId);
+
+    if (clearError) {
+      res.status(500).json({ error: clearError.message });
+      return;
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'studio-v2 history reconciliation DELETE error');
     res.status(500).json({ error: 'Internt serverfel' });
   }
 });

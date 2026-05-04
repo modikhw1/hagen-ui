@@ -359,8 +359,16 @@ export async function syncCustomerHistory(
           totalStatsUpdated += updateClips.length;
         }
 
-        // Insert new clips as history_import (no feed_order shifting here —
-        // auto-reconcile is handled by a downstream task)
+        // Insert new clips as imported_history rows. No feed_order assigned — these
+        // sit outside the feed grid until a CM (or future automation) reconciles them.
+        //
+        // KNOWN LIMITATION: auto-reconciliation ("mark clip as LeTrend when +1 clip
+        // detected and nu-slot is occupied") is NOT yet implemented. The downstream
+        // task described here does not exist. CMs must manually toggle each clip via
+        // the "Markera som LeTrend" button in the history context menu. Any future
+        // auto-reconciliation must guard against false positives (e.g. clip observed
+        // is unrelated to the nu-slot concept) and should emit a CM-review nudge
+        // rather than silently writing reconciled_customer_concept_id.
         if (newClips.length > 0) {
           const inserts = newClips.map((c) => ({
             customer_profile_id: customerId,

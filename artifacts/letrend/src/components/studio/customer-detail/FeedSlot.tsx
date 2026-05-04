@@ -1393,6 +1393,13 @@ function FeedSlot({
                 {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
               </button>
             )}
+            {/* "Ångra koppling" toggle for LeTrend (assignment) history cards.
+                reconciled_clip_id is the ID of the imported_history row whose stats
+                are overlaid on this card. It is injected by GET /customers/:id/concepts
+                at query-time when an imported row is linked to this assignment. Passing
+                this ID to onUndoHistoryReconciliation sends DELETE /history/reconciliation
+                which clears reconciled_customer_concept_id on the imported row, restoring
+                it as a standalone TikTok card and stripping the stats overlay from here. */}
             {concept.row_kind === 'assignment' && concept.reconciliation.reconciled_clip_id && (
               <button
                 onClick={(e) => {
