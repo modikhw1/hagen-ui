@@ -2596,7 +2596,7 @@ function CustomerWorkspacePageContent() {
   const customerStatusMeta = getStudioCustomerStatusMeta(normalizeStudioCustomerStatus(customer.status));
 
   return (
-    <div>
+    <div style={{ paddingBottom: 40 }}>
       {/* Sticky quick-switch tab strip */}
       <div
         style={{
@@ -2909,7 +2909,7 @@ function CustomerWorkspacePageContent() {
         </div>
 
         {/* RIGHT COLUMN - Flexible content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
           {pendingEmailPrompt && (
             <div
               style={{
