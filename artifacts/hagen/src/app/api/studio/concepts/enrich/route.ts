@@ -2,29 +2,32 @@
  * POST /api/studio/concepts/enrich
  *
  * Studio ingest step 2 — given the raw backend analysis object produced by
- * the /analyze step, call Gemini to generate Swedish-language concept
- * metadata for LeTrend's concept library.
+ * /api/studio/concepts/analyze, call Gemini with function-calling to generate
+ * Swedish-language concept metadata for LeTrend's concept library.
+ *
+ * Uses the exact same system prompt and tool schema as the letrend frontend
+ * (letrend/src/lib/concept-enrichment.ts) so both sides stay in sync.
  *
  * Request body: { backend_data: Record<string, unknown> }
- *
- * Response shape:
- *   { overrides: EnrichedConceptOverride }
- *
- * The overrides object is validated against the enrichedConceptSchema
- * defined in letrend/src/lib/concept-enrichment.ts.  Any field that
- * Gemini fails to populate correctly falls back to a heuristic derived
- * from the raw analysis.
+ * Response:     { overrides: EnrichedConcept }
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
+import {
+  GoogleGenerativeAI,
+  SchemaType,
+  type Tool,
+  type FunctionDeclaration,
+} from '@google/generative-ai'
 
 export const maxDuration = 45
 
-// ── Enumerations (mirror of letrend/src/lib/concept-enrichment.ts) ─────────
+// ── Enumerations (exact mirror of letrend/src/lib/concept-enrichment.ts) ──
 
 const DIFFICULTY_VALUES = ['easy', 'medium', 'advanced'] as const
-const FILM_TIME_VALUES = ['5min', '10min', '15min', '20min', '30min', '1hr', '1hr_plus'] as const
+const FILM_TIME_VALUES = [
+  '5min', '10min', '15min', '20min', '30min', '1hr', '1hr_plus',
+] as const
 const PEOPLE_VALUES = ['solo', 'duo', 'small_team', 'team'] as const
 const MECHANISM_VALUES = [
   'subversion', 'contrast', 'recognition', 'dark', 'escalation', 'deadpan', 'absurdism',
@@ -35,17 +38,43 @@ const BUSINESS_TYPE_VALUES = [
   'bar', 'restaurang', 'cafe', 'bistro', 'hotell', 'foodtruck', 'nattklubb', 'bageri',
 ] as const
 
-// ── System prompt ───────────────────────────────────────────────────────────
+type DifficultyValue = typeof DIFFICULTY_VALUES[number]
+type FilmTimeValue = typeof FILM_TIME_VALUES[number]
+type PeopleValue = typeof PEOPLE_VALUES[number]
+type MechanismValue = typeof MECHANISM_VALUES[number]
+type MarketValue = typeof MARKET_VALUES[number]
+type BudgetValue = typeof BUDGET_VALUES[number]
+type BusinessTypeValue = typeof BUSINESS_TYPE_VALUES[number]
 
-const SYSTEM_PROMPT = `Du är en innehållsstrateg för svenska restauranger, barer, caféer och hotell.
+interface EnrichedConcept {
+  headline_sv: string
+  description_sv: string
+  whyItWorks_sv: string
+  script_sv: string
+  productionNotes_sv: string[]
+  whyItFits_sv: string[]
+  difficulty: DifficultyValue
+  filmTime: FilmTimeValue
+  peopleNeeded: PeopleValue
+  mechanism: MechanismValue
+  market: MarketValue
+  trendLevel: number
+  businessTypes: BusinessTypeValue[]
+  hasScript: boolean
+  estimatedBudget: BudgetValue
+}
+
+// ── System prompt (exact copy of ENRICH_CONCEPT_SYSTEM_PROMPT) ─────────────
+
+const ENRICH_CONCEPT_SYSTEM_PROMPT = `Du är en innehållsstrateg för svenska restauranger, barer, caféer och hotell.
 
 Du får analysdata för ett videokoncept och ska returnera strukturerad JSON för LeTrends konceptbibliotek.
 
-SCRIPT-NOTATION:
-- Om konceptet har tal/dialog, inled varje replik med [Dialog]:
-- Om konceptet har textkort eller textoverlay, inled med [Textoverlay]:
-- Om konceptet är rent visuellt utan tal, inled med [Visuell]:
-- Kombinera typer när de förekommer i samma video.
+SCRIPT-NOTATION — markera varje rad i script_sv med rätt prefix:
+- [Dialog]: tal/replik som sägs av en person
+- [Textoverlay]: text som visas på skärmen (text card, caption, overlay)
+- [Visuell]: rent visuell scen utan tal eller textoverlay
+Kombinera typer när de förekommer i samma video.
 
 Regler:
 - All text ska vara på svenska.
@@ -63,40 +92,60 @@ Regler:
 - market: SE, US eller UK.
 - trendLevel: 1-5.
 - estimatedBudget: free, low, medium eller high.
-- hasScript ska vara true om konceptet har ett tydligt manus eller tydliga repliker att följa.
+- hasScript ska vara true om konceptet har ett tydligt manus eller tydliga repliker att följa.`
 
-Returnera ENBART giltig JSON utan markdown-kodblock.`
+// ── Tool definition (mirrors ENRICH_CONCEPT_TOOL from letrend) ─────────────
+// Use SchemaType enum so values match the Google AI SDK's expected literals.
 
-// ── Response schema (used to validate Gemini output) ───────────────────────
-
-function clamp<T extends readonly string[]>(value: unknown, allowed: T, fallback: T[number]): T[number] {
-  return (allowed as readonly string[]).includes(value as string)
-    ? (value as T[number])
-    : fallback
+const enrichFunctionDeclaration: FunctionDeclaration = {
+  name: 'enrich_concept',
+  description: 'Return structured concept data for the concept library',
+  // Cast through unknown: the SDK's internal FunctionDeclarationSchema type is
+  // structurally equivalent at runtime; the cast avoids a version-locked import.
+  parameters: {
+    type: SchemaType.OBJECT,
+    properties: {
+      headline_sv:        { type: SchemaType.STRING },
+      description_sv:     { type: SchemaType.STRING },
+      whyItWorks_sv:      { type: SchemaType.STRING },
+      script_sv:          { type: SchemaType.STRING },
+      productionNotes_sv: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+      whyItFits_sv:       { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+      difficulty:         { type: SchemaType.STRING, enum: [...DIFFICULTY_VALUES] },
+      filmTime:           { type: SchemaType.STRING, enum: [...FILM_TIME_VALUES] },
+      peopleNeeded:       { type: SchemaType.STRING, enum: [...PEOPLE_VALUES] },
+      mechanism:          { type: SchemaType.STRING, enum: [...MECHANISM_VALUES] },
+      market:             { type: SchemaType.STRING, enum: [...MARKET_VALUES] },
+      trendLevel:         { type: SchemaType.NUMBER },
+      businessTypes:      { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+      hasScript:          { type: SchemaType.BOOLEAN },
+      estimatedBudget:    { type: SchemaType.STRING, enum: [...BUDGET_VALUES] },
+    },
+    required: [
+      'headline_sv', 'description_sv', 'whyItWorks_sv', 'script_sv',
+      'productionNotes_sv', 'whyItFits_sv', 'difficulty', 'filmTime',
+      'peopleNeeded', 'mechanism', 'market', 'trendLevel',
+      'businessTypes', 'hasScript', 'estimatedBudget',
+    ],
+  } as unknown as FunctionDeclaration['parameters'],
 }
 
-function clampArr<T extends readonly string[]>(
+const ENRICH_TOOL: Tool = { functionDeclarations: [enrichFunctionDeclaration] }
+
+// ── Fallback from raw analysis ─────────────────────────────────────────────
+
+function clampEnum<T extends readonly string[]>(
   value: unknown,
   allowed: T,
-  max: number,
-): Array<T[number]> {
-  if (!Array.isArray(value)) return []
-  const seen = new Set<string>()
-  const result: Array<T[number]> = []
-  for (const item of value) {
-    if (typeof item !== 'string') continue
-    const trimmed = item.trim()
-    if (!trimmed || seen.has(trimmed)) continue
-    if ((allowed as readonly string[]).includes(trimmed)) {
-      seen.add(trimmed)
-      result.push(trimmed as T[number])
-      if (result.length >= max) break
-    }
+  fallback: T[number],
+): T[number] {
+  if (typeof value === 'string' && (allowed as readonly string[]).includes(value)) {
+    return value as T[number]
   }
-  return result
+  return fallback
 }
 
-function dedupeStrings(value: unknown, max: number): string[] {
+function dedupeStringArray(value: unknown, maxLen: number): string[] {
   if (!Array.isArray(value)) return []
   const seen = new Set<string>()
   const result: string[] = []
@@ -106,58 +155,86 @@ function dedupeStrings(value: unknown, max: number): string[] {
     if (!t || seen.has(t.toLowerCase())) continue
     seen.add(t.toLowerCase())
     result.push(t)
-    if (result.length >= max) break
+    if (result.length >= maxLen) break
   }
   return result
 }
 
-function extractStr(obj: Record<string, unknown>, key: string, fallback = ''): string {
-  const v = obj[key]
-  return typeof v === 'string' && v.trim() ? v.trim() : fallback
+function clampEnumArray<T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+  maxLen: number,
+): Array<T[number]> {
+  if (!Array.isArray(value)) return []
+  const result: Array<T[number]> = []
+  const seen = new Set<string>()
+  for (const item of value) {
+    if (typeof item !== 'string') continue
+    const t = item.trim()
+    if (!t || seen.has(t) || !(allowed as readonly string[]).includes(t)) continue
+    seen.add(t)
+    result.push(t as T[number])
+    if (result.length >= maxLen) break
+  }
+  return result
 }
 
-/** Derive reasonable fallbacks from the raw backend_data analysis. */
-function buildFallback(data: Record<string, unknown>): Record<string, unknown> {
-  const analysis = (data as any)
-  const script = analysis?.script || {}
-  const content = analysis?.content || {}
-  const replicability = script?.replicability || {}
-  const technical = analysis?.technical || {}
-  const schemaV1 = analysis?.schema_v1_signals || {}
-
-  const hasVoiceover = !!analysis?.audio?.hasVoiceover
-  const isHumorous = !!script?.humor?.isHumorous
-  const hasScript = script?.hasScript ?? (hasVoiceover || !!script?.transcript)
-
-  const actors = schemaV1?.replicability?.actor_count || 'solo'
-  const actorMap: Record<string, string> = {
-    solo: 'solo', duo: 'duo', small_team: 'small_team', large_team: 'team',
+function buildFallback(data: Record<string, unknown>): EnrichedConcept {
+  // Navigate into the analysis structure safely
+  const getObj = (obj: unknown, key: string): Record<string, unknown> => {
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      const v = (obj as Record<string, unknown>)[key]
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        return v as Record<string, unknown>
+      }
+    }
+    return {}
   }
-  const peopleNeeded = actorMap[actors] || 'solo'
 
-  const resourceReq = replicability?.resourceRequirements || 'medium'
-  const difficultyMap: Record<string, string> = { low: 'easy', medium: 'medium', high: 'advanced' }
-  const difficulty = difficultyMap[resourceReq] || 'medium'
+  const script = getObj(data, 'script')
+  const content = getObj(data, 'content')
+  const audio = getObj(data, 'audio')
+  const technical = getObj(data, 'technical')
+  const replicability = getObj(script, 'replicability')
 
-  const pacing = typeof technical?.pacing === 'number' ? technical.pacing : 5
-  const filmTime = pacing >= 8 ? '5min' : pacing >= 5 ? '10min' : '15min'
+  const conceptCore = typeof script['conceptCore'] === 'string' ? script['conceptCore'] : ''
+  const keyMessage = typeof content['keyMessage'] === 'string' ? content['keyMessage'] : ''
+  const transcript = typeof script['transcript'] === 'string' ? script['transcript'] : ''
+  const hasVoiceover = audio['hasVoiceover'] === true
 
-  const humorMech = script?.humor?.humorType || 'none'
-  const mechMap: Record<string, string> = {
+  const resourceReq = typeof replicability['resourceRequirements'] === 'string'
+    ? replicability['resourceRequirements']
+    : 'medium'
+  const difficultyMap: Record<string, DifficultyValue> = {
+    low: 'easy', medium: 'medium', high: 'advanced',
+  }
+  const difficulty = difficultyMap[resourceReq] ?? 'medium'
+
+  const pacing = typeof technical['pacing'] === 'number' ? technical['pacing'] : 5
+  const filmTime: FilmTimeValue = pacing >= 8 ? '5min' : pacing >= 5 ? '10min' : '15min'
+
+  const humorObj = getObj(script, 'humor')
+  const humorType = typeof humorObj['humorType'] === 'string' ? humorObj['humorType'] : 'none'
+  const isHumorous = humorObj['isHumorous'] === true
+  const mechMap: Record<string, MechanismValue> = {
     subversion: 'subversion', contrast: 'contrast', recognition: 'recognition',
     dark: 'dark', escalation: 'escalation', deadpan: 'deadpan', absurdism: 'absurdism',
   }
-  const mechanism = mechMap[humorMech] || (isHumorous ? 'contrast' : 'recognition')
+  const mechanism = mechMap[humorType] ?? (isHumorous ? 'contrast' : 'recognition')
 
-  const concept = script?.conceptCore || content?.keyMessage || ''
-  const headline = concept.slice(0, 60) || 'Nytt videokoncept'
+  const actors = getObj(getObj(data, 'schema_v1_signals'), 'replicability')['actor_count']
+  const actorMap: Record<string, PeopleValue> = {
+    solo: 'solo', duo: 'duo', small_team: 'small_team', large_team: 'team',
+  }
+  const peopleNeeded: PeopleValue =
+    (typeof actors === 'string' && actorMap[actors]) ? actorMap[actors] : 'solo'
 
   return {
-    headline_sv: headline,
-    description_sv: content?.keyMessage || concept || '',
-    whyItWorks_sv: script?.humor?.humorMechanism || '',
-    script_sv: script?.transcript || '',
-    productionNotes_sv: replicability?.requiredElements?.slice(0, 5) || [],
+    headline_sv: (conceptCore || keyMessage).slice(0, 60) || 'Nytt videokoncept',
+    description_sv: keyMessage.slice(0, 400),
+    whyItWorks_sv: '',
+    script_sv: transcript.slice(0, 4000),
+    productionNotes_sv: dedupeStringArray(replicability['requiredElements'], 5),
     whyItFits_sv: [],
     difficulty,
     filmTime,
@@ -166,60 +243,54 @@ function buildFallback(data: Record<string, unknown>): Record<string, unknown> {
     market: 'SE',
     trendLevel: 3,
     businessTypes: ['restaurang'],
-    hasScript,
+    hasScript: typeof script['hasScript'] === 'boolean' ? script['hasScript'] : hasVoiceover,
     estimatedBudget: 'low',
   }
 }
 
-/** Merge Gemini output on top of fallback, clamp all enum fields. */
-function mergeAndClamp(
-  gemini: Record<string, unknown>,
-  fallback: Record<string, unknown>,
-): Record<string, unknown> {
-  const g = gemini
-  const f = fallback
+function mergeToolCall(
+  args: Record<string, unknown>,
+  fallback: EnrichedConcept,
+): EnrichedConcept {
+  const str = (key: string, maxLen: number, fb: string): string => {
+    const v = args[key]
+    return typeof v === 'string' && v.trim() ? v.trim().slice(0, maxLen) : fb
+  }
 
-  const headline = extractStr(g, 'headline_sv') || extractStr(f as any, 'headline_sv', 'Nytt videokoncept')
-  const productionNotes = dedupeStrings(g['productionNotes_sv'], 5).length
-    ? dedupeStrings(g['productionNotes_sv'], 5)
-    : dedupeStrings(f['productionNotes_sv'], 5)
-  const whyItFits = dedupeStrings(g['whyItFits_sv'], 4).length
-    ? dedupeStrings(g['whyItFits_sv'], 4)
-    : dedupeStrings(f['whyItFits_sv'], 4)
-  const businessTypes = clampArr(g['businessTypes'], BUSINESS_TYPE_VALUES, 3).length
-    ? clampArr(g['businessTypes'], BUSINESS_TYPE_VALUES, 3)
-    : clampArr(f['businessTypes'], BUSINESS_TYPE_VALUES, 3)
+  const productionNotes = dedupeStringArray(args['productionNotes_sv'], 5)
+  const whyItFits = dedupeStringArray(args['whyItFits_sv'], 4)
+  const businessTypes = clampEnumArray(args['businessTypes'], BUSINESS_TYPE_VALUES, 3)
 
   return {
-    headline_sv: headline.slice(0, 120),
-    description_sv: (extractStr(g, 'description_sv') || extractStr(f as any, 'description_sv')).slice(0, 400),
-    whyItWorks_sv: (extractStr(g, 'whyItWorks_sv') || extractStr(f as any, 'whyItWorks_sv')).slice(0, 500),
-    script_sv: (extractStr(g, 'script_sv') || extractStr(f as any, 'script_sv')).slice(0, 4000),
-    productionNotes_sv: productionNotes,
-    whyItFits_sv: whyItFits,
-    difficulty: clamp(g['difficulty'], DIFFICULTY_VALUES, f['difficulty'] as 'medium'),
-    filmTime: clamp(g['filmTime'], FILM_TIME_VALUES, f['filmTime'] as '10min'),
-    peopleNeeded: clamp(g['peopleNeeded'], PEOPLE_VALUES, f['peopleNeeded'] as 'solo'),
-    mechanism: clamp(g['mechanism'], MECHANISM_VALUES, f['mechanism'] as 'recognition'),
-    market: clamp(g['market'], MARKET_VALUES, 'SE'),
-    trendLevel: typeof g['trendLevel'] === 'number'
-      ? Math.max(1, Math.min(5, Math.round(g['trendLevel'])))
-      : (f['trendLevel'] as number ?? 3),
-    businessTypes: businessTypes.length ? businessTypes : ['restaurang'],
-    hasScript: typeof g['hasScript'] === 'boolean' ? g['hasScript'] : (f['hasScript'] as boolean ?? false),
-    estimatedBudget: clamp(g['estimatedBudget'], BUDGET_VALUES, f['estimatedBudget'] as 'low'),
+    headline_sv: str('headline_sv', 120, fallback.headline_sv),
+    description_sv: str('description_sv', 400, fallback.description_sv),
+    whyItWorks_sv: str('whyItWorks_sv', 500, fallback.whyItWorks_sv),
+    script_sv: str('script_sv', 4000, fallback.script_sv),
+    productionNotes_sv: productionNotes.length ? productionNotes : fallback.productionNotes_sv,
+    whyItFits_sv: whyItFits.length ? whyItFits : fallback.whyItFits_sv,
+    difficulty: clampEnum(args['difficulty'], DIFFICULTY_VALUES, fallback.difficulty),
+    filmTime: clampEnum(args['filmTime'], FILM_TIME_VALUES, fallback.filmTime),
+    peopleNeeded: clampEnum(args['peopleNeeded'], PEOPLE_VALUES, fallback.peopleNeeded),
+    mechanism: clampEnum(args['mechanism'], MECHANISM_VALUES, fallback.mechanism),
+    market: clampEnum(args['market'], MARKET_VALUES, 'SE'),
+    trendLevel: typeof args['trendLevel'] === 'number'
+      ? Math.max(1, Math.min(5, Math.round(args['trendLevel'] as number)))
+      : fallback.trendLevel,
+    businessTypes: businessTypes.length ? businessTypes : fallback.businessTypes,
+    hasScript: typeof args['hasScript'] === 'boolean' ? args['hasScript'] as boolean : fallback.hasScript,
+    estimatedBudget: clampEnum(args['estimatedBudget'], BUDGET_VALUES, fallback.estimatedBudget),
   }
 }
 
-// ── Route handler ───────────────────────────────────────────────────────────
+// ── Route handler ──────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
-    const rawBody = await request.json().catch(() => ({})) as Record<string, unknown>
+    const rawBody = (await request.json().catch(() => ({}))) as Record<string, unknown>
     const backendData = rawBody['backend_data']
-    if (!backendData || typeof backendData !== 'object') {
+    if (!backendData || typeof backendData !== 'object' || Array.isArray(backendData)) {
       return NextResponse.json(
-        { error: 'validation-error', message: 'backend_data is required' },
+        { error: 'validation_error', message: 'backend_data is required and must be an object' },
         { status: 400 },
       )
     }
@@ -228,85 +299,99 @@ export async function POST(request: NextRequest) {
     const fallback = buildFallback(data)
 
     if (!process.env.GEMINI_API_KEY) {
-      // Gracefully return heuristic overrides when Gemini is unavailable.
       console.warn('[studio/enrich] GEMINI_API_KEY not set — returning heuristic fallback')
       return NextResponse.json({ overrides: fallback })
     }
 
-    // ── Build the user prompt ───────────────────────────────────────────────
-    const script = (data as any)?.script || {}
-    const content = (data as any)?.content || {}
-    const audio = (data as any)?.audio || {}
-    const visual = (data as any)?.visual || {}
-    const technical = (data as any)?.technical || {}
-    const replicability = script?.replicability || {}
+    // ── Build user prompt ────────────────────────────────────────────────────
+    const getStr = (obj: unknown, key: string): string => {
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        const v = (obj as Record<string, unknown>)[key]
+        return typeof v === 'string' ? v : ''
+      }
+      return ''
+    }
+    const getObj = (obj: unknown, key: string): Record<string, unknown> => {
+      if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+        const v = (obj as Record<string, unknown>)[key]
+        return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+      }
+      return {}
+    }
+
+    const script = getObj(data, 'script')
+    const content = getObj(data, 'content')
+    const audio = getObj(data, 'audio')
+    const visual = getObj(data, 'visual')
+    const technical = getObj(data, 'technical')
+    const replicability = getObj(script, 'replicability')
+    const humor = getObj(script, 'humor')
+
+    const reqElements = Array.isArray(replicability['requiredElements'])
+      ? (replicability['requiredElements'] as unknown[])
+          .filter((x): x is string => typeof x === 'string')
+          .join(', ')
+      : ''
+
+    const textOverlays = Array.isArray(visual['textOverlays'])
+      ? (visual['textOverlays'] as unknown[])
+          .filter((x): x is string => typeof x === 'string')
+          .join(', ')
+      : '(inga)'
+
+    const humorInfo = humor['isHumorous'] === true
+      ? `Ja – ${getStr(humor, 'humorType')}, ${getStr(humor, 'humorMechanism')}`
+      : 'Nej'
+
+    const structureObj = getObj(script, 'structure')
 
     const userPrompt = [
       'Analysdata:',
       '',
-      `Konceptkärna: ${script?.conceptCore || content?.keyMessage || '(saknas)'}`,
-      `Nyckelbudskap: ${content?.keyMessage || ''}`,
-      `Format: ${content?.format || ''}`,
-      `Målgrupp: ${content?.targetAudience || ''}`,
-      `Humor: ${script?.humor?.isHumorous ? `Ja – ${script.humor.humorType || ''}, ${script.humor.humorMechanism || ''}` : 'Nej'}`,
-      `Transkript: ${script?.transcript ? script.transcript.slice(0, 600) : '(saknas)'}`,
-      `Replikbarhet: ${replicability?.template || ''} (score ${replicability?.score ?? '?'}/10)`,
-      `Nödvändiga element: ${Array.isArray(replicability?.requiredElements) ? replicability.requiredElements.join(', ') : ''}`,
-      `Röst/voiceover: ${audio?.hasVoiceover ? 'Ja' : 'Nej'}`,
-      `Textoverlay på skärm: ${Array.isArray(visual?.textOverlays) && visual.textOverlays.length ? visual.textOverlays.join(', ') : '(inga)'}`,
-      `Tempo/pacing: ${technical?.pacing ?? ''}/10`,
-      `Hook: ${script?.structure?.hook || ''}`,
-      `Setup: ${script?.structure?.setup || ''}`,
-      `Payoff: ${script?.structure?.payoff || ''}`,
-      '',
-      'Returnera JSON med dessa fält:',
-      '{ "headline_sv", "description_sv", "whyItWorks_sv", "script_sv",',
-      '  "productionNotes_sv", "whyItFits_sv", "difficulty", "filmTime",',
-      '  "peopleNeeded", "mechanism", "market", "trendLevel",',
-      '  "businessTypes", "hasScript", "estimatedBudget" }',
+      `Konceptkärna: ${getStr(script, 'conceptCore') || getStr(content, 'keyMessage') || '(saknas)'}`,
+      `Nyckelbudskap: ${getStr(content, 'keyMessage')}`,
+      `Format: ${getStr(content, 'format')}`,
+      `Målgrupp: ${getStr(content, 'targetAudience')}`,
+      `Humor: ${humorInfo}`,
+      `Transkript: ${getStr(script, 'transcript').slice(0, 600) || '(saknas)'}`,
+      `Replikbarhet: ${getStr(replicability, 'template')} (score ${replicability['score'] ?? '?'}/10)`,
+      `Nödvändiga element: ${reqElements}`,
+      `Röst/voiceover: ${audio['hasVoiceover'] === true ? 'Ja' : 'Nej'}`,
+      `Textoverlay på skärm: ${textOverlays}`,
+      `Tempo/pacing: ${technical['pacing'] ?? ''}/10`,
+      `Hook: ${getStr(structureObj, 'hook')}`,
+      `Setup: ${getStr(structureObj, 'setup')}`,
+      `Payoff: ${getStr(structureObj, 'payoff')}`,
     ].join('\n')
 
-    // ── Call Gemini ─────────────────────────────────────────────────────────
+    // ── Call Gemini with function calling ────────────────────────────────────
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.0-flash-001',
-      systemInstruction: SYSTEM_PROMPT,
+      systemInstruction: ENRICH_CONCEPT_SYSTEM_PROMPT,
+      tools: [ENRICH_TOOL],
       generationConfig: {
-        responseMimeType: 'application/json',
         temperature: 0.4,
         maxOutputTokens: 1024,
       },
     })
 
     const result = await model.generateContent(userPrompt)
-    const rawText = result.response.text().trim()
+    const calls = result.response.functionCalls()
+    const call = calls?.find((c) => c.name === 'enrich_concept')
 
-    let geminiOutput: Record<string, unknown> = {}
-    try {
-      // Strip accidental markdown fences
-      const stripped = rawText
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/```\s*$/i, '')
-        .trim()
-      const firstBrace = stripped.indexOf('{')
-      const lastBrace = stripped.lastIndexOf('}')
-      const jsonStr =
-        firstBrace !== -1 && lastBrace > firstBrace
-          ? stripped.slice(firstBrace, lastBrace + 1)
-          : stripped
-      geminiOutput = JSON.parse(jsonStr) as Record<string, unknown>
-    } catch (parseErr) {
-      console.warn('[studio/enrich] Gemini JSON parse failed, using fallback:', parseErr)
+    let overrides: EnrichedConcept
+    if (call?.args) {
+      overrides = mergeToolCall(call.args as Record<string, unknown>, fallback)
+    } else {
+      console.warn('[studio/enrich] No function call returned — using heuristic fallback')
+      overrides = fallback
     }
 
-    const overrides = mergeAndClamp(geminiOutput, fallback)
     return NextResponse.json({ overrides })
   } catch (err) {
     console.error('[studio/enrich] Error:', err)
     const message = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json(
-      { error: 'enrich-failed', message },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: 'enrich_failed', message }, { status: 500 })
   }
 }

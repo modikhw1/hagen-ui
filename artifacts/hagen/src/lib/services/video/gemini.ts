@@ -426,30 +426,72 @@ Provide detailed, actionable analysis. Rate everything on 1-10 scales. Be specif
 
     const model = this.client.getGenerativeModel({ model: this.model })
 
-    // Attempt up to 2 times in case Gemini omits the sentinel wrappers on
-    // first try (rare but observed under high load / long prompts).
+    // Hard 15-second timeout per Gemini call attempt. If Gemini hangs (Railway
+    // networking or under high load) the outer try/catch in the caller falls
+    // back to the sequential two-call path instead of blocking indefinitely.
+    async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+      return new Promise<T>((resolve, reject) => {
+        const id = setTimeout(
+          () => reject(new Error(`SENTINEL_TIMEOUT: Gemini call exceeded ${ms}ms`)),
+          ms,
+        )
+        p.then(
+          (v) => { clearTimeout(id); resolve(v) },
+          (e: unknown) => { clearTimeout(id); reject(e) },
+        )
+      })
+    }
+
+    // Simplified display-only prompt used on retry — strips the σTaste
+    // section so Gemini has less work to do and is less likely to omit sentinels.
+    const displayOnlyPrompt = [
+      learningContext ? `${learningContext}\n` : '',
+      'Wrap your JSON response between the exact sentinels below — no markdown, no commentary outside.',
+      '',
+      DISPLAY_OPEN,
+      '<the JSON goes here>',
+      DISPLAY_CLOSE,
+      '',
+      displayPrompt,
+    ].join('\n')
+
     let text = ''
     let displayBlock: string | null = null
     let schemaBlock: string | null = null
 
     for (let attempt = 1; attempt <= 2; attempt++) {
+      const promptForAttempt = attempt === 1 ? combinedPrompt : displayOnlyPrompt
       if (attempt > 1) {
-        console.warn('⚠️ analyzeVideoCombined: DISPLAY block missing on attempt 1, retrying…')
+        console.warn('⚠️ analyzeVideoCombined: DISPLAY block missing/timeout on attempt 1 — retrying with simplified prompt…')
         await new Promise(resolve => setTimeout(resolve, 1500))
       }
-      const result = await model.generateContent([
-        { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
-        { text: combinedPrompt },
-      ])
-      text = result.response.text()
-      displayBlock = extractBetween(text, DISPLAY_OPEN, DISPLAY_CLOSE)
-      schemaBlock = extractBetween(text, SCHEMA_V1_OPEN, SCHEMA_V1_CLOSE)
-      if (displayBlock) break
+
+      try {
+        const result = await withTimeout(
+          model.generateContent([
+            { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+            { text: promptForAttempt },
+          ]),
+          15000,
+        )
+        text = result.response.text()
+        displayBlock = extractBetween(text, DISPLAY_OPEN, DISPLAY_CLOSE)
+        schemaBlock = extractBetween(text, SCHEMA_V1_OPEN, SCHEMA_V1_CLOSE)
+        if (displayBlock) break
+      } catch (attemptErr) {
+        const msg = attemptErr instanceof Error ? attemptErr.message : String(attemptErr)
+        console.warn(`⚠️ analyzeVideoCombined attempt ${attempt} failed: ${msg}`)
+        if (attempt === 2) {
+          // Both attempts failed — surface the error so the caller can fall
+          // back to the sequential analyzeVideo() + BrandAnalyzer path.
+          throw new Error(`SENTINEL_FAIL: ${msg}`)
+        }
+      }
     }
 
     if (!displayBlock) {
       console.error('❌ Merged response missing DISPLAY block after 2 attempts; preview:', text.slice(0, 500))
-      throw new Error('Merged Gemini response missing display section')
+      throw new Error('SENTINEL_FAIL: Gemini response missing display section after 2 attempts')
     }
 
     const analysis = this.parseAnalysisResponse(displayBlock, detailLevel)
