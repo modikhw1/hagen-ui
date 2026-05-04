@@ -51,6 +51,7 @@ HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
 RESEND_FROM_EMAIL = "LeTrend <hej@letrend.se>"
 VITE_APP_URL = "http://localhost:3000"
 VITE_ENV = "test"
+VITE_SUPABASE_ANON_KEY = "sb_publishable_65ahLoUDSMCvfWaorf5DBQ_5hNQrWJO"
 
 [nix]
 channel = "stable-25_05"
