@@ -440,6 +440,10 @@ function CustomerWorkspacePageContent() {
   const [gamePlanError, setGamePlanError] = useState<string | null>(null);
   const [gamePlanSaveMessage, setGamePlanSaveMessage] = useState<string | null>(null);
   const [generatingGamePlanAi, setGeneratingGamePlanAi] = useState(false);
+  const [showAiSheet, setShowAiSheet] = useState(false);
+  const [aiDraft, setAiDraft] = useState<GamePlanGenerateInput>(() =>
+    buildGamePlanAiDefaults(null, { tone: '', constraints: '', current_focus: '' }, [])
+  );
   const addConceptSearchInputRef = useRef<HTMLInputElement | null>(null);
   const {
     expandedConceptId,
@@ -2533,7 +2537,12 @@ function CustomerWorkspacePageContent() {
   };
 
   const hasUnsavedGamePlanChanges = gamePlanHtml !== (typeof gamePlanSummary?.html === 'string' ? gamePlanSummary.html : '');
-  const gamePlanAiDefaults = buildGamePlanAiDefaults(customer, brief, notes);
+
+  useEffect(() => {
+    setAiDraft(buildGamePlanAiDefaults(customer, brief, notes));
+    setShowAiSheet(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
 
   const handleGenerateGamePlanAi = async (input: GamePlanGenerateInput): Promise<boolean> => {
     setGeneratingGamePlanAi(true);
@@ -3086,7 +3095,10 @@ function CustomerWorkspacePageContent() {
               customerId={customerId}
               notes={notes}
               customerName={customer?.business_name || ''}
-              aiDefaults={gamePlanAiDefaults}
+              showAiSheet={showAiSheet}
+              setShowAiSheet={setShowAiSheet}
+              aiDraft={aiDraft}
+              setAiDraft={setAiDraft}
               gamePlanHtml={gamePlanHtml}
               gamePlanSummary={gamePlanSummary}
               setGamePlanHtml={setGamePlanHtml}

@@ -71,7 +71,10 @@ export function GamePlanSection({
   customerId,
   notes,
   customerName,
-  aiDefaults,
+  showAiSheet,
+  setShowAiSheet,
+  aiDraft,
+  setAiDraft,
   gamePlanHtml,
   gamePlanSummary,
   setGamePlanHtml,
@@ -99,7 +102,6 @@ export function GamePlanSection({
   // Defensive: API may return null/undefined/non-string in some legacy rows,
   // so always treat the value as a string before calling string methods.
   const safeGamePlanHtml = typeof gamePlanHtml === 'string' ? gamePlanHtml : '';
-  const [showAiSheet, setShowAiSheet] = useState(false);
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteContent, setEditingNoteContent] = useState('');
   const [hoveredNoteId, setHoveredNoteId] = useState<string | null>(null);
@@ -576,7 +578,8 @@ export function GamePlanSection({
         <GamePlanGenerateModal
           customerId={customerId}
           loading={generatingGamePlanAi}
-          initialValues={aiDefaults}
+          form={aiDraft}
+          setForm={setAiDraft}
           onClose={() => setShowAiSheet(false)}
           onGenerate={handleGenerateGamePlanAi}
         />

@@ -35,7 +35,10 @@ export interface GamePlanSectionProps {
   notes: CustomerNote[];
   customerName: string;
   onCreateEmailDraft?: (noteContent: string) => void;
-  aiDefaults: GamePlanGenerateInput;
+  showAiSheet: boolean;
+  setShowAiSheet: (v: boolean) => void;
+  aiDraft: GamePlanGenerateInput;
+  setAiDraft: React.Dispatch<React.SetStateAction<GamePlanGenerateInput>>;
   gamePlanHtml: string;
   gamePlanSummary: CustomerGamePlanSummary | null;
   setGamePlanHtml: (html: string) => void;

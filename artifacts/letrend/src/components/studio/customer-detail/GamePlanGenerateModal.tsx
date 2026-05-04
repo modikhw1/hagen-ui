@@ -1,13 +1,24 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent, type TextareaHTMLAttributes } from 'react';
-import type { GamePlanGenerateInput } from '@/lib/game-plan';
-import { ReferenceInputRow } from './ReferenceInputRow';
+import {
+  detectLinkType,
+  getLinkPlatformLabel,
+  normalizeHref,
+} from '@/components/gameplan-editor/utils/link-helpers';
+import type { GamePlanGenerateInput, GamePlanReferenceInput } from '@/lib/game-plan';
+
+interface ReferenceGroup {
+  id: string;
+  context: string;
+  links: Array<{ url: string; label: string }>;
+}
 
 interface GamePlanGenerateModalProps {
   customerId: string;
   loading: boolean;
-  initialValues: GamePlanGenerateInput;
+  form: GamePlanGenerateInput;
+  setForm: React.Dispatch<React.SetStateAction<GamePlanGenerateInput>>;
   onClose: () => void;
   onGenerate: (input: GamePlanGenerateInput) => Promise<boolean>;
 }
@@ -61,27 +72,67 @@ function TextareaField(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   );
 }
 
+function getPlatformIcon(platform: ReturnType<typeof detectLinkType>): string {
+  switch (platform) {
+    case 'tiktok': return '♪';
+    case 'instagram': return '◎';
+    case 'youtube': return '▶';
+    case 'article': return '≡';
+    default: return '↗';
+  }
+}
+
+function initGroupsFromReferences(refs: GamePlanReferenceInput[]): ReferenceGroup[] {
+  if (refs.length === 0) return [];
+  return refs.map((r, i) => ({
+    id: String(Date.now()) + i,
+    context: r.note || '',
+    links: [{ url: r.url || '', label: r.label || '' }],
+  }));
+}
+
+function flattenGroups(groups: ReferenceGroup[]): GamePlanReferenceInput[] {
+  return groups.flatMap((g) =>
+    g.links
+      .filter((l) => l.url.trim())
+      .map((l) => {
+        const normalized = normalizeHref(l.url.trim());
+        return {
+          url: l.url.trim(),
+          label: l.label.trim() || undefined,
+          note: g.context.trim() || undefined,
+          platform: normalized ? detectLinkType(normalized) : undefined,
+        };
+      })
+  );
+}
+
 export function GamePlanGenerateModal({
   customerId,
   loading,
-  initialValues,
+  form,
+  setForm,
   onClose,
   onGenerate,
 }: GamePlanGenerateModalProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [form, setForm] = useState<GamePlanGenerateInput>(initialValues);
+
   const [showReferensmaterial, setShowReferensmaterial] = useState(
-    initialValues.references.length > 0 || initialValues.images.length > 0
+    form.references.length > 0 || form.images.length > 0
   );
-  const [showVisualReferences, setShowVisualReferences] = useState(initialValues.images.length > 0);
+  const [showVisualReferences, setShowVisualReferences] = useState(form.images.length > 0);
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  const [groups, setGroups] = useState<ReferenceGroup[]>(() =>
+    initGroupsFromReferences(form.references)
+  );
+
   useEffect(() => {
-    setForm(initialValues);
-    setShowReferensmaterial(initialValues.references.length > 0 || initialValues.images.length > 0);
-    setShowVisualReferences(initialValues.images.length > 0);
-  }, [initialValues]);
+    const flatRefs = flattenGroups(groups);
+    setForm((prev) => ({ ...prev, references: flatRefs }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups]);
 
   const handleClose = () => {
     if (loading) return;
@@ -138,13 +189,59 @@ export function GamePlanGenerateModal({
 
     const success = await onGenerate({
       ...form,
-      references: form.references.filter((r) => r.url.trim()),
+      references: flattenGroups(groups).filter((r) => r.url.trim()),
       images: form.images.filter((i) => i.url.trim()),
     });
 
     if (success) {
       onClose();
     }
+  };
+
+  const addGroup = () => {
+    setGroups((prev) => [
+      ...prev,
+      { id: String(Date.now()), context: '', links: [{ url: '', label: '' }] },
+    ]);
+  };
+
+  const removeGroup = (groupId: string) => {
+    setGroups((prev) => prev.filter((g) => g.id !== groupId));
+  };
+
+  const updateGroupContext = (groupId: string, context: string) => {
+    setGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, context } : g));
+  };
+
+  const addLinkToGroup = (groupId: string) => {
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId ? { ...g, links: [...g.links, { url: '', label: '' }] } : g
+      )
+    );
+  };
+
+  const updateLink = (groupId: string, linkIndex: number, field: 'url' | 'label', value: string) => {
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId
+          ? {
+              ...g,
+              links: g.links.map((l, i) => i === linkIndex ? { ...l, [field]: value } : l),
+            }
+          : g
+      )
+    );
+  };
+
+  const removeLink = (groupId: string, linkIndex: number) => {
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const next = g.links.filter((_, i) => i !== linkIndex);
+        return next.length > 0 ? { ...g, links: next } : g;
+      })
+    );
   };
 
   return (
@@ -341,6 +438,7 @@ export function GamePlanGenerateModal({
             />
           </FieldBlock>
 
+          {/* ── Referensmaterial ── */}
           <div
             style={{
               borderRadius: 14,
@@ -380,15 +478,14 @@ export function GamePlanGenerateModal({
 
             {showReferensmaterial ? (
               <div style={{ display: 'grid', gap: 16, padding: '0 16px 16px' }}>
+
+                {/* ── Link groups ── */}
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1612' }}>Länkar</span>
                     <button
                       type="button"
-                      onClick={() => setForm((p) => ({
-                        ...p,
-                        references: [...p.references, { url: '', label: '', note: '' }],
-                      }))}
+                      onClick={addGroup}
                       disabled={loading}
                       style={{
                         border: 'none',
@@ -401,29 +498,11 @@ export function GamePlanGenerateModal({
                         padding: 0,
                       }}
                     >
-                      + Lägg till
+                      + Lägg till grupp
                     </button>
                   </div>
 
-                  {form.references.length > 0 ? (
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {form.references.map((reference, index) => (
-                        <ReferenceInputRow
-                          key={index}
-                          index={index}
-                          reference={reference}
-                          onChange={(next) => setForm((p) => ({
-                            ...p,
-                            references: p.references.map((cur, i) => (i === index ? next : cur)),
-                          }))}
-                          onRemove={() => setForm((p) => ({
-                            ...p,
-                            references: p.references.filter((_, i) => i !== index),
-                          }))}
-                        />
-                      ))}
-                    </div>
-                  ) : (
+                  {groups.length === 0 ? (
                     <div
                       style={{
                         padding: '13px 15px',
@@ -435,11 +514,27 @@ export function GamePlanGenerateModal({
                         lineHeight: 1.6,
                       }}
                     >
-                      Lägg till profiler, videos eller artiklar och skriv gärna vad du gillar med dem.
+                      Lägg till profiler, videos eller artiklar — och skriv vad du gillar med dem.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 10 }}>
+                      {groups.map((group) => (
+                        <ReferenceGroupCard
+                          key={group.id}
+                          group={group}
+                          disabled={loading}
+                          onContextChange={(ctx) => updateGroupContext(group.id, ctx)}
+                          onAddLink={() => addLinkToGroup(group.id)}
+                          onUpdateLink={(li, field, val) => updateLink(group.id, li, field, val)}
+                          onRemoveLink={(li) => removeLink(group.id, li)}
+                          onRemoveGroup={() => removeGroup(group.id)}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
 
+                {/* ── Images ── */}
                 <div style={{ display: 'grid', gap: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                     <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1612' }}>Bilder</span>
@@ -671,6 +766,218 @@ export function GamePlanGenerateModal({
             {loading ? 'Genererar utkast...' : '✨ Generera utkast'}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface ReferenceGroupCardProps {
+  group: ReferenceGroup;
+  disabled: boolean;
+  onContextChange: (ctx: string) => void;
+  onAddLink: () => void;
+  onUpdateLink: (index: number, field: 'url' | 'label', value: string) => void;
+  onRemoveLink: (index: number) => void;
+  onRemoveGroup: () => void;
+}
+
+function ReferenceGroupCard({
+  group,
+  disabled,
+  onContextChange,
+  onAddLink,
+  onUpdateLink,
+  onRemoveLink,
+  onRemoveGroup,
+}: ReferenceGroupCardProps) {
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        border: '1px solid rgba(74,47,24,0.10)',
+        background: '#FFFFFF',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Link rows */}
+      <div style={{ padding: '12px 14px 0' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+          {group.links.map((link, li) => {
+            const normalizedUrl = link.url.trim() ? normalizeHref(link.url) : '';
+            const platform = normalizedUrl ? detectLinkType(normalizedUrl) : 'external';
+            const hasUrl = Boolean(link.url.trim());
+            return (
+              <span
+                key={li}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '3px 8px',
+                  borderRadius: 999,
+                  background: hasUrl ? '#F2EADF' : '#F8F4EE',
+                  border: '1px solid rgba(74,47,24,0.10)',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: '#6B4423',
+                }}
+              >
+                {hasUrl ? (
+                  <span aria-hidden="true">{getPlatformIcon(platform)}</span>
+                ) : null}
+                <span style={{ color: hasUrl ? '#4A2F18' : '#9D8E7D' }}>
+                  {hasUrl
+                    ? (link.label.trim() || getLinkPlatformLabel(platform))
+                    : `Länk ${li + 1}`}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+
+        {group.links.map((link, li) => (
+          <div
+            key={li}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto',
+              gap: 6,
+              marginBottom: 8,
+              alignItems: 'center',
+            }}
+          >
+            <input
+              value={link.url}
+              onChange={(e) => onUpdateLink(li, 'url', e.target.value)}
+              placeholder="URL"
+              disabled={disabled}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: '1px solid rgba(74,47,24,0.12)',
+                fontSize: 12,
+                color: '#4A4239',
+                background: '#FAFAF9',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            <input
+              value={link.label}
+              onChange={(e) => onUpdateLink(li, 'label', e.target.value)}
+              placeholder="Rubrik (valfri)"
+              disabled={disabled}
+              maxLength={60}
+              style={{
+                padding: '8px 10px',
+                borderRadius: 8,
+                border: '1px solid rgba(74,47,24,0.12)',
+                fontSize: 12,
+                color: '#4A4239',
+                background: '#FAFAF9',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => onRemoveLink(li)}
+              disabled={disabled || group.links.length <= 1}
+              title="Ta bort länk"
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: group.links.length <= 1 ? '#C9B8A8' : '#B45309',
+                fontSize: 14,
+                fontWeight: 700,
+                cursor: disabled || group.links.length <= 1 ? 'default' : 'pointer',
+                padding: '4px 2px',
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+
+        <button
+          type="button"
+          onClick={onAddLink}
+          disabled={disabled}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: '#6B4423',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            padding: '0 0 10px',
+            opacity: disabled ? 0.6 : 1,
+          }}
+        >
+          + Lägg till länk
+        </button>
+      </div>
+
+      {/* Shared context */}
+      <div
+        style={{
+          padding: '10px 14px',
+          borderTop: '1px solid rgba(74,47,24,0.06)',
+          background: '#FAFAF9',
+        }}
+      >
+        <textarea
+          value={group.context}
+          onChange={(e) => onContextChange(e.target.value)}
+          placeholder="Vad gillar du här? T.ex. skön ton, bra pacing, varm känsla..."
+          disabled={disabled}
+          rows={2}
+          maxLength={300}
+          style={{
+            width: '100%',
+            padding: '8px 10px',
+            borderRadius: 8,
+            border: '1px solid rgba(74,47,24,0.10)',
+            fontSize: 12,
+            color: '#4A4239',
+            background: '#FFFFFF',
+            outline: 'none',
+            resize: 'vertical',
+            minHeight: 56,
+            boxSizing: 'border-box',
+            lineHeight: 1.5,
+            fontFamily: 'inherit',
+          }}
+        />
+      </div>
+
+      {/* Footer */}
+      <div
+        style={{
+          padding: '8px 14px',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          borderTop: '1px solid rgba(74,47,24,0.06)',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onRemoveGroup}
+          disabled={disabled}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: '#B45309',
+            fontSize: 11,
+            fontWeight: 700,
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            padding: 0,
+            opacity: disabled ? 0.6 : 1,
+          }}
+        >
+          Ta bort grupp
+        </button>
       </div>
     </div>
   );
