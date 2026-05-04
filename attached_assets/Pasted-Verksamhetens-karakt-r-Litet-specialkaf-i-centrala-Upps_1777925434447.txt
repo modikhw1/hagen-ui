@@ -1,0 +1,118 @@
+Verksamhetens karaktär
+Litet specialkafé i centrala Uppsala, fokus på single origin och handbrygg. Väldigt lugnt och avskalat — träbänkar, mjukt ljus, ingen musik. Folk kommer hit för att faktiskt sitta ner och dricka kaffe, inte för att jobba med laptops.
+Personalen
+Ägaren Jonas är alltid där och är genuint passionerad på ett sätt som smittar av sig. Inte utåtriktad i klassisk bemärkelse men har en lugn auktoritet när han pratar om kaffe. En av baristorna, Mia, är mer spontan och rolig framför kamera.
+Lokal och estetik
+Väldigt fotogenisk. Naturligt ljus på förmiddagen, varmt och dämpat på eftermiddagen. Bardisken är snygg — synliga redskap, rena linjer.
+Vad kunden vill uppnå
+Synas mer i Uppsala, nå folk som inte känner till dem än. De vill inte kännas som ett kedjekafé — de vill att rätt folk hittar dem.
+Ambitionsnivå och tillgänglighet
+Måttlig. De kan ta emot oss en gång varannan vecka. Jonas är med om det inte stör verksamheten, Mia är mer flexibel.
+Något som sticker ut
+Jonas importerar direkt från en farm i Etiopien som han besökt. Det är inte något de skyltar med men det är en riktig historia.
+Målgrupp
+Unga vuxna i Uppsala, folk som redan är intresserade av kaffe men också folk som bara vill ha ett ställe som känns rätt.
+
+Bifogat referensmaterial
+Vad vill du förmedla med dessa?
+Tips på två verksamheter jag hoppas kunden drar inspiration från.
+— Länk 1: tiktok.com/@koppi.roasters — Liknande kafé, gör det här bra
+— Länk 2: tiktok.com/@tacos_el_gordo — Inte alls samma kategori, men ägaren är rolig och klippningen är bra
+
+Vad Gemini ska producera
+**Vad ni har att jobba med**
+Det finns en historia i det här kaféet som de flesta ställen 
+inte har — Jonas importerar direkt från en farm i Etiopien 
+han faktiskt besökt. Det är inte något ni skyltar med, men 
+det är precis den typen av substans som TikTok-publik 
+reagerar på när det berättas rätt. Kombinera det med en 
+lokal som är visuellt stark på ett avskalat sätt och en 
+barista som är naturlig framför kameran, och utgångsläget 
+är bättre än för de flesta vi jobbar med.
+
+**Vad vi rekommenderar**
+Vi siktar på en mix där en del klipp bygger relation — 
+Jonas som pratar om farmen, vad som gör ett visst ursprung 
+annorlunda, varför de valt att jobba som de gör — och en 
+del klipp som är mer omedelbara och snabba, med Mia som 
+ankare. Det sistnämnda håller kontot levande och lättrörligt, 
+det förstnämnda bygger en identitet som håller över tid. 
+Vi tittar mest på likes per visning som kvalitetsmått — 
+det berättar om ett koncept faktiskt landade, oberoende 
+av räckvidden den dagen. Inspirationen vi utgår ifrån 
+pekar mot två saker: hur ett kafé med liknande känsla 
+bygger sin estetik konsekvent, och hur en stark ägarröst 
+kan bära ett klipp utan att det känns producerat.
+
+**Insats och arbetssätt**
+Varannan vecka är ett bra tempo att börja på. Det ger oss 
+tillräckligt flöde utan att det börjar kännas som ett 
+störningsmoment i verksamheten. Vi behöver inte Jonas 
+varje gång — men de klipp han är med i kommer troligen 
+prestera starkast på sikt, och det är värt att ha med 
+sig när ni funderar på tillgänglighet.
+
+**Vad ni kan förvänta er**
+Det primära är att rätt folk i Uppsala hittar er — inte 
+via en annons utan för att de sett något som fått dem att 
+vilja komma dit. Det tar ett par månader att bygga den 
+typen av igenkänning, men det håller på ett annat sätt 
+än betald räckvidd. Målet är ett konto som folk aktivt 
+följer och associerar med något specifikt, inte bara 
+"ett kafé i Uppsala".
+
+Komplett prompt-template
+Du skriver ett Game Plan-utkast åt en content manager på 
+LeTrend. Texten riktar sig till en verksamhetsägare inom 
+restaurang, café eller bar som redan är kund.
+
+Texten skrivs i rösten av en ung, kunnig content manager. 
+Tonen är direkt och varm — inte konsultmässig, inte generell. 
+Undvik fraser som låter som marknadsföringstext.
+
+Struktur: fyra stycken med en fetstilt inledningsfras per 
+stycke. Ingen annan formattering. Inga punktlistor. 
+Inga fristående rubriker. 300–400 ord totalt.
+
+Styckena täcker i ordning:
+1. Verksamhetens konkreta förutsättningar för TikTok
+2. Konceptrekommendation och varför — inkl. tempo, 
+   kvalitet vs substans, hur referensmaterialet informerar 
+   riktningen utan att nämnas explicit som källor
+3. Förväntad insats anpassad till denna kund
+4. Realistiska målsättningar
+
+Använd inputen som underlag — översätt och kondensera, 
+återge den inte ordagrant. Dra gärna slutsatser från 
+materialet om de är rimliga. Fyll inte i luckor med 
+påhittade förutsättningar om ett fält är tomt eller vagt.
+
+Om referensmaterial finns: låt det informera tonen, 
+konceptriktningen och vad som lyfts fram — men nämn 
+inte källorna explicit i texten.
+
+[KUNDKONTEXT]
+Verksamhetstyp: {{type}}
+Karaktär och känsla: {{character}}
+Personal: {{people}}
+Lokal och estetik: {{aesthetic}}
+Unikt eller ovanligt: {{unique}}
+Målgrupp: {{audience}}
+Vad kunden vill uppnå: {{goals}}
+Ambitionsnivå / tillgänglighet: {{effort_level}}
+
+[REFERENSMATERIAL]
+{{#if attachments}}
+Nedan följer material som content managern bifogat som 
+inspiration eller kontext. Använd det för att informera 
+riktning och ton — inte som källor att referera till.
+
+{{#each attachments}}
+[{{type}}] {{#if url}}{{url}}{{/if}}
+{{#if image}}Bifogad bild{{/if}}
+Beskrivning: {{caption}}
+{{#if context}}Syfte: {{context}}{{/if}}
+
+{{/each}}
+{{/if}}
+För kodningsagenten: länkinnehåll hämtas och sammanfattas av backend innan det skickas — skicka inte råa URLs till Gemini om du vill ha konsekvent beteende. Bilder skickas som base64 i messages-arrayen placerade före instruktionsblocket. Kontextfältet (Syfte) är det som samlar ihop flera bifogade objekt till en gemensam mening, vilket motsvarar den "vad vill du förmedla med dessa"-rutan i UI:t.
