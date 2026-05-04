@@ -28,6 +28,7 @@ export interface ActiveConceptCardProps {
   tags: string[];
   onUpdateTags?: (conceptId: string, newTags: string[]) => Promise<void>;
   libraryAssignmentCounts?: Record<string, number>;
+  postingWeekdays?: number[] | null;
 }
 
 interface CustomizeModalProps {
@@ -342,6 +343,14 @@ function CustomizeModal({
 const THUMB_W = 72;
 const THUMB_H = Math.round(THUMB_W * 16 / 9);
 
+const WEEKDAY_NAMES_SV = ['mån', 'tis', 'ons', 'tor', 'fre', 'lör', 'sön'];
+
+function weekdayEstimateLabel(weekdays: number[]): string {
+  if (weekdays.length === 0) return '';
+  const sorted = [...weekdays].sort((a, b) => a - b);
+  return 'vanligtvis ' + sorted.map((d) => WEEKDAY_NAMES_SV[d] ?? '').filter(Boolean).join('/');
+}
+
 export function ActiveConceptCard({
   concept,
   justAdded,
@@ -359,6 +368,7 @@ export function ActiveConceptCard({
   tags,
   onUpdateTags,
   libraryAssignmentCounts,
+  postingWeekdays,
 }: ActiveConceptCardProps) {
   const details = getWorkspaceConceptDetails(concept, getConceptDetails);
   const resolved = resolveConceptContent(concept, details ?? null);
@@ -533,7 +543,12 @@ export function ActiveConceptCard({
                 · Uppladdning {formatDate(plannedPublishAt)}
               </span>
             ) : (
-              <span style={{ fontSize: 11, color: LeTrendColors.textMuted }}>· Preliminär uppladdning</span>
+              <span style={{ fontSize: 11, color: LeTrendColors.textMuted }}>
+                · Preliminär uppladdning
+                {postingWeekdays && postingWeekdays.length > 0
+                  ? ` · ${weekdayEstimateLabel(postingWeekdays)}`
+                  : ''}
+              </span>
             )}
             {typeof concept.placement.feed_order === 'number' ? (
               <button

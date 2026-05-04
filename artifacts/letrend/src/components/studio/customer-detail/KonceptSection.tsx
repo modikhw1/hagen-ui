@@ -474,6 +474,7 @@ export const KonceptSection = React.memo(function KonceptSection({
                       tags={concept.markers.tags ?? []}
                       onUpdateTags={handleUpdateConceptTags}
                       libraryAssignmentCounts={libraryAssignmentCounts}
+                      postingWeekdays={brief.posting_weekdays}
                     />
                   </SortableConceptRow>
                 );

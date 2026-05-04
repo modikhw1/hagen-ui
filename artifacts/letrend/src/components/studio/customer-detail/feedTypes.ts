@@ -220,7 +220,7 @@ export interface KonceptSectionProps {
   justAddedConceptId: string | null;
   justProducedConceptId: string | null;
   cmDisplayNames: Record<string, CMIdentity>;
-  brief: { tone: string; constraints: string; current_focus: string };
+  brief: { tone: string; constraints: string; current_focus: string; posting_weekdays?: number[] | null };
   onNavigateToFeedSlot?: (feedOrder: number) => void;
   onBeginFeedPlacement?: (conceptId: string) => void;
   onReorderConcepts?: (conceptIds: string[]) => Promise<void>;
