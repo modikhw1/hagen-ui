@@ -77,6 +77,7 @@ export function GamePlanGenerateModal({
   onGenerate,
 }: GamePlanGenerateModalProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const activeUploadGroupIdRef = useRef<string | null>(null);
   const [uploadingGroupId, setUploadingGroupId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showReferensmaterial, setShowReferensmaterial] = useState(false);
@@ -389,7 +390,6 @@ export function GamePlanGenerateModal({
                         disabled={loading}
                         uploadingGroupId={uploadingGroupId}
                         pendingUrl={pendingLinkUrls[group.id]}
-                        fileInputRef={fileInputRef}
                         onContextChange={(ctx) => updateContext(group.id, ctx)}
                         onStartAddLink={() => setPendingLinkUrls((p) => ({ ...p, [group.id]: '' }))}
                         onPendingUrlChange={(url) => setPendingLinkUrls((p) => ({ ...p, [group.id]: url }))}
@@ -397,7 +397,10 @@ export function GamePlanGenerateModal({
                         onCancelPendingLink={() => setPendingLinkUrls((p) => { const n = { ...p }; delete n[group.id]; return n; })}
                         onRemoveLink={(linkId) => removeLink(group.id, linkId)}
                         onRemoveImage={(imgId) => removeImage(group.id, imgId)}
-                        onUploadImages={(files) => void handleImageFiles(group.id, files)}
+                        onTriggerUpload={() => {
+                          activeUploadGroupIdRef.current = group.id;
+                          fileInputRef.current?.click();
+                        }}
                         onRemoveGroup={() => removeGroup(group.id)}
                       />
                     ))}
@@ -424,13 +427,21 @@ export function GamePlanGenerateModal({
             ) : null}
           </div>
 
-          {/* hidden shared file input */}
+          {/* hidden shared file input — single onChange handler, no stale listeners */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
             multiple
             style={{ display: 'none' }}
+            onChange={(e) => {
+              const groupId = activeUploadGroupIdRef.current;
+              activeUploadGroupIdRef.current = null;
+              if (!groupId) return;
+              const files = Array.from(e.target.files || []);
+              if (files.length > 0) void handleImageFiles(groupId, files);
+              e.target.value = '';
+            }}
           />
         </div>
 
@@ -485,7 +496,6 @@ interface ReferenceGroupCardProps {
   disabled: boolean;
   uploadingGroupId: string | null;
   pendingUrl: string | undefined;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
   onContextChange: (ctx: string) => void;
   onStartAddLink: () => void;
   onPendingUrlChange: (url: string) => void;
@@ -493,7 +503,7 @@ interface ReferenceGroupCardProps {
   onCancelPendingLink: () => void;
   onRemoveLink: (linkId: string) => void;
   onRemoveImage: (imgId: string) => void;
-  onUploadImages: (files: File[]) => void;
+  onTriggerUpload: () => void;
   onRemoveGroup: () => void;
 }
 
@@ -502,7 +512,6 @@ function ReferenceGroupCard({
   disabled,
   uploadingGroupId,
   pendingUrl,
-  fileInputRef,
   onContextChange,
   onStartAddLink,
   onPendingUrlChange,
@@ -510,7 +519,7 @@ function ReferenceGroupCard({
   onCancelPendingLink,
   onRemoveLink,
   onRemoveImage,
-  onUploadImages,
+  onTriggerUpload,
   onRemoveGroup,
 }: ReferenceGroupCardProps) {
   const isUploadingThisGroup = uploadingGroupId === group.id;
@@ -676,20 +685,7 @@ function ReferenceGroupCard({
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (fileInputRef.current) {
-                  const el = fileInputRef.current;
-                  const handler = (e: Event) => {
-                    const input = e.target as HTMLInputElement;
-                    const files = Array.from(input.files || []);
-                    if (files.length > 0) onUploadImages(files);
-                    input.value = '';
-                    el.removeEventListener('change', handler);
-                  };
-                  el.addEventListener('change', handler);
-                  el.click();
-                }
-              }}
+              onClick={onTriggerUpload}
               disabled={disabled || isUploadingThisGroup}
               style={{
                 border: 'none', background: 'transparent',
