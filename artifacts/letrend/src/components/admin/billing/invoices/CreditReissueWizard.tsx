@@ -5,18 +5,12 @@ import { useMemo, useState } from 'react';
 import { Loader2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import {
-  NumberInput,
-  Radio,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-} from '@mantine/core';
-import {
   adminModalAlertStyle,
   adminModalPrimaryButtonStyle,
   adminModalSecondaryButtonStyle,
+  adminModalSectionStyle,
+  ADMIN_MODAL_INPUT_CLS,
+  ADMIN_MODAL_LABEL_CLS,
 } from '@/components/admin/ui/adminModalTokens';
 import { cn } from '@/lib/utils';
 
@@ -64,6 +58,35 @@ const SETTLEMENT_LABEL: Record<SettlementMode, string> = {
 };
 
 const STEPS = ['Åtgärd', 'Detaljer', 'Granska'] as const;
+
+const radioLabelStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: 8,
+  alignItems: 'flex-start',
+  cursor: 'pointer',
+  fontSize: 12,
+  color: '#4A2F18',
+  lineHeight: 1.4,
+};
+
+const radioInputStyle: React.CSSProperties = {
+  accentColor: '#4A2F18',
+  marginTop: 2,
+  flexShrink: 0,
+  cursor: 'pointer',
+};
+
+const fieldHintStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: '#9D8E7D',
+  marginTop: 2,
+};
+
+const fieldErrorStyle: React.CSSProperties = {
+  fontSize: 11,
+  color: '#C53030',
+  marginTop: 2,
+};
 
 export function CreditReissueWizard({
   invoiceId,
@@ -262,15 +285,23 @@ export function CreditReissueWizard({
                 {index + 1}
               </span>
               <span
-                className={cn(
-                  'font-medium',
-                  isActive ? 'text-foreground' : 'text-muted-foreground',
-                )}
+                style={{
+                  fontWeight: 500,
+                  color: isActive ? '#4A2F18' : '#9D8E7D',
+                }}
               >
                 {label}
               </span>
               {index < STEPS.length - 1 && (
-                <span className="mx-2 h-px w-6 bg-border" />
+                <span
+                  style={{
+                    display: 'inline-block',
+                    width: 24,
+                    height: 1,
+                    background: 'rgba(74,47,24,0.15)',
+                    margin: '0 8px',
+                  }}
+                />
               )}
             </li>
           );
@@ -280,62 +311,93 @@ export function CreditReissueWizard({
       {/* STEG 0 — välj åtgärd */}
       {step === 0 && (
         <div className="space-y-4">
-          <Radio.Group
-            value={mode}
-            onChange={(value) => setMode(value as AdjustmentMode)}
-            label="Vilken åtgärd vill du göra?"
-          >
-            <Stack mt="xs" gap="xs">
+          {/* Mode radio group */}
+          <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+            <legend className={ADMIN_MODAL_LABEL_CLS} style={{ marginBottom: 6 }}>
+              Vilken åtgärd vill du göra?
+            </legend>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {modeOptions.map((option) => (
-                <Radio
-                  key={option.value}
-                  value={option.value}
-                  label={
-                    <div>
-                      <Text size="sm" fw={500}>
-                        {option.label}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {option.description}
-                      </Text>
-                    </div>
-                  }
-                />
+                <label key={option.value} style={radioLabelStyle}>
+                  <input
+                    type="radio"
+                    name="wizard-mode"
+                    value={option.value}
+                    checked={mode === option.value}
+                    onChange={() => setMode(option.value as AdjustmentMode)}
+                    style={radioInputStyle}
+                  />
+                  <span>
+                    <span style={{ fontWeight: 500, display: 'block' }}>
+                      {option.label}
+                    </span>
+                    <span style={{ fontSize: 11, color: '#9D8E7D' }}>
+                      {option.description}
+                    </span>
+                  </span>
+                </label>
               ))}
-            </Stack>
-          </Radio.Group>
+            </div>
+          </fieldset>
 
+          {/* Scope radio group */}
           {mode !== 'cancel_subscription' && (
-            <Radio.Group
-              value={scope}
-              onChange={(value) => {
-                const nextScope = value as CreditScope;
-                setScope(nextScope);
-                if (nextScope === 'invoice') {
-                  setSelectedLineId(null);
-                  setAmountKr(String(Math.round(defaultAmountOre / 100)));
-                }
-              }}
-              label="Vad ska krediteras?"
-            >
-              <Stack mt="xs" gap="xs">
-                <Radio value="invoice" label="Hela fakturan / valfritt totalbelopp" />
-                <Radio value="line" label="En specifik fakturarad" />
-              </Stack>
-            </Radio.Group>
+            <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+              <legend className={ADMIN_MODAL_LABEL_CLS} style={{ marginBottom: 6 }}>
+                Vad ska krediteras?
+              </legend>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={radioLabelStyle}>
+                  <input
+                    type="radio"
+                    name="wizard-scope"
+                    value="invoice"
+                    checked={scope === 'invoice'}
+                    onChange={() => {
+                      setScope('invoice');
+                      setSelectedLineId(null);
+                      setAmountKr(String(Math.round(defaultAmountOre / 100)));
+                    }}
+                    style={radioInputStyle}
+                  />
+                  Hela fakturan / valfritt totalbelopp
+                </label>
+                <label style={radioLabelStyle}>
+                  <input
+                    type="radio"
+                    name="wizard-scope"
+                    value="line"
+                    checked={scope === 'line'}
+                    onChange={() => setScope('line')}
+                    style={radioInputStyle}
+                  />
+                  En specifik fakturarad
+                </label>
+              </div>
+            </fieldset>
           )}
 
+          {/* Line select */}
           {scope === 'line' && mode !== 'cancel_subscription' && (
-            <Select
-              label="Fakturarad"
-              value={selectedLineId}
-              onChange={(value) => {
-                setSelectedLineId(value);
-                syncAmountToLine(value);
-              }}
-              data={lineOptions}
-              placeholder="Välj rad"
-            />
+            <div style={adminModalSectionStyle}>
+              <label className={ADMIN_MODAL_LABEL_CLS}>Fakturarad</label>
+              <select
+                className={ADMIN_MODAL_INPUT_CLS}
+                value={selectedLineId ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  setSelectedLineId(val);
+                  syncAmountToLine(val);
+                }}
+              >
+                <option value="">Välj rad</option>
+                {lineOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
       )}
@@ -343,90 +405,155 @@ export function CreditReissueWizard({
       {/* STEG 1 — detaljer */}
       {step === 1 && (
         <div className="space-y-4">
-          <Select
-            label="Anledning"
-            value={reason}
-            onChange={(value) => setReason(value || 'order_change')}
-            data={Object.entries(REASON_LABEL).map(([value, label]) => ({
-              value,
-              label,
-            }))}
-          />
-
-          <NumberInput
-            label={
-              mode === 'cancel_subscription'
-                ? 'Kreditbelopp vid avslut (kr)'
-                : 'Kreditbelopp (kr)'
-            }
-            min={1}
-            step={1}
-            value={amountKr}
-            onChange={setAmountKr}
-            description={
-              mode !== 'cancel_subscription'
-                ? `Max ${fmtKr(maxCreditOre)}`
-                : undefined
-            }
-            error={
-              amountOre > maxCreditOre && mode !== 'cancel_subscription'
-                ? 'Beloppet överstiger valt underlag'
-                : undefined
-            }
-          />
-
-          {isPaidInvoice && (
-            <Radio.Group
-              value={resolvedSettlementMode}
-              onChange={(value) => setSettlementMode(value as SettlementMode)}
-              label="Hur ska krediten hanteras?"
+          {/* Reason select */}
+          <div style={adminModalSectionStyle}>
+            <label className={ADMIN_MODAL_LABEL_CLS}>Anledning</label>
+            <select
+              className={ADMIN_MODAL_INPUT_CLS}
+              value={reason}
+              onChange={(e) => setReason(e.target.value || 'order_change')}
             >
-              <Stack mt="xs" gap="xs">
+              {Object.entries(REASON_LABEL).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Credit amount */}
+          <div style={adminModalSectionStyle}>
+            <label className={ADMIN_MODAL_LABEL_CLS}>
+              {mode === 'cancel_subscription'
+                ? 'Kreditbelopp vid avslut (kr)'
+                : 'Kreditbelopp (kr)'}
+            </label>
+            <input
+              type="number"
+              className={ADMIN_MODAL_INPUT_CLS}
+              min={1}
+              step={1}
+              value={amountKr}
+              onChange={(e) => setAmountKr(e.target.value)}
+            />
+            {mode !== 'cancel_subscription' && (
+              <span style={fieldHintStyle}>Max {fmtKr(maxCreditOre)}</span>
+            )}
+            {amountOre > maxCreditOre && mode !== 'cancel_subscription' && (
+              <span style={fieldErrorStyle}>Beloppet överstiger valt underlag</span>
+            )}
+          </div>
+
+          {/* Settlement radio group */}
+          {isPaidInvoice && (
+            <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+              <legend className={ADMIN_MODAL_LABEL_CLS} style={{ marginBottom: 6 }}>
+                Hur ska krediten hanteras?
+              </legend>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {canRefundPaymentMethod && (
-                  <Radio value="refund" label={SETTLEMENT_LABEL.refund} />
+                  <label style={radioLabelStyle}>
+                    <input
+                      type="radio"
+                      name="wizard-settlement"
+                      value="refund"
+                      checked={resolvedSettlementMode === 'refund'}
+                      onChange={() => setSettlementMode('refund')}
+                      style={radioInputStyle}
+                    />
+                    {SETTLEMENT_LABEL.refund}
+                  </label>
                 )}
-                <Radio
-                  value="customer_balance"
-                  label={SETTLEMENT_LABEL.customer_balance}
-                />
-                <Radio
-                  value="outside_stripe"
-                  label={SETTLEMENT_LABEL.outside_stripe}
-                />
-              </Stack>
-            </Radio.Group>
+                <label style={radioLabelStyle}>
+                  <input
+                    type="radio"
+                    name="wizard-settlement"
+                    value="customer_balance"
+                    checked={resolvedSettlementMode === 'customer_balance'}
+                    onChange={() => setSettlementMode('customer_balance')}
+                    style={radioInputStyle}
+                  />
+                  {SETTLEMENT_LABEL.customer_balance}
+                </label>
+                <label style={radioLabelStyle}>
+                  <input
+                    type="radio"
+                    name="wizard-settlement"
+                    value="outside_stripe"
+                    checked={resolvedSettlementMode === 'outside_stripe'}
+                    onChange={() => setSettlementMode('outside_stripe')}
+                    style={radioInputStyle}
+                  />
+                  {SETTLEMENT_LABEL.outside_stripe}
+                </label>
+              </div>
+            </fieldset>
           )}
 
+          {/* Reissue sub-section */}
           {mode === 'credit_and_reissue' && (
-            <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                borderRadius: 8,
+                border: '1px solid rgba(74,47,24,0.12)',
+                background: 'rgba(74,47,24,0.03)',
+                padding: 12,
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#9D8E7D',
+                  margin: 0,
+                }}
+              >
                 Ny ersättningsfaktura
               </p>
-              <NumberInput
-                label="Nytt fakturabelopp (kr)"
-                min={1}
-                step={1}
-                value={newAmountKr}
-                onChange={setNewAmountKr}
-              />
-              <TextInput
-                label="Beskrivning"
-                value={newDescription}
-                onChange={(event) => setNewDescription(event.currentTarget.value)}
-                placeholder="Korrigerat månadsbelopp"
-                maxLength={500}
-              />
+              <div style={adminModalSectionStyle}>
+                <label className={ADMIN_MODAL_LABEL_CLS}>Nytt fakturabelopp (kr)</label>
+                <input
+                  type="number"
+                  className={ADMIN_MODAL_INPUT_CLS}
+                  min={1}
+                  step={1}
+                  value={newAmountKr}
+                  onChange={(e) => setNewAmountKr(e.target.value)}
+                />
+              </div>
+              <div style={adminModalSectionStyle}>
+                <label className={ADMIN_MODAL_LABEL_CLS}>Beskrivning</label>
+                <input
+                  type="text"
+                  className={ADMIN_MODAL_INPUT_CLS}
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  placeholder="Korrigerat månadsbelopp"
+                  maxLength={500}
+                />
+              </div>
             </div>
           )}
 
-          <Textarea
-            label="Intern notering"
-            value={memo}
-            onChange={(event) => setMemo(event.currentTarget.value)}
-            rows={2}
-            maxLength={2000}
-          />
+          {/* Memo textarea */}
+          <div style={adminModalSectionStyle}>
+            <label className={ADMIN_MODAL_LABEL_CLS}>Intern notering</label>
+            <textarea
+              className={ADMIN_MODAL_INPUT_CLS}
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              rows={2}
+              maxLength={2000}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
 
+          {/* Alert */}
           {mode === 'cancel_subscription' ? (
             <div style={adminModalAlertStyle('warning')}>
               <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -454,20 +581,41 @@ export function CreditReissueWizard({
       {/* STEG 2 — granska */}
       {step === 2 && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <h3 className="mb-3 text-sm font-semibold text-foreground">
+          <div
+            style={{
+              borderRadius: 8,
+              border: '1px solid rgba(74,47,24,0.12)',
+              background: '#FAF8F5',
+              padding: 16,
+            }}
+          >
+            <h3
+              style={{
+                marginBottom: 12,
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#4A2F18',
+              }}
+            >
               Sammanfattning
             </h3>
-            <dl className="grid grid-cols-2 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">Åtgärd</dt>
-              <dd className="font-medium text-foreground">
+            <dl
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '8px 0',
+                fontSize: 13,
+              }}
+            >
+              <dt style={{ color: '#9D8E7D' }}>Åtgärd</dt>
+              <dd style={{ fontWeight: 500, color: '#4A2F18' }}>
                 {modeOptions.find((m) => m.value === mode)?.label}
               </dd>
 
               {mode !== 'cancel_subscription' && (
                 <>
-                  <dt className="text-muted-foreground">Omfattning</dt>
-                  <dd className="font-medium text-foreground">
+                  <dt style={{ color: '#9D8E7D' }}>Omfattning</dt>
+                  <dd style={{ fontWeight: 500, color: '#4A2F18' }}>
                     {scope === 'invoice'
                       ? 'Hela fakturan'
                       : selectedLine?.description ?? '—'}
@@ -475,20 +623,20 @@ export function CreditReissueWizard({
                 </>
               )}
 
-              <dt className="text-muted-foreground">Anledning</dt>
-              <dd className="font-medium text-foreground">
+              <dt style={{ color: '#9D8E7D' }}>Anledning</dt>
+              <dd style={{ fontWeight: 500, color: '#4A2F18' }}>
                 {REASON_LABEL[reason] ?? reason}
               </dd>
 
-              <dt className="text-muted-foreground">Kreditbelopp</dt>
-              <dd className="font-semibold text-destructive tabular-nums">
+              <dt style={{ color: '#9D8E7D' }}>Kreditbelopp</dt>
+              <dd style={{ fontWeight: 600, color: '#C53030', fontVariantNumeric: 'tabular-nums' }}>
                 −{fmtKr(amountOre)}
               </dd>
 
               {isPaidInvoice && (
                 <>
-                  <dt className="text-muted-foreground">Avstämning</dt>
-                  <dd className="font-medium text-foreground">
+                  <dt style={{ color: '#9D8E7D' }}>Avstämning</dt>
+                  <dd style={{ fontWeight: 500, color: '#4A2F18' }}>
                     {SETTLEMENT_LABEL[resolvedSettlementMode]}
                   </dd>
                 </>
@@ -496,12 +644,12 @@ export function CreditReissueWizard({
 
               {mode === 'credit_and_reissue' && (
                 <>
-                  <dt className="text-muted-foreground">Ny faktura</dt>
-                  <dd className="font-semibold text-emerald-600 tabular-nums">
+                  <dt style={{ color: '#9D8E7D' }}>Ny faktura</dt>
+                  <dd style={{ fontWeight: 600, color: '#15803d', fontVariantNumeric: 'tabular-nums' }}>
                     +{fmtKr(newAmountOre)}
                   </dd>
-                  <dt className="text-muted-foreground">Beskrivning</dt>
-                  <dd className="font-medium text-foreground">
+                  <dt style={{ color: '#9D8E7D' }}>Beskrivning</dt>
+                  <dd style={{ fontWeight: 500, color: '#4A2F18' }}>
                     {newDescription || '—'}
                   </dd>
                 </>
@@ -509,20 +657,31 @@ export function CreditReissueWizard({
 
               {memo && (
                 <>
-                  <dt className="text-muted-foreground">Notering</dt>
-                  <dd className="text-foreground">{memo}</dd>
+                  <dt style={{ color: '#9D8E7D' }}>Notering</dt>
+                  <dd style={{ color: '#4A2F18' }}>{memo}</dd>
                 </>
               )}
             </dl>
           </div>
 
           {mode === 'credit_and_reissue' && (
-            <div className="rounded-md border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-              <p className="mb-1 font-medium text-foreground">Nettoeffekt:</p>
+            <div
+              style={{
+                borderRadius: 8,
+                border: '1px solid rgba(74,47,24,0.12)',
+                background: 'rgba(74,47,24,0.03)',
+                padding: 12,
+                fontSize: 12,
+                color: '#9D8E7D',
+              }}
+            >
+              <p style={{ marginBottom: 4, fontWeight: 500, color: '#4A2F18' }}>
+                Nettoeffekt:
+              </p>
               <p>
                 −{fmtKr(amountOre)} (kreditnota) +{' '}
                 {fmtKr(newAmountOre)} (ny faktura) ={' '}
-                <span className="font-semibold text-foreground">
+                <span style={{ fontWeight: 600, color: '#4A2F18' }}>
                   {newAmountOre - amountOre >= 0 ? '+' : ''}
                   {fmtKr(newAmountOre - amountOre)}
                 </span>{' '}
@@ -541,7 +700,15 @@ export function CreditReissueWizard({
       )}
 
       {/* Navigation */}
-      <div className="flex items-center justify-between border-t border-border pt-3">
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderTop: '1px solid rgba(74,47,24,0.12)',
+          paddingTop: 12,
+        }}
+      >
         <button
           type="button"
           style={{
