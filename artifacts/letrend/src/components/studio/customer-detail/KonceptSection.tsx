@@ -20,7 +20,7 @@ import {
   isCollaborationCustomerConcept,
   isStudioAssignedCustomerConcept,
 } from '@/lib/studio/customer-concepts';
-import type { CmTag, CustomerConcept } from '@/types/studio-v2';
+import type { CustomerConcept } from '@/types/studio-v2';
 import type { KonceptSectionProps } from './feedTypes';
 import { ActiveConceptCard } from './ActiveConceptCard';
 import { ProducedConceptCard } from './ProducedConceptCard';
@@ -117,9 +117,6 @@ interface SortableConceptRowProps {
   id: string;
   positionLabel: string;
   concept: CustomerConcept;
-  tags: string[];
-  cmTags: CmTag[];
-  onUpdateTags?: (conceptId: string, newTags: string[]) => Promise<void>;
   children: React.ReactNode;
 }
 
@@ -127,9 +124,6 @@ function SortableConceptRow({
   id,
   positionLabel,
   concept,
-  tags,
-  cmTags,
-  onUpdateTags,
   children,
 }: SortableConceptRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -140,50 +134,8 @@ function SortableConceptRow({
     position: 'relative',
   };
 
-  const [showPicker, setShowPicker] = React.useState(false);
-  const [savingTags, setSavingTags] = React.useState(false);
-  const pickerRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (!showPicker) return;
-    const handle = (e: MouseEvent) => {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setShowPicker(false);
-      }
-    };
-    document.addEventListener('mousedown', handle);
-    return () => document.removeEventListener('mousedown', handle);
-  }, [showPicker]);
-
-  const tagColorMap = React.useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of cmTags) map.set(t.name, t.color);
-    return map;
-  }, [cmTags]);
-
-  const availableToAdd = React.useMemo(
-    () => cmTags.filter((t) => !tags.includes(t.name)),
-    [cmTags, tags],
-  );
-
-  const addTag = async (name: string) => {
-    if (tags.includes(name) || !onUpdateTags) return;
-    setSavingTags(true);
-    await onUpdateTags(id, [...tags, name]);
-    setSavingTags(false);
-    setShowPicker(false);
-  };
-
-  const removeTag = async (tag: string) => {
-    if (!onUpdateTags) return;
-    setSavingTags(true);
-    await onUpdateTags(id, tags.filter((t) => t !== tag));
-    setSavingTags(false);
-  };
-
   return (
     <div ref={setNodeRef} style={style}>
-      {/* Row header: drag handle + position label */}
       <div
         style={{
           display: 'flex',
@@ -193,7 +145,6 @@ function SortableConceptRow({
           userSelect: 'none',
         }}
       >
-        {/* Drag handle */}
         <div
           {...attributes}
           {...listeners}
@@ -210,8 +161,6 @@ function SortableConceptRow({
         >
           ⠿
         </div>
-
-        {/* Position indicator */}
         {positionLabel && (
           <span
             style={{
@@ -228,162 +177,7 @@ function SortableConceptRow({
             {positionLabel}
           </span>
         )}
-
-        {/* Tags row */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            flexWrap: 'wrap',
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          {tags.map((tag) => {
-            const color = tagColorMap.get(tag);
-            return (
-              <span
-                key={tag}
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: '#374151',
-                  background: color ? `${color}18` : '#f3f4f6',
-                  border: `1px solid ${color ?? '#e5e7eb'}`,
-                  borderRadius: 999,
-                  padding: '1px 7px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                {color && (
-                  <span
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      background: color,
-                      flexShrink: 0,
-                    }}
-                  />
-                )}
-                {tag}
-                {onUpdateTags && (
-                  <button
-                    type="button"
-                    onClick={() => void removeTag(tag)}
-                    disabled={savingTags}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0,
-                      color: '#9ca3af',
-                      fontSize: 11,
-                      lineHeight: 1,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-              </span>
-            );
-          })}
-
-          {onUpdateTags && (
-            <div style={{ position: 'relative' }} ref={pickerRef}>
-              <button
-                type="button"
-                onClick={() => setShowPicker((v) => !v)}
-                disabled={savingTags}
-                style={{
-                  fontSize: 11,
-                  color: '#9ca3af',
-                  background: 'none',
-                  border: '1px dashed #d1d5db',
-                  borderRadius: 999,
-                  padding: '1px 7px',
-                  cursor: 'pointer',
-                  lineHeight: 1.4,
-                }}
-              >
-                + Tagg
-              </button>
-              {showPicker && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 4px)',
-                    left: 0,
-                    zIndex: 50,
-                    background: '#fff',
-                    borderRadius: 8,
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                    border: '1px solid #e5e7eb',
-                    minWidth: 160,
-                    padding: 6,
-                  }}
-                >
-                  {cmTags.length === 0 ? (
-                    <div style={{ padding: '6px 8px', fontSize: 11, color: '#9ca3af' }}>
-                      Inga taggar ännu. Klicka "Hantera taggar".
-                    </div>
-                  ) : availableToAdd.length === 0 ? (
-                    <div style={{ padding: '6px 8px', fontSize: 11, color: '#9ca3af' }}>
-                      Alla taggar är tillagda
-                    </div>
-                  ) : (
-                    availableToAdd.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => void addTag(t.name)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          width: '100%',
-                          padding: '5px 8px',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: 6,
-                          cursor: 'pointer',
-                          fontSize: 12,
-                          textAlign: 'left',
-                          color: '#374151',
-                        }}
-                        onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = '#f9fafb';
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLElement).style.background = 'none';
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            background: t.color,
-                            flexShrink: 0,
-                          }}
-                        />
-                        {t.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
-
-      {/* Concept card */}
       {children}
     </div>
   );
@@ -392,15 +186,11 @@ function SortableConceptRow({
 export const KonceptSection = React.memo(function KonceptSection({
   concepts,
   notes,
-  expandedConceptId,
-  setExpandedConceptId,
   handleDeleteConcept,
   handleChangeStatus,
-  openConceptEditor,
   setShowAddConceptPanel,
   formatDate,
   getConceptDetails,
-  onSendConcept,
   handleUpdateCmNote,
   handleUpdateWhyItFits,
   handleUpdateConceptTags,
@@ -418,10 +208,10 @@ export const KonceptSection = React.memo(function KonceptSection({
   showTagManager,
   setShowTagManager,
   refreshCmTags,
+  libraryAssignmentCounts = {},
+  onPatchConcept,
 }: KonceptSectionProps) {
   const [showProducedSection, setShowProducedSection] = React.useState(false);
-  const [selectedConceptIds, setSelectedConceptIds] = React.useState<string[]>([]);
-  const [batchUpdatingStatus, setBatchUpdatingStatus] = React.useState<string | null>(null);
   const [collabModal, setCollabModal] = React.useState<
     | { mode: 'create' }
     | { mode: 'edit'; conceptId: string; initial: CollaborationFormValues }
@@ -508,38 +298,6 @@ export const KonceptSection = React.memo(function KonceptSection({
     },
     [sortedIds, onReorderConcepts]
   );
-
-  React.useEffect(() => {
-    setSelectedConceptIds((current) =>
-      current.filter((conceptId) => activeConcepts.some((concept) => concept.id === conceptId))
-    );
-  }, [activeConcepts]);
-
-  const selectedActiveConcepts = React.useMemo(
-    () => activeConcepts.filter((concept) => selectedConceptIds.includes(concept.id)),
-    [activeConcepts, selectedConceptIds]
-  );
-
-  const toggleSelectedConcept = React.useCallback((conceptId: string) => {
-    setSelectedConceptIds((current) =>
-      current.includes(conceptId)
-        ? current.filter((id) => id !== conceptId)
-        : [...current, conceptId]
-    );
-  }, []);
-
-  const applyBatchStatus = React.useCallback(async (status: 'draft' | 'sent' | 'archived') => {
-    if (selectedConceptIds.length === 0 || batchUpdatingStatus) return;
-    setBatchUpdatingStatus(status);
-    try {
-      for (const conceptId of selectedConceptIds) {
-        await handleChangeStatus(conceptId, status);
-      }
-      setSelectedConceptIds([]);
-    } finally {
-      setBatchUpdatingStatus(null);
-    }
-  }, [batchUpdatingStatus, handleChangeStatus, selectedConceptIds]);
 
   return (
     <div
@@ -631,21 +389,6 @@ export const KonceptSection = React.memo(function KonceptSection({
         </div>
       </div>
 
-      <div
-        style={{
-          marginBottom: 20,
-          padding: '12px 14px',
-          borderRadius: LeTrendRadius.md,
-          background: LeTrendColors.surface,
-          border: `1px solid ${LeTrendColors.border}`,
-          color: LeTrendColors.textSecondary,
-          fontSize: 13,
-          lineHeight: 1.6,
-        }}
-      >
-        Varje rad är ett kunduppdrag i CM-flödet. Dra i handtaget (⠿) för att ändra ordning. Taggar synkroniseras med feedplanen.
-      </div>
-
       <div style={{ marginBottom: 16, fontSize: 12, lineHeight: 1.5 }}>
         {brief.tone || brief.current_focus || brief.constraints ? (
           <div style={{ color: LeTrendColors.textSecondary }}>
@@ -663,116 +406,6 @@ export const KonceptSection = React.memo(function KonceptSection({
           </em>
         )}
       </div>
-
-      {activeConcepts.length > 0 ? (
-        <div
-          style={{
-            marginBottom: 18,
-            padding: '12px 14px',
-            borderRadius: LeTrendRadius.md,
-            background: '#faf7f2',
-            border: `1px solid ${LeTrendColors.border}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, lineHeight: 1.5 }}>
-            {selectedActiveConcepts.length > 0
-              ? `${selectedActiveConcepts.length} kunduppdrag markerade for batchstatus.`
-              : 'Markera flera kunduppdrag for att uppdatera status i batch.'}
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => setSelectedConceptIds(activeConcepts.map((concept) => concept.id))}
-              style={{
-                border: `1px solid ${LeTrendColors.border}`,
-                background: '#fff',
-                color: LeTrendColors.brownDark,
-                padding: '7px 10px',
-                borderRadius: LeTrendRadius.md,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Markera alla
-            </button>
-            <button
-              type="button"
-              disabled={selectedActiveConcepts.length === 0 || batchUpdatingStatus !== null}
-              onClick={() => void applyBatchStatus('draft')}
-              style={{
-                border: 'none',
-                background: selectedActiveConcepts.length > 0 ? '#f59e0b' : LeTrendColors.textMuted,
-                color: '#fff',
-                padding: '7px 10px',
-                borderRadius: LeTrendRadius.md,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: selectedActiveConcepts.length > 0 ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {batchUpdatingStatus === 'draft' ? 'Sparar...' : 'Satt som utkast'}
-            </button>
-            <button
-              type="button"
-              disabled={selectedActiveConcepts.length === 0 || batchUpdatingStatus !== null}
-              onClick={() => void applyBatchStatus('sent')}
-              style={{
-                border: 'none',
-                background: selectedActiveConcepts.length > 0 ? '#2563eb' : LeTrendColors.textMuted,
-                color: '#fff',
-                padding: '7px 10px',
-                borderRadius: LeTrendRadius.md,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: selectedActiveConcepts.length > 0 ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {batchUpdatingStatus === 'sent' ? 'Sparar...' : 'Satt som delad'}
-            </button>
-            <button
-              type="button"
-              disabled={selectedActiveConcepts.length === 0 || batchUpdatingStatus !== null}
-              onClick={() => void applyBatchStatus('archived')}
-              style={{
-                border: `1px solid ${selectedActiveConcepts.length > 0 ? '#9ca3af' : LeTrendColors.border}`,
-                background: '#fff',
-                color: selectedActiveConcepts.length > 0 ? '#4b5563' : LeTrendColors.textMuted,
-                padding: '7px 10px',
-                borderRadius: LeTrendRadius.md,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: selectedActiveConcepts.length > 0 ? 'pointer' : 'not-allowed',
-              }}
-            >
-              {batchUpdatingStatus === 'archived' ? 'Sparar...' : 'Arkivera'}
-            </button>
-            {selectedConceptIds.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setSelectedConceptIds([])}
-                style={{
-                  border: `1px solid ${LeTrendColors.border}`,
-                  background: '#fff',
-                  color: LeTrendColors.textSecondary,
-                  padding: '7px 10px',
-                  borderRadius: LeTrendRadius.md,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                Avmarkera
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
 
       {collaborationConcepts.length > 0 ? (
         <div style={{ marginBottom: 18 }}>
@@ -816,7 +449,6 @@ export const KonceptSection = React.memo(function KonceptSection({
                 const positionLabel = feedOrder !== null
                   ? feedOrder === 0 ? 'Nu' : `+${feedOrder}`
                   : `#${index + 1}`;
-                const tags = concept.markers.tags ?? [];
 
                 return (
                   <SortableConceptRow
@@ -824,29 +456,24 @@ export const KonceptSection = React.memo(function KonceptSection({
                     id={concept.id}
                     positionLabel={positionLabel}
                     concept={concept}
-                    tags={tags}
-                    cmTags={cmTags}
-                    onUpdateTags={handleUpdateConceptTags}
                   >
                     <ActiveConceptCard
                       concept={concept}
-                      isExpanded={expandedConceptId === concept.id}
                       justAdded={justAddedConceptId === concept.id}
-                      selected={selectedConceptIds.includes(concept.id)}
                       formatDate={formatDate}
                       getConceptDetails={getConceptDetails}
-                      onToggleExpanded={() => setExpandedConceptId(expandedConceptId === concept.id ? null : concept.id)}
-                      onToggleSelected={toggleSelectedConcept}
                       onDelete={handleDeleteConcept}
                       onChangeStatus={handleChangeStatus}
-                      onOpenEditor={openConceptEditor}
-                      onSendConcept={onSendConcept}
                       onUpdateCmNote={handleUpdateCmNote}
                       onUpdateWhyItFits={handleUpdateWhyItFits}
-                      onAddConceptNote={handleAddConceptNote}
+                      onPatchConcept={onPatchConcept}
                       onNavigateToFeedSlot={onNavigateToFeedSlot}
                       onBeginFeedPlacement={onBeginFeedPlacement}
                       cmDisplayNames={cmDisplayNames}
+                      cmTags={cmTags}
+                      tags={concept.markers.tags ?? []}
+                      onUpdateTags={handleUpdateConceptTags}
+                      libraryAssignmentCounts={libraryAssignmentCounts}
                     />
                   </SortableConceptRow>
                 );

@@ -3092,6 +3092,8 @@ function CustomerWorkspacePageContent() {
               showTagManager={showTagManager}
               setShowTagManager={setShowTagManager}
               refreshCmTags={fetchCmTags}
+              libraryAssignmentCounts={libraryAssignmentCounts}
+              onPatchConcept={handleUpdateConcept}
             />
           )}
 
