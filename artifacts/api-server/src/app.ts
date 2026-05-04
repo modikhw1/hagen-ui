@@ -30,7 +30,9 @@ app.use(
 
 const allowedOrigins = [
   process.env["FRONTEND_URL"],
-  process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : undefined,
+  process.env["REPLIT_DEV_DOMAIN"]
+    ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
+    : undefined,
 ].filter(Boolean) as string[];
 
 app.use(
@@ -44,8 +46,11 @@ app.use(
         allowedOrigins.some((o) => origin.startsWith(o)) ||
         origin.includes(".replit.dev") ||
         origin.includes(".repl.co") ||
+        origin.includes(".lovable.app") ||
+        origin.includes(".lovableproject.com") ||
         origin === "http://localhost:3000" ||
-        origin === "http://localhost:5173";
+        origin === "http://localhost:5173" ||
+        origin === "http://localhost:8080";
       callback(null, allowed);
     },
     credentials: true,
@@ -56,7 +61,11 @@ app.use(cookieParser());
 
 // Stripe webhook must receive the raw body for signature verification.
 // Mount BEFORE express.json() so the raw buffer is preserved.
-app.use("/api/stripe/webhook", express.raw({ type: "application/json" }), webhookRouter);
+app.use(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  webhookRouter,
+);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

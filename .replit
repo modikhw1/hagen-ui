@@ -20,6 +20,9 @@ path = "scripts/post-merge.sh"
 timeoutMs = 20000
 
 [[ports]]
+localPort = 3000
+
+[[ports]]
 localPort = 8080
 externalPort = 8080
 
@@ -49,9 +52,10 @@ STRIPE_ENV = "live"
 STRIPE_TEST_PUBLISHABLE_KEY = "pk_test_51SnhAoPetwZcCbhPAniEmOEUQrs4b9JBKOThOGX7uBFsmF6QI9bG7QjnnFg47wg5a2Zmn3qK5b1opKl1rx7NsB3d00oLpCVQRe"
 HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
 RESEND_FROM_EMAIL = "LeTrend <hej@letrend.se>"
-VITE_APP_URL = "http://localhost:3000"
+VITE_APP_URL = "https://72ede591-2293-453b-b41d-a99522630201-00-29z0j81ipx73a.worf.replit.dev"
 VITE_ENV = "test"
 VITE_SUPABASE_ANON_KEY = "sb_publishable_65ahLoUDSMCvfWaorf5DBQ_5hNQrWJO"
 
 [nix]
 channel = "stable-25_05"
+packages = ["yakut"]
