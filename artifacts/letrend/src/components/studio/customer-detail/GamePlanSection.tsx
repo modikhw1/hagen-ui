@@ -120,29 +120,6 @@ export function GamePlanSection({
       }}
     >
       <div style={{ marginBottom: 32 }}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            gap: 8,
-            marginBottom: 12,
-            flexWrap: 'wrap',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setShowAiSheet(true)}
-            disabled={generatingGamePlanAi}
-            style={{
-              ...buttonBase('#FFFFFF', LeTrendColors.brownLight, `1px solid ${LeTrendColors.border}`),
-              cursor: generatingGamePlanAi ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {generatingGamePlanAi ? 'Genererar...' : 'Generera utkast'}
-          </button>
-        </div>
-
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
           {sourceLabel === 'Äldre' ? (
             <span
@@ -270,34 +247,53 @@ export function GamePlanSection({
           </div>
         ) : (
           <div style={{ position: 'relative', minHeight: 100 }}>
-            <button
-              type="button"
-              onClick={() => {
-                if (!safeGamePlanHtml.trim()) {
-                  setGamePlanHtml(GAME_PLAN_STARTER_TEMPLATE);
-                }
-                setEditingGamePlan(true);
-              }}
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                zIndex: 2,
-                padding: '5px 10px',
-                borderRadius: LeTrendRadius.md,
-                border: `1px solid ${LeTrendColors.border}`,
-                background: '#fff',
-                color: LeTrendColors.brownLight,
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              ✏ {safeGamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
-            </button>
+            <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setShowAiSheet(true)}
+                disabled={generatingGamePlanAi}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: LeTrendRadius.md,
+                  border: `1px solid ${LeTrendColors.border}`,
+                  background: '#fff',
+                  color: LeTrendColors.brownLight,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: generatingGamePlanAi ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  opacity: generatingGamePlanAi ? 0.6 : 1,
+                }}
+              >
+                {generatingGamePlanAi ? 'Genererar...' : 'AI-generera'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!safeGamePlanHtml.trim()) {
+                    setGamePlanHtml(GAME_PLAN_STARTER_TEMPLATE);
+                  }
+                  setEditingGamePlan(true);
+                }}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: LeTrendRadius.md,
+                  border: `1px solid ${LeTrendColors.border}`,
+                  background: '#fff',
+                  color: LeTrendColors.brownLight,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                ✏ {safeGamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
+              </button>
+            </div>
             {safeGamePlanHtml.trim() ? (
               <GamePlanDisplay html={safeGamePlanHtml} />
             ) : (
