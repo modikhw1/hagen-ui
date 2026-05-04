@@ -447,6 +447,7 @@ function CustomerWorkspacePageContent() {
   const [aiDraftGroups, setAiDraftGroups] = useState<ReferenceGroup[]>([]);
   const aiDraftSeedDone = useRef(false);
   const addConceptSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [hoveredLibraryConceptId, setHoveredLibraryConceptId] = useState<string | null>(null);
   const {
     expandedConceptId,
     setExpandedConceptId,
@@ -3861,10 +3862,48 @@ function CustomerWorkspacePageContent() {
                 }}>
                   {concept.headline_sv || concept.headline}
                 </h4>
-                <span style={{ fontSize: 11, color: libraryAssignmentCounts[concept.id] > 0 ? LeTrendColors.success : LeTrendColors.textMuted, whiteSpace: 'nowrap' }}>
-                  {libraryAssignmentCounts[concept.id] > 0
-                    ? `${libraryAssignmentCounts[concept.id]} kund${libraryAssignmentCounts[concept.id] > 1 ? 'er' : ''}`
-                    : 'Ej tilldelad'}
+                <span
+                  style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}
+                  onMouseEnter={() => setHoveredLibraryConceptId(concept.id)}
+                  onMouseLeave={() => setHoveredLibraryConceptId(null)}
+                >
+                  <span style={{ fontSize: 11, color: libraryAssignmentCounts[concept.id] > 0 ? LeTrendColors.success : LeTrendColors.textMuted }}>
+                    {libraryAssignmentCounts[concept.id] > 0
+                      ? `${libraryAssignmentCounts[concept.id]} kund${libraryAssignmentCounts[concept.id] > 1 ? 'er' : ''}`
+                      : 'Ej tilldelad'}
+                  </span>
+                  {hoveredLibraryConceptId === concept.id && (libraryAssignmentCmIds[concept.id]?.length ?? 0) > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: 'calc(100% + 6px)',
+                        right: 0,
+                        background: '#1a1612',
+                        color: '#fff',
+                        fontSize: 11,
+                        fontWeight: 500,
+                        borderRadius: 6,
+                        padding: '5px 9px',
+                        whiteSpace: 'nowrap',
+                        zIndex: 20,
+                        pointerEvents: 'none',
+                        lineHeight: 1.5,
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                      }}
+                    >
+                      {(libraryAssignmentCmIds[concept.id] ?? []).map((id) => cmDisplayNames[id]?.name ?? id).join(', ')}
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 10,
+                          borderWidth: '5px 5px 0',
+                          borderStyle: 'solid',
+                          borderColor: '#1a1612 transparent transparent',
+                        }}
+                      />
+                    </span>
+                  )}
                 </span>
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
