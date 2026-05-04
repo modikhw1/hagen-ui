@@ -788,11 +788,11 @@ router.post('/customers/:customerId/game-plan/generate', requireAuth, CM_ONLY, a
     let errorReason = '';
 
     try {
-      const upstream = await fetch(`${baseUrl}/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      const upstream = await fetch(`${baseUrl}/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: { temperature: 0.85, maxOutputTokens: 1200 },
         }),
         signal: AbortSignal.timeout(25000),
@@ -818,7 +818,7 @@ router.post('/customers/:customerId/game-plan/generate', requireAuth, CM_ONLY, a
       html = buildFallbackHtmlSrv();
     }
 
-    res.json({ html, source, model: source === 'ai' ? 'gemini-1.5-flash' : undefined, reason: errorReason || undefined });
+    res.json({ html, source, model: source === 'ai' ? 'gemini-2.5-flash' : undefined, reason: errorReason || undefined });
   } catch (err) {
     logger.error(err, 'game-plan generate error');
     res.status(500).json({ error: 'Internt serverfel' });

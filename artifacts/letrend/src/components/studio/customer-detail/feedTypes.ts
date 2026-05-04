@@ -30,6 +30,25 @@ export interface CMIdentity {
   color?: string;
 }
 
+export interface ReferenceGroupLink {
+  id: string;
+  url: string;
+  label: string;
+}
+
+export interface ReferenceGroupImage {
+  id: string;
+  url: string;
+  caption: string;
+}
+
+export interface ReferenceGroup {
+  id: string;
+  context: string;
+  links: ReferenceGroupLink[];
+  images: ReferenceGroupImage[];
+}
+
 export interface GamePlanSectionProps {
   customerId: string;
   notes: CustomerNote[];
@@ -39,6 +58,8 @@ export interface GamePlanSectionProps {
   setShowAiSheet: (v: boolean) => void;
   aiDraft: GamePlanGenerateInput;
   setAiDraft: React.Dispatch<React.SetStateAction<GamePlanGenerateInput>>;
+  aiDraftGroups: ReferenceGroup[];
+  setAiDraftGroups: React.Dispatch<React.SetStateAction<ReferenceGroup[]>>;
   gamePlanHtml: string;
   gamePlanSummary: CustomerGamePlanSummary | null;
   setGamePlanHtml: (html: string) => void;

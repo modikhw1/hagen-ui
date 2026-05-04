@@ -1,24 +1,21 @@
 'use client';
 
-import { useEffect, useRef, useState, type ChangeEvent, type TextareaHTMLAttributes } from 'react';
+import { useRef, useState, type TextareaHTMLAttributes } from 'react';
 import {
   detectLinkType,
   getLinkPlatformLabel,
   normalizeHref,
 } from '@/components/gameplan-editor/utils/link-helpers';
-import type { GamePlanGenerateInput, GamePlanReferenceInput } from '@/lib/game-plan';
-
-interface ReferenceGroup {
-  id: string;
-  context: string;
-  links: Array<{ url: string; label: string }>;
-}
+import type { GamePlanGenerateInput } from '@/lib/game-plan';
+import type { ReferenceGroup, ReferenceGroupLink, ReferenceGroupImage } from './feedTypes';
 
 interface GamePlanGenerateModalProps {
   customerId: string;
   loading: boolean;
   form: GamePlanGenerateInput;
   setForm: React.Dispatch<React.SetStateAction<GamePlanGenerateInput>>;
+  groups: ReferenceGroup[];
+  setGroups: React.Dispatch<React.SetStateAction<ReferenceGroup[]>>;
   onClose: () => void;
   onGenerate: (input: GamePlanGenerateInput) => Promise<boolean>;
 }
@@ -39,24 +36,12 @@ const FIELD_STYLE: React.CSSProperties = {
   fontFamily: 'inherit',
 };
 
-function FieldBlock({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint: string;
-  children: React.ReactNode;
-}) {
+function FieldBlock({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'grid', gap: 6 }}>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1612', marginBottom: 2 }}>
-          {label}
-        </div>
-        <div style={{ fontSize: 12, color: '#7D6E5D', lineHeight: 1.5 }}>
-          {hint}
-        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#1A1612', marginBottom: 2 }}>{label}</div>
+        <div style={{ fontSize: 12, color: '#7D6E5D', lineHeight: 1.5 }}>{hint}</div>
       </div>
       {children}
     </div>
@@ -64,12 +49,7 @@ function FieldBlock({
 }
 
 function TextareaField(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      {...props}
-      style={{ ...FIELD_STYLE, ...(props.style || {}) }}
-    />
-  );
+  return <textarea {...props} style={{ ...FIELD_STYLE, ...(props.style || {}) }} />;
 }
 
 function getPlatformIcon(platform: ReturnType<typeof detectLinkType>): string {
@@ -82,29 +62,8 @@ function getPlatformIcon(platform: ReturnType<typeof detectLinkType>): string {
   }
 }
 
-function initGroupsFromReferences(refs: GamePlanReferenceInput[]): ReferenceGroup[] {
-  if (refs.length === 0) return [];
-  return refs.map((r, i) => ({
-    id: String(Date.now()) + i,
-    context: r.note || '',
-    links: [{ url: r.url || '', label: r.label || '' }],
-  }));
-}
-
-function flattenGroups(groups: ReferenceGroup[]): GamePlanReferenceInput[] {
-  return groups.flatMap((g) =>
-    g.links
-      .filter((l) => l.url.trim())
-      .map((l) => {
-        const normalized = normalizeHref(l.url.trim());
-        return {
-          url: l.url.trim(),
-          label: l.label.trim() || undefined,
-          note: g.context.trim() || undefined,
-          platform: normalized ? detectLinkType(normalized) : undefined,
-        };
-      })
-  );
+function newId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export function GamePlanGenerateModal({
@@ -112,85 +71,51 @@ export function GamePlanGenerateModal({
   loading,
   form,
   setForm,
+  groups,
+  setGroups,
   onClose,
   onGenerate,
 }: GamePlanGenerateModalProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const [showReferensmaterial, setShowReferensmaterial] = useState(
-    form.references.length > 0 || form.images.length > 0
-  );
-  const [showVisualReferences, setShowVisualReferences] = useState(form.images.length > 0);
-  const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadingGroupId, setUploadingGroupId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-
-  const [groups, setGroups] = useState<ReferenceGroup[]>(() =>
-    initGroupsFromReferences(form.references)
+  const [showReferensmaterial, setShowReferensmaterial] = useState(
+    groups.length > 0
   );
-
-  useEffect(() => {
-    const flatRefs = flattenGroups(groups);
-    setForm((prev) => ({ ...prev, references: flatRefs }));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groups]);
+  const [pendingLinkUrls, setPendingLinkUrls] = useState<Record<string, string>>({});
 
   const handleClose = () => {
     if (loading) return;
     onClose();
   };
 
-  const handleImageFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const input = event.currentTarget;
-    const files = Array.from(input.files || []);
-    if (files.length === 0) return;
-
-    setUploadingImages(true);
-    setUploadError(null);
-    setShowReferensmaterial(true);
-    setShowVisualReferences(true);
-
-    try {
-      const uploadedImages: Array<{ url: string; caption?: string }> = [];
-
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const response = await fetch(`/api/studio-v2/customers/${customerId}/game-plan/upload-image`, {
-          method: 'POST',
-          body: formData,
-        });
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok || typeof data.url !== 'string' || !data.url.trim()) {
-          throw new Error(typeof data.error === 'string' && data.error ? data.error : 'Kunde inte ladda upp bilden');
-        }
-
-        uploadedImages.push({
-          url: data.url,
-          caption: file.name.replace(/\.[^.]+$/, ''),
-        });
-      }
-
-      setForm((prev) => ({
-        ...prev,
-        images: [...prev.images, ...uploadedImages],
-      }));
-    } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'Kunde inte ladda upp bilderna');
-    } finally {
-      setUploadingImages(false);
-      input.value = '';
-    }
-  };
-
   const handleSubmit = async () => {
     if (loading) return;
 
+    const flatRefs = groups.flatMap((g) =>
+      g.links
+        .filter((l) => l.url.trim())
+        .map((l) => {
+          const normalized = normalizeHref(l.url.trim());
+          return {
+            url: l.url.trim(),
+            label: l.label.trim() || undefined,
+            note: g.context.trim() || undefined,
+            platform: normalized ? detectLinkType(normalized) : undefined,
+          };
+        })
+    );
+
+    const flatImages = groups.flatMap((g) =>
+      g.images
+        .filter((i) => i.url.trim())
+        .map((i) => ({ url: i.url.trim(), caption: i.caption.trim() || undefined }))
+    );
+
     const success = await onGenerate({
       ...form,
-      references: flattenGroups(groups).filter((r) => r.url.trim()),
-      images: form.images.filter((i) => i.url.trim()),
+      references: flatRefs,
+      images: flatImages,
     });
 
     if (success) {
@@ -199,93 +124,100 @@ export function GamePlanGenerateModal({
   };
 
   const addGroup = () => {
-    setGroups((prev) => [
-      ...prev,
-      { id: String(Date.now()), context: '', links: [{ url: '', label: '' }] },
-    ]);
+    const id = newId();
+    setGroups((prev) => [...prev, { id, context: '', links: [], images: [] }]);
+    setPendingLinkUrls((prev) => ({ ...prev, [id]: '' }));
   };
 
   const removeGroup = (groupId: string) => {
     setGroups((prev) => prev.filter((g) => g.id !== groupId));
+    setPendingLinkUrls((prev) => {
+      const next = { ...prev };
+      delete next[groupId];
+      return next;
+    });
   };
 
-  const updateGroupContext = (groupId: string, context: string) => {
+  const confirmPendingLink = (groupId: string) => {
+    const url = (pendingLinkUrls[groupId] || '').trim();
+    if (!url) {
+      setPendingLinkUrls((prev) => { const n = { ...prev }; delete n[groupId]; return n; });
+      return;
+    }
+    const link: ReferenceGroupLink = { id: newId(), url, label: '' };
+    setGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, links: [...g.links, link] } : g));
+    setPendingLinkUrls((prev) => { const n = { ...prev }; delete n[groupId]; return n; });
+  };
+
+  const removeLink = (groupId: string, linkId: string) => {
+    setGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, links: g.links.filter((l) => l.id !== linkId) } : g));
+  };
+
+  const removeImage = (groupId: string, imageId: string) => {
+    setGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, images: g.images.filter((i) => i.id !== imageId) } : g));
+  };
+
+  const updateContext = (groupId: string, context: string) => {
     setGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, context } : g));
   };
 
-  const addLinkToGroup = (groupId: string) => {
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId ? { ...g, links: [...g.links, { url: '', label: '' }] } : g
-      )
-    );
-  };
+  const handleImageFiles = async (groupId: string, files: File[]) => {
+    if (files.length === 0) return;
+    setUploadingGroupId(groupId);
+    setUploadError(null);
 
-  const updateLink = (groupId: string, linkIndex: number, field: 'url' | 'label', value: string) => {
-    setGroups((prev) =>
-      prev.map((g) =>
-        g.id === groupId
-          ? {
-              ...g,
-              links: g.links.map((l, i) => i === linkIndex ? { ...l, [field]: value } : l),
-            }
-          : g
-      )
-    );
-  };
-
-  const removeLink = (groupId: string, linkIndex: number) => {
-    setGroups((prev) =>
-      prev.map((g) => {
-        if (g.id !== groupId) return g;
-        const next = g.links.filter((_, i) => i !== linkIndex);
-        return next.length > 0 ? { ...g, links: next } : g;
-      })
-    );
+    try {
+      const uploaded: ReferenceGroupImage[] = [];
+      for (const file of files) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const response = await fetch(`/api/studio-v2/customers/${customerId}/game-plan/upload-image`, {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || typeof data.url !== 'string' || !data.url.trim()) {
+          throw new Error(typeof data.error === 'string' && data.error ? data.error : 'Kunde inte ladda upp bilden');
+        }
+        uploaded.push({ id: newId(), url: data.url, caption: file.name.replace(/\.[^.]+$/, '') });
+      }
+      setGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, images: [...g.images, ...uploaded] } : g));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Uppladdning misslyckades');
+    } finally {
+      setUploadingGroupId(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   return (
     <div
       style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 1100,
+        position: 'fixed', inset: 0, zIndex: 1100,
         background: 'rgba(26, 22, 18, 0.48)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        boxSizing: 'border-box',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '16px', boxSizing: 'border-box',
       }}
       onClick={handleClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: '100%',
-          maxWidth: 640,
-          maxHeight: 'calc(100vh - 32px)',
-          overflowY: 'auto',
-          background: '#FFFFFF',
-          borderRadius: 18,
+          width: '100%', maxWidth: 640,
+          maxHeight: 'calc(100vh - 32px)', overflowY: 'auto',
+          background: '#FFFFFF', borderRadius: 18,
           boxShadow: '0 12px 48px rgba(107, 68, 35, 0.28)',
-          display: 'flex',
-          flexDirection: 'column',
+          display: 'flex', flexDirection: 'column',
         }}
       >
+        {/* Header */}
         <div
           style={{
             padding: '22px 24px 18px',
             borderBottom: '1px solid rgba(74,47,24,0.08)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 16,
-            position: 'sticky',
-            top: 0,
-            background: '#FFFFFF',
-            borderRadius: '18px 18px 0 0',
-            zIndex: 1,
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16,
+            position: 'sticky', top: 0, background: '#FFFFFF',
+            borderRadius: '18px 18px 0 0', zIndex: 1,
           }}
         >
           <div>
@@ -303,12 +235,9 @@ export function GamePlanGenerateModal({
             style={{
               flexShrink: 0,
               border: '1px solid rgba(74,47,24,0.10)',
-              background: '#F8F4EE',
-              color: '#4A4239',
-              borderRadius: 8,
-              padding: '7px 12px',
-              fontSize: 13,
-              fontWeight: 600,
+              background: '#F8F4EE', color: '#4A4239',
+              borderRadius: 8, padding: '7px 12px',
+              fontSize: 13, fontWeight: 600,
               cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.5 : 1,
             }}
@@ -317,17 +246,12 @@ export function GamePlanGenerateModal({
           </button>
         </div>
 
+        {/* Body */}
         <div style={{ padding: '20px 24px', display: 'grid', gap: 20 }}>
 
+          {/* Kundöversikt summary */}
           {(form.customer_name.trim() || form.platform.trim() || form.niche.trim()) ? (
-            <div
-              style={{
-                padding: '14px 16px',
-                borderRadius: 12,
-                background: '#F8F4EE',
-                border: '1px solid rgba(74,47,24,0.08)',
-              }}
-            >
+            <div style={{ padding: '14px 16px', borderRadius: 12, background: '#F8F4EE', border: '1px solid rgba(74,47,24,0.08)' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#6B4423', marginBottom: 8, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
                 Kundöversikt
               </div>
@@ -354,118 +278,62 @@ export function GamePlanGenerateModal({
             </div>
           ) : null}
 
-          <FieldBlock
-            label="Verksamhetens karaktär"
-            hint="Vad gör de, hur länge har de funnits, vilken känsla utstrålar verksamheten?"
-          >
-            <TextareaField
-              value={form.character}
-              onChange={(e) => setForm((p) => ({ ...p, character: e.target.value }))}
-              placeholder="T.ex. Mysig krog i Gamla Stan, 12 år gamla, känd för husmanskost och handhällt kaffe..."
-              disabled={loading}
-            />
+          {/* Form fields */}
+          <FieldBlock label="Verksamhetens karaktär" hint="Vad gör de, hur länge har de funnits, vilken känsla utstrålar verksamheten?">
+            <TextareaField value={form.character} onChange={(e) => setForm((p) => ({ ...p, character: e.target.value }))}
+              placeholder="T.ex. Mysig krog i Gamla Stan, 12 år gamla, känd för husmanskost och handhällt kaffe..." disabled={loading} />
           </FieldBlock>
 
-          <FieldBlock
-            label="Personalen"
-            hint="Vem syns i innehållet? Ägaren, kocken, hela teamet? Vad är deras energi och personlighet?"
-          >
-            <TextareaField
-              value={form.people}
-              onChange={(e) => setForm((p) => ({ ...p, people: e.target.value }))}
-              placeholder="T.ex. Ägarparet Mia och Johan, jobbar alltid ihop. Glad, jordnära, snabb humor..."
-              disabled={loading}
-            />
+          <FieldBlock label="Personalen" hint="Vem syns i innehållet? Ägaren, kocken, hela teamet? Vad är deras energi och personlighet?">
+            <TextareaField value={form.people} onChange={(e) => setForm((p) => ({ ...p, people: e.target.value }))}
+              placeholder="T.ex. Ägarparet Mia och Johan, jobbar alltid ihop. Glad, jordnära, snabb humor..." disabled={loading} />
           </FieldBlock>
 
-          <FieldBlock
-            label="Lokal och estetik"
-            hint="Beskriv miljön: ljus, material, färger, stämning. Vad ser man i bakgrunden?"
-          >
-            <TextareaField
-              value={form.aesthetic}
-              onChange={(e) => setForm((p) => ({ ...p, aesthetic: e.target.value }))}
-              placeholder="T.ex. Tegelväggar, varmt ljus, öppet kök, väldig grön växt bakom bardisken..."
-              disabled={loading}
-            />
+          <FieldBlock label="Lokal och estetik" hint="Beskriv miljön: ljus, material, färger, stämning. Vad ser man i bakgrunden?">
+            <TextareaField value={form.aesthetic} onChange={(e) => setForm((p) => ({ ...p, aesthetic: e.target.value }))}
+              placeholder="T.ex. Tegelväggar, varmt ljus, öppet kök, väldig grön växt bakom bardisken..." disabled={loading} />
           </FieldBlock>
 
-          <FieldBlock
-            label="Vad kunden vill uppnå"
-            hint="Vad hoppas de på av TikTok-närvaron? Fler bordsbokningar, lokalt igenkännande, något annat?"
-          >
-            <TextareaField
-              value={form.goals}
-              onChange={(e) => setForm((p) => ({ ...p, goals: e.target.value }))}
-              placeholder="T.ex. Bli den självklara afterworkplatsen för 25–35-åringar i Södermalm..."
-              disabled={loading}
-            />
+          <FieldBlock label="Vad kunden vill uppnå" hint="Vad hoppas de på av TikTok-närvaron? Fler bordsbokningar, lokalt igenkännande, något annat?">
+            <TextareaField value={form.goals} onChange={(e) => setForm((p) => ({ ...p, goals: e.target.value }))}
+              placeholder="T.ex. Bli den självklara afterworkplatsen för 25–35-åringar i Södermalm..." disabled={loading} />
           </FieldBlock>
 
-          <FieldBlock
-            label="Ambitionsnivå och tillgänglighet"
-            hint="Hur mycket tid kan de lägga? Är de villiga att synas själva? Vilka dagar passar bäst?"
-          >
-            <TextareaField
-              value={form.effort_level}
-              onChange={(e) => setForm((p) => ({ ...p, effort_level: e.target.value }))}
-              placeholder="T.ex. Kan filma 2 gånger i veckan, helst vardagar. Ägaren är blyg men med på det..."
-              disabled={loading}
-            />
+          <FieldBlock label="Ambitionsnivå och tillgänglighet" hint="Hur mycket tid kan de lägga? Är de villiga att synas själva? Vilka dagar passar bäst?">
+            <TextareaField value={form.effort_level} onChange={(e) => setForm((p) => ({ ...p, effort_level: e.target.value }))}
+              placeholder="T.ex. Kan filma 2 gånger i veckan, helst vardagar. Ägaren är blyg men med på det..." disabled={loading} />
           </FieldBlock>
 
-          <FieldBlock
-            label="Något som sticker ut"
-            hint="Vad är det unika med just den här kunden? En signaturrätt, en ritual, en historia?"
-          >
-            <TextareaField
-              value={form.unique}
-              onChange={(e) => setForm((p) => ({ ...p, unique: e.target.value }))}
-              placeholder="T.ex. De bränner sitt eget kaffe, varje måndag delar de med sig av veckans ingrediens..."
-              disabled={loading}
-            />
+          <FieldBlock label="Något som sticker ut" hint="Vad är det unika med just den här kunden? En signaturrätt, en ritual, en historia?">
+            <TextareaField value={form.unique} onChange={(e) => setForm((p) => ({ ...p, unique: e.target.value }))}
+              placeholder="T.ex. De bränner sitt eget kaffe, varje måndag delar de med sig av veckans ingrediens..." disabled={loading} />
           </FieldBlock>
 
-          <FieldBlock
-            label="Målgrupp"
-            hint="Vem vill de nå? Ålder, intressen, geografi — vad du vet om dem."
-          >
-            <TextareaField
-              value={form.audience}
-              onChange={(e) => setForm((p) => ({ ...p, audience: e.target.value }))}
-              placeholder="T.ex. Foodieintresserade 25–40 i Stockholm, följer mat-content och planerar helgutflykter..."
-              disabled={loading}
-            />
+          <FieldBlock label="Målgrupp" hint="Vem vill de nå? Ålder, intressen, geografi — vad du vet om dem.">
+            <TextareaField value={form.audience} onChange={(e) => setForm((p) => ({ ...p, audience: e.target.value }))}
+              placeholder="T.ex. Foodieintresserade 25–40 i Stockholm, följer mat-content och planerar helgutflykter..." disabled={loading} />
           </FieldBlock>
 
-          {/* ── Referensmaterial ── */}
-          <div
-            style={{
-              borderRadius: 14,
-              border: '1px solid rgba(74,47,24,0.08)',
-              background: '#F8F4EE',
-              overflow: 'hidden',
-            }}
-          >
+          {/* Referensmaterial accordion */}
+          <div style={{ borderRadius: 14, border: '1px solid rgba(74,47,24,0.08)', background: '#F8F4EE', overflow: 'hidden' }}>
             <button
               type="button"
               onClick={() => setShowReferensmaterial((p) => !p)}
               style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                padding: '14px 16px',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                textAlign: 'left',
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                gap: 12, padding: '14px 16px', border: 'none', background: 'transparent',
+                cursor: 'pointer', textAlign: 'left',
               }}
             >
               <span>
                 <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#1A1612' }}>
                   Referensmaterial
+                  {groups.length > 0 ? (
+                    <span style={{ marginLeft: 6, fontSize: 11, color: '#6B4423', fontWeight: 700,
+                      background: '#F2EADF', padding: '2px 7px', borderRadius: 999 }}>
+                      {groups.length}
+                    </span>
+                  ) : null}
                 </span>
                 <span style={{ display: 'block', marginTop: 2, fontSize: 12, color: '#7D6E5D' }}>
                   Profilsidor, videos, artiklar och moodboard-bilder
@@ -477,255 +345,105 @@ export function GamePlanGenerateModal({
             </button>
 
             {showReferensmaterial ? (
-              <div style={{ display: 'grid', gap: 16, padding: '0 16px 16px' }}>
+              <div style={{ padding: '0 16px 16px' }}>
+                {uploadError ? (
+                  <div style={{
+                    marginBottom: 10, padding: '10px 12px', borderRadius: 10,
+                    background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.16)',
+                    color: '#b91c1c', fontSize: 12,
+                  }}>
+                    {uploadError}
+                  </div>
+                ) : null}
 
-                {/* ── Link groups ── */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1612' }}>Länkar</span>
+                {groups.length === 0 ? (
+                  <div
+                    style={{
+                      padding: '20px 0', textAlign: 'center',
+                      color: '#9D8E7D', fontSize: 13, lineHeight: 1.6,
+                    }}
+                  >
+                    <div style={{ marginBottom: 12 }}>
+                      Lägg till konton, videos eller bilder — och beskriv vad du gillar med dem.
+                    </div>
                     <button
                       type="button"
                       onClick={addGroup}
                       disabled={loading}
                       style={{
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#6B4423',
-                        fontSize: 12,
-                        fontWeight: 700,
+                        padding: '9px 16px', borderRadius: 10,
+                        border: '1.5px dashed rgba(107,68,35,0.3)',
+                        background: '#FFFFFF', color: '#6B4423',
+                        fontSize: 13, fontWeight: 700,
                         cursor: loading ? 'not-allowed' : 'pointer',
                         opacity: loading ? 0.6 : 1,
-                        padding: 0,
                       }}
                     >
-                      + Lägg till grupp
+                      + Lägg till referens
                     </button>
                   </div>
-
-                  {groups.length === 0 ? (
-                    <div
-                      style={{
-                        padding: '13px 15px',
-                        borderRadius: 12,
-                        background: '#FFFFFF',
-                        border: '1px dashed rgba(74,47,24,0.16)',
-                        color: '#7D6E5D',
-                        fontSize: 13,
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      Lägg till profiler, videos eller artiklar — och skriv vad du gillar med dem.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'grid', gap: 10 }}>
-                      {groups.map((group) => (
-                        <ReferenceGroupCard
-                          key={group.id}
-                          group={group}
-                          disabled={loading}
-                          onContextChange={(ctx) => updateGroupContext(group.id, ctx)}
-                          onAddLink={() => addLinkToGroup(group.id)}
-                          onUpdateLink={(li, field, val) => updateLink(group.id, li, field, val)}
-                          onRemoveLink={(li) => removeLink(group.id, li)}
-                          onRemoveGroup={() => removeGroup(group.id)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* ── Images ── */}
-                <div style={{ display: 'grid', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1A1612' }}>Bilder</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={(e) => void handleImageFiles(e)}
-                        style={{ display: 'none' }}
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {groups.map((group) => (
+                      <ReferenceGroupCard
+                        key={group.id}
+                        group={group}
+                        disabled={loading}
+                        uploadingGroupId={uploadingGroupId}
+                        pendingUrl={pendingLinkUrls[group.id]}
+                        fileInputRef={fileInputRef}
+                        onContextChange={(ctx) => updateContext(group.id, ctx)}
+                        onStartAddLink={() => setPendingLinkUrls((p) => ({ ...p, [group.id]: '' }))}
+                        onPendingUrlChange={(url) => setPendingLinkUrls((p) => ({ ...p, [group.id]: url }))}
+                        onConfirmPendingLink={() => confirmPendingLink(group.id)}
+                        onCancelPendingLink={() => setPendingLinkUrls((p) => { const n = { ...p }; delete n[group.id]; return n; })}
+                        onRemoveLink={(linkId) => removeLink(group.id, linkId)}
+                        onRemoveImage={(imgId) => removeImage(group.id, imgId)}
+                        onUploadImages={(files) => void handleImageFiles(group.id, files)}
+                        onRemoveGroup={() => removeGroup(group.id)}
                       />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={loading || uploadingImages}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          color: '#6B4423',
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: loading || uploadingImages ? 'not-allowed' : 'pointer',
-                          opacity: loading || uploadingImages ? 0.6 : 1,
-                          padding: 0,
-                        }}
-                      >
-                        {uploadingImages ? 'Laddar upp...' : 'Ladda upp'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowVisualReferences((p) => !p);
-                          if (!showVisualReferences) {
-                            setForm((p) => ({ ...p, images: [...p.images, { url: '', caption: '' }] }));
-                          }
-                        }}
-                        style={{
-                          border: 'none',
-                          background: 'transparent',
-                          color: '#6B4423',
-                          fontSize: 12,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          padding: 0,
-                        }}
-                      >
-                        + Länk
-                      </button>
-                    </div>
-                  </div>
+                    ))}
 
-                  {uploadError ? (
-                    <div
+                    <button
+                      type="button"
+                      onClick={addGroup}
+                      disabled={loading}
                       style={{
-                        padding: '10px 12px',
-                        borderRadius: 10,
-                        background: 'rgba(239,68,68,0.08)',
-                        border: '1px solid rgba(239,68,68,0.16)',
-                        color: '#b91c1c',
-                        fontSize: 12,
+                        padding: '8px 14px', borderRadius: 10,
+                        border: '1px dashed rgba(107,68,35,0.25)',
+                        background: '#FFFFFF', color: '#6B4423',
+                        fontSize: 12, fontWeight: 700,
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        opacity: loading ? 0.6 : 1,
+                        textAlign: 'left',
                       }}
                     >
-                      {uploadError}
-                    </div>
-                  ) : null}
-
-                  {showVisualReferences ? (
-                    form.images.length > 0 ? (
-                      form.images.map((image, index) => {
-                        const previewUrl = image.url.trim();
-                        return (
-                          <div
-                            key={index}
-                            style={{
-                              display: 'grid',
-                              gap: 10,
-                              padding: 14,
-                              borderRadius: 12,
-                              background: '#FFFFFF',
-                              border: '1px solid rgba(74,47,24,0.08)',
-                            }}
-                          >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: '#6B4423' }}>
-                                Bild {index + 1}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setForm((p) => ({
-                                  ...p,
-                                  images: p.images.filter((_, i) => i !== index),
-                                }))}
-                                disabled={loading}
-                                style={{
-                                  border: 'none',
-                                  background: 'transparent',
-                                  color: '#B45309',
-                                  fontSize: 12,
-                                  fontWeight: 700,
-                                  cursor: loading ? 'not-allowed' : 'pointer',
-                                  opacity: loading ? 0.6 : 1,
-                                  padding: 0,
-                                }}
-                              >
-                                Ta bort
-                              </button>
-                            </div>
-
-                            <div style={{ display: 'grid', gap: 10, gridTemplateColumns: previewUrl ? '80px minmax(0,1fr)' : '1fr' }}>
-                              {previewUrl ? (
-                                <div
-                                  style={{
-                                    width: 80,
-                                    height: 80,
-                                    borderRadius: 10,
-                                    overflow: 'hidden',
-                                    border: '1px solid rgba(74,47,24,0.08)',
-                                    background: '#F5F2EE',
-                                  }}
-                                >
-                                  <img
-                                    src={previewUrl}
-                                    alt={image.caption || `Referensbild ${index + 1}`}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                  />
-                                </div>
-                              ) : null}
-                              <div style={{ display: 'grid', gap: 10 }}>
-                                <input
-                                  value={image.url}
-                                  onChange={(e) => setForm((p) => ({
-                                    ...p,
-                                    images: p.images.map((cur, i) => i === index ? { ...cur, url: e.target.value } : cur),
-                                  }))}
-                                  placeholder="Bildlänk (URL)"
-                                  style={{
-                                    width: '100%',
-                                    padding: '10px 12px',
-                                    borderRadius: 10,
-                                    border: '1px solid rgba(74,47,24,0.12)',
-                                    fontSize: 13,
-                                    color: '#4A4239',
-                                    background: '#FFFFFF',
-                                    outline: 'none',
-                                    boxSizing: 'border-box',
-                                  }}
-                                />
-                                <input
-                                  value={image.caption || ''}
-                                  onChange={(e) => setForm((p) => ({
-                                    ...p,
-                                    images: p.images.map((cur, i) => i === index ? { ...cur, caption: e.target.value } : cur),
-                                  }))}
-                                  placeholder="Kort caption eller vad bilden signalerar"
-                                  style={{
-                                    width: '100%',
-                                    padding: '10px 12px',
-                                    borderRadius: 10,
-                                    border: '1px solid rgba(74,47,24,0.12)',
-                                    fontSize: 13,
-                                    color: '#4A4239',
-                                    background: '#FFFFFF',
-                                    outline: 'none',
-                                    boxSizing: 'border-box',
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })
-                    ) : null
-                  ) : null}
-                </div>
+                      + Ny grupp
+                    </button>
+                  </div>
+                )}
               </div>
             ) : null}
           </div>
+
+          {/* hidden shared file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+          />
         </div>
 
+        {/* Footer */}
         <div
           style={{
             padding: '16px 24px',
             borderTop: '1px solid rgba(74,47,24,0.08)',
-            display: 'flex',
-            gap: 10,
-            justifyContent: 'flex-end',
-            position: 'sticky',
-            bottom: 0,
-            background: '#FFFFFF',
-            borderRadius: '0 0 18px 18px',
+            display: 'flex', gap: 10, justifyContent: 'flex-end',
+            position: 'sticky', bottom: 0,
+            background: '#FFFFFF', borderRadius: '0 0 18px 18px',
           }}
         >
           <button
@@ -733,13 +451,10 @@ export function GamePlanGenerateModal({
             onClick={handleClose}
             disabled={loading}
             style={{
-              padding: '10px 18px',
-              borderRadius: 10,
+              padding: '10px 18px', borderRadius: 10,
               border: '1px solid rgba(74,47,24,0.12)',
-              background: '#FFFFFF',
-              color: '#4A4239',
-              fontSize: 14,
-              fontWeight: 600,
+              background: '#FFFFFF', color: '#4A4239',
+              fontSize: 14, fontWeight: 600,
               cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.6 : 1,
             }}
@@ -751,15 +466,11 @@ export function GamePlanGenerateModal({
             onClick={() => void handleSubmit()}
             disabled={loading || !form.customer_name.trim()}
             style={{
-              padding: '10px 20px',
-              borderRadius: 10,
-              border: 'none',
+              padding: '10px 20px', borderRadius: 10, border: 'none',
               background: loading || !form.customer_name.trim()
                 ? '#9D8E7D'
                 : 'linear-gradient(145deg, #6B4423, #4A2F18)',
-              color: '#FAF8F5',
-              fontSize: 14,
-              fontWeight: 700,
+              color: '#FAF8F5', fontSize: 14, fontWeight: 700,
               cursor: loading || !form.customer_name.trim() ? 'not-allowed' : 'pointer',
             }}
           >
@@ -774,206 +485,257 @@ export function GamePlanGenerateModal({
 interface ReferenceGroupCardProps {
   group: ReferenceGroup;
   disabled: boolean;
+  uploadingGroupId: string | null;
+  pendingUrl: string | undefined;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
   onContextChange: (ctx: string) => void;
-  onAddLink: () => void;
-  onUpdateLink: (index: number, field: 'url' | 'label', value: string) => void;
-  onRemoveLink: (index: number) => void;
+  onStartAddLink: () => void;
+  onPendingUrlChange: (url: string) => void;
+  onConfirmPendingLink: () => void;
+  onCancelPendingLink: () => void;
+  onRemoveLink: (linkId: string) => void;
+  onRemoveImage: (imgId: string) => void;
+  onUploadImages: (files: File[]) => void;
   onRemoveGroup: () => void;
 }
 
 function ReferenceGroupCard({
   group,
   disabled,
+  uploadingGroupId,
+  pendingUrl,
+  fileInputRef,
   onContextChange,
-  onAddLink,
-  onUpdateLink,
+  onStartAddLink,
+  onPendingUrlChange,
+  onConfirmPendingLink,
+  onCancelPendingLink,
   onRemoveLink,
+  onRemoveImage,
+  onUploadImages,
   onRemoveGroup,
 }: ReferenceGroupCardProps) {
+  const isUploadingThisGroup = uploadingGroupId === group.id;
+  const hasPending = pendingUrl !== undefined;
+  const isEmpty = group.links.length === 0 && group.images.length === 0 && !hasPending;
+
   return (
     <div
       style={{
-        borderRadius: 12,
-        border: '1px solid rgba(74,47,24,0.10)',
-        background: '#FFFFFF',
-        overflow: 'hidden',
+        borderRadius: 12, border: '1px solid rgba(74,47,24,0.10)',
+        background: '#FFFFFF', overflow: 'hidden',
       }}
     >
-      {/* Link rows */}
+      {/* Chips row: links + images + add buttons */}
       <div style={{ padding: '12px 14px 0' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-          {group.links.map((link, li) => {
-            const normalizedUrl = link.url.trim() ? normalizeHref(link.url) : '';
-            const platform = normalizedUrl ? detectLinkType(normalizedUrl) : 'external';
-            const hasUrl = Boolean(link.url.trim());
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+          {/* Link chips */}
+          {group.links.map((link) => {
+            const normalized = link.url.trim() ? normalizeHref(link.url) : '';
+            const platform = normalized ? detectLinkType(normalized) : 'external';
             return (
               <span
-                key={li}
+                key={link.id}
                 style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  padding: '3px 8px',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '4px 8px 4px 8px',
                   borderRadius: 999,
-                  background: hasUrl ? '#F2EADF' : '#F8F4EE',
-                  border: '1px solid rgba(74,47,24,0.10)',
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: '#6B4423',
+                  background: '#F2EADF', border: '1px solid rgba(74,47,24,0.12)',
+                  fontSize: 11, fontWeight: 600, color: '#4A2F18',
+                  maxWidth: 180,
                 }}
+                title={link.url}
               >
-                {hasUrl ? (
-                  <span aria-hidden="true">{getPlatformIcon(platform)}</span>
-                ) : null}
-                <span style={{ color: hasUrl ? '#4A2F18' : '#9D8E7D' }}>
-                  {hasUrl
-                    ? (link.label.trim() || getLinkPlatformLabel(platform))
-                    : `Länk ${li + 1}`}
+                <span aria-hidden="true" style={{ flexShrink: 0 }}>{getPlatformIcon(platform)}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {link.label.trim() || getLinkPlatformLabel(platform)}
                 </span>
+                <button
+                  type="button"
+                  onClick={() => onRemoveLink(link.id)}
+                  disabled={disabled}
+                  aria-label="Ta bort länk"
+                  style={{
+                    marginLeft: 2, flexShrink: 0,
+                    border: 'none', background: 'transparent',
+                    color: '#B45309', fontSize: 12, fontWeight: 700,
+                    cursor: disabled ? 'default' : 'pointer',
+                    padding: 0, lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
               </span>
             );
           })}
+
+          {/* Image thumbnails */}
+          {group.images.map((img) => (
+            <span
+              key={img.id}
+              style={{
+                position: 'relative', display: 'inline-block',
+                width: 36, height: 36, borderRadius: 8, overflow: 'hidden',
+                border: '1px solid rgba(74,47,24,0.10)',
+                flexShrink: 0,
+              }}
+              title={img.caption || img.url}
+            >
+              <img src={img.url} alt={img.caption || 'Referensbild'}
+                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+              />
+              <button
+                type="button"
+                onClick={() => onRemoveImage(img.id)}
+                disabled={disabled}
+                aria-label="Ta bort bild"
+                style={{
+                  position: 'absolute', top: 1, right: 1,
+                  width: 14, height: 14, borderRadius: '50%',
+                  background: 'rgba(26,22,18,0.65)', border: 'none',
+                  color: '#fff', fontSize: 9, fontWeight: 700,
+                  cursor: disabled ? 'default' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: 0, lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+
+          {isUploadingThisGroup ? (
+            <span style={{ fontSize: 11, color: '#9D8E7D', fontStyle: 'italic' }}>Laddar upp...</span>
+          ) : null}
+
+          {isEmpty && !hasPending ? (
+            <span style={{ fontSize: 12, color: '#C9B8A8', fontStyle: 'italic' }}>Inga objekt ännu</span>
+          ) : null}
         </div>
 
-        {group.links.map((link, li) => (
-          <div
-            key={li}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto',
-              gap: 6,
-              marginBottom: 8,
-              alignItems: 'center',
-            }}
-          >
+        {/* Pending URL inline input */}
+        {hasPending ? (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
             <input
-              value={link.url}
-              onChange={(e) => onUpdateLink(li, 'url', e.target.value)}
-              placeholder="URL"
-              disabled={disabled}
-              style={{
-                padding: '8px 10px',
-                borderRadius: 8,
-                border: '1px solid rgba(74,47,24,0.12)',
-                fontSize: 12,
-                color: '#4A4239',
-                background: '#FAFAF9',
-                outline: 'none',
-                boxSizing: 'border-box',
+              autoFocus
+              value={pendingUrl}
+              onChange={(e) => onPendingUrlChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); onConfirmPendingLink(); }
+                if (e.key === 'Escape') onCancelPendingLink();
               }}
-            />
-            <input
-              value={link.label}
-              onChange={(e) => onUpdateLink(li, 'label', e.target.value)}
-              placeholder="Rubrik (valfri)"
+              placeholder="Klistra in URL och tryck Enter"
               disabled={disabled}
-              maxLength={60}
               style={{
-                padding: '8px 10px',
-                borderRadius: 8,
-                border: '1px solid rgba(74,47,24,0.12)',
-                fontSize: 12,
-                color: '#4A4239',
-                background: '#FAFAF9',
-                outline: 'none',
-                boxSizing: 'border-box',
+                flex: 1, padding: '7px 10px', borderRadius: 8,
+                border: '1px solid rgba(107,68,35,0.25)',
+                fontSize: 12, color: '#4A4239', background: '#F8F4EE',
+                outline: 'none', boxSizing: 'border-box',
               }}
             />
             <button
               type="button"
-              onClick={() => onRemoveLink(li)}
-              disabled={disabled || group.links.length <= 1}
-              title="Ta bort länk"
+              onClick={onConfirmPendingLink}
+              disabled={disabled}
               style={{
-                border: 'none',
-                background: 'transparent',
-                color: group.links.length <= 1 ? '#C9B8A8' : '#B45309',
-                fontSize: 14,
-                fontWeight: 700,
-                cursor: disabled || group.links.length <= 1 ? 'default' : 'pointer',
-                padding: '4px 2px',
-                lineHeight: 1,
+                padding: '6px 12px', borderRadius: 8,
+                border: 'none', background: '#6B4423', color: '#fff',
+                fontSize: 12, fontWeight: 700, cursor: disabled ? 'not-allowed' : 'pointer',
               }}
             >
-              ×
+              Lägg till
+            </button>
+            <button
+              type="button"
+              onClick={onCancelPendingLink}
+              style={{
+                padding: '6px 10px', borderRadius: 8,
+                border: '1px solid rgba(74,47,24,0.12)',
+                background: '#fff', color: '#7D6E5D',
+                fontSize: 12, cursor: 'pointer',
+              }}
+            >
+              ✕
             </button>
           </div>
-        ))}
+        ) : null}
 
-        <button
-          type="button"
-          onClick={onAddLink}
-          disabled={disabled}
-          style={{
-            border: 'none',
-            background: 'transparent',
-            color: '#6B4423',
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            padding: '0 0 10px',
-            opacity: disabled ? 0.6 : 1,
-          }}
-        >
-          + Lägg till länk
-        </button>
+        {/* Add link / add image buttons */}
+        {!hasPending ? (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+            <button
+              type="button"
+              onClick={onStartAddLink}
+              disabled={disabled}
+              style={{
+                border: 'none', background: 'transparent',
+                color: '#6B4423', fontSize: 12, fontWeight: 700,
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                padding: 0, opacity: disabled ? 0.6 : 1,
+              }}
+            >
+              + Lägg till länk
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (fileInputRef.current) {
+                  const el = fileInputRef.current;
+                  const handler = (e: Event) => {
+                    const input = e.target as HTMLInputElement;
+                    const files = Array.from(input.files || []);
+                    if (files.length > 0) onUploadImages(files);
+                    input.value = '';
+                    el.removeEventListener('change', handler);
+                  };
+                  el.addEventListener('change', handler);
+                  el.click();
+                }
+              }}
+              disabled={disabled || isUploadingThisGroup}
+              style={{
+                border: 'none', background: 'transparent',
+                color: '#6B4423', fontSize: 12, fontWeight: 700,
+                cursor: disabled || isUploadingThisGroup ? 'not-allowed' : 'pointer',
+                padding: 0, opacity: disabled || isUploadingThisGroup ? 0.6 : 1,
+              }}
+            >
+              🖼 Bild
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {/* Shared context */}
-      <div
-        style={{
-          padding: '10px 14px',
-          borderTop: '1px solid rgba(74,47,24,0.06)',
-          background: '#FAFAF9',
-        }}
-      >
+      {/* Shared context textarea */}
+      <div style={{ padding: '10px 14px', borderTop: '1px solid rgba(74,47,24,0.06)', background: '#FAFAF9' }}>
         <textarea
           value={group.context}
           onChange={(e) => onContextChange(e.target.value)}
-          placeholder="Vad gillar du här? T.ex. skön ton, bra pacing, varm känsla..."
+          placeholder="Vad vill du förmedla med dessa? T.ex. skön ton, bra pacing, varm känsla..."
           disabled={disabled}
           rows={2}
           maxLength={300}
           style={{
-            width: '100%',
-            padding: '8px 10px',
-            borderRadius: 8,
+            width: '100%', padding: '8px 10px', borderRadius: 8,
             border: '1px solid rgba(74,47,24,0.10)',
-            fontSize: 12,
-            color: '#4A4239',
-            background: '#FFFFFF',
-            outline: 'none',
-            resize: 'vertical',
-            minHeight: 56,
-            boxSizing: 'border-box',
-            lineHeight: 1.5,
-            fontFamily: 'inherit',
+            fontSize: 12, color: '#4A4239', background: '#FFFFFF',
+            outline: 'none', resize: 'vertical', minHeight: 56,
+            boxSizing: 'border-box', lineHeight: 1.5, fontFamily: 'inherit',
           }}
         />
       </div>
 
       {/* Footer */}
-      <div
-        style={{
-          padding: '8px 14px',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          borderTop: '1px solid rgba(74,47,24,0.06)',
-        }}
-      >
+      <div style={{ padding: '8px 14px', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid rgba(74,47,24,0.06)' }}>
         <button
           type="button"
           onClick={onRemoveGroup}
           disabled={disabled}
           style={{
-            border: 'none',
-            background: 'transparent',
-            color: '#B45309',
-            fontSize: 11,
-            fontWeight: 700,
+            border: 'none', background: 'transparent',
+            color: '#B45309', fontSize: 11, fontWeight: 700,
             cursor: disabled ? 'not-allowed' : 'pointer',
-            padding: 0,
-            opacity: disabled ? 0.6 : 1,
+            padding: 0, opacity: disabled ? 0.6 : 1,
           }}
         >
           Ta bort grupp

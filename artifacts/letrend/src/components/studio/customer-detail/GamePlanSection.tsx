@@ -75,6 +75,8 @@ export function GamePlanSection({
   setShowAiSheet,
   aiDraft,
   setAiDraft,
+  aiDraftGroups,
+  setAiDraftGroups,
   gamePlanHtml,
   gamePlanSummary,
   setGamePlanHtml,
@@ -580,6 +582,8 @@ export function GamePlanSection({
           loading={generatingGamePlanAi}
           form={aiDraft}
           setForm={setAiDraft}
+          groups={aiDraftGroups}
+          setGroups={setAiDraftGroups}
           onClose={() => setShowAiSheet(false)}
           onGenerate={handleGenerateGamePlanAi}
         />

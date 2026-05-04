@@ -81,7 +81,7 @@ import {
 import { formatLastEmailSent } from './KommunikationSection';
 import { CustomerImportHistoryModal } from './CustomerImportHistoryModal';
 import { MarkProducedDialog } from './MarkProducedDialog';
-import type { CMIdentity } from './feedTypes';
+import type { CMIdentity, ReferenceGroup } from './feedTypes';
 import { GamePlanSection } from './GamePlanSection';
 import { KonceptSection } from './KonceptSection';
 import { FeedPlannerSection } from './FeedPlannerSection';
@@ -444,6 +444,8 @@ function CustomerWorkspacePageContent() {
   const [aiDraft, setAiDraft] = useState<GamePlanGenerateInput>(() =>
     buildGamePlanAiDefaults(null, { tone: '', constraints: '', current_focus: '' }, [])
   );
+  const [aiDraftGroups, setAiDraftGroups] = useState<ReferenceGroup[]>([]);
+  const aiDraftSeedDone = useRef(false);
   const addConceptSearchInputRef = useRef<HTMLInputElement | null>(null);
   const {
     expandedConceptId,
@@ -2539,10 +2541,29 @@ function CustomerWorkspacePageContent() {
   const hasUnsavedGamePlanChanges = gamePlanHtml !== (typeof gamePlanSummary?.html === 'string' ? gamePlanSummary.html : '');
 
   useEffect(() => {
-    setAiDraft(buildGamePlanAiDefaults(customer, brief, notes));
+    aiDraftSeedDone.current = false;
+    setAiDraft(buildGamePlanAiDefaults(null, { tone: '', constraints: '', current_focus: '' }, []));
+    setAiDraftGroups([]);
     setShowAiSheet(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customerId]);
+
+  useEffect(() => {
+    if (!customer || aiDraftSeedDone.current) return;
+    aiDraftSeedDone.current = true;
+    const defaults = buildGamePlanAiDefaults(customer, brief, notes);
+    setAiDraft(defaults);
+    setAiDraftGroups((prev) => {
+      if (prev.length > 0) return prev;
+      return defaults.references.filter((r) => r.url?.trim()).map((r, i) => ({
+        id: `seed-${i}`,
+        context: r.note || '',
+        links: [{ id: `seed-${i}-l0`, url: r.url, label: r.label || '' }],
+        images: [],
+      }));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer]);
 
   const handleGenerateGamePlanAi = async (input: GamePlanGenerateInput): Promise<boolean> => {
     setGeneratingGamePlanAi(true);
@@ -3099,6 +3120,8 @@ function CustomerWorkspacePageContent() {
               setShowAiSheet={setShowAiSheet}
               aiDraft={aiDraft}
               setAiDraft={setAiDraft}
+              aiDraftGroups={aiDraftGroups}
+              setAiDraftGroups={setAiDraftGroups}
               gamePlanHtml={gamePlanHtml}
               gamePlanSummary={gamePlanSummary}
               setGamePlanHtml={setGamePlanHtml}
