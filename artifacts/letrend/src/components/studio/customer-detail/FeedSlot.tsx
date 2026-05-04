@@ -39,10 +39,11 @@ function FeedSlot({
   onUpdateTikTokUrl,
   onPatchConcept,
   onOpenConcept,
-  onSlotClick
+  onSlotClick,
+  openMenuConceptId,
+  setOpenMenuConceptId,
 }: FeedSlotProps) {
   const [isHovered, setIsHovered] = React.useState(false);
-  const [showContextMenu, setShowContextMenu] = React.useState(false);
   const menuBtnRef = React.useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = React.useState<{ top: number; left: number } | null>(null);
   const [showTagPicker, setShowTagPicker] = React.useState(false);
@@ -60,6 +61,7 @@ function FeedSlot({
   const [refThumbnailUrl, setRefThumbnailUrl] = React.useState<string | null>(null);
 
   const { concept, type } = slot;
+  const showContextMenu = openMenuConceptId === concept?.id && concept?.id != null;
   const details = concept ? getWorkspaceConceptDetails(concept, getConceptDetails) ?? null : null;
   const result = concept?.result ?? null;
   const markers = concept?.markers ?? null;
@@ -213,7 +215,7 @@ function FeedSlot({
       Math.max(8, window.innerWidth - menuWidth - 8)
     );
     setMenuPos({ top, left });
-    setShowContextMenu(true);
+    setOpenMenuConceptId(concept?.id ?? null);
   };
 
   React.useEffect(() => {
@@ -234,9 +236,11 @@ function FeedSlot({
     concept?.reconciliation.linked_customer_concept_id
   ]);
 
-  const formatMetric = (value: number | null) => {
+  const formatMetric = (value: number | null): string => {
     if (typeof value !== 'number' || !Number.isFinite(value)) return '-';
-    return new Intl.NumberFormat('sv-SE', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace('.0', '')}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1).replace('.0', '')}k`;
+    return String(value);
   };
 
   const handleSavePlannedDate = async () => {
@@ -245,7 +249,7 @@ function FeedSlot({
       const value = localPlannedDate ? new Date(localPlannedDate).toISOString() : null;
       await onPatchConcept(concept.id, { planned_publish_at: value });
       setEditingPlannedDate(false);
-      setShowContextMenu(false);
+      setOpenMenuConceptId(null);
     } catch {
       alert('Kunde inte spara planerat datum');
     }
@@ -621,7 +625,7 @@ function FeedSlot({
               openContextMenuFromButton();
               return;
             }
-            setShowContextMenu(v => !v);
+            setOpenMenuConceptId(null);
           }}
           style={{
             position: 'absolute',
@@ -879,7 +883,7 @@ function FeedSlot({
               lineHeight: 1.35,
               overflow: 'hidden',
               display: '-webkit-box',
-              WebkitLineClamp: type === 'current' ? 3 : 4,
+              WebkitLineClamp: 3,
               WebkitBoxOrient: 'vertical' as const,
             }}>
               {getStudioCustomerConceptDisplayTitle(
@@ -1121,7 +1125,7 @@ function FeedSlot({
                       backdropFilter: hasHistoryThumbnail ? 'blur(4px)' : undefined,
                       whiteSpace: 'nowrap',
                     }}>
-                      {tag && <span style={{ width: 5, height: 5, borderRadius: '50%', background: tag.color, flexShrink: 0, display: 'inline-block' }} />}
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: tag?.color ?? '#9CA3AF', flexShrink: 0, display: 'inline-block' }} />
                       {tagName}
                     </span>
                   );
@@ -1133,7 +1137,7 @@ function FeedSlot({
               fontSize: 12, fontWeight: 600,
               color: hasHistoryThumbnail ? '#fff' : LeTrendColors.brownDark,
               lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box',
-              WebkitLineClamp: concept.row_kind === 'imported_history' ? 4 : 3,
+              WebkitLineClamp: 3,
               WebkitBoxOrient: 'vertical' as const,
               textShadow: hasHistoryThumbnail ? '0 1px 3px rgba(0,0,0,0.6)' : undefined,
             }}>
@@ -1263,7 +1267,7 @@ function FeedSlot({
       {showContextMenu && concept && menuPos && createPortal(<>
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
-          onClick={(e) => { e.stopPropagation(); setShowContextMenu(false); }}
+          onClick={(e) => { e.stopPropagation(); setOpenMenuConceptId(null); }}
         />
         <div
           style={{
@@ -1284,7 +1288,7 @@ function FeedSlot({
         >
           {/* ── KOMMANDE ── */}
           {type === 'planned' && (<>
-            <button onClick={(e) => { e.stopPropagation(); onOpenConcept(concept.id, ['script', 'instructions', 'fit']); setShowContextMenu(false); }} style={feedSlotMenuBtnStyle}>
+            <button onClick={(e) => { e.stopPropagation(); onOpenConcept(concept.id, ['script', 'instructions', 'fit']); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
               Redigera koncept
             </button>
             <button onClick={(e) => {
@@ -1310,16 +1314,16 @@ function FeedSlot({
             </button>
             {/* Flytta upp/ner — byter feed_order med grannen atomärt (Task 12) */}
             {swapUpNeighbor && onSwapFeedOrder && (
-              <button onClick={(e) => { e.stopPropagation(); void onSwapFeedOrder(concept.id, swapUpNeighbor.id); setShowContextMenu(false); }} style={feedSlotMenuBtnStyle}>
+              <button onClick={(e) => { e.stopPropagation(); void onSwapFeedOrder(concept.id, swapUpNeighbor.id); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
                 ↑ Flytta upp
               </button>
             )}
             {swapDownNeighbor && onSwapFeedOrder && (
-              <button onClick={(e) => { e.stopPropagation(); void onSwapFeedOrder(concept.id, swapDownNeighbor.id); setShowContextMenu(false); }} style={feedSlotMenuBtnStyle}>
+              <button onClick={(e) => { e.stopPropagation(); void onSwapFeedOrder(concept.id, swapDownNeighbor.id); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
                 ↓ Flytta ner
               </button>
             )}
-            <button onClick={(e) => { e.stopPropagation(); void onRemoveFromSlot(concept.id); setShowContextMenu(false); }} style={{ ...feedSlotMenuBtnStyle, color: '#b91c1c' }}>
+            <button onClick={(e) => { e.stopPropagation(); void onRemoveFromSlot(concept.id); setOpenMenuConceptId(null); }} style={{ ...feedSlotMenuBtnStyle, color: '#b91c1c' }}>
               Ta bort från flödet
             </button>
           </>)}
@@ -1329,14 +1333,14 @@ function FeedSlot({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setShowContextMenu(false);
+                setOpenMenuConceptId(null);
                 if (onOpenMarkProducedDialog) onOpenMarkProducedDialog(concept.id);
               }}
               style={{ ...feedSlotMenuBtnStyle, fontWeight: 600 }}
             >
               Markera som gjord
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onOpenConcept(concept.id, ['script', 'instructions', 'fit']); setShowContextMenu(false); }} style={feedSlotMenuBtnStyle}>
+            <button onClick={(e) => { e.stopPropagation(); onOpenConcept(concept.id, ['script', 'instructions', 'fit']); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
               Redigera koncept
             </button>
             <button onClick={(e) => {
@@ -1360,7 +1364,7 @@ function FeedSlot({
             <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
               {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
             </button>
-            <button onClick={(e) => { e.stopPropagation(); void onRemoveFromSlot(concept.id); setShowContextMenu(false); }} style={{ ...feedSlotMenuBtnStyle, color: '#b91c1c' }}>
+            <button onClick={(e) => { e.stopPropagation(); void onRemoveFromSlot(concept.id); setOpenMenuConceptId(null); }} style={{ ...feedSlotMenuBtnStyle, color: '#b91c1c' }}>
               Ta bort från flödet
             </button>
           </>)}
@@ -1368,7 +1372,7 @@ function FeedSlot({
           {/* ── HISTORIK ── */}
           {type === 'history' && (<>
             {result?.tiktok_url && (
-              <button onClick={(e) => { e.stopPropagation(); window.open(result.tiktok_url!, '_blank', 'noopener,noreferrer'); setShowContextMenu(false); }} style={feedSlotMenuBtnStyle}>
+              <button onClick={(e) => { e.stopPropagation(); window.open(result.tiktok_url!, '_blank', 'noopener,noreferrer'); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
                 Öppna TikTok ↗
               </button>
             )}
@@ -1377,7 +1381,7 @@ function FeedSlot({
                 onClick={(e) => {
                   e.stopPropagation();
                   onOpenConcept(linkedHistoryConcept.id, ['script', 'instructions', 'fit']);
-                  setShowContextMenu(false);
+                  setOpenMenuConceptId(null);
                 }}
                 style={feedSlotMenuBtnStyle}
               >
@@ -1394,7 +1398,7 @@ function FeedSlot({
                 onClick={(e) => {
                   e.stopPropagation();
                   void onUndoHistoryReconciliation(concept.reconciliation.reconciled_clip_id!);
-                  setShowContextMenu(false);
+                  setOpenMenuConceptId(null);
                 }}
                 disabled={savingReconciliation}
                 style={{

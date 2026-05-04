@@ -139,6 +139,9 @@ export interface FeedSlotProps {
   onSlotClick: (slot: FeedSlotData, concept: CustomerConcept | null, details: TranslatedConcept | null) => void;
   /** All concepts for the same customer — used to find swap neighbors. */
   allConcepts?: CustomerConcept[];
+  /** Lifted context-menu state — only one menu open at a time across the planner. */
+  openMenuConceptId: string | null;
+  setOpenMenuConceptId: (id: string | null) => void;
 }
 
 export interface KommunikationSectionProps {

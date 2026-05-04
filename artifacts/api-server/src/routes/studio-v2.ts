@@ -293,7 +293,10 @@ router.get('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, 
         return !row.reconciled_customer_concept_id;
       })
       .map((row) => {
-        if (row.concept_id && typeof row.feed_order === 'number' && row.feed_order < 0) {
+        // Overlay thumbnail + stats from reconciled imported_history row onto any
+        // assignment row that has a linked history clip — not just past (feed_order < 0)
+        // ones, so the Nu slot and future planned slots also surface the thumbnail.
+        if (row.concept_id) {
           const importedStats = reconciledByTarget.get(row.id);
           if (importedStats) {
             return {
@@ -302,6 +305,7 @@ router.get('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, 
               tiktok_thumbnail_url: importedStats.tiktok_thumbnail_url ?? row.tiktok_thumbnail_url,
               tiktok_views: importedStats.tiktok_views ?? row.tiktok_views,
               tiktok_likes: importedStats.tiktok_likes ?? row.tiktok_likes,
+              tiktok_comments: importedStats.tiktok_comments ?? row.tiktok_comments,
             };
           }
         }

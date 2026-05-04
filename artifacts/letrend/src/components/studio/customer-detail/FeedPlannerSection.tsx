@@ -280,6 +280,7 @@ export function FeedPlannerSection({
   const [editingPeriod, setEditingPeriod] = React.useState(false);
   const [showConceptPicker, setShowConceptPicker] = React.useState(false);
   const [showTempoModal, setShowTempoModal] = React.useState(false);
+  const [openMenuConceptId, setOpenMenuConceptId] = React.useState<string | null>(null);
   const [slotAnchors, setSlotAnchors] = React.useState<Array<{
     yTop: number;
     yMid: number;
@@ -498,6 +499,20 @@ export function FeedPlannerSection({
   React.useEffect(() => {
     setSpans((previous) => previous.map(hydrateSpanForViewport));
   }, [hydrateSpanForViewport]);
+
+  // Scroll so the "Nu" slot (feed_order=0) row is centred in the viewport on first load.
+  // Only fires once, when historyOffset is 0 (unshifted view) and the grid is first populated.
+  const nuScrolledRef = React.useRef(false);
+  React.useEffect(() => {
+    if (nuScrolledRef.current) return;
+    if (historyOffset !== 0) return;
+    if (slotMap.length === 0 || !gridRef.current) return;
+    const nuSlotIndex = gridConfig.currentSlotIndex;
+    const nuEl = gridRef.current.querySelector(`[data-slot-index="${nuSlotIndex}"]`);
+    if (!nuEl) return;
+    nuScrolledRef.current = true;
+    nuEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [slotMap, historyOffset, gridConfig.currentSlotIndex]);
 
   // Measure slot positions
   React.useEffect(() => {
@@ -873,38 +888,7 @@ export function FeedPlannerSection({
         padding: 24,
         border: `1px solid ${LeTrendColors.border}`
       }}>
-      {/* Header med Hantera taggar-länk */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h2 style={{
-          fontSize: 22,
-          fontWeight: 700,
-          color: LeTrendColors.brownDark,
-          margin: 0
-        }}>
-          Feed-planerare
-        </h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => setShowTagManager(true)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: LeTrendColors.brownLight,
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              textDecoration: 'underline'
-            }}
-          >
-            Hantera taggar
-          </button>
-        </div>
-      </div>
-
-      {/* History controls removed from planner surface — auto-loads on workspace open;
-          manual import/fetch available in the Demo-förberedelse tab */}
-
-      {/* Rytm: compact summary trigger — opens TempoModal for full picker */}
+      {/* Header med Hantera taggar-länk och Rytm inline */}
       {(() => {
         const tempoSortedKey = [...tempoWeekdays].sort().join(',');
         const matchedPreset = TEMPO_PRESETS.find(
@@ -917,27 +901,56 @@ export function FeedPlannerSection({
             ? matchedPreset.label
             : tempoWeekdays.map((d) => DAY_LABELS[d]).join(' · ');
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
-            <span style={{ fontSize: 11, color: LeTrendColors.textMuted, fontWeight: 500 }}>Rytm:</span>
-            <button
-              onClick={() => setShowTempoModal(true)}
-              style={{
-                padding: '2px 10px',
-                borderRadius: 999,
-                border: `1px solid ${isTempoExplicit ? LeTrendColors.brownLight : LeTrendColors.border}`,
-                background: isTempoExplicit ? LeTrendColors.brownLight : 'transparent',
-                color: isTempoExplicit ? 'white' : LeTrendColors.textMuted,
-                fontSize: 11,
-                fontWeight: isTempoExplicit ? 500 : 400,
-                cursor: 'pointer',
-                opacity: isTempoExplicit ? 1 : 0.65,
-              }}
-            >
-              {isTempoExplicit ? tempoLabel : `${tempoLabel} (standard)`}
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h2 style={{
+              fontSize: 22,
+              fontWeight: 700,
+              color: LeTrendColors.brownDark,
+              margin: 0
+            }}>
+              Feed-planerare
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, color: LeTrendColors.textMuted, fontWeight: 500 }}>Rytm:</span>
+                <button
+                  onClick={() => setShowTempoModal(true)}
+                  style={{
+                    padding: '2px 10px',
+                    borderRadius: 999,
+                    border: `1px solid ${isTempoExplicit ? LeTrendColors.brownLight : LeTrendColors.border}`,
+                    background: isTempoExplicit ? LeTrendColors.brownLight : 'transparent',
+                    color: isTempoExplicit ? 'white' : LeTrendColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: isTempoExplicit ? 500 : 400,
+                    cursor: 'pointer',
+                    opacity: isTempoExplicit ? 1 : 0.65,
+                  }}
+                >
+                  {isTempoExplicit ? tempoLabel : `${tempoLabel} (standard)`}
+                </button>
+              </div>
+              <button
+                onClick={() => setShowTagManager(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: LeTrendColors.brownLight,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  textDecoration: 'underline'
+                }}
+              >
+                Hantera taggar
+              </button>
+            </div>
           </div>
         );
       })()}
+
+      {/* History controls removed from planner surface — auto-loads on workspace open;
+          manual import/fetch available in the Demo-förberedelse tab */}
 
       {/* TempoModal — preset + free-form weekday picker */}
       {/* Legacy TempoModal extracted to ./TempoModal */}
@@ -1765,6 +1778,8 @@ export function FeedPlannerSection({
                     onOpenConcept={onOpenConcept}
                     onSlotClick={onSlotClick}
                     onCreateEmailDraft={onCreateEmailDraft}
+                    openMenuConceptId={openMenuConceptId}
+                    setOpenMenuConceptId={setOpenMenuConceptId}
                   />
                 );
               })}
