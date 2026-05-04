@@ -126,53 +126,51 @@ export function GamePlanSection({
             display: 'flex',
             justifyContent: 'flex-end',
             alignItems: 'center',
-            gap: 12,
+            gap: 8,
             marginBottom: 12,
             flexWrap: 'wrap',
           }}
         >
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {!editingGamePlan ? (
-              <button
-                type="button"
-                onClick={() => void handleReloadGamePlan(true)}
-                disabled={loadingGamePlan}
-                style={{
-                  ...buttonBase('#FFFFFF', LeTrendColors.brownInk, `1px solid ${LeTrendColors.border}`),
-                  cursor: loadingGamePlan ? 'not-allowed' : 'pointer',
-                }}
-              >
-                {loadingGamePlan ? 'Laddar...' : 'Ladda om'}
-              </button>
-            ) : null}
-
+          {!editingGamePlan ? (
             <button
               type="button"
-              onClick={() => setShowAiSheet(true)}
-              disabled={generatingGamePlanAi}
+              onClick={() => void handleReloadGamePlan(true)}
+              disabled={loadingGamePlan}
               style={{
-                ...buttonBase('#FFFFFF', LeTrendColors.brownLight, `1px solid ${LeTrendColors.border}`),
-                cursor: generatingGamePlanAi ? 'not-allowed' : 'pointer',
+                ...buttonBase('#FFFFFF', LeTrendColors.brownInk, `1px solid ${LeTrendColors.border}`),
+                cursor: loadingGamePlan ? 'not-allowed' : 'pointer',
               }}
             >
-              {generatingGamePlanAi ? 'Genererar...' : 'Generera utkast'}
+              {loadingGamePlan ? 'Laddar...' : 'Ladda om'}
             </button>
+          ) : null}
 
-            {!editingGamePlan ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!safeGamePlanHtml.trim()) {
-                    setGamePlanHtml(GAME_PLAN_STARTER_TEMPLATE);
-                  }
-                  setEditingGamePlan(true);
-                }}
-                style={buttonBase(LeTrendColors.brownLight, '#fff')}
-              >
-                {safeGamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
-              </button>
-            ) : null}
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAiSheet(true)}
+            disabled={generatingGamePlanAi}
+            style={{
+              ...buttonBase('#FFFFFF', LeTrendColors.brownLight, `1px solid ${LeTrendColors.border}`),
+              cursor: generatingGamePlanAi ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {generatingGamePlanAi ? 'Genererar...' : 'Generera utkast'}
+          </button>
+
+          {!editingGamePlan ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (!safeGamePlanHtml.trim()) {
+                  setGamePlanHtml(GAME_PLAN_STARTER_TEMPLATE);
+                }
+                setEditingGamePlan(true);
+              }}
+              style={buttonBase(LeTrendColors.brownLight, '#fff')}
+            >
+              {safeGamePlanHtml.trim() ? 'Redigera' : 'Starta Game Plan'}
+            </button>
+          ) : null}
         </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
