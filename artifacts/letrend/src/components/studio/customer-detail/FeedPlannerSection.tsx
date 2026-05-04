@@ -125,11 +125,12 @@ export function FeedPlannerSection({
   const [deferredAdvanceCue, setDeferredAdvanceCue] = React.useState(false);
   const effectiveCue = React.useMemo(() => {
     if (activeNudges.length === 0) return null;
-    const p = (activeNudges[0].payload ?? {}) as { imported_count?: number; kind?: string; latest_published_at?: string | null };
+    const p = (activeNudges[0].payload ?? {}) as { imported_count?: number; kind?: string; latest_published_at?: string | null; auto_reconciled?: boolean };
     return {
       imported: p.imported_count ?? 1,
       kind: (p.kind ?? 'fresh_activity') as MotorSignalKind,
       publishedAt: p.latest_published_at ?? null,
+      autoReconciled: p.auto_reconciled === true,
     };
   }, [activeNudges]);
   // Local focus state: set of imported-history concept IDs identified as fresh evidence for the

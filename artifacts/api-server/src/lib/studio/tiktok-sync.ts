@@ -237,6 +237,89 @@ export interface SyncResult {
   error?: string;
   rateLimited?: boolean;
   retryAfterMs?: number;
+  /** True when exactly one new clip was detected and auto-linked to the nu-slot concept. */
+  autoReconciled?: boolean;
+}
+
+// ── Motor signal nudge helper ────────────────────────────────────────────────
+// Creates or merges a nudge in feed_motor_signals so the workspace banner
+// prompts the CM to review the new clip(s). Best-effort: any failure is
+// swallowed so it cannot affect the user-visible sync result.
+async function emitSyncNudge(
+  supabase: SupabaseAdmin,
+  customerId: string,
+  payload: {
+    imported_count: number;
+    latest_published_at: string | null;
+    auto_reconciled?: boolean;
+    auto_reconciled_history_id?: string;
+  },
+): Promise<void> {
+  try {
+    const ageDays = payload.latest_published_at
+      ? (Date.now() - new Date(payload.latest_published_at).getTime()) / (1000 * 60 * 60 * 24)
+      : 0;
+    const kind = ageDays <= 90 ? 'fresh_activity' : 'backfill';
+
+    const { data: existing } = await supabase
+      .from('feed_motor_signals')
+      .select('id, payload')
+      .eq('customer_id', customerId)
+      .eq('signal_type', 'nudge')
+      .is('acknowledged_at', null)
+      .is('auto_resolved_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      const ep = ((existing as Record<string, unknown>).payload ?? {}) as Record<string, unknown>;
+      const existingCount = typeof ep.imported_count === 'number' ? Math.max(0, ep.imported_count) : 0;
+      const epPublishedAt = typeof ep.latest_published_at === 'string' ? ep.latest_published_at : null;
+      const mergedPublishedAt =
+        payload.latest_published_at && epPublishedAt
+          ? payload.latest_published_at > epPublishedAt ? payload.latest_published_at : epPublishedAt
+          : (payload.latest_published_at ?? epPublishedAt);
+      // Re-derive kind from the merged (most-recent) published timestamp so that
+      // merging an older backfill import into a fresh-activity nudge keeps the kind accurate.
+      const mergedAgeDays = mergedPublishedAt
+        ? (Date.now() - new Date(mergedPublishedAt).getTime()) / (1000 * 60 * 60 * 24)
+        : 0;
+      const mergedKind = mergedAgeDays <= 90 ? 'fresh_activity' : 'backfill';
+      // Preserve prior fields from existing payload, then overwrite with merged values.
+      // auto_reconciled is overwritten by the incoming event's value (not inherited from
+      // the existing payload) so stale auto-link messaging does not survive subsequent
+      // non-auto-reconciled syncs that merge into the same active nudge.
+      const mergedPayload: Record<string, unknown> = {
+        ...ep,
+        imported_count: existingCount + payload.imported_count,
+        latest_published_at: mergedPublishedAt,
+        kind: mergedKind,
+        auto_reconciled: payload.auto_reconciled === true,
+        auto_reconciled_history_id: payload.auto_reconciled === true ? payload.auto_reconciled_history_id : null,
+      };
+      const { error: updateErr } = await supabase
+        .from('feed_motor_signals')
+        .update({ payload: mergedPayload })
+        .eq('id', (existing as { id: string }).id);
+      if (updateErr) {
+        logger.warn({ err: updateErr, customerId }, 'tiktok-sync: failed to merge nudge signal');
+      }
+    } else {
+      const { error: insertErr } = await supabase
+        .from('feed_motor_signals')
+        .insert({
+          customer_id: customerId,
+          signal_type: 'nudge',
+          payload: { ...payload, kind },
+        });
+      if (insertErr) {
+        logger.warn({ err: insertErr, customerId }, 'tiktok-sync: failed to insert nudge signal');
+      }
+    }
+  } catch {
+    /* best-effort: any unexpected failure must not surface as a sync error */
+  }
 }
 
 export async function syncCustomerHistory(
@@ -303,6 +386,13 @@ export async function syncCustomerHistory(
   let errorMessage: string | undefined;
   let rateLimited = false;
   let retryAfterMs: number | undefined;
+  let autoReconciled = false;
+  let autoReconciledHistoryConceptId: string | null = null;
+  let latestNewClipPublishedAt: string | null = null;
+  // Collects the single history row inserted across all pages; only populated when
+  // exactly one clip is inserted per page (we track across pages to enforce the
+  // "total == 1" guard after pagination completes).
+  let singleInsertedRow: { id: string; clip: NormalizedClip } | null = null;
 
   try {
     // fetch user (1 call) + first page (1 call)
@@ -402,15 +492,8 @@ export async function syncCustomerHistory(
         }
 
         // Insert new clips as imported_history rows. No feed_order assigned — these
-        // sit outside the feed grid until a CM (or future automation) reconciles them.
-        //
-        // KNOWN LIMITATION: auto-reconciliation ("mark clip as LeTrend when +1 clip
-        // detected and nu-slot is occupied") is NOT yet implemented. The downstream
-        // task described here does not exist. CMs must manually toggle each clip via
-        // the "Markera som LeTrend" button in the history context menu. Any future
-        // auto-reconciliation must guard against false positives (e.g. clip observed
-        // is unrelated to the nu-slot concept) and should emit a CM-review nudge
-        // rather than silently writing reconciled_customer_concept_id.
+        // sit outside the feed grid until a CM reconciles them manually, or the
+        // auto-reconcile logic below links them when exactly one clip is observed.
         if (newClips.length > 0) {
           const inserts = newClips.map((c) => ({
             customer_profile_id: customerId,
@@ -431,9 +514,27 @@ export async function syncCustomerHistory(
             last_observed_at: observedAt,
             tiktok_last_synced_at: observedAt,
           }));
-          const { error: insertError } = await supabase.from('customer_concepts').insert(inserts);
+          const { data: insertedRows, error: insertError } = await supabase.from('customer_concepts').insert(inserts).select('id');
           if (insertError) throw new Error(`insert_failed: ${insertError.message}`);
           totalImported += newClips.length;
+
+          // Track the latest published_at across all newly imported clips.
+          for (const c of newClips) {
+            if (c.published_at && (!latestNewClipPublishedAt || c.published_at > latestNewClipPublishedAt)) {
+              latestNewClipPublishedAt = c.published_at;
+            }
+          }
+
+          // Record the inserted row only when exactly one clip was added on this page.
+          // If a second clip ever comes in (this or a later page), nullify so the post-
+          // loop guard sees totalImported > 1 and correctly skips auto-reconciliation.
+          if (newClips.length === 1 && insertedRows && insertedRows.length === 1 && singleInsertedRow === null) {
+            singleInsertedRow = { id: (insertedRows[0] as { id: string }).id, clip: newClips[0] };
+          } else if (newClips.length > 1) {
+            // More than one clip on this page — clear any previously recorded row so
+            // we never auto-link when the total across the sync is >1.
+            singleInsertedRow = null;
+          }
         }
 
         // Track latest upload
@@ -454,6 +555,99 @@ export async function syncCustomerHistory(
       lastCursor = page.cursor;
       if (!page.has_more || page.cursor === null) break;
       cursor = page.cursor;
+    }
+
+    // Auto-reconcile: runs once after all pages are processed so the guard is on
+    // the total number of newly imported clips across the ENTIRE sync, not per page.
+    //
+    // Conditions (all must hold):
+    //   1. Exactly one new clip was imported in this sync run (totalImported === 1).
+    //   2. A nu-slot assignment exists (feed_order=0, concept_id IS NOT NULL).
+    //   3. No history clip is already linked to that nu-slot assignment.
+    //
+    // If ambiguous (totalImported > 1 or no nu-slot), no auto-link is performed;
+    // the regular nudge below still fires so CMs know to review.
+    if (totalImported === 1 && singleInsertedRow !== null) {
+      const { id: historyRowId, clip: singleClip } = singleInsertedRow;
+
+      const { data: nuSlot, error: nuSlotErr } = await supabase
+        .from('customer_concepts')
+        .select('id')
+        .eq('customer_profile_id', customerId)
+        .eq('feed_order', 0)
+        .not('concept_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+      if (nuSlotErr) {
+        logger.warn({ err: nuSlotErr }, 'tiktok-sync: auto-reconcile nu-slot lookup failed; skipping auto-link');
+      }
+
+      if (nuSlot) {
+        const nuSlotId = (nuSlot as { id: string }).id;
+
+        // Guard: skip if the nu-slot already has a history clip linked to it.
+        const { data: existingLink, error: existingLinkErr } = await supabase
+          .from('customer_concepts')
+          .select('id')
+          .eq('customer_profile_id', customerId)
+          .eq('reconciled_customer_concept_id', nuSlotId)
+          .limit(1)
+          .maybeSingle();
+        if (existingLinkErr) {
+          logger.warn({ err: existingLinkErr }, 'tiktok-sync: auto-reconcile existing-link lookup failed; skipping auto-link');
+        }
+
+        if (!existingLink) {
+          const autoNow = new Date().toISOString();
+          const { error: autoLinkErr } = await supabase
+            .from('customer_concepts')
+            .update({
+              reconciled_customer_concept_id: nuSlotId,
+              reconciled_at: autoNow,
+              // reconciled_by_cm_id intentionally null — system auto-link, not a CM action
+            })
+            .eq('id', historyRowId);
+
+          if (!autoLinkErr) {
+            autoReconciled = true;
+            autoReconciledHistoryConceptId = historyRowId;
+
+            // Propagate thumbnail + stats to the assignment row — mirrors the
+            // manual POST /history/reconciliation route behaviour.
+            const assignmentPatch: Record<string, unknown> = {};
+            if (singleClip.tiktok_thumbnail_url) assignmentPatch.tiktok_thumbnail_url = singleClip.tiktok_thumbnail_url;
+            if (singleClip.tiktok_url) assignmentPatch.tiktok_url = singleClip.tiktok_url;
+            if (singleClip.tiktok_views != null) assignmentPatch.tiktok_views = singleClip.tiktok_views;
+            if (singleClip.tiktok_likes != null) assignmentPatch.tiktok_likes = singleClip.tiktok_likes;
+            if (singleClip.tiktok_comments != null) assignmentPatch.tiktok_comments = singleClip.tiktok_comments;
+            if (singleClip.published_at) assignmentPatch.published_at = singleClip.published_at;
+            if (Object.keys(assignmentPatch).length > 0) {
+              const { error: patchErr } = await supabase
+                .from('customer_concepts')
+                .update(assignmentPatch)
+                .eq('id', nuSlotId);
+              if (patchErr) {
+                logger.warn({ err: patchErr }, 'tiktok-sync: auto-reconcile failed to propagate stats to assignment row');
+              }
+            }
+          } else {
+            logger.warn({ err: autoLinkErr }, 'tiktok-sync: auto-reconcile link failed');
+          }
+        }
+      }
+    }
+
+    // Emit a Granska nudge whenever new clips were imported.
+    // When exactly one clip was auto-linked the payload carries auto_reconciled so
+    // the workspace banner can surface a more specific "verify auto-link" message.
+    if (totalImported > 0) {
+      await emitSyncNudge(supabase, customerId, {
+        imported_count: totalImported,
+        latest_published_at: latestNewClipPublishedAt,
+        ...(autoReconciled && autoReconciledHistoryConceptId
+          ? { auto_reconciled: true, auto_reconciled_history_id: autoReconciledHistoryConceptId }
+          : {}),
+      });
     }
 
     const finishedAt = new Date().toISOString();
@@ -502,6 +696,7 @@ export async function syncCustomerHistory(
     fetched: totalFetched, imported: totalImported, statsUpdated: totalStatsUpdated, skipped,
     callsUsed, pages: pagesProcessed, has_more: lastHasMore, cursor: lastCursor,
     error: errorMessage, rateLimited, retryAfterMs,
+    autoReconciled: autoReconciled || undefined,
   };
 }
 

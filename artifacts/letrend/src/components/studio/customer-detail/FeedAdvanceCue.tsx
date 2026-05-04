@@ -10,6 +10,7 @@ type FeedAdvanceCueProps = {
     imported: number;
     kind: MotorSignalKind;
     publishedAt: string | null;
+    autoReconciled?: boolean;
   };
   cueSignalId?: string;
   activeNudgesCount: number;
@@ -58,9 +59,11 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
     >
       <div style={{ flex: 1 }}>
         <div style={{ color: '#166534', fontWeight: 600 }}>
-          {cue.kind === 'fresh_activity'
-            ? `${cue.imported} nya klipp i historiken`
-            : `${cue.imported} historiska klipp importerade`}
+          {cue.autoReconciled
+            ? 'Klipp automatiskt kopplat till nu-slotten'
+            : cue.kind === 'fresh_activity'
+              ? `${cue.imported} nya klipp i historiken`
+              : `${cue.imported} historiska klipp importerade`}
           {activeNudgesCount > 1 && (
             <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 500, color: '#166534', opacity: 0.65 }}>
               +{activeNudgesCount - 1} fler
@@ -68,15 +71,17 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
           )}
         </div>
         <div style={{ color: '#166534', fontSize: 11, opacity: 0.75, marginTop: 2 }}>
-          {cue.kind === 'fresh_activity'
-            ? (nuConcept
-                ? 'Var det nu-konceptet som publicerades?'
-                : (hasActivePlan
-                    ? 'Kunden publicerade nytt. Granska historiken innan du bekräftar.'
-                    : 'Placera ett koncept i planen för att kunna markera produktion.'))
-            : (hasActivePlan
-                ? 'Äldre innehåll. Granska historiken innan du bekräftar.'
-                : 'Äldre innehåll importerat till historiken.')}
+          {cue.autoReconciled
+            ? 'Vi kopplade automatiskt det nya klippet till nu-konceptet. Granska och bekräfta att det stämmer.'
+            : cue.kind === 'fresh_activity'
+              ? (nuConcept
+                  ? 'Var det nu-konceptet som publicerades?'
+                  : (hasActivePlan
+                      ? 'Kunden publicerade nytt. Granska historiken innan du bekräftar.'
+                      : 'Placera ett koncept i planen för att kunna markera produktion.'))
+              : (hasActivePlan
+                  ? 'Äldre innehåll. Granska historiken innan du bekräftar.'
+                  : 'Äldre innehåll importerat till historiken.')}
         </div>
         {nuConcept && (
           <div style={{ marginTop: 6, fontSize: 11, color: '#166534', opacity: 0.8 }}>
