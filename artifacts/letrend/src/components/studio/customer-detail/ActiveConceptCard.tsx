@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { toast } from 'sonner';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import { StatusChip } from '@/components/studio-v2/StatusChip';
 import { getNextCustomerConceptAssignmentStatus } from '@/lib/customer-concept-lifecycle';
@@ -63,10 +64,12 @@ function CustomizeModal({
   );
   const [cmNote, setCmNote] = React.useState(concept.markers.assignment_note ?? concept.cm_note ?? '');
   const [saving, setSaving] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
   const [showScript, setShowScript] = React.useState(false);
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError(null);
     try {
       await Promise.all([
         onUpdateCmNote(concept.id, cmNote),
@@ -83,7 +86,10 @@ function CustomizeModal({
             ]
           : []),
       ]);
+      toast.success('Sparat');
       onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Något gick fel. Försök igen.');
     } finally {
       setSaving(false);
     }
@@ -103,6 +109,7 @@ function CustomizeModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      <style>{`@keyframes letrend-spin{to{transform:rotate(360deg)}}`}</style>
       <div
         style={{
           width: 'min(580px, calc(100vw - 32px))',
@@ -298,6 +305,22 @@ function CustomizeModal({
           />
         </div>
 
+        {saveError && (
+          <div
+            style={{
+              marginBottom: 12,
+              padding: '8px 12px',
+              background: '#fef2f2',
+              border: '1px solid #fca5a5',
+              borderRadius: LeTrendRadius.md,
+              fontSize: 13,
+              color: '#b91c1c',
+            }}
+          >
+            {saveError}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button
             type="button"
@@ -311,7 +334,7 @@ function CustomizeModal({
               fontSize: 13,
               fontWeight: 600,
               color: LeTrendColors.textSecondary,
-              cursor: 'pointer',
+              cursor: saving ? 'not-allowed' : 'pointer',
             }}
           >
             Avbryt
@@ -328,11 +351,27 @@ function CustomizeModal({
               fontSize: 13,
               fontWeight: 600,
               color: '#fff',
-              cursor: 'pointer',
+              cursor: saving ? 'not-allowed' : 'pointer',
               opacity: saving ? 0.7 : 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
             }}
           >
-            {saving ? 'Sparar...' : 'Spara'}
+            {saving && (
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: '50%',
+                  border: '2px solid rgba(255,255,255,0.4)',
+                  borderTopColor: '#fff',
+                  display: 'inline-block',
+                  animation: 'letrend-spin 0.7s linear infinite',
+                }}
+              />
+            )}
+            {saving ? 'Sparar…' : 'Spara'}
           </button>
         </div>
       </div>

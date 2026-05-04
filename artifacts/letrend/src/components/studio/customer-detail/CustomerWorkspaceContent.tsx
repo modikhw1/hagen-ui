@@ -1474,7 +1474,7 @@ function CustomerWorkspacePageContent() {
     } catch (err) {
       setConcepts(previousConcepts);
       console.error('Error updating concept:', err);
-      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
+      throw err;
     }
   };
 
@@ -1572,12 +1572,21 @@ function CustomerWorkspacePageContent() {
       return;
     }
 
-    await handleUpdateConcept(conceptId, { status: newStatus });
+    try {
+      await handleUpdateConcept(conceptId, { status: newStatus });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
+    }
   };
 
   // Feed planner handlers (uppdaterade för feed_order)
   const handleAssignToFeedOrder = async (conceptId: string, feedOrder: number) => {
-    await handleUpdateConcept(conceptId, { feed_order: feedOrder });
+    try {
+      await handleUpdateConcept(conceptId, { feed_order: feedOrder });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
+      return;
+    }
     setShowFeedSlotPanel(false);
     setSelectedFeedSlot(null);
     if (pendingFeedPlacementConceptId === conceptId) {
@@ -1586,11 +1595,20 @@ function CustomerWorkspacePageContent() {
   };
 
   const handleRemoveFromSlot = async (conceptId: string) => {
-    await handleUpdateConcept(conceptId, { feed_order: null });
+    try {
+      await handleUpdateConcept(conceptId, { feed_order: null });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
+    }
   };
 
   const handleAssignToSlot = async (conceptId: string, feedOrder: number) => {
-    await handleUpdateConcept(conceptId, { feed_order: feedOrder });
+    try {
+      await handleUpdateConcept(conceptId, { feed_order: feedOrder });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
+      return;
+    }
     if (pendingFeedPlacementConceptId === conceptId) {
       setPendingFeedPlacementConceptId(null);
     }
@@ -1666,7 +1684,11 @@ function CustomerWorkspacePageContent() {
   };
 
   const handleUpdateConceptTags = async (conceptId: string, tags: string[]) => {
-    await handleUpdateConcept(conceptId, { tags });
+    try {
+      await handleUpdateConcept(conceptId, { tags });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
+    }
   };
 
   const handleReorderConcepts = React.useCallback(async (newOrderIds: string[]) => {
@@ -1690,14 +1712,18 @@ function CustomerWorkspacePageContent() {
       })
       .sort((a, b) => a - b);
 
-    await Promise.all(
-      placedInNewOrder.map((concept, idx) => {
-        const curFo = (concept as Record<string, unknown>)['feed_order'] ?? ((concept as Record<string, unknown>)['placement'] as Record<string, unknown> | undefined)?.['feed_order'];
-        const newFo = sortedFeedOrders[idx];
-        if (newFo === curFo) return Promise.resolve();
-        return handleUpdateConcept(concept.id, { feed_order: newFo } as Partial<CustomerConcept>);
-      })
-    );
+    try {
+      await Promise.all(
+        placedInNewOrder.map((concept, idx) => {
+          const curFo = (concept as Record<string, unknown>)['feed_order'] ?? ((concept as Record<string, unknown>)['placement'] as Record<string, unknown> | undefined)?.['feed_order'];
+          const newFo = sortedFeedOrders[idx];
+          if (newFo === curFo) return Promise.resolve();
+          return handleUpdateConcept(concept.id, { feed_order: newFo } as Partial<CustomerConcept>);
+        })
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
+    }
   }, [concepts, handleUpdateConcept]);
 
   const handleUpdateCmNote = async (conceptId: string, note: string) => {
@@ -1709,7 +1735,11 @@ function CustomerWorkspacePageContent() {
   };
 
   const handleUpdateTikTokUrl = async (conceptId: string, url: string) => {
-    await handleUpdateConcept(conceptId, { tiktok_url: url.trim() || null });
+    try {
+      await handleUpdateConcept(conceptId, { tiktok_url: url.trim() || null });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
+    }
   };
 
   const handleReconcileHistory = async (
@@ -3211,9 +3241,9 @@ function CustomerWorkspacePageContent() {
               onSlotClick={(slot, concept) => {
                 // Acknowledge unread upload regardless of which action follows
                 if (concept && hasUnreadUploadMarker(concept)) {
-                  void handleUpdateConcept(concept.id, {
+                  handleUpdateConcept(concept.id, {
                     content_loaded_seen_at: new Date().toISOString()
-                  });
+                  }).catch((err) => console.error('Error marking concept as seen:', err));
                 }
                 // Empty kommande/nu slot → open library panel so CM can pick from all concepts
                 if (!concept && slot.feedOrder >= 0) {
