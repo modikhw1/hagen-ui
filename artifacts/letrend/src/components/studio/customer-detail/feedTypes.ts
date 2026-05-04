@@ -41,13 +41,11 @@ export interface GamePlanSectionProps {
   setGamePlanHtml: (html: string) => void;
   editingGamePlan: boolean;
   setEditingGamePlan: (editing: boolean) => void;
-  loadingGamePlan: boolean;
   savingGamePlan: boolean;
   gamePlanError: string | null;
   gamePlanSaveMessage: string | null;
   generatingGamePlanAi: boolean;
   hasUnsavedGamePlanChanges: boolean;
-  handleReloadGamePlan: (force?: boolean) => Promise<void>;
   handleSaveGamePlan: () => Promise<void>;
   handleCancelGamePlanEdit: () => void;
   handleGenerateGamePlanAi: (input: GamePlanGenerateInput) => Promise<boolean>;

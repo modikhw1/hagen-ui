@@ -3049,13 +3049,12 @@ function CustomerWorkspacePageContent() {
               setGamePlanHtml={setGamePlanHtml}
               editingGamePlan={editingGamePlan}
               setEditingGamePlan={setEditingGamePlan}
-              loadingGamePlan={loadingGamePlan}
+
               savingGamePlan={savingGamePlan}
               gamePlanError={gamePlanError}
               gamePlanSaveMessage={gamePlanSaveMessage}
               generatingGamePlanAi={generatingGamePlanAi}
               hasUnsavedGamePlanChanges={hasUnsavedGamePlanChanges}
-              handleReloadGamePlan={fetchGamePlan}
               handleSaveGamePlan={handleSaveGamePlan}
               handleCancelGamePlanEdit={handleCancelGamePlanEdit}
               handleGenerateGamePlanAi={handleGenerateGamePlanAi}
