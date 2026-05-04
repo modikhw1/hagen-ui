@@ -425,17 +425,30 @@ Provide detailed, actionable analysis. Rate everything on 1-10 scales. Be specif
     ].join('\n')
 
     const model = this.client.getGenerativeModel({ model: this.model })
-    const result = await model.generateContent([
-      { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
-      { text: combinedPrompt },
-    ])
-    const text = result.response.text()
 
-    const displayBlock = extractBetween(text, DISPLAY_OPEN, DISPLAY_CLOSE)
-    const schemaBlock = extractBetween(text, SCHEMA_V1_OPEN, SCHEMA_V1_CLOSE)
+    // Attempt up to 2 times in case Gemini omits the sentinel wrappers on
+    // first try (rare but observed under high load / long prompts).
+    let text = ''
+    let displayBlock: string | null = null
+    let schemaBlock: string | null = null
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      if (attempt > 1) {
+        console.warn('⚠️ analyzeVideoCombined: DISPLAY block missing on attempt 1, retrying…')
+        await new Promise(resolve => setTimeout(resolve, 1500))
+      }
+      const result = await model.generateContent([
+        { fileData: { mimeType: 'video/mp4', fileUri: videoUrl } },
+        { text: combinedPrompt },
+      ])
+      text = result.response.text()
+      displayBlock = extractBetween(text, DISPLAY_OPEN, DISPLAY_CLOSE)
+      schemaBlock = extractBetween(text, SCHEMA_V1_OPEN, SCHEMA_V1_CLOSE)
+      if (displayBlock) break
+    }
 
     if (!displayBlock) {
-      console.error('❌ Merged response missing DISPLAY block; preview:', text.slice(0, 500))
+      console.error('❌ Merged response missing DISPLAY block after 2 attempts; preview:', text.slice(0, 500))
       throw new Error('Merged Gemini response missing display section')
     }
 

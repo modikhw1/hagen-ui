@@ -137,48 +137,65 @@ export class VideoStorageService {
    * Upload to Gemini File API (alternative approach)
    * This uploads directly to Gemini's temporary storage
    */
-  async uploadToGeminiFileAPI(localFilePath: string, mimeType: string = 'video/mp4'): Promise<UploadResult> {
-    try {
-      const { GoogleAIFileManager, FileState } = await import('@google/generative-ai/server')
-      
-      const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY!)
-      
-      console.log(`☁️ Uploading to Gemini File API: ${localFilePath}`)
-      
-      // Upload file
-      const uploadResult = await fileManager.uploadFile(localFilePath, {
-        mimeType,
-        displayName: path.basename(localFilePath),
-      })
+  async uploadToGeminiFileAPI(
+    localFilePath: string,
+    mimeType: string = 'video/mp4',
+    maxAttempts = 3,
+  ): Promise<UploadResult> {
+    const { GoogleAIFileManager, FileState } = await import('@google/generative-ai/server')
+    const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY!)
 
-      console.log(`⏳ File uploaded, waiting for processing: ${uploadResult.file.name}`)
+    let lastError = 'unknown'
 
-      // Wait for file to be ready (ACTIVE state)
-      let file = uploadResult.file
-      while (file.state === FileState.PROCESSING) {
-        await new Promise(resolve => setTimeout(resolve, 2000)) // Wait 2 seconds
-        file = await fileManager.getFile(file.name)
-        console.log(`   File state: ${file.state}`)
-      }
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        if (attempt > 1) {
+          const delayMs = 2000 * Math.pow(2, attempt - 2)
+          console.log(`☁️ Gemini File API upload attempt ${attempt}/${maxAttempts} (backoff ${delayMs}ms)…`)
+          await new Promise(resolve => setTimeout(resolve, delayMs))
+        } else {
+          console.log(`☁️ Uploading to Gemini File API: ${localFilePath}`)
+        }
 
-      if (file.state !== FileState.ACTIVE) {
-        throw new Error(`File processing failed. Final state: ${file.state}`)
-      }
+        const uploadResult = await fileManager.uploadFile(localFilePath, {
+          mimeType,
+          displayName: path.basename(localFilePath),
+        })
 
-      console.log(`✅ File ready for analysis: ${file.uri}`)
+        console.log(`⏳ File uploaded (attempt ${attempt}), waiting for processing: ${uploadResult.file.name}`)
 
-      return {
-        success: true,
-        gsUrl: file.uri // Returns URI like "https://generativelanguage.googleapis.com/v1beta/files/..."
-      }
+        let file = uploadResult.file
+        let pollCount = 0
+        const maxPolls = 30
+        while (file.state === FileState.PROCESSING && pollCount < maxPolls) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          file = await fileManager.getFile(file.name)
+          pollCount++
+          console.log(`   File state: ${file.state} (poll ${pollCount}/${maxPolls})`)
+        }
 
-    } catch (error) {
-      console.error('❌ Upload to Gemini File API failed:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+        if (file.state !== FileState.ACTIVE) {
+          throw new Error(
+            `GEMINI_FILE_NOT_ACTIVE: final state=${file.state} after ${pollCount} polls`,
+          )
+        }
+
+        console.log(`✅ File ready for analysis: ${file.uri}`)
+        return { success: true, gsUrl: file.uri }
+
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error)
+        const code = lastError.startsWith('GEMINI_FILE_NOT_ACTIVE')
+          ? 'GEMINI_FILE_NOT_ACTIVE'
+          : 'GEMINI_UPLOAD_ERROR'
+        console.error(`❌ Upload attempt ${attempt}/${maxAttempts} failed [${code}]:`, lastError)
+        if (attempt === maxAttempts) {
+          return { success: false, error: `${code}: ${lastError}` }
+        }
       }
     }
+
+    return { success: false, error: `GEMINI_UPLOAD_ERROR: ${lastError}` }
   }
 
   /**

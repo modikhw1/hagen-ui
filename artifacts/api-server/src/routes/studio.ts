@@ -21,7 +21,7 @@ router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
     method: 'POST',
     path: '/api/studio/concepts/analyze',
     body: { videoUrl },
-    timeoutMs: 30000,
+    timeoutMs: 45000,
     routeTag: 'studio.concepts.analyze',
   });
 });
