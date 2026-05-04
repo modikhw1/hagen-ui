@@ -2473,6 +2473,7 @@ function CustomerWorkspacePageContent() {
       writeClientCache(gamePlanCacheKey, nextGamePlan, WORKSPACE_CACHE_TTL_MS);
       setEditingGamePlan(false);
       setGamePlanSaveMessage('Game Plan sparad.');
+      void fetchGamePlan(true);
       setPendingEmailPrompt({
         title: 'Game Plan sparad',
         description: 'Vill du meddela kunden direkt med den uppdaterade planen?',

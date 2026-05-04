@@ -163,7 +163,7 @@ export function GamePlanSection({
               Äldre
             </span>
           ) : null}
-          {sourceLabel !== 'Tom' && gamePlanSummary?.updated_at ? (
+          {sourceLabel === 'Äldre' && gamePlanSummary?.updated_at ? (
             <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
               Sparad {formatDateTime(gamePlanSummary.updated_at)}
             </span>
