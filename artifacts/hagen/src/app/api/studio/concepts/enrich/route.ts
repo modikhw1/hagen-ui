@@ -117,7 +117,7 @@ const enrichFunctionDeclaration: FunctionDeclaration = {
       mechanism:          { type: SchemaType.STRING, enum: [...MECHANISM_VALUES] },
       market:             { type: SchemaType.STRING, enum: [...MARKET_VALUES] },
       trendLevel:         { type: SchemaType.NUMBER },
-      businessTypes:      { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+      businessTypes:      { type: SchemaType.ARRAY, items: { type: SchemaType.STRING, enum: [...BUSINESS_TYPE_VALUES] } },
       hasScript:          { type: SchemaType.BOOLEAN },
       estimatedBudget:    { type: SchemaType.STRING, enum: [...BUDGET_VALUES] },
     },

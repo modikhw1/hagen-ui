@@ -3,17 +3,28 @@
  * test-ingest.ts
  *
  * End-to-end smoke test for the Hagen studio ingest pipeline.
- * Tests the full create → analyze → enrich flow for a real video URL.
+ * Tests the full analyze → enrich flow for a real video URL.
  *
- * Usage:
+ * NOTE on scope: The studio ingest path (`/api/studio/concepts/analyze` →
+ * `/api/studio/concepts/enrich`) is the single-request replacement for the
+ * older two-step `create` + `/api/videos/analyze/deep` flow. The studio routes
+ * return a structured VideoAnalysis object that the enrich route consumes
+ * directly, so testing the studio chain is sufficient end-to-end coverage.
+ *
+ * Usage (env vars or CLI args):
+ *   ts-node scripts/test-ingest.ts [VIDEO_URL] [HAGEN_URL]
+ *
+ *   # env vars:
  *   HAGEN_URL=https://your-hagen.up.railway.app ts-node scripts/test-ingest.ts
- *   HAGEN_URL=http://localhost:3001 ts-node scripts/test-ingest.ts
  *
- * The VIDEO_URL env var overrides the default test URL.
+ *   # positional CLI args (override env vars):
+ *   ts-node scripts/test-ingest.ts https://www.tiktok.com/@foo/video/123 http://localhost:3001
  */
 
-const HAGEN_URL = (process.env['HAGEN_URL'] ?? 'http://localhost:3001').replace(/\/$/, '')
+// CLI args take precedence over env vars
+const HAGEN_URL = (process.argv[3] ?? process.env['HAGEN_URL'] ?? 'http://localhost:3001').replace(/\/$/, '')
 const VIDEO_URL =
+  process.argv[2] ??
   process.env['VIDEO_URL'] ??
   'https://www.tiktok.com/@letrend.se/video/7306189234782937377'
 
