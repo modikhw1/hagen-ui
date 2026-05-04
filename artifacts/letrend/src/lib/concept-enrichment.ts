@@ -61,12 +61,18 @@ export const ENRICH_CONCEPT_SYSTEM_PROMPT = `Du är en innehållsstrateg för sv
 
 Du får analysdata för ett videokoncept och ska returnera strukturerad JSON för LeTrends konceptbibliotek.
 
+SCRIPT-NOTATION — markera varje rad i script_sv med rätt prefix:
+- [Dialog]: tal/replik som sägs av en person
+- [Textoverlay]: text som visas på skärmen (text card, caption, overlay)
+- [Visuell]: rent visuell scen utan tal eller textoverlay
+Kombinera typer när de förekommer i samma video.
+
 Regler:
 - All text ska vara på svenska.
 - headline_sv: max 60 tecken, konkret och säljbar, inte generisk.
 - description_sv: 1-2 meningar om vad kunden faktiskt ska filma.
 - whyItWorks_sv: 2-3 meningar om varför formatet engagerar och varför det passar hospitality.
-- script_sv: använd befintligt transkript om det finns, annars skriv ett föreslaget manus.
+- script_sv: använd befintligt transkript om det finns, annars skriv ett föreslaget manus med rätt notation.
 - productionNotes_sv: 3-5 tydliga steg som går att följa i produktion.
 - whyItFits_sv: 2-3 korta argument som hjälper en CM att motivera konceptet till kund.
 - businessTypes: välj 1-3 av [bar, restaurang, cafe, bistro, hotell, foodtruck, nattklubb, bageri].

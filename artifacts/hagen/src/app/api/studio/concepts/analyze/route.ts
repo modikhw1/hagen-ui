@@ -306,18 +306,22 @@ export async function POST(request: NextRequest) {
       const gcsResult = await storage.uploadVideo(localFilePath, destPath)
 
       if (!gcsResult.success || !gcsResult.gsUrl) {
-        // Return immediately with a typed error — caller can retry or skip the fine-tuning pass
-        console.error('[studio/analyze] GCS upload failed:', gcsResult.error)
-        return NextResponse.json(
-          {
-            error: 'gcs_upload_failed',
-            message: `GCS upload for fine-tuning pass failed: ${gcsResult.error ?? 'unknown error'}`,
-            // Still surface the base analysis so partial results are not lost
-            analysis,
-            upload: { gcsUri: geminiUri },
-          },
-          { status: 422 },
-        )
+        // GCS upload is only needed for the optional fine-tuning pass — treat
+        // failure as non-fatal. Return 200 with base analysis and a warning so
+        // the caller never gets blocked on a purely optional enrichment step.
+        console.warn('[studio/analyze] GCS upload failed (optional pass skipped):', gcsResult.error)
+        await (createVideoDownloader()).cleanup(localFilePath).catch(() => {})
+        localFilePath = undefined
+        return NextResponse.json({
+          analysis,
+          upload: { gcsUri: geminiUri },
+          warnings: [
+            {
+              code: 'gcs_upload_failed',
+              message: `Fine-tuned humor pass skipped — GCS upload failed: ${gcsResult.error ?? 'unknown error'}`,
+            },
+          ],
+        })
       }
 
       gcsUri = gcsResult.gsUrl
