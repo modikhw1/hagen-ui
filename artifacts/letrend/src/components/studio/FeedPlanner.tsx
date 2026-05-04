@@ -181,11 +181,35 @@ export function FeedPlanner({
           >
             {slot.concept ? (
               <>
+                {/* Thumbnail background */}
+                {(slot.concept.thumbnail_url || slot.concept.tiktok_thumbnail_url) && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    backgroundImage: `url(${slot.concept.thumbnail_url || slot.concept.tiktok_thumbnail_url})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    borderRadius: LeTrendRadius.lg,
+                    zIndex: 0,
+                  }} />
+                )}
+                {/* Overlay for readability when thumbnail is present */}
+                {(slot.concept.thumbnail_url || slot.concept.tiktok_thumbnail_url) && (
+                  <div style={{
+                    position: 'absolute',
+                    inset: 0,
+                    background: 'linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.1) 50%, transparent 100%)',
+                    borderRadius: LeTrendRadius.lg,
+                    zIndex: 1,
+                  }} />
+                )}
                 {/* Concept content */}
                 <div style={{
+                  position: 'relative',
+                  zIndex: 2,
                   fontSize: '12px',
                   fontWeight: 500,
-                  color: LeTrendColors.textPrimary,
+                  color: (slot.concept.thumbnail_url || slot.concept.tiktok_thumbnail_url) ? '#fff' : LeTrendColors.textPrimary,
                   marginBottom: '8px',
                   lineHeight: 1.3,
                   display: '-webkit-box',
@@ -193,7 +217,7 @@ export function FeedPlanner({
                   WebkitBoxOrient: 'vertical',
                   overflow: 'hidden',
                 }}>
-                  {slot.concept.custom_script || 'Koncept'}
+                  {slot.concept.headline_sv ?? slot.concept.headline ?? slot.concept.title ?? slot.concept.custom_script ?? 'Koncept'}
                 </div>
 
                 {/* Tags */}

@@ -1719,7 +1719,6 @@ export function FeedPlannerSection({
             gap: 8,
             position: 'relative',
             zIndex: 2,
-            transition: 'transform 200ms ease-out',
           }}
         >
           {slotRows.map((row, rowIndex) => (

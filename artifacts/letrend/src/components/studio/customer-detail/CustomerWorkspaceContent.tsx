@@ -1,19 +1,19 @@
 ﻿'use client';
 
 /**
- * CustomerWorkspaceContent â€” main studio workspace for a single customer.
+ * CustomerWorkspaceContent — main studio workspace for a single customer.
  *
  * Section components extracted to separate files:
- *   - GamePlanSection.tsx      â€” Game Plan tab (notes + rich text editor)
- *   - KonceptSection.tsx       â€” Koncept tab (concept list + lifecycle)
- *   - FeedPlannerSection.tsx   â€” Feed Planner tab (grid, eel curve, motor signals)
- *   - KommunikationSection.tsx â€” Kommunikation tab (email log + composer)
- *   - FeedSlot.tsx             â€” Individual feed slot card (used by FeedPlannerSection)
+ *   - GamePlanSection.tsx      — Game Plan tab (notes + rich text editor)
+ *   - KonceptSection.tsx       — Koncept tab (concept list + lifecycle)
+ *   - FeedPlannerSection.tsx   — Feed Planner tab (grid, eel curve, motor signals)
+ *   - KommunikationSection.tsx — Kommunikation tab (email log + composer)
+ *   - FeedSlot.tsx             — Individual feed slot card (used by FeedPlannerSection)
  *
  * Shared utilities and types:
- *   - shared.ts     â€” EMAIL_TEMPLATES, cache constants, hexToRgba, hasUnreadUploadMarker,
+ *   - shared.ts     — EMAIL_TEMPLATES, cache constants, hexToRgba, hasUnreadUploadMarker,
  *                     getWorkspaceConceptDetails, getWorkspaceConceptTitle, feedSlotMenuBtnStyle
- *   - feedTypes.ts  â€” Shared prop interfaces (FeedSlotProps, FeedPlannerSectionProps, etc.)
+ *   - feedTypes.ts  — Shared prop interfaces (FeedSlotProps, FeedPlannerSectionProps, etc.)
  */
 
 import React, { Suspense, useState, useEffect, useRef } from 'react';
@@ -828,7 +828,7 @@ function CustomerWorkspacePageContent() {
     }
   }, [customerId]);
 
-  // Auto-fetch real customer profile history on first open â€” only when no history exists yet.
+  // Auto-fetch real customer profile history on first open — only when no history exists yet.
   // Conservative policy: fires once per customer lifetime (when last_history_sync_at is null).
   // Subsequent refreshes and load-more are explicit CM actions to preserve API budget.
   useEffect(() => {
@@ -844,7 +844,7 @@ function CustomerWorkspacePageContent() {
       try {
         const res = await fetch(`/api/studio-v2/customers/${customerId}/fetch-profile-history`, { method: 'POST' });
         const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || 'Historik-hÃ¤mtning misslyckades');
+        if (!res.ok) throw new Error(data?.error || 'Historik-hämtning misslyckades');
         setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
         setHistoryHasMore(data.has_more ?? false);
         setHistoryNextCursor(data.cursor ?? null);
@@ -870,7 +870,7 @@ function CustomerWorkspacePageContent() {
       });
 
       if (cached?.value) {
-        // Always enforce canonical currentSlotIndex â€” stored value may be stale (e.g. old 2â†’4 migration)
+        // Always enforce canonical currentSlotIndex — stored value may be stale (e.g. old 2→4 migration)
         setGridConfig({ ...cached.value, currentSlotIndex: DEFAULT_GRID_CONFIG.currentSlotIndex });
       }
 
@@ -945,7 +945,7 @@ function CustomerWorkspacePageContent() {
   }, [fetchCmTags, fetchGridConfig]);
 
   // Load CM identity once for note/email/concept attribution badges.
-  // Pass 1: team_members â€” preferred (name + avatar_url + color for badge rendering)
+  // Pass 1: team_members — preferred (name + avatar_url + color for badge rendering)
   // Pass 2: profiles.email username fallback for CMs without a team_members link
   useEffect(() => {
     void (async () => {
@@ -1052,7 +1052,7 @@ function CustomerWorkspacePageContent() {
       setGamePlanHtml(typeof data.game_plan?.html === 'string' ? data.game_plan.html : '');
     } catch (err) {
       console.error('Error fetching game plan:', err);
-      setGamePlanError('Kunde inte ladda Game Plan. Visar senaste kÃ¤nda version om den finns.');
+      setGamePlanError('Kunde inte ladda Game Plan. Visar senaste kända version om den finns.');
     } finally {
       setLoadingGamePlan(false);
     }
@@ -1210,7 +1210,7 @@ function CustomerWorkspacePageContent() {
     }
   };
 
-  // Soft tempo cadence â€” saves posting_weekdays to brief JSONB (display-only, never writes to planned_publish_at)
+  // Soft tempo cadence — saves posting_weekdays to brief JSONB (display-only, never writes to planned_publish_at)
   const handleSaveTempoWeekdays = async (weekdays: number[]) => {
     setBrief(prev => ({ ...prev, posting_weekdays: weekdays }));
     try {
@@ -1246,7 +1246,7 @@ function CustomerWorkspacePageContent() {
       setNewNoteContent('');
     } catch (err) {
       console.error('Error adding note:', err);
-      alert('Kunde inte lÃ¤gga till notering');
+      alert('Kunde inte lägga till notering');
     } finally {
       setAddingNote(false);
     }
@@ -1289,7 +1289,7 @@ function CustomerWorkspacePageContent() {
       await fetchNotes(true);
     } catch (err) {
       console.error('Error adding concept note:', err);
-      alert('Kunde inte lÃ¤gga till notering');
+      alert('Kunde inte lägga till notering');
     }
   };
 
@@ -1352,7 +1352,7 @@ function CustomerWorkspacePageContent() {
         });
       }
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Kunde inte lÃ¤gga till koncept');
+      alert(err instanceof Error ? err.message : 'Kunde inte lägga till koncept');
     }
   };
 
@@ -1546,7 +1546,7 @@ function CustomerWorkspacePageContent() {
   };
 
   const handleDeleteConcept = async (conceptId: string) => {
-    if (!confirm('Ta bort detta koncept frÃ¥n kunden?')) return;
+    if (!confirm('Ta bort detta koncept från kunden?')) return;
 
     try {
       const response = await fetch(
@@ -1575,7 +1575,7 @@ function CustomerWorkspacePageContent() {
     await handleUpdateConcept(conceptId, { status: newStatus });
   };
 
-  // Feed planner handlers (uppdaterade fÃ¶r feed_order)
+  // Feed planner handlers (uppdaterade för feed_order)
   const handleAssignToFeedOrder = async (conceptId: string, feedOrder: number) => {
     await handleUpdateConcept(conceptId, { feed_order: feedOrder });
     setShowFeedSlotPanel(false);
@@ -1638,7 +1638,7 @@ function CustomerWorkspacePageContent() {
 
   // Called when CM clicks "Markera som gjord" on the nu card.
   // Fetches the latest clips from TikTok first. If a new clip was imported,
-  // auto-reconcile already advanced the plan â€” no separate mark-produced needed.
+  // auto-reconcile already advanced the plan — no separate mark-produced needed.
   // Returns 'advanced' (clip found, plan moved) or 'no_clip' (nothing new on profile).
   const handleCheckAndMarkProduced = async (conceptId: string): Promise<'advanced' | 'no_clip'> => {
     void conceptId;
@@ -1990,7 +1990,19 @@ function CustomerWorkspacePageContent() {
   };
 
   const availableAddConcepts = React.useMemo(
-    () => allConcepts.filter((concept) => !concepts.find((customerConcept) => customerConcept.concept_id === concept.id)),
+    () =>
+      allConcepts
+        .filter((concept) => !concepts.find((customerConcept) => customerConcept.concept_id === concept.id))
+        .sort((a, b) => {
+          // CM-created uploads always appear first; null/unknown source treated same as 'hagen'
+          const sourceOrder = (src: string | null | undefined) => (src === 'cm_created' ? 0 : 1);
+          const diff = sourceOrder(a.source) - sourceOrder(b.source);
+          if (diff !== 0) return diff;
+          // Within the same group, sort alphabetically by display title for a stable, predictable order
+          const aTitle = (a.headline_sv || a.headline || '').toLowerCase();
+          const bTitle = (b.headline_sv || b.headline || '').toLowerCase();
+          return aTitle < bTitle ? -1 : aTitle > bTitle ? 1 : 0;
+        }),
     [allConcepts, concepts]
   );
 
@@ -2209,13 +2221,13 @@ function CustomerWorkspacePageContent() {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || 'Kunde inte kÃ¶a om email-jobbet');
+        throw new Error(data.error || 'Kunde inte köa om email-jobbet');
       }
 
       await fetchEmailJobs(true);
       setCommunicationFeedback({
         tone: 'info',
-        text: data.message || 'Email-jobbet har kÃ¶ats om.',
+        text: data.message || 'Email-jobbet har köats om.',
       });
     } catch (err: unknown) {
       setCommunicationFeedback({
@@ -2236,7 +2248,7 @@ function CustomerWorkspacePageContent() {
     let clips: unknown[];
     try {
       clips = JSON.parse(importHistoryJson);
-      if (!Array.isArray(clips)) throw new Error('MÃ¥ste vara en JSON-array');
+      if (!Array.isArray(clips)) throw new Error('Måste vara en JSON-array');
     } catch (e) {
       setImportHistoryError(`Ogiltig JSON: ${(e as Error).message}`);
       return;
@@ -2270,7 +2282,7 @@ function CustomerWorkspacePageContent() {
     try {
       const res = await fetch(`/api/studio-v2/customers/${customerId}/hagen-clips`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Kunde inte hÃ¤mta klipp frÃ¥n hagen');
+      if (!res.ok) throw new Error(data?.error || 'Kunde inte hämta klipp från hagen');
       if (!Array.isArray(data.clips) || data.clips.length === 0) throw new Error('Inga TikTok-klipp hittades i hagen');
       setImportHistoryJson(JSON.stringify(data.clips, null, 2));
       setImportHistoryError(null);
@@ -2322,12 +2334,12 @@ function CustomerWorkspacePageContent() {
         body: JSON.stringify({ count: 10 }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Historik-hÃ¤mtning misslyckades');
+      if (!res.ok) throw new Error(data?.error || 'Historik-hämtning misslyckades');
       const imported = data.imported ?? 0;
       setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported, skipped: data.skipped ?? 0 });
       setHistoryHasMore(data.has_more ?? false);
       setHistoryNextCursor(data.cursor ?? null);
-      // Cue is derived from backend via the customer profile effect â€” no direct set needed here.
+      // Cue is derived from backend via the customer profile effect — no direct set needed here.
       await Promise.all([fetchCustomer(true), fetchConcepts(true)]);
     } catch (err) {
       setProfileHistoryFetchError((err as Error).message);
@@ -2374,7 +2386,7 @@ function CustomerWorkspacePageContent() {
         body: JSON.stringify({ count, cursor: historyNextCursor }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Historik-hÃ¤mtning misslyckades');
+      if (!res.ok) throw new Error(data?.error || 'Historik-hämtning misslyckades');
       setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
       setHistoryHasMore(data.has_more ?? false);
       setHistoryNextCursor(data.cursor ?? null);
@@ -2399,7 +2411,7 @@ function CustomerWorkspacePageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Synk misslyckades');
       setSyncHistoryResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
-      // Cue is derived from backend via the customer profile effect â€” no direct set needed here.
+      // Cue is derived from backend via the customer profile effect — no direct set needed here.
       await fetchCustomer(true);
       await fetchConcepts(true);
     } catch (err) {
@@ -2421,7 +2433,7 @@ function CustomerWorkspacePageContent() {
         method: 'POST',
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'FÃ¶rhandsvisning misslyckades');
+      if (!res.ok) throw new Error(data?.error || 'Förhandsvisning misslyckades');
       setSyncPreviewResult({
         handle: data.handle ?? '',
         wouldImport: data.wouldImport ?? 0,
@@ -2469,7 +2481,7 @@ function CustomerWorkspacePageContent() {
       });
     } catch (err) {
       console.error('Error saving game plan:', err);
-      setGamePlanError('Kunde inte spara Game Plan. FÃ¶rsÃ¶k igen.');
+      setGamePlanError('Kunde inte spara Game Plan. Försök igen.');
     } finally {
       setSavingGamePlan(false);
     }
@@ -2817,7 +2829,7 @@ function CustomerWorkspacePageContent() {
             )}
 
             <div style={{ fontSize: 13, color: LeTrendColors.textSecondary, marginBottom: 12 }}>
-              Pris: {(customer.monthly_price ?? 0) > 0 ? `${customer.monthly_price} kr/mÃ¥n` : 'Pris ej satt'}
+              Pris: {(customer.monthly_price ?? 0) > 0 ? `${customer.monthly_price} kr/mån` : 'Pris ej satt'}
             </div>
             <div style={{ marginBottom: 12, fontSize: 11, color: LeTrendColors.textMuted }}>
               Pris och avtal hanteras i Admin.
@@ -2838,7 +2850,7 @@ function CustomerWorkspacePageContent() {
 
             {concepts.length > 0 && (
               <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, marginTop: 10 }}>
-                {concepts.length} koncept{draftCount > 0 ? ` Â· ${draftCount} utkast` : ''}
+                {concepts.length} koncept{draftCount > 0 ? ` · ${draftCount} utkast` : ''}
               </div>
             )}
 
@@ -2847,7 +2859,7 @@ function CustomerWorkspacePageContent() {
             </div>
 
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
-              {gamePlanHtml.length > 50 ? 'Game Plan: skrivet' : 'Game Plan: ej pÃ¥bÃ¶rjat'}
+              {gamePlanHtml.length > 50 ? 'Game Plan: skrivet' : 'Game Plan: ej påbörjat'}
             </div>
 
           </div>
@@ -2894,19 +2906,19 @@ function CustomerWorkspacePageContent() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: LeTrendColors.textSecondary, display: 'block', marginBottom: 4 }}>
-                    KÃ¤nsla och ton
+                    Känsla och ton
                   </label>
                   <AutoSaveTextarea
                     value={brief.tone}
                     onChange={(val) => setBrief({ ...brief, tone: val })}
                     onSave={(val) => handleSaveBrief('tone', val)}
                     rows={2}
-                    placeholder='T.ex. "Humor, relatable, livsstilsinspirerat â€” inte fÃ¶r sÃ¤ljigt"'
+                    placeholder='T.ex. "Humor, relatable, livsstilsinspirerat — inte för säljigt"'
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: LeTrendColors.textSecondary, display: 'block', marginBottom: 4 }}>
-                    BegrÃ¤nsningar
+                    Begränsningar
                   </label>
                   <AutoSaveTextarea
                     value={brief.constraints}
@@ -2918,14 +2930,14 @@ function CustomerWorkspacePageContent() {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 600, color: LeTrendColors.textSecondary, display: 'block', marginBottom: 4 }}>
-                    Periodens ingÃ¥ng â€” syns som intro i kundens feed
+                    Periodens ingång — syns som intro i kundens feed
                   </label>
                   <AutoSaveTextarea
                     value={brief.current_focus}
                     onChange={(val) => setBrief({ ...brief, current_focus: val })}
                     onSave={(val) => handleSaveBrief('current_focus', val)}
                     rows={2}
-                    placeholder='T.ex. "Den hÃ¤r perioden fokuserar vi pÃ¥ format som bygger trovÃ¤rdighet infÃ¶r hÃ¶st..."'
+                    placeholder='T.ex. "Den här perioden fokuserar vi på format som bygger trovärdighet inför höst..."'
                   />
                 </div>
               </div>
@@ -2933,11 +2945,11 @@ function CustomerWorkspacePageContent() {
               <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, lineHeight: 1.6 }}>
                 {!brief.tone && !brief.constraints && !brief.current_focus ? (
                   <>
-                    <em>Ingen brief ifylld Ã¤n</em>
+                    <em>Ingen brief ifylld än</em>
                     {gamePlanHtml.length > 200 && (
                       <div style={{ marginTop: 10 }}>
                         <div style={{ marginBottom: 6, fontSize: 11, color: LeTrendColors.textMuted, lineHeight: 1.5 }}>
-                          Du har ett Game Plan â€” fyll i kundbriefen fÃ¶r bÃ¤ttre konceptpassning.
+                          Du har ett Game Plan — fyll i kundbriefen för bättre konceptpassning.
                         </div>
                         <button
                           onClick={() => setEditingBrief(true)}
@@ -2959,8 +2971,8 @@ function CustomerWorkspacePageContent() {
                   </>
                 ) : (
                   <>
-                    {brief.tone && <div style={{ marginBottom: 8 }}><strong>KÃ¤nsla och ton:</strong> {brief.tone}</div>}
-                    {brief.constraints && <div style={{ marginBottom: 8 }}><strong>BegrÃ¤nsningar:</strong> {brief.constraints}</div>}
+                    {brief.tone && <div style={{ marginBottom: 8 }}><strong>Känsla och ton:</strong> {brief.tone}</div>}
+                    {brief.constraints && <div style={{ marginBottom: 8 }}><strong>Begränsningar:</strong> {brief.constraints}</div>}
                     {brief.current_focus && <div><strong>Fokus:</strong> {brief.current_focus}</div>}
                   </>
                 )}
@@ -3117,8 +3129,8 @@ function CustomerWorkspacePageContent() {
                     alignItems: 'center',
                     gap: 8,
                   }}>
-                    <span style={{ fontSize: 14 }}>â³</span>
-                    Synkronisering pÃ¥gÃ¥r â€” plan-framflyttning tog lÃ¤ngre tid Ã¤n fÃ¶rvÃ¤ntat.
+                    <span style={{ fontSize: 14 }}>⏳</span>
+                    Synkronisering pågår — plan-framflyttning tog längre tid än förväntat.
                   </div>
                 );
               })()}
@@ -3134,7 +3146,7 @@ function CustomerWorkspacePageContent() {
                     Koppla TikTok-profil
                   </div>
                   <div style={{ fontSize: 13, color: '#b45309', marginBottom: 14, opacity: 0.85 }}>
-                    LeTrend hÃ¤mtar kundens klipp automatiskt och skapar motor-signaler nÃ¤r profil-URL:en Ã¤r satt.
+                    LeTrend hämtar kundens klipp automatiskt och skapar motor-signaler när profil-URL:en är satt.
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input
@@ -3203,23 +3215,23 @@ function CustomerWorkspacePageContent() {
                     content_loaded_seen_at: new Date().toISOString()
                   });
                 }
-                // Empty kommande/nu slot â†’ direct to concept picker, no modal
+                // Empty kommande/nu slot → open library panel so CM can pick from all concepts
                 if (!concept && slot.feedOrder >= 0) {
                   if (pendingFeedPlacementConcept) {
                     void handleAssignToSlot(pendingFeedPlacementConcept.id, slot.feedOrder);
                     return;
                   }
-                  setSelectedFeedSlot(slot.feedOrder);
-                  setShowFeedSlotPanel(true);
+                  setSlotAddTargetFeedOrder(slot.feedOrder);
+                  setShowAddConceptPanel(true);
                   return;
                 }
-                // Empty past slot (historik) â†’ no-op
+                // Empty past slot (historik) → no-op
                 if (!concept) return;
-                // Historik â€” context menu handled directly in FeedSlot onClick; no-op here
+                // Historik — context menu handled directly in FeedSlot onClick; no-op here
                 if (slot.type === 'history') return;
-                // Nu card â€” card + context menu is self-sufficient after E87; suppress modal
+                // Nu card — card + context menu is self-sufficient after E87; suppress modal
                 if (slot.type === 'current') return;
-                // Kommande â€” open concept detail directly (planning view)
+                // Kommande — open concept detail directly (planning view)
                 if (slot.type === 'planned') {
                   handleOpenConceptFromFeed(concept.id);
                   return;
@@ -3319,10 +3331,10 @@ function CustomerWorkspacePageContent() {
                     color: LeTrendColors.brownDark,
                     margin: 0,
                   }}>
-                    Demo-fÃ¶rberedelse
+                    Demo-förberedelse
                   </h2>
                   <p style={{ fontSize: 13, color: LeTrendColors.textSecondary, margin: '4px 0 0' }}>
-                    Pre-seeda feedplanen och fÃ¶rbered kundanpassad demo-sida.
+                    Pre-seeda feedplanen och förbered kundanpassad demo-sida.
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -3358,7 +3370,7 @@ function CustomerWorkspacePageContent() {
                       display: 'inline-block',
                     }}
                   >
-                    Ã–ppna demo-sida â†—
+                    Öppna demo-sida ↗
                   </a>
                 </div>
               </div>
@@ -3423,13 +3435,13 @@ function CustomerWorkspacePageContent() {
                   )}
                 </div>
 
-                {/* Real profile-history fetch â€” primary action */}
+                {/* Real profile-history fetch — primary action */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <button
                       onClick={() => void handleFetchProfileHistory()}
                       disabled={fetchingProfileHistory || !customer?.tiktok_profile_url}
-                      title={!customer?.tiktok_profile_url ? 'Spara TikTok-profil URL fÃ¶rst' : undefined}
+                      title={!customer?.tiktok_profile_url ? 'Spara TikTok-profil URL först' : undefined}
                       style={{
                         padding: '7px 14px',
                         background: customer?.tiktok_profile_url ? LeTrendColors.brownLight : LeTrendColors.surface,
@@ -3442,14 +3454,14 @@ function CustomerWorkspacePageContent() {
                         opacity: !customer?.tiktok_profile_url ? 0.5 : 1,
                       }}
                     >
-                      {fetchingProfileHistory ? 'HÃ¤mtar TikTok-historik...' : 'HÃ¤mta historik'}
+                      {fetchingProfileHistory ? 'Hämtar TikTok-historik...' : 'Hämta historik'}
                     </button>
                     {profileHistoryFetchResult && !fetchingProfileHistory && (
                       <span style={{ fontSize: 12, color: profileHistoryFetchResult.imported > 0 ? '#166534' : LeTrendColors.textMuted }}>
                         {profileHistoryFetchResult.imported > 0
                           ? `${profileHistoryFetchResult.imported} nya klipp importerade`
-                          : 'Historik Ã¤r uppdaterad'}
-                        {profileHistoryFetchResult.skipped > 0 && ` Â· ${profileHistoryFetchResult.skipped} redan finns`}
+                          : 'Historik är uppdaterad'}
+                        {profileHistoryFetchResult.skipped > 0 && ` · ${profileHistoryFetchResult.skipped} redan finns`}
                       </span>
                     )}
                     {profileHistoryFetchError && !fetchingProfileHistory && (
@@ -3458,9 +3470,9 @@ function CustomerWorkspacePageContent() {
                     {customer?.last_history_sync_at && !fetchingProfileHistory && !profileHistoryFetchResult && !profileHistoryFetchError && (
                       <span style={{ fontSize: 12, color: LeTrendColors.textMuted }}>
                         {customer.tiktok_runtime?.stats
-                          ? `${customer.tiktok_runtime.stats.total_videos} videor Â· ${customer.tiktok_runtime.stats.followers.toLocaleString('sv-SE')} foljare`
+                          ? `${customer.tiktok_runtime.stats.total_videos} videor · ${customer.tiktok_runtime.stats.followers.toLocaleString('sv-SE')} foljare`
                           : `${concepts.filter(c => (c.feed_order ?? 1) < 0).length} klipp`}
-                        {` Â· Senast: ${new Date(customer.last_history_sync_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                        {` · Senast: ${new Date(customer.last_history_sync_at).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}`}
                       </span>
                     )}
                   </div>
@@ -3479,21 +3491,21 @@ function CustomerWorkspacePageContent() {
                         cursor: 'pointer',
                       }}
                     >
-                      Ladda Ã¤ldre historik
+                      Ladda äldre historik
                     </button>
                   )}
                 </div>
 
-                {/* hagen-library import â€” separate secondary workflow */}
+                {/* hagen-library import — separate secondary workflow */}
                 <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, paddingTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ fontSize: 10, color: LeTrendColors.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Importera frÃ¥n hagen-biblioteket
+                    Importera från hagen-biblioteket
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <button
                       onClick={() => void handlePreviewSync()}
                       disabled={previewingSync || !customer?.tiktok_handle}
-                      title={!customer?.tiktok_handle ? 'Ange och spara ett TikTok-konto fÃ¶rst' : undefined}
+                      title={!customer?.tiktok_handle ? 'Ange och spara ett TikTok-konto först' : undefined}
                       style={{
                         padding: '6px 10px',
                         background: LeTrendColors.surface,
@@ -3506,12 +3518,12 @@ function CustomerWorkspacePageContent() {
                         opacity: !customer?.tiktok_handle ? 0.5 : 1,
                       }}
                     >
-                      {previewingSync ? 'Kollar...' : 'FÃ¶rhandsgranska'}
+                      {previewingSync ? 'Kollar...' : 'Förhandsgranska'}
                     </button>
                     <button
                       onClick={() => void handleSyncHistory()}
                       disabled={syncingHistory || !customer?.tiktok_handle}
-                      title={!customer?.tiktok_handle ? 'Ange och spara ett TikTok-konto fÃ¶rst' : undefined}
+                      title={!customer?.tiktok_handle ? 'Ange och spara ett TikTok-konto först' : undefined}
                       style={{
                         padding: '6px 10px',
                         background: LeTrendColors.surface,
@@ -3524,7 +3536,7 @@ function CustomerWorkspacePageContent() {
                         opacity: !customer?.tiktok_handle ? 0.5 : 1,
                       }}
                     >
-                      {syncingHistory ? 'Syncar...' : 'Synca frÃ¥n hagen'}
+                      {syncingHistory ? 'Syncar...' : 'Synca från hagen'}
                     </button>
                     {syncHistoryResult && (
                       <span style={{ fontSize: 11, color: '#166534' }}>
@@ -3551,8 +3563,8 @@ function CustomerWorkspacePageContent() {
                       gap: 4,
                     }}>
                       <div style={{ fontWeight: 600, color: LeTrendColors.textPrimary }}>
-                        @{syncPreviewResult.handle} â€” {syncPreviewResult.totalMatched} matchade klipp
-                        {' Â· '}<span style={{ color: '#166534' }}>{syncPreviewResult.wouldImport} nya</span>
+                        @{syncPreviewResult.handle} — {syncPreviewResult.totalMatched} matchade klipp
+                        {' · '}<span style={{ color: '#166534' }}>{syncPreviewResult.wouldImport} nya</span>
                         {syncPreviewResult.wouldSkip > 0 && (
                           <span style={{ color: LeTrendColors.textMuted }}>, {syncPreviewResult.wouldSkip} redan finns</span>
                         )}
@@ -3560,14 +3572,14 @@ function CustomerWorkspacePageContent() {
                       {syncPreviewResult.samples.map((s, i) => (
                         <div key={i} style={{ fontSize: 10, color: LeTrendColors.textMuted, fontFamily: 'monospace' }}>
                           {s.source_username ? `@${s.source_username}` : ''}
-                          {s.description ? ` â€” ${s.description.slice(0, 60)}${s.description.length > 60 ? 'â€¦' : ''}` : ''}
+                          {s.description ? ` — ${s.description.slice(0, 60)}${s.description.length > 60 ? '…' : ''}` : ''}
                           {' '}
                           <span style={{ opacity: 0.6 }}>{s.tiktok_url.replace('https://www.tiktok.com', '').slice(0, 40)}</span>
                         </div>
                       ))}
                       {syncPreviewResult.totalMatched === 0 && syncPreviewResult.availableUsernames && syncPreviewResult.availableUsernames.length > 0 && (
                         <div style={{ marginTop: 2, color: LeTrendColors.textSecondary }}>
-                          TillgÃ¤ngliga konton i hagen: {syncPreviewResult.availableUsernames.map(u => `@${u}`).join(', ')}
+                          Tillgängliga konton i hagen: {syncPreviewResult.availableUsernames.map(u => `@${u}`).join(', ')}
                         </div>
                       )}
                       {syncPreviewResult.totalMatched === 0 && (!syncPreviewResult.availableUsernames || syncPreviewResult.availableUsernames.length === 0) && (
@@ -3664,9 +3676,9 @@ function CustomerWorkspacePageContent() {
       <SidePanel
         isOpen={showAddConceptPanel}
         onClose={() => { setShowAddConceptPanel(false); resetAddConceptPanelState(); }}
-        title="LÃ¤gg till koncept"
+        title="Lägg till koncept"
       >
-        {/* Slot context header â€” shown when CM arrived via the slot-aware entry point */}
+        {/* Slot context header — shown when CM arrived via the slot-aware entry point */}
         {slotAddTargetFeedOrder !== null && (
           <div style={{
             marginBottom: 12,
@@ -3677,22 +3689,22 @@ function CustomerWorkspacePageContent() {
             fontSize: 12,
             color: '#166534',
           }}>
-            VÃ¤ljer fÃ¶r <strong>{getStudioFeedOrderLabel(slotAddTargetFeedOrder)}</strong> â€” konceptet placeras direkt i den sloten
+            Väljer för <strong>{getStudioFeedOrderLabel(slotAddTargetFeedOrder)}</strong> — konceptet placeras direkt i den sloten
           </div>
         )}
         <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: LeTrendRadius.md, background: LeTrendColors.surface, border: `1px solid ${LeTrendColors.border}`, fontSize: 12, lineHeight: 1.5 }}>
           {(brief.tone || brief.current_focus || brief.constraints) ? (
             <div style={{ color: LeTrendColors.textSecondary }}>
               <strong style={{ color: LeTrendColors.brownDark }}>Kundbrief:</strong>{' '}
-              {[brief.tone, brief.current_focus].filter(Boolean).join(' Â· ')}
+              {[brief.tone, brief.current_focus].filter(Boolean).join(' · ')}
               {brief.constraints && (
                 <div style={{ marginTop: 4, color: LeTrendColors.textMuted }}>
-                  <strong style={{ color: LeTrendColors.brownDark }}>BegrÃ¤nsningar:</strong>{' '}{brief.constraints}
+                  <strong style={{ color: LeTrendColors.brownDark }}>Begränsningar:</strong>{' '}{brief.constraints}
                 </div>
               )}
             </div>
           ) : (
-            <em style={{ color: LeTrendColors.textMuted }}>Brief saknas â€” fyll i kundbriefen i sidopanelen fÃ¶r bÃ¤ttre konceptpassning.</em>
+            <em style={{ color: LeTrendColors.textMuted }}>Brief saknas — fyll i kundbriefen i sidopanelen för bättre konceptpassning.</em>
           )}
         </div>
         <input
@@ -3732,9 +3744,28 @@ function CustomerWorkspacePageContent() {
           ) : null}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {filteredAddConcepts.map((concept) => (
+          {filteredAddConcepts.map((concept, idx) => {
+            const prevConcept = filteredAddConcepts[idx - 1];
+            const isCmCreated = concept.source === 'cm_created';
+            const prevIsCmCreated = prevConcept?.source === 'cm_created';
+            // Show "Dina uppladdningar" header at the first cm_created concept
+            const showCmHeader = isCmCreated && (idx === 0 || !prevIsCmCreated);
+            // Show "LeTrend-biblioteket" header at the first non-cm_created concept
+            // (covers source === 'hagen', null, or any other unknown source)
+            const showHagenHeader = !isCmCreated && (idx === 0 || prevIsCmCreated);
+            return (
+            <React.Fragment key={concept.id}>
+              {showCmHeader && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: LeTrendColors.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase', paddingBottom: 2, borderBottom: `1px solid ${LeTrendColors.border}`, marginBottom: 4 }}>
+                  Dina uppladdningar
+                </div>
+              )}
+              {showHagenHeader && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: LeTrendColors.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase', paddingBottom: 2, borderBottom: `1px solid ${LeTrendColors.border}`, marginBottom: 4 }}>
+                  LeTrend-biblioteket
+                </div>
+              )}
             <div
-              key={concept.id}
               style={{
                 background: '#fff',
                 borderRadius: LeTrendRadius.md,
@@ -3821,7 +3852,9 @@ function CustomerWorkspacePageContent() {
                 {slotAddTargetFeedOrder !== null ? `+ Lägg till i ${getStudioFeedOrderLabel(slotAddTargetFeedOrder)}` : '+ Lägg till koncept'}
               </button>
             </div>
-          ))}
+            </React.Fragment>
+          );
+          })}
           {filteredAddConcepts.length === 0 && (
             <div style={{ textAlign: 'center', padding: '24px 0', color: LeTrendColors.textMuted, fontSize: 13 }}>
               Inga koncept matchar det aktuella urvalet.
@@ -3838,8 +3871,8 @@ function CustomerWorkspacePageContent() {
           setSelectedFeedSlot(null);
         }}
         title={selectedFeedSlot !== null
-          ? `VÃ¤lj kunduppdrag fÃ¶r ${getStudioFeedOrderLabel(selectedFeedSlot)}`
-          : 'VÃ¤lj kunduppdrag fÃ¶r plan-slot'}
+          ? `Välj kunduppdrag för ${getStudioFeedOrderLabel(selectedFeedSlot)}`
+          : 'Välj kunduppdrag för plan-slot'}
       >
         {selectedFeedSlot !== null && (
           <div style={{ margin: '0 0 12px' }}>
@@ -3853,7 +3886,7 @@ function CustomerWorkspacePageContent() {
         )}
         {getDraftConcepts().length === 0 ? (
           <p style={{ color: LeTrendColors.textSecondary, fontSize: 14 }}>
-            Inga ej-placerade utkast finns. LÃ¤gg till eller frigÃ¶r ett kunduppdrag fÃ¶rst.
+            Inga ej-placerade utkast finns. Lägg till eller frigör ett kunduppdrag först.
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -3909,7 +3942,7 @@ function CustomerWorkspacePageContent() {
               textAlign: 'left',
             }}
           >
-            + LÃ¤gg till nytt koncept frÃ¥n biblioteket
+            + Lägg till nytt koncept från biblioteket
           </button>
         </div>
       </SidePanel>

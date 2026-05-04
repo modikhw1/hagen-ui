@@ -46,6 +46,10 @@ export interface FeedCustomerConcept {
   customer_id: string;
   concept_id: string | null;
   status: CustomerConceptAssignmentStatus;
+  headline_sv: string | null;
+  headline: string | null;
+  title: string | null;
+  thumbnail_url: string | null;
   custom_script: string | null;
   why_it_fits: string | null;
   filming_instructions: string | null;

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import { getStudioCustomerConceptDisplayTitle } from '@/lib/studio/customer-concepts';
 import { getStudioFeedOrderLabel } from '@/lib/customer-concept-lifecycle';
@@ -1257,10 +1258,11 @@ function FeedSlot({
         </div>
       ) : null}
 
-      {/* Context menu — viewport-fixed positioning, backdrop for click-outside */}
-      {showContextMenu && concept && menuPos && (<>
+      {/* Context menu — rendered via portal to document.body so position: fixed is not
+          affected by CSS transforms on ancestor elements (e.g. DnD drag proxies). */}
+      {showContextMenu && concept && menuPos && createPortal(<>
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
           onClick={(e) => { e.stopPropagation(); setShowContextMenu(false); }}
         />
         <div
@@ -1272,7 +1274,7 @@ function FeedSlot({
             border: `1px solid ${LeTrendColors.border}`,
             borderRadius: LeTrendRadius.md,
             boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-            zIndex: 100,
+            zIndex: 10000,
             width: 220,
             maxWidth: 'calc(100vw - 16px)',
             maxHeight: 'min(360px, 55vh)',
@@ -1588,7 +1590,7 @@ function FeedSlot({
           )}
 
         </div>
-      </>)}
+      </>, document.body)}
     </div>
   );
 }
