@@ -229,5 +229,6 @@ export interface KonceptSectionProps {
   setShowTagManager?: (show: boolean) => void;
   refreshCmTags?: (force?: boolean) => Promise<void>;
   libraryAssignmentCounts?: Record<string, number>;
+  libraryAssignmentCmIds?: Record<string, string[]>;
   onPatchConcept?: (conceptId: string, updates: Partial<CustomerConcept>) => Promise<void>;
 }

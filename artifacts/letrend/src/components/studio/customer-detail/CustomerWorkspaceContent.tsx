@@ -413,6 +413,7 @@ function CustomerWorkspacePageContent() {
   const [emailLog, setEmailLog] = useState<EmailLogEntry[]>([]);
   const [allConcepts, setAllConcepts] = useState<WorkspaceLibraryConcept[]>([]);
   const [libraryAssignmentCounts, setLibraryAssignmentCounts] = useState<Record<string, number>>({});
+  const [libraryAssignmentCmIds, setLibraryAssignmentCmIds] = useState<Record<string, string[]>>({});
   const [gamePlanHtml, setGamePlanHtml] = useState('');
   const [gamePlanSummary, setGamePlanSummary] = useState<CustomerGamePlanSummary | null>(null);
   const [cmDisplayNames, setCmDisplayNames] = useState<Record<string, CMIdentity>>({});
@@ -795,7 +796,7 @@ function CustomerWorkspacePageContent() {
         const [dbConcepts, conceptMetaResult, assignmentResult] = await Promise.all([
           loadConceptsFromDB(),
           supabase.from('concepts').select('id, source').eq('is_active', true),
-          supabase.from('customer_concepts').select('concept_id'),
+          supabase.from('customer_concepts').select('concept_id, cm_id'),
         ]);
 
         const conceptSourceMap = new Map<string, 'hagen' | 'cm_created' | null>();
@@ -809,13 +810,20 @@ function CustomerWorkspacePageContent() {
         }
 
         const counts: Record<string, number> = {};
+        const cmIds: Record<string, string[]> = {};
         for (const row of assignmentResult.data ?? []) {
           const conceptId = typeof row.concept_id === 'string' ? row.concept_id : null;
           if (!conceptId) continue;
           counts[conceptId] = (counts[conceptId] ?? 0) + 1;
+          const cmId = typeof row.cm_id === 'string' ? row.cm_id : null;
+          if (cmId) {
+            if (!cmIds[conceptId]) cmIds[conceptId] = [];
+            if (!cmIds[conceptId].includes(cmId)) cmIds[conceptId].push(cmId);
+          }
         }
 
         setLibraryAssignmentCounts(counts);
+        setLibraryAssignmentCmIds(cmIds);
         setAllConcepts(
           dbConcepts.map((concept) => ({
             ...concept,
@@ -3135,6 +3143,7 @@ function CustomerWorkspacePageContent() {
               setShowTagManager={setShowTagManager}
               refreshCmTags={fetchCmTags}
               libraryAssignmentCounts={libraryAssignmentCounts}
+              libraryAssignmentCmIds={libraryAssignmentCmIds}
               onPatchConcept={handleUpdateConcept}
             />
           )}

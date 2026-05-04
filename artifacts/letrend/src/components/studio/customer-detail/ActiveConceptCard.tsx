@@ -29,6 +29,7 @@ export interface ActiveConceptCardProps {
   tags: string[];
   onUpdateTags?: (conceptId: string, newTags: string[]) => Promise<void>;
   libraryAssignmentCounts?: Record<string, number>;
+  libraryAssignmentCmIds?: Record<string, string[]>;
   postingWeekdays?: number[] | null;
 }
 
@@ -402,11 +403,12 @@ export function ActiveConceptCard({
   onPatchConcept,
   onNavigateToFeedSlot,
   onBeginFeedPlacement,
-  cmDisplayNames: _cmDisplayNames,
+  cmDisplayNames,
   cmTags,
   tags,
   onUpdateTags,
   libraryAssignmentCounts,
+  libraryAssignmentCmIds,
   postingWeekdays,
 }: ActiveConceptCardProps) {
   const details = getWorkspaceConceptDetails(concept, getConceptDetails);
@@ -471,6 +473,12 @@ export function ActiveConceptCard({
   const plannedPublishAt = concept.result.planned_publish_at;
   const cmUsageCount =
     concept.concept_id && libraryAssignmentCounts ? (libraryAssignmentCounts[concept.concept_id] ?? 0) : 0;
+  const cmUsageNames = React.useMemo(() => {
+    if (!concept.concept_id || !libraryAssignmentCmIds) return [];
+    const ids = libraryAssignmentCmIds[concept.concept_id] ?? [];
+    return ids.map((id) => cmDisplayNames[id]?.name ?? id);
+  }, [concept.concept_id, libraryAssignmentCmIds, cmDisplayNames]);
+  const [showCmTooltip, setShowCmTooltip] = React.useState(false);
   const canBeginFeedPlacement =
     concept.assignment.status === 'draft' && concept.placement.feed_order === null;
 
@@ -611,19 +619,62 @@ export function ActiveConceptCard({
             ) : null}
             {cmUsageCount > 1 ? (
               <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: cmUsageCount >= 4 ? '#92400e' : LeTrendColors.textSecondary,
-                  background: cmUsageCount >= 4 ? '#fef3c7' : '#f3f4f6',
-                  border: `1px solid ${cmUsageCount >= 4 ? '#f59e0b' : '#e5e7eb'}`,
-                  borderRadius: 999,
-                  padding: '1px 7px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                }}
+                style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+                onMouseEnter={() => setShowCmTooltip(true)}
+                onMouseLeave={() => setShowCmTooltip(false)}
               >
-                Använt av {cmUsageCount} CMs
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: cmUsageCount >= 4 ? '#92400e' : LeTrendColors.textSecondary,
+                    background: cmUsageCount >= 4 ? '#fef3c7' : '#f3f4f6',
+                    border: `1px solid ${cmUsageCount >= 4 ? '#f59e0b' : '#e5e7eb'}`,
+                    borderRadius: 999,
+                    padding: '1px 7px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    cursor: cmUsageNames.length > 0 ? 'default' : undefined,
+                  }}
+                >
+                  Använt av {cmUsageCount} CMs
+                </span>
+                {showCmTooltip && cmUsageNames.length > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      bottom: 'calc(100% + 6px)',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      background: '#1a1612',
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 500,
+                      borderRadius: 6,
+                      padding: '5px 9px',
+                      whiteSpace: 'nowrap',
+                      zIndex: 20,
+                      pointerEvents: 'none',
+                      lineHeight: 1.5,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                    }}
+                  >
+                    {cmUsageNames.join(', ')}
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: 0,
+                        height: 0,
+                        borderLeft: '5px solid transparent',
+                        borderRight: '5px solid transparent',
+                        borderTop: '5px solid #1a1612',
+                      }}
+                    />
+                  </span>
+                )}
               </span>
             ) : null}
           </div>

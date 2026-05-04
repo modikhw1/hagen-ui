@@ -209,6 +209,7 @@ export const KonceptSection = React.memo(function KonceptSection({
   setShowTagManager,
   refreshCmTags,
   libraryAssignmentCounts = {},
+  libraryAssignmentCmIds = {},
   onPatchConcept,
 }: KonceptSectionProps) {
   const [showProducedSection, setShowProducedSection] = React.useState(false);
@@ -474,6 +475,7 @@ export const KonceptSection = React.memo(function KonceptSection({
                       tags={concept.markers.tags ?? []}
                       onUpdateTags={handleUpdateConceptTags}
                       libraryAssignmentCounts={libraryAssignmentCounts}
+                      libraryAssignmentCmIds={libraryAssignmentCmIds}
                       postingWeekdays={brief.posting_weekdays}
                     />
                   </SortableConceptRow>
