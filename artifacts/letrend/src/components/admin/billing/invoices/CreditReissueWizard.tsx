@@ -76,6 +76,9 @@ const radioInputStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
+const RADIO_CLS =
+  'focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#4A2F18]';
+
 const fieldHintStyle: React.CSSProperties = {
   fontSize: 11,
   color: '#9D8E7D',
@@ -311,7 +314,6 @@ export function CreditReissueWizard({
       {/* STEG 0 — välj åtgärd */}
       {step === 0 && (
         <div className="space-y-4">
-          {/* Mode radio group */}
           <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
             <legend className={ADMIN_MODAL_LABEL_CLS} style={{ marginBottom: 6 }}>
               Vilken åtgärd vill du göra?
@@ -326,6 +328,7 @@ export function CreditReissueWizard({
                     checked={mode === option.value}
                     onChange={() => setMode(option.value as AdjustmentMode)}
                     style={radioInputStyle}
+                    className={RADIO_CLS}
                   />
                   <span>
                     <span style={{ fontWeight: 500, display: 'block' }}>
@@ -340,7 +343,6 @@ export function CreditReissueWizard({
             </div>
           </fieldset>
 
-          {/* Scope radio group */}
           {mode !== 'cancel_subscription' && (
             <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
               <legend className={ADMIN_MODAL_LABEL_CLS} style={{ marginBottom: 6 }}>
@@ -359,6 +361,7 @@ export function CreditReissueWizard({
                       setAmountKr(String(Math.round(defaultAmountOre / 100)));
                     }}
                     style={radioInputStyle}
+                    className={RADIO_CLS}
                   />
                   Hela fakturan / valfritt totalbelopp
                 </label>
@@ -370,6 +373,7 @@ export function CreditReissueWizard({
                     checked={scope === 'line'}
                     onChange={() => setScope('line')}
                     style={radioInputStyle}
+                    className={RADIO_CLS}
                   />
                   En specifik fakturarad
                 </label>
@@ -377,7 +381,6 @@ export function CreditReissueWizard({
             </fieldset>
           )}
 
-          {/* Line select */}
           {scope === 'line' && mode !== 'cancel_subscription' && (
             <div style={adminModalSectionStyle}>
               <label className={ADMIN_MODAL_LABEL_CLS}>Fakturarad</label>
@@ -405,7 +408,6 @@ export function CreditReissueWizard({
       {/* STEG 1 — detaljer */}
       {step === 1 && (
         <div className="space-y-4">
-          {/* Reason select */}
           <div style={adminModalSectionStyle}>
             <label className={ADMIN_MODAL_LABEL_CLS}>Anledning</label>
             <select
@@ -421,7 +423,6 @@ export function CreditReissueWizard({
             </select>
           </div>
 
-          {/* Credit amount */}
           <div style={adminModalSectionStyle}>
             <label className={ADMIN_MODAL_LABEL_CLS}>
               {mode === 'cancel_subscription'
@@ -444,7 +445,6 @@ export function CreditReissueWizard({
             )}
           </div>
 
-          {/* Settlement radio group */}
           {isPaidInvoice && (
             <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
               <legend className={ADMIN_MODAL_LABEL_CLS} style={{ marginBottom: 6 }}>
@@ -460,6 +460,7 @@ export function CreditReissueWizard({
                       checked={resolvedSettlementMode === 'refund'}
                       onChange={() => setSettlementMode('refund')}
                       style={radioInputStyle}
+                      className={RADIO_CLS}
                     />
                     {SETTLEMENT_LABEL.refund}
                   </label>
@@ -472,6 +473,7 @@ export function CreditReissueWizard({
                     checked={resolvedSettlementMode === 'customer_balance'}
                     onChange={() => setSettlementMode('customer_balance')}
                     style={radioInputStyle}
+                    className={RADIO_CLS}
                   />
                   {SETTLEMENT_LABEL.customer_balance}
                 </label>
@@ -483,6 +485,7 @@ export function CreditReissueWizard({
                     checked={resolvedSettlementMode === 'outside_stripe'}
                     onChange={() => setSettlementMode('outside_stripe')}
                     style={radioInputStyle}
+                    className={RADIO_CLS}
                   />
                   {SETTLEMENT_LABEL.outside_stripe}
                 </label>
@@ -490,7 +493,6 @@ export function CreditReissueWizard({
             </fieldset>
           )}
 
-          {/* Reissue sub-section */}
           {mode === 'credit_and_reissue' && (
             <div
               style={{
@@ -540,7 +542,6 @@ export function CreditReissueWizard({
             </div>
           )}
 
-          {/* Memo textarea */}
           <div style={adminModalSectionStyle}>
             <label className={ADMIN_MODAL_LABEL_CLS}>Intern notering</label>
             <textarea
@@ -553,7 +554,6 @@ export function CreditReissueWizard({
             />
           </div>
 
-          {/* Alert */}
           {mode === 'cancel_subscription' ? (
             <div style={adminModalAlertStyle('warning')}>
               <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
