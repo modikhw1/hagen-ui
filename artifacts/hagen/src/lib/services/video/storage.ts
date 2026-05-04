@@ -83,54 +83,60 @@ export class VideoStorageService {
   }
 
   /**
-   * Upload video file to Google Cloud Storage
+   * Upload video file to Google Cloud Storage with exponential backoff retry.
+   * Mirrors the retry pattern used in uploadToGeminiFileAPI (3 attempts, 2s/4s backoff).
+   *
+   * @param localFilePath  Absolute path to the local file to upload
+   * @param videoId        Logical video ID; used as the GCS object name stem
+   * @param maxAttempts    Max upload attempts (default: 3)
    */
-  async uploadVideo(localFilePath: string, videoId: string): Promise<UploadResult> {
+  async uploadVideo(
+    localFilePath: string,
+    videoId: string,
+    maxAttempts = 3,
+  ): Promise<UploadResult> {
     if (!this.useGCS || !this.bucket) {
       return {
         success: false,
-        error: 'Google Cloud Storage not configured. Use uploadToGeminiFileAPI instead.'
+        error: 'GCS_NOT_CONFIGURED: Google Cloud Storage not configured. Use uploadToGeminiFileAPI instead.',
       }
     }
 
-    try {
-      console.log(`☁️ Uploading to GCS: ${localFilePath}`)
+    const ext = path.extname(localFilePath)
+    const filename = `videos/${videoId}${ext}`
+    let lastError = 'unknown'
 
-      // Generate unique filename
-      const ext = path.extname(localFilePath)
-      const filename = `videos/${videoId}${ext}`
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        const delayMs = 2000 * Math.pow(2, attempt - 2)   // 2 000 ms, 4 000 ms
+        console.log(`☁️ GCS upload attempt ${attempt}/${maxAttempts} (backoff ${delayMs}ms)…`)
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      } else {
+        console.log(`☁️ Uploading to GCS: ${localFilePath} → ${filename}`)
+      }
 
-      // Upload file
-      await this.bucket.upload(localFilePath, {
-        destination: filename,
-        metadata: {
-          contentType: 'video/mp4',
+      try {
+        await this.bucket.upload(localFilePath, {
+          destination: filename,
           metadata: {
-            videoId,
-            uploadedAt: new Date().toISOString()
-          }
-        }
-      })
+            contentType: 'video/mp4',
+            metadata: { videoId, uploadedAt: new Date().toISOString() },
+          },
+        })
 
-      // Get URLs
-      const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filename}`
-      const gsUrl = `gs://${this.bucketName}/${filename}`
+        const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filename}`
+        const gsUrl = `gs://${this.bucketName}/${filename}`
+        console.log(`✅ Uploaded to GCS (attempt ${attempt}): ${gsUrl}`)
+        return { success: true, publicUrl, gsUrl }
 
-      console.log(`✅ Uploaded to GCS: ${gsUrl}`)
-
-      return {
-        success: true,
-        publicUrl,
-        gsUrl
-      }
-
-    } catch (error) {
-      console.error('❌ Upload to GCS failed:', error)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : String(error)
+        console.error(`❌ GCS upload attempt ${attempt}/${maxAttempts} failed:`, lastError)
+        // Continue loop — try again unless this was the last attempt
       }
     }
+
+    return { success: false, error: `GCS_UPLOAD_ERROR: ${lastError}` }
   }
 
   /**
