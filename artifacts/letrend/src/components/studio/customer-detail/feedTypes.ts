@@ -226,4 +226,8 @@ export interface KonceptSectionProps {
   onReorderConcepts?: (conceptIds: string[]) => Promise<void>;
   onCreateCollaboration?: (values: import('./CollaborationModal').CollaborationFormValues) => Promise<void>;
   onUpdateCollaboration?: (conceptId: string, values: import('./CollaborationModal').CollaborationFormValues) => Promise<void>;
+  cmTags?: CmTag[];
+  showTagManager?: boolean;
+  setShowTagManager?: (show: boolean) => void;
+  refreshCmTags?: (force?: boolean) => Promise<void>;
 }

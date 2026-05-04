@@ -20,7 +20,7 @@ import {
   isCollaborationCustomerConcept,
   isStudioAssignedCustomerConcept,
 } from '@/lib/studio/customer-concepts';
-import type { CustomerConcept } from '@/types/studio-v2';
+import type { CmTag, CustomerConcept } from '@/types/studio-v2';
 import type { KonceptSectionProps } from './feedTypes';
 import { ActiveConceptCard } from './ActiveConceptCard';
 import { ProducedConceptCard } from './ProducedConceptCard';
@@ -31,6 +31,7 @@ import {
   type CollaborationFormValues,
   type CollaborationScopeId,
 } from './CollaborationModal';
+import { TagManager } from '@/features/studio/customer-workspace/components/TagManager';
 
 function toCollaborationCardData(concept: CustomerConcept): CollaborationCardData {
   return {
@@ -117,6 +118,7 @@ interface SortableConceptRowProps {
   positionLabel: string;
   concept: CustomerConcept;
   tags: string[];
+  cmTags: CmTag[];
   onUpdateTags?: (conceptId: string, newTags: string[]) => Promise<void>;
   children: React.ReactNode;
 }
@@ -126,6 +128,7 @@ function SortableConceptRow({
   positionLabel,
   concept,
   tags,
+  cmTags,
   onUpdateTags,
   children,
 }: SortableConceptRowProps) {
@@ -137,17 +140,38 @@ function SortableConceptRow({
     position: 'relative',
   };
 
-  const [editingTags, setEditingTags] = React.useState(false);
-  const [tagInput, setTagInput] = React.useState('');
+  const [showPicker, setShowPicker] = React.useState(false);
   const [savingTags, setSavingTags] = React.useState(false);
+  const pickerRef = React.useRef<HTMLDivElement>(null);
 
-  const addTag = async (tag: string) => {
-    const trimmed = tag.trim().toLowerCase().replace(/\s+/g, '-');
-    if (!trimmed || tags.includes(trimmed) || !onUpdateTags) return;
+  React.useEffect(() => {
+    if (!showPicker) return;
+    const handle = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [showPicker]);
+
+  const tagColorMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of cmTags) map.set(t.name, t.color);
+    return map;
+  }, [cmTags]);
+
+  const availableToAdd = React.useMemo(
+    () => cmTags.filter((t) => !tags.includes(t.name)),
+    [cmTags, tags],
+  );
+
+  const addTag = async (name: string) => {
+    if (tags.includes(name) || !onUpdateTags) return;
     setSavingTags(true);
-    await onUpdateTags(id, [...tags, trimmed]);
+    await onUpdateTags(id, [...tags, name]);
     setSavingTags(false);
-    setTagInput('');
+    setShowPicker(false);
   };
 
   const removeTag = async (tag: string) => {
@@ -216,99 +240,145 @@ function SortableConceptRow({
             minWidth: 0,
           }}
         >
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: '#374151',
-                background: '#f3f4f6',
-                border: '1px solid #e5e7eb',
-                borderRadius: 999,
-                padding: '1px 7px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              {tag}
-              {onUpdateTags && (
-                <button
-                  type="button"
-                  onClick={() => void removeTag(tag)}
-                  disabled={savingTags}
+          {tags.map((tag) => {
+            const color = tagColorMap.get(tag);
+            return (
+              <span
+                key={tag}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: '#374151',
+                  background: color ? `${color}18` : '#f3f4f6',
+                  border: `1px solid ${color ?? '#e5e7eb'}`,
+                  borderRadius: 999,
+                  padding: '1px 7px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                {color && (
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: color,
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                {tag}
+                {onUpdateTags && (
+                  <button
+                    type="button"
+                    onClick={() => void removeTag(tag)}
+                    disabled={savingTags}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      color: '#9ca3af',
+                      fontSize: 11,
+                      lineHeight: 1,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </span>
+            );
+          })}
+
+          {onUpdateTags && (
+            <div style={{ position: 'relative' }} ref={pickerRef}>
+              <button
+                type="button"
+                onClick={() => setShowPicker((v) => !v)}
+                disabled={savingTags}
+                style={{
+                  fontSize: 11,
+                  color: '#9ca3af',
+                  background: 'none',
+                  border: '1px dashed #d1d5db',
+                  borderRadius: 999,
+                  padding: '1px 7px',
+                  cursor: 'pointer',
+                  lineHeight: 1.4,
+                }}
+              >
+                + Tagg
+              </button>
+              {showPicker && (
+                <div
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 0,
-                    color: '#9ca3af',
-                    fontSize: 11,
-                    lineHeight: 1,
-                    display: 'inline-flex',
-                    alignItems: 'center',
+                    position: 'absolute',
+                    top: 'calc(100% + 4px)',
+                    left: 0,
+                    zIndex: 50,
+                    background: '#fff',
+                    borderRadius: 8,
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
+                    border: '1px solid #e5e7eb',
+                    minWidth: 160,
+                    padding: 6,
                   }}
                 >
-                  ×
-                </button>
+                  {cmTags.length === 0 ? (
+                    <div style={{ padding: '6px 8px', fontSize: 11, color: '#9ca3af' }}>
+                      Inga taggar ännu. Klicka "Hantera taggar".
+                    </div>
+                  ) : availableToAdd.length === 0 ? (
+                    <div style={{ padding: '6px 8px', fontSize: 11, color: '#9ca3af' }}>
+                      Alla taggar är tillagda
+                    </div>
+                  ) : (
+                    availableToAdd.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => void addTag(t.name)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          width: '100%',
+                          padding: '5px 8px',
+                          background: 'none',
+                          border: 'none',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          fontSize: 12,
+                          textAlign: 'left',
+                          color: '#374151',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = '#f9fafb';
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.background = 'none';
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: '50%',
+                            background: t.color,
+                            flexShrink: 0,
+                          }}
+                        />
+                        {t.name}
+                      </button>
+                    ))
+                  )}
+                </div>
               )}
-            </span>
-          ))}
-
-          {onUpdateTags && !editingTags && (
-            <button
-              type="button"
-              onClick={() => setEditingTags(true)}
-              style={{
-                fontSize: 11,
-                color: '#9ca3af',
-                background: 'none',
-                border: '1px dashed #d1d5db',
-                borderRadius: 999,
-                padding: '1px 7px',
-                cursor: 'pointer',
-                lineHeight: 1.4,
-              }}
-            >
-              + Tagg
-            </button>
-          )}
-
-          {onUpdateTags && editingTags && (
-            <input
-              autoFocus
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void addTag(tagInput);
-                }
-                if (e.key === 'Escape') {
-                  setEditingTags(false);
-                  setTagInput('');
-                }
-              }}
-              onBlur={() => {
-                if (tagInput.trim()) {
-                  void addTag(tagInput);
-                } else {
-                  setEditingTags(false);
-                  setTagInput('');
-                }
-              }}
-              placeholder="tagg-namn"
-              style={{
-                fontSize: 11,
-                padding: '2px 8px',
-                border: `1px solid ${LeTrendColors.borderStrong}`,
-                borderRadius: 999,
-                outline: 'none',
-                width: 90,
-                background: '#fff',
-              }}
-            />
+            </div>
           )}
         </div>
       </div>
@@ -344,6 +414,10 @@ export const KonceptSection = React.memo(function KonceptSection({
   onReorderConcepts,
   onCreateCollaboration,
   onUpdateCollaboration,
+  cmTags = [],
+  showTagManager,
+  setShowTagManager,
+  refreshCmTags,
 }: KonceptSectionProps) {
   const [showProducedSection, setShowProducedSection] = React.useState(false);
   const [selectedConceptIds, setSelectedConceptIds] = React.useState<string[]>([]);
@@ -495,7 +569,28 @@ export const KonceptSection = React.memo(function KonceptSection({
         >
           Koncept
         </h2>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {setShowTagManager && (
+            <button
+              type="button"
+              onClick={() => setShowTagManager(true)}
+              style={{
+                padding: '10px 16px',
+                background: '#fff',
+                color: LeTrendColors.textSecondary,
+                border: `1.5px solid ${LeTrendColors.border}`,
+                borderRadius: LeTrendRadius.md,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              🏷 Hantera taggar
+            </button>
+          )}
           {onCreateCollaboration ? (
             <button
               type="button"
@@ -730,6 +825,7 @@ export const KonceptSection = React.memo(function KonceptSection({
                     positionLabel={positionLabel}
                     concept={concept}
                     tags={tags}
+                    cmTags={cmTags}
                     onUpdateTags={handleUpdateConceptTags}
                   >
                     <ActiveConceptCard
@@ -823,6 +919,14 @@ export const KonceptSection = React.memo(function KonceptSection({
               setSavingCollab(false);
             }
           }}
+        />
+      ) : null}
+
+      {showTagManager && setShowTagManager && refreshCmTags ? (
+        <TagManager
+          tags={cmTags}
+          onClose={() => setShowTagManager(false)}
+          onTagsUpdated={() => refreshCmTags(true)}
         />
       ) : null}
     </div>

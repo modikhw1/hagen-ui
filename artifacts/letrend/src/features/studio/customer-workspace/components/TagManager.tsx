@@ -40,14 +40,14 @@ export function TagManager({ tags, onClose, onTagsUpdated }: TagManagerProps) {
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <h3 style={{ margin: 0, fontSize: 20, color: '#4A2F18' }}>Manage tags</h3>
+          <h3 style={{ margin: 0, fontSize: 20, color: '#4A2F18' }}>Hantera taggar</h3>
           <button type="button" onClick={onClose} style={{ border: 'none', background: 'transparent', fontSize: 24, cursor: 'pointer' }}>×</button>
         </div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="New tag"
+            placeholder="Ny tagg"
             style={{ flex: 1, borderRadius: 10, border: '1px solid rgba(74,47,24,0.12)', padding: '10px 12px' }}
           />
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 10, border: '1px solid rgba(74,47,24,0.12)' }}>
@@ -86,7 +86,7 @@ export function TagManager({ tags, onClose, onTagsUpdated }: TagManagerProps) {
             }}
             style={{ border: 'none', borderRadius: 10, background: '#4A2F18', color: '#fff', padding: '10px 14px', fontWeight: 700 }}
           >
-            Add
+            Lägg till
           </button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -104,7 +104,7 @@ export function TagManager({ tags, onClose, onTagsUpdated }: TagManagerProps) {
                 }}
                 style={{ border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, background: '#fff', color: '#ef4444', padding: '6px 10px', fontWeight: 700 }}
               >
-                Delete
+                Ta bort
               </button>
             </div>
           ))}

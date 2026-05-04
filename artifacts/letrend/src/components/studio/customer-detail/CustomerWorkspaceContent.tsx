@@ -3088,6 +3088,10 @@ function CustomerWorkspacePageContent() {
               onReorderConcepts={handleReorderConcepts}
               onCreateCollaboration={handleCreateCollaboration}
               onUpdateCollaboration={handleUpdateCollaboration}
+              cmTags={cmTags}
+              showTagManager={showTagManager}
+              setShowTagManager={setShowTagManager}
+              refreshCmTags={fetchCmTags}
             />
           )}
 
