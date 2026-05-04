@@ -22,6 +22,7 @@ import { calculateFirstInvoice } from '@/lib/billing/first-invoice';
 import { createCustomerSchema, type CreateCustomerPayload } from '@/lib/schemas/customer';
 import type { TikTokProfilePreview } from '@/lib/tiktok/profile';
 import { cn } from '@/lib/utils';
+import { ADMIN_MODAL_INPUT_CLS } from '@/components/admin/ui/adminModalTokens';
 
 type Team = Array<{
   id: string;
@@ -74,8 +75,6 @@ const initial = (): InviteState => ({
   concepts: [],
 });
 
-const inputCls =
-  'w-full rounded-md border border-border bg-background px-3 py-2 text-sm transition-colors focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary';
 
 export default function InviteCustomerModal({
   open,
@@ -230,7 +229,7 @@ export default function InviteCustomerModal({
               <input
                 value={state.business_name}
                 onChange={(e) => setField('business_name', e.target.value)}
-                className={inputCls}
+                className={ADMIN_MODAL_INPUT_CLS}
                 placeholder="Företaget AB"
               />
             </AdminField>
@@ -238,7 +237,7 @@ export default function InviteCustomerModal({
               <input
                 value={state.customer_contact_name ?? ''}
                 onChange={(e) => setField('customer_contact_name', e.target.value)}
-                className={inputCls}
+                className={ADMIN_MODAL_INPUT_CLS}
                 placeholder="Maria Holm"
               />
             </AdminField>
@@ -249,7 +248,7 @@ export default function InviteCustomerModal({
                   type="email"
                   value={state.contact_email}
                   onChange={(e) => setField('contact_email', e.target.value)}
-                  className={cn(inputCls, 'pl-9')}
+                  className={cn(ADMIN_MODAL_INPUT_CLS, 'pl-9')}
                   placeholder="maria@foretaget.se"
                 />
               </div>
@@ -258,7 +257,7 @@ export default function InviteCustomerModal({
               <input
                 value={state.phone ?? ''}
                 onChange={(e) => setField('phone', e.target.value)}
-                className={inputCls}
+                className={ADMIN_MODAL_INPUT_CLS}
                 placeholder="+46 70 123 45 67"
               />
             </AdminField>
@@ -273,7 +272,7 @@ export default function InviteCustomerModal({
                 setField('tiktok_profile_url', e.target.value);
                 setTiktokPreview(null);
               }}
-              className={cn(inputCls, 'flex-1')}
+              className={cn(ADMIN_MODAL_INPUT_CLS, 'flex-1')}
               placeholder="https://tiktok.com/@handle"
             />
             <button
@@ -329,8 +328,8 @@ export default function InviteCustomerModal({
                       value={state.monthly_price}
                       onChange={(e) => setField('monthly_price', Number(e.target.value))}
                       className={cn(
-                        inputCls,
-                        invalidFixedPrice && 'border-status-danger-fg/60 focus:border-status-danger-fg focus:ring-status-danger-fg',
+                        ADMIN_MODAL_INPUT_CLS,
+                        invalidFixedPrice && 'border-status-danger-fg/60 focus:ring-1 focus:border-status-danger-fg focus:ring-status-danger-fg',
                       )}
                     />
                   </AdminField>
@@ -343,7 +342,7 @@ export default function InviteCustomerModal({
                           e.target.value as InviteState['subscription_interval'],
                         )
                       }
-                      className={inputCls}
+                      className={ADMIN_MODAL_INPUT_CLS}
                     >
                       <option value="month">Månad</option>
                       <option value="quarter">Kvartal</option>
@@ -370,7 +369,7 @@ export default function InviteCustomerModal({
                   type="date"
                   value={state.contract_start_date ?? ''}
                   onChange={(e) => setField('contract_start_date', e.target.value)}
-                  className={inputCls}
+                  className={ADMIN_MODAL_INPUT_CLS}
                 />
               </AdminField>
               <AdminField label="Faktureringsdag (1–28)">
@@ -380,7 +379,7 @@ export default function InviteCustomerModal({
                   max={28}
                   value={state.billing_day_of_month}
                   onChange={(e) => setField('billing_day_of_month', Number(e.target.value))}
-                  className={inputCls}
+                  className={ADMIN_MODAL_INPUT_CLS}
                 />
               </AdminField>
             </div>
@@ -405,7 +404,7 @@ export default function InviteCustomerModal({
           <select
             value={state.account_manager ?? ''}
             onChange={(e) => setField('account_manager', e.target.value)}
-            className={inputCls}
+            className={ADMIN_MODAL_INPUT_CLS}
           >
             <option value="">Ingen CM än</option>
             {team.map((member) => (

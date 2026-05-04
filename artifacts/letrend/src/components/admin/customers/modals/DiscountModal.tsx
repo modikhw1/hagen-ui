@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { AdminField } from '@/components/admin/ui/form/AdminField';
+import { ADMIN_MODAL_INPUT_CLS } from '@/components/admin/ui/adminModalTokens';
 import { PriceInput } from '@/components/admin/ui/form/PriceInput';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { oreToSek, sekToOre } from '@/lib/admin/money';
@@ -132,7 +133,7 @@ export default function DiscountModal({
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className={ADMIN_MODAL_INPUT_CLS}
           >
             <option value="none">Ingen rabatt</option>
             <option value="percent">Procent (%)</option>
@@ -159,7 +160,7 @@ export default function DiscountModal({
                       if (type === 'percent') setPercentValue(v);
                       else setMonthsValue(v);
                     }}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    className={ADMIN_MODAL_INPUT_CLS}
                   />
                   <span className="absolute right-3 top-2 text-xs text-muted-foreground">
                     {type === 'percent' ? '%' : 'st'}
@@ -174,7 +175,7 @@ export default function DiscountModal({
                 min={todayDateInput()}
                 value={endsAt}
                 onChange={(e) => setEndsAt(e.target.value)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className={ADMIN_MODAL_INPUT_CLS}
               />
             </AdminField>
           </>

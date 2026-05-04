@@ -5,7 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/admin/api-client';
 import { Metric, ModeButton } from '@/components/admin/_primitives';
-import { TextInput, Table } from '@mantine/core';
+import { Table } from '@mantine/core';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { parseMonthlyPriceSekInput } from '@/lib/admin/billing';
 import { logAdminClientError } from '@/lib/admin/logger';
@@ -13,6 +13,7 @@ import { formatPriceSEK, formatSek } from '@/lib/admin/money';
 import { shortDateSv } from '@/lib/admin/time';
 import { subscriptionPriceChangeSchema } from '@/lib/schemas/billing';
 import { cn } from '@/lib/utils';
+import { ADMIN_MODAL_INPUT_CLS, ADMIN_MODAL_LABEL_CLS } from '@/components/admin/ui/adminModalTokens';
 
 type PreviewPayload = {
   mode: 'now' | 'next_period';
@@ -197,20 +198,20 @@ export default function SubscriptionPriceChangeModal({
       <div className="space-y-6">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Nytt månadspris</label>
+            <label className={ADMIN_MODAL_LABEL_CLS}>Nytt månadspris</label>
             <div className="relative">
-              <TextInput
+              <input
                 value={monthlyPrice}
-                onChange={(event) => setMonthlyPrice(event.currentTarget.value)}
+                onChange={(event) => setMonthlyPrice(event.target.value)}
                 inputMode="numeric"
-                className="pr-8"
+                className={cn(ADMIN_MODAL_INPUT_CLS, 'pr-8')}
               />
-              <span className="absolute right-3 top-2 text-sm text-muted-foreground">kr</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#9D8E7D] pointer-events-none">kr</span>
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">När ska bytet ske</label>
+            <label className={ADMIN_MODAL_LABEL_CLS}>När ska bytet ske</label>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setMode('now')}

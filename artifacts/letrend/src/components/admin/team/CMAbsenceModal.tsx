@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { ModeButton } from '@/components/admin/_primitives';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { AdminField } from '@/components/admin/ui/form/AdminField';
+import { ADMIN_MODAL_INPUT_CLS } from '@/components/admin/ui/adminModalTokens';
 import { addAdminBreadcrumb, captureAdminError } from '@/lib/admin/admin-telemetry';
 import { apiClient } from '@/lib/admin/api-client';
 import { cmAbsenceCopy } from '@/lib/admin/copy/team';
@@ -145,7 +146,7 @@ export default function CMAbsenceModal({
         <AdminField label={cmAbsenceCopy.type} error={errors.absence_type?.message}>
           <select
             {...register('absence_type')}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+            className={ADMIN_MODAL_INPUT_CLS}
           >
             {Object.entries(cmAbsenceCopy.typeLabels).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
@@ -159,7 +160,7 @@ export default function CMAbsenceModal({
               type="date"
               min={today}
               {...register('starts_on')}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+              className={ADMIN_MODAL_INPUT_CLS}
             />
           </AdminField>
           <AdminField label={cmAbsenceCopy.endsOn} error={errors.ends_on?.message}>
@@ -167,7 +168,7 @@ export default function CMAbsenceModal({
               type="date"
               min={startsOn || today}
               {...register('ends_on')}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+              className={ADMIN_MODAL_INPUT_CLS}
             />
           </AdminField>
         </div>
@@ -176,7 +177,7 @@ export default function CMAbsenceModal({
           <select
             value={backupCmId ?? ''}
             onChange={(e) => setValue('backup_cm_id', e.target.value || null, { shouldDirty: true, shouldValidate: true })}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+            className={ADMIN_MODAL_INPUT_CLS}
           >
             <option value="">{cmAbsenceCopy.noBackupCm}</option>
             {backupOptions.map((m) => (
@@ -186,7 +187,7 @@ export default function CMAbsenceModal({
         </AdminField>
 
         <div className="space-y-2">
-          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Ersättning</label>
+          <label className={ADMIN_MODAL_LABEL_CLS}>Ersättning</label>
           <div className="grid gap-2 sm:grid-cols-2">
             <ModeButton
               active={compensationMode === 'covering_cm'}
@@ -227,7 +228,7 @@ export default function CMAbsenceModal({
           <textarea
             {...register('note')}
             rows={2}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:ring-1 focus:ring-primary focus:outline-none"
+            className={ADMIN_MODAL_INPUT_CLS}
             placeholder="Valfri notering..."
           />
         </AdminField>

@@ -6,6 +6,7 @@ import type { CustomerDetail } from '@/hooks/admin/useCustomerDetail';
 import { apiClient } from '@/lib/admin/api-client';
 import { formatPriceSEK } from '@/lib/admin/money';
 import { todayDateInput } from '@/lib/admin/time';
+import { ADMIN_MODAL_INPUT_CLS } from '@/components/admin/ui/adminModalTokens';
 
 export default function ContractEditForm({
   customer,
@@ -91,7 +92,7 @@ export default function ContractEditForm({
         <select
           value={pricingStatus}
           onChange={(event) => setPricingStatus(event.target.value as 'fixed' | 'unknown')}
-          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+          className={ADMIN_MODAL_INPUT_CLS}
         >
           <option value="fixed">Fast pris</option>
           <option value="unknown">Pris ej satt</option>
@@ -102,7 +103,7 @@ export default function ContractEditForm({
           value={monthlyPrice}
           disabled={pricingStatus === 'unknown'}
           onChange={(event) => setMonthlyPrice(Math.max(0, Number(event.target.value) || 0))}
-          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm disabled:opacity-50"
+          className={`${ADMIN_MODAL_INPUT_CLS} disabled:opacity-50`}
         />
       </div>
 
@@ -112,7 +113,7 @@ export default function ContractEditForm({
           onChange={(event) =>
             setSubscriptionInterval(event.target.value as 'month' | 'quarter' | 'year')
           }
-          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+          className={ADMIN_MODAL_INPUT_CLS}
         >
           <option value="month">Månad</option>
           <option value="quarter">Kvartal</option>
@@ -126,7 +127,7 @@ export default function ContractEditForm({
           onChange={(event) =>
             setBillingDayOfMonth(Math.max(1, Math.min(28, Number(event.target.value) || 25)))
           }
-          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+          className={ADMIN_MODAL_INPUT_CLS}
         />
       </div>
 
@@ -135,13 +136,13 @@ export default function ContractEditForm({
           type="date"
           value={contractStartDate}
           onChange={(event) => setContractStartDate(event.target.value)}
-          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+          className={ADMIN_MODAL_INPUT_CLS}
         />
         <input
           type="date"
           value={upcomingPriceEffectiveDate}
           onChange={(event) => setUpcomingPriceEffectiveDate(event.target.value)}
-          className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+          className={ADMIN_MODAL_INPUT_CLS}
         />
       </div>
 
@@ -152,7 +153,7 @@ export default function ContractEditForm({
         onChange={(event) =>
           setUpcomingMonthlyPrice(Math.max(0, Number(event.target.value) || 0))
         }
-        className="w-full rounded-md border border-border bg-background px-3 py-2.5 text-sm"
+        className={ADMIN_MODAL_INPUT_CLS}
       />
 
       <label className="flex items-center gap-2 text-sm text-foreground">

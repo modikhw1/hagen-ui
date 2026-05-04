@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { ADMIN_MODAL_LABEL_CLS } from '@/components/admin/ui/adminModalTokens';
 
 export function AdminField({
   label,
@@ -25,7 +26,7 @@ export function AdminField({
       <div className="flex items-center justify-between gap-4">
         <label
           htmlFor={htmlFor}
-          className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+          className={ADMIN_MODAL_LABEL_CLS}
         >
           {label}
           {required && <span className="ml-0.5 text-status-danger-fg">*</span>}

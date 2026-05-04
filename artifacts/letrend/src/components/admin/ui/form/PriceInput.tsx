@@ -2,6 +2,7 @@
 
 import { oreToSek, sekToOre } from '@/lib/admin/money';
 import { cn } from '@/lib/utils';
+import { ADMIN_MODAL_INPUT_CLS } from '@/components/admin/ui/adminModalTokens';
 
 export function PriceInput({
   valueOre,
@@ -22,7 +23,7 @@ export function PriceInput({
         type="number"
         value={oreToSek(valueOre)}
         onChange={(e) => onChangeOre(sekToOre(Number(e.target.value)))}
-        className="w-full rounded-md border border-border bg-background px-3 py-2 pr-9 text-sm focus:ring-1 focus:ring-primary focus:outline-none disabled:opacity-50"
+        className={cn(ADMIN_MODAL_INPUT_CLS, 'pr-9 disabled:opacity-50')}
         placeholder={placeholder}
         disabled={disabled}
       />
