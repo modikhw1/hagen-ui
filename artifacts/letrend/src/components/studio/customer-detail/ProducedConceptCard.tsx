@@ -133,9 +133,20 @@ export function ProducedConceptCard({
               ) : null}
               {concept.updated_at ? <span>Senast redigerad {formatDate(concept.updated_at)}</span> : null}
             </div>
-            {markerIdentity ? (
-              <div style={{ marginTop: 6, fontSize: 11, color: LeTrendColors.textMuted }}>
-                Producerad av {markerIdentity.name}
+            {details?.description_sv ? (
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 12,
+                  color: LeTrendColors.textSecondary,
+                  lineHeight: 1.45,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {details.description_sv}
               </div>
             ) : null}
           </div>
@@ -145,6 +156,12 @@ export function ProducedConceptCard({
             </span>
           ) : null}
         </div>
+
+        {concept.result.tiktok_last_synced_at ? (
+          <div style={{ marginTop: 4, fontSize: 11, color: LeTrendColors.textMuted }}>
+            Statistik uppdaterades {formatDate(concept.result.tiktok_last_synced_at)}
+          </div>
+        ) : null}
 
         {stats.length > 0 ? (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8, alignItems: 'center' }}>

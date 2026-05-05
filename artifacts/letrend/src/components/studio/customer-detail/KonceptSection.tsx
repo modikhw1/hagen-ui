@@ -24,7 +24,7 @@ import type { CustomerConcept } from '@/types/studio-v2';
 import type { KonceptSectionProps } from './feedTypes';
 import { ActiveConceptCard } from './ActiveConceptCard';
 import { ProducedConceptCard } from './ProducedConceptCard';
-import { CollaborationCard, type CollaborationCardData } from './CollaborationCard';
+import { CollaborationConceptRow } from './CollaborationConceptRow';
 import {
   CollaborationModal,
   EMPTY_COLLABORATION_FORM,
@@ -32,22 +32,6 @@ import {
   type CollaborationScopeId,
 } from './CollaborationModal';
 import { TagManager } from '@/features/studio/customer-workspace/components/TagManager';
-
-function toCollaborationCardData(concept: CustomerConcept): CollaborationCardData {
-  return {
-    id: concept.id,
-    partner_name: concept.partner_name,
-    collaborator_reach: concept.collaborator_reach,
-    collaborator_avatar_url: concept.collaborator_avatar_url,
-    scope: (concept.scope ?? []).filter((s): s is CollaborationScopeId =>
-      s === 'medverka' || s === 'skriva' || s === 'producera' || s === 'skriva_medverka'
-    ),
-    price: concept.price,
-    confirmed: concept.confirmed,
-    date: concept.result?.planned_publish_at ?? null,
-    date_type: concept.collaboration_date_type ?? 'exact',
-  };
-}
 
 function toCollaborationFormValues(concept: CustomerConcept): CollaborationFormValues {
   return {
@@ -243,6 +227,18 @@ export const KonceptSection = React.memo(function KonceptSection({
     [assignmentConcepts]
   );
 
+  const activeCollaborationConcepts = React.useMemo(
+    () => collaborationConcepts.filter(
+      (c) => c.assignment.status !== 'produced' && c.assignment.status !== 'archived'
+    ),
+    [collaborationConcepts]
+  );
+
+  const allActiveSortable = React.useMemo(
+    () => [...activeConcepts, ...activeCollaborationConcepts],
+    [activeConcepts, activeCollaborationConcepts]
+  );
+
   const producedConcepts = React.useMemo(
     () => assignmentConcepts
       .filter((concept) => concept.assignment.status === 'produced')
@@ -254,17 +250,17 @@ export const KonceptSection = React.memo(function KonceptSection({
     [assignmentConcepts]
   );
 
-  // DnD ordered IDs — kept in sync with activeConcepts
+  // DnD ordered IDs — kept in sync with allActiveSortable (regular + collaboration concepts)
   const [sortedIds, setSortedIds] = React.useState<string[]>(() =>
-    activeConcepts.map((c) => c.id)
+    allActiveSortable.map((c) => c.id)
   );
 
-  // Sync sorted IDs when activeConcepts changes (concepts added/removed).
+  // Sync sorted IDs when allActiveSortable changes (concepts added/removed).
   // Initialize prevIds to match sortedIds so the first effect run doesn't
   // treat all existing IDs as "new" additions (which caused duplicate keys).
-  const prevIds = React.useRef<string[]>(activeConcepts.map((c) => c.id));
+  const prevIds = React.useRef<string[]>(allActiveSortable.map((c) => c.id));
   React.useEffect(() => {
-    const newIds = activeConcepts.map((c) => c.id);
+    const newIds = allActiveSortable.map((c) => c.id);
     const added = newIds.filter((id) => !prevIds.current.includes(id));
     const removed = new Set(prevIds.current.filter((id) => !newIds.includes(id)));
     if (added.length > 0 || removed.size > 0) {
@@ -274,12 +270,12 @@ export const KonceptSection = React.memo(function KonceptSection({
       ]);
     }
     prevIds.current = newIds;
-  }, [activeConcepts]);
+  }, [allActiveSortable]);
 
   const orderedActiveConcepts = React.useMemo(() => {
-    const map = new Map(activeConcepts.map((c) => [c.id, c]));
-    return sortedIds.map((id) => map.get(id)).filter((c): c is typeof activeConcepts[0] => c !== undefined);
-  }, [sortedIds, activeConcepts]);
+    const map = new Map(allActiveSortable.map((c) => [c.id, c]));
+    return sortedIds.map((id) => map.get(id)).filter((c): c is CustomerConcept => c !== undefined);
+  }, [sortedIds, allActiveSortable]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -408,25 +404,7 @@ export const KonceptSection = React.memo(function KonceptSection({
         )}
       </div>
 
-      {collaborationConcepts.length > 0 ? (
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: LeTrendColors.textSecondary, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-            Samarbeten ({collaborationConcepts.length})
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            {collaborationConcepts.map((c) => (
-              <CollaborationCard
-                key={c.id}
-                data={toCollaborationCardData(c)}
-                onClick={() => setCollabModal({ mode: 'edit', conceptId: c.id, initial: toCollaborationFormValues(c) })}
-                onDelete={() => void handleDeleteConcept(c.id)}
-              />
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {activeConcepts.length === 0 && producedConcepts.length === 0 && collaborationConcepts.length === 0 ? (
+      {allActiveSortable.length === 0 && producedConcepts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 60, color: LeTrendColors.textMuted }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>[ ]</div>
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
@@ -448,8 +426,9 @@ export const KonceptSection = React.memo(function KonceptSection({
               {orderedActiveConcepts.map((concept, index) => {
                 const feedOrder = concept.placement.feed_order;
                 const positionLabel = feedOrder !== null
-                  ? feedOrder === 0 ? 'Nu' : `+${feedOrder}`
+                  ? feedOrder === 0 ? 'Nu' : String(feedOrder)
                   : `#${index + 1}`;
+                const isCollab = isCollaborationCustomerConcept(concept);
 
                 return (
                   <SortableConceptRow
@@ -458,26 +437,34 @@ export const KonceptSection = React.memo(function KonceptSection({
                     positionLabel={positionLabel}
                     concept={concept}
                   >
-                    <ActiveConceptCard
-                      concept={concept}
-                      justAdded={justAddedConceptId === concept.id}
-                      formatDate={formatDate}
-                      getConceptDetails={getConceptDetails}
-                      onDelete={handleDeleteConcept}
-                      onChangeStatus={handleChangeStatus}
-                      onUpdateCmNote={handleUpdateCmNote}
-                      onUpdateWhyItFits={handleUpdateWhyItFits}
-                      onPatchConcept={onPatchConcept}
-                      onNavigateToFeedSlot={onNavigateToFeedSlot}
-                      onBeginFeedPlacement={onBeginFeedPlacement}
-                      cmDisplayNames={cmDisplayNames}
-                      cmTags={cmTags}
-                      tags={concept.markers.tags ?? []}
-                      onUpdateTags={handleUpdateConceptTags}
-                      libraryAssignmentCounts={libraryAssignmentCounts}
-                      libraryAssignmentCmIds={libraryAssignmentCmIds}
-                      postingWeekdays={brief.posting_weekdays}
-                    />
+                    {isCollab ? (
+                      <CollaborationConceptRow
+                        concept={concept}
+                        onEdit={() => setCollabModal({ mode: 'edit', conceptId: concept.id, initial: toCollaborationFormValues(concept) })}
+                        onDelete={handleDeleteConcept}
+                      />
+                    ) : (
+                      <ActiveConceptCard
+                        concept={concept}
+                        justAdded={justAddedConceptId === concept.id}
+                        formatDate={formatDate}
+                        getConceptDetails={getConceptDetails}
+                        onDelete={handleDeleteConcept}
+                        onChangeStatus={handleChangeStatus}
+                        onUpdateCmNote={handleUpdateCmNote}
+                        onUpdateWhyItFits={handleUpdateWhyItFits}
+                        onPatchConcept={onPatchConcept}
+                        onNavigateToFeedSlot={onNavigateToFeedSlot}
+                        onBeginFeedPlacement={onBeginFeedPlacement}
+                        cmDisplayNames={cmDisplayNames}
+                        cmTags={cmTags}
+                        tags={concept.markers.tags ?? []}
+                        onUpdateTags={handleUpdateConceptTags}
+                        libraryAssignmentCounts={libraryAssignmentCounts}
+                        libraryAssignmentCmIds={libraryAssignmentCmIds}
+                        postingWeekdays={brief.posting_weekdays}
+                      />
+                    )}
                   </SortableConceptRow>
                 );
               })}
@@ -485,7 +472,7 @@ export const KonceptSection = React.memo(function KonceptSection({
           </DndContext>
 
           {producedConcepts.length > 0 ? (
-            <div style={{ marginTop: activeConcepts.length > 0 ? 8 : 0 }}>
+            <div style={{ marginTop: allActiveSortable.length > 0 ? 8 : 0 }}>
               <button
                 onClick={() => setShowProducedSection((current) => !current)}
                 style={{

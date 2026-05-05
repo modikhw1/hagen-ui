@@ -42,7 +42,7 @@ import {
   writeClientCache,
 } from '@/lib/client-cache';
 import type { MotorSignalKind } from '@/lib/studio/motor-signal';
-import { isStudioAssignedCustomerConcept } from '@/lib/studio/customer-concepts';
+import { isCollaborationCustomerConcept, isStudioAssignedCustomerConcept } from '@/lib/studio/customer-concepts';
 import { resolveConceptContent } from '@/lib/studio-v2-concept-content';
 import { display } from '@/lib/display';
 import { getStudioCustomerStatusMeta } from '@/lib/studio/customer-status';
@@ -298,9 +298,11 @@ export function FeedPlannerSection({
     () =>
       concepts.filter(
         (concept) =>
-          isStudioAssignedCustomerConcept(concept) &&
-          concept.assignment.status === 'draft' &&
-          concept.placement?.feed_order === null
+          (isStudioAssignedCustomerConcept(concept) &&
+            concept.assignment.status === 'draft' &&
+            concept.placement?.feed_order === null) ||
+          (isCollaborationCustomerConcept(concept) &&
+            concept.placement?.feed_order === null)
       ),
     [concepts]
   );

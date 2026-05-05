@@ -428,20 +428,10 @@ export function ActiveConceptCard({
   const resolved = resolveConceptContent(concept, details ?? null);
   const nextStatus = getNextCustomerConceptAssignmentStatus(concept.assignment.status);
   const [showCustomize, setShowCustomize] = React.useState(false);
-  const [showMenu, setShowMenu] = React.useState(false);
+  const [hovered, setHovered] = React.useState(false);
   const [savingTags, setSavingTags] = React.useState(false);
   const [showPicker, setShowPicker] = React.useState(false);
-  const menuRef = React.useRef<HTMLDivElement>(null);
   const pickerRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    if (!showMenu) return;
-    const handler = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showMenu]);
 
   React.useEffect(() => {
     if (!showPicker) return;
@@ -480,7 +470,7 @@ export function ActiveConceptCard({
 
   const title = getWorkspaceConceptTitle(concept, details ?? null);
   const initials = title.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase() || '?';
-  const thumbnailUrl = concept.result.tiktok_thumbnail_url;
+  const thumbnailUrl = concept.result.tiktok_thumbnail_url ?? (details as { thumbnail_url?: string | null } | undefined)?.thumbnail_url ?? null;
   const tiktokUrl = concept.result.tiktok_url;
   const addedDate = concept.assignment.added_at ?? concept.added_at;
   const plannedPublishAt = concept.result.planned_publish_at;
@@ -551,6 +541,8 @@ export function ActiveConceptCard({
   return (
     <>
       <article
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
           background: justAdded ? '#fffaf1' : LeTrendColors.surface,
           borderRadius: LeTrendRadius.lg,
@@ -560,8 +552,38 @@ export function ActiveConceptCard({
           display: 'flex',
           gap: 14,
           alignItems: 'flex-start',
+          position: 'relative',
         }}
       >
+        {/* Delete × button — top-right, visible on hover */}
+        <button
+          type="button"
+          onClick={() => void onDelete(concept.id)}
+          aria-label="Ta bort från plan"
+          title="Ta bort från plan"
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 22,
+            height: 22,
+            borderRadius: '50%',
+            border: '1px solid #e5e7eb',
+            background: hovered ? '#fff' : 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            color: '#9ca3af',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: hovered ? 1 : 0,
+            transition: 'opacity 0.15s, background 0.15s',
+            lineHeight: 1,
+            padding: 0,
+          }}
+        >
+          ×
+        </button>
         {thumbnailNode}
 
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -610,26 +632,7 @@ export function ActiveConceptCard({
                   : ''}
               </span>
             )}
-            {typeof concept.placement.feed_order === 'number' ? (
-              <button
-                type="button"
-                onClick={() => onNavigateToFeedSlot?.(concept.placement.feed_order!)}
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: '#1e40af',
-                  background: '#dbeafe',
-                  border: '1px solid #bfdbfe',
-                  borderRadius: 999,
-                  padding: '1px 7px',
-                  cursor: onNavigateToFeedSlot ? 'pointer' : 'default',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                }}
-              >
-                {concept.placement.feed_order === 0 ? 'Nu' : `Plan +${concept.placement.feed_order}`}
-              </button>
-            ) : null}
+            {null /* position label shown in outer SortableConceptRow */}
             {cmUsageCount > 1 ? (
               <span
                 style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
@@ -865,70 +868,7 @@ export function ActiveConceptCard({
                 Placera i feed
               </button>
             ) : null}
-            <div style={{ position: 'relative', marginLeft: 'auto' }} ref={menuRef}>
-              <button
-                type="button"
-                onClick={() => setShowMenu((v) => !v)}
-                style={{
-                  background: 'none',
-                  border: `1px solid ${LeTrendColors.border}`,
-                  borderRadius: LeTrendRadius.md,
-                  padding: '5px 10px',
-                  cursor: 'pointer',
-                  fontSize: 14,
-                  color: LeTrendColors.textSecondary,
-                  lineHeight: 1,
-                }}
-                title="Fler alternativ"
-              >
-                ⠿
-              </button>
-              {showMenu && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 4px)',
-                    right: 0,
-                    zIndex: 50,
-                    background: '#fff',
-                    borderRadius: 8,
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
-                    border: '1px solid #e5e7eb',
-                    minWidth: 140,
-                    padding: 4,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowMenu(false);
-                      void onDelete(concept.id);
-                    }}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      padding: '7px 12px',
-                      background: 'none',
-                      border: 'none',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: '#ef4444',
-                      textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = '#fef2f2';
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLElement).style.background = 'none';
-                    }}
-                  >
-                    Ta bort
-                  </button>
-                </div>
-              )}
-            </div>
+            {null /* delete handled by top-right × button */}
           </div>
         </div>
       </article>
