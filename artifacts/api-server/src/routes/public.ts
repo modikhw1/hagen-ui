@@ -270,7 +270,7 @@ async function loadPreviewMetrics(
       .select('uploaded_at, views, likes, comments, shares, share_url, cover_image_url')
       .eq('customer_profile_id', customerId)
       .order('uploaded_at', { ascending: false })
-      .limit(30),
+      .limit(60),
   ]);
 
   const statsRows = (snapshots ?? []) as JsonRecord[];
@@ -281,21 +281,68 @@ async function loadPreviewMetrics(
     return date ? new Date(date).getTime() <= Date.now() - 7 * 24 * 3600 * 1000 : false;
   });
   const prev30 = statsRows[statsRows.length - 1] ?? null;
-  const videoViews = videoRows
-    .map((row) => readNumber(row['views']))
-    .filter((value): value is number => value !== null && value > 0);
+
   const conceptViews = concepts
     .map((concept) => concept.views)
     .filter((value): value is number => typeof value === 'number' && value > 0);
-  const viewsForAverage = videoViews.length > 0 ? videoViews : conceptViews;
-  const avgViews = viewsForAverage.length > 0
-    ? Math.round(viewsForAverage.reduce((sum, value) => sum + value, 0) / viewsForAverage.length)
-    : null;
+
   const latestFollowers = readNumber(latest?.['followers']) ?? 0;
 
   if (statsRows.length === 0 && videoRows.length === 0 && conceptViews.length === 0) {
     return {};
   }
+
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 3600 * 1000;
+
+  const endOfToday = new Date();
+  endOfToday.setUTCHours(0, 0, 0, 0);
+  const chartLabels: string[] = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(endOfToday);
+    d.setUTCDate(endOfToday.getUTCDate() - (29 - i));
+    return d.toISOString().slice(0, 10);
+  });
+  const buckets = new Map(chartLabels.map((l) => [l, 0]));
+
+  let totalViews30d = 0;
+  let totalLikes30d = 0;
+  const videos30d: JsonRecord[] = [];
+  for (const row of videoRows) {
+    const uploadedAt = readString(row['uploaded_at']);
+    if (!uploadedAt) continue;
+    const t = new Date(uploadedAt).getTime();
+    if (t < thirtyDaysAgo) continue;
+    const views = readNumber(row['views']) ?? 0;
+    const likes = readNumber(row['likes']) ?? 0;
+    totalViews30d += views;
+    totalLikes30d += likes;
+    videos30d.push(row);
+    const key = new Date(uploadedAt).toISOString().slice(0, 10);
+    if (buckets.has(key)) buckets.set(key, (buckets.get(key) ?? 0) + views);
+  }
+
+  const videoCount30d = videos30d.length;
+  const avgViews30d = videoCount30d > 0 ? Math.round(totalViews30d / videoCount30d) : null;
+  const likeRate30d = totalViews30d > 0 ? Math.round((totalLikes30d / totalViews30d) * 1000) / 10 : 0;
+
+  const hitThreshold = avgViews30d != null ? avgViews30d * 10 : null;
+  const viralThreshold = avgViews30d != null ? avgViews30d * 20 : null;
+  let genombrott_viral = 0;
+  let genombrott_hit = 0;
+  for (const row of videos30d) {
+    const views = readNumber(row['views']) ?? 0;
+    if (viralThreshold != null && views >= viralThreshold) genombrott_viral++;
+    else if (hitThreshold != null && views >= hitThreshold) genombrott_hit++;
+  }
+
+  const chartValues = chartLabels.map((l) => buckets.get(l) ?? 0);
+
+  const videoViews = videoRows
+    .map((row) => readNumber(row['views']))
+    .filter((value): value is number => value !== null && value > 0);
+  const viewsForAverage = videoViews.length > 0 ? videoViews : conceptViews;
+  const avgViewsAll = viewsForAverage.length > 0
+    ? Math.round(viewsForAverage.reduce((sum, value) => sum + value, 0) / viewsForAverage.length)
+    : null;
 
   return {
     source: 'live_studio',
@@ -305,8 +352,18 @@ async function loadPreviewMetrics(
     follower_delta_30d: latestFollowers - (readNumber(prev30?.['followers']) ?? latestFollowers),
     avg_engagement: readNumber(latest?.['engagement_rate']),
     engagement_rate: readNumber(latest?.['engagement_rate']),
-    avg_views: avgViews,
-    averageViews: avgViews,
+    avg_views: avgViews30d ?? avgViewsAll,
+    avg_views_30d: avgViews30d,
+    averageViews: avgViews30d ?? avgViewsAll,
+    total_views_30d: totalViews30d,
+    video_count_30d: videoCount30d,
+    like_rate_30d: likeRate30d,
+    like_rate: likeRate30d,
+    genombrott_viral,
+    genombrott_hit,
+    genombrott_klipp: videoCount30d,
+    chart_labels: chartLabels,
+    chart_values: chartValues,
     recent_video_count: videoRows.length,
     latest_video_views: readNumber(videoRows[0]?.['views']),
     stats_updated_at: readString(latest?.['snapshot_date']),
