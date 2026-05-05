@@ -69,10 +69,11 @@ function statusTone(status: DemoStatus): string {
   }
 }
 
+const DEMO_SHARE_BASE = 'https://letrend.se';
+
 function buildShareUrl(token: string | null): string | null {
   if (!token) return null;
-  if (typeof window === 'undefined') return `/d/${token}`;
-  return `${window.location.origin}/d/${token}`;
+  return `${DEMO_SHARE_BASE}/d/${token}`;
 }
 
 export function DemosBoard({ days = 30 }: { days?: number }) {
