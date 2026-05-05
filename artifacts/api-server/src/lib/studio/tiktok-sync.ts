@@ -894,23 +894,30 @@ export async function refreshReconciledThumbnails(
   let updated = 0;
   let errors = 0;
 
-  await Promise.all(rows.map(async (row) => {
-    const { error } = await supabase
-      .from('customer_concepts')
-      .update({ tiktok_thumbnail_url: row.tiktok_thumbnail_url })
-      .eq('id', row.reconciled_customer_concept_id);
-    if (error) {
-      logger.warn(
-        { err: error, historyId: row.id, assignmentId: row.reconciled_customer_concept_id },
-        'tiktok-sync: refreshReconciledThumbnails update failed',
-      );
-      errors += 1;
-    } else {
-      updated += 1;
-    }
-  }));
+  // Process in small batches to avoid unbounded concurrent DB writes at scale.
+  const BATCH = 10;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    await Promise.all(rows.slice(i, i + BATCH).map(async (row) => {
+      const { error } = await supabase
+        .from('customer_concepts')
+        .update({ tiktok_thumbnail_url: row.tiktok_thumbnail_url })
+        .eq('id', row.reconciled_customer_concept_id);
+      if (error) {
+        logger.warn(
+          { err: error, historyId: row.id, assignmentId: row.reconciled_customer_concept_id },
+          'tiktok-sync: refreshReconciledThumbnails update failed',
+        );
+        errors += 1;
+      } else {
+        updated += 1;
+      }
+    }));
+  }
 
-  logger.info({ customerId: customerId ?? 'all', updated, errors }, 'tiktok-sync: refreshReconciledThumbnails done');
+  logger.info(
+    { customerId: customerId ?? 'all', scanned: rows.length, updated, errors },
+    'tiktok-sync: refreshReconciledThumbnails done',
+  );
   return { updated, errors };
 }
 
