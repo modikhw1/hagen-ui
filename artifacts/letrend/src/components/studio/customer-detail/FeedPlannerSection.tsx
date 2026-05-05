@@ -98,6 +98,91 @@ function parseProjectedDate(value: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function formatPlannerDebugDate(value: string | null): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toISOString().slice(0, 10);
+}
+
+function FeedPlannerDebugPanel({ rows }: { rows: PlannerVisualCell[][] }) {
+  const cells = rows.flat();
+
+  return (
+    <details
+      style={{
+        marginTop: 12,
+        border: `1px dashed ${LeTrendColors.border}`,
+        borderRadius: LeTrendRadius.md,
+        background: 'rgba(250,248,245,0.82)',
+        color: LeTrendColors.brownDark,
+        fontSize: 11,
+      }}
+    >
+      <summary
+        style={{
+          cursor: 'pointer',
+          padding: '8px 10px',
+          fontWeight: 700,
+          userSelect: 'none',
+        }}
+      >
+        Planner debug ({cells.length} cells)
+      </summary>
+      <div
+        style={{
+          display: 'grid',
+          gap: 6,
+          maxHeight: 280,
+          overflow: 'auto',
+          padding: '0 10px 10px',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        }}
+      >
+        {cells.map((cell) => {
+          const card = cell.card;
+          return (
+            <div
+              key={cell.cellIndex}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '58px 54px 126px 1fr',
+                gap: 8,
+                alignItems: 'start',
+                padding: '7px 8px',
+                borderRadius: 8,
+                background: cell.cellIndex === 4 ? 'rgba(196,129,58,0.12)' : '#fff',
+                border: `1px solid ${cell.cellIndex === 4 ? 'rgba(196,129,58,0.28)' : 'rgba(74,47,24,0.08)'}`,
+              }}
+            >
+              <div>
+                <strong>cell {cell.cellIndex + 1}</strong>
+                <div>r{cell.rowIndex + 1} c{cell.columnIndex + 1}</div>
+              </div>
+              <div>
+                <strong>{cell.relativePosition > 0 ? `+${cell.relativePosition}` : cell.relativePosition}</strong>
+                <div>{formatPlannerDebugDate(cell.projectedDate)}</div>
+              </div>
+              <div>
+                <strong>{cell.kind}</strong>
+                <div>{card ? `${card.kind}/${card.state}` : cell.placeholder?.state ?? '-'}</div>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {card?.id ?? '-'}
+                </div>
+                <div>identity: {card?.historyIdentity ?? '-'}</div>
+                <div>actions: {card?.actions.join(', ') || '-'}</div>
+                <div>badges: {card?.badges.join(', ') || '-'}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // FeedPlannerSection
 // ---------------------------------------------------------------------------
@@ -1834,6 +1919,10 @@ export function FeedPlannerSection({
             </div>
           ))}
         </div>
+
+        {import.meta.env.MODE !== 'production' && (
+          <FeedPlannerDebugPanel rows={visualCellRows} />
+        )}
 
         {/* Empty feed state (Task 8): shown when no LeTrend concepts have been assigned */}
         {hasNoConcepts && (
