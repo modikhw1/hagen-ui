@@ -48,6 +48,8 @@ app.use(
         origin.includes(".repl.co") ||
         origin.includes(".lovable.app") ||
         origin.includes(".lovableproject.com") ||
+        origin === "https://letrend.se" ||
+        origin === "https://www.letrend.se" ||
         origin === "http://localhost:3000" ||
         origin === "http://localhost:5173" ||
         origin === "http://localhost:8080";
