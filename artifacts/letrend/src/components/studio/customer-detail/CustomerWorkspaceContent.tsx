@@ -62,6 +62,7 @@ import {
   getStudioWorkspaceSection,
 } from '@/lib/studio/navigation';
 import {
+  isCollaborationCustomerConcept,
   isStudioAssignedCustomerConcept,
   normalizeStudioCustomerConcept,
 } from '@/lib/studio/customer-concepts';
@@ -2033,6 +2034,20 @@ function CustomerWorkspacePageContent() {
     setWorkspaceSection('feed');
   };
 
+  // Unplaced, active collaboration customer concepts — shown in the slot-pick panel
+  // as a bypass section so they are always selectable regardless of library filters.
+  const unplacedCollaborationConcepts = React.useMemo(
+    () =>
+      concepts.filter(
+        (c) =>
+          isCollaborationCustomerConcept(c) &&
+          c.placement?.feed_order === null &&
+          c.assignment.status !== 'produced' &&
+          c.assignment.status !== 'archived',
+      ),
+    [concepts],
+  );
+
   const availableAddConcepts = React.useMemo(
     () =>
       allConcepts
@@ -3823,6 +3838,57 @@ function CustomerWorkspacePageContent() {
             </button>
           ) : null}
         </div>
+        {/* Collaboration concepts bypass — always shown, exempt from search/filter predicates */}
+        {unplacedCollaborationConcepts.length > 0 && slotAddTargetFeedOrder !== null && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: LeTrendColors.textMuted, letterSpacing: '0.06em', textTransform: 'uppercase', paddingBottom: 4, borderBottom: `1px solid ${LeTrendColors.border}`, marginBottom: 8 }}>
+              ✦ Samarbeten
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {unplacedCollaborationConcepts.map((collab) => (
+                <div
+                  key={collab.id}
+                  style={{
+                    background: 'white',
+                    border: `1.5px solid ${LeTrendColors.brownLight}`,
+                    borderRadius: LeTrendRadius.md,
+                    padding: '10px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: LeTrendColors.brownDark, lineHeight: 1.3 }}>
+                      {collab.partner_name || 'Samarbetspartner'}
+                    </div>
+                    <div style={{ fontSize: 11, color: LeTrendColors.textMuted, marginTop: 2 }}>
+                      {collab.confirmed ? 'Bekräftat' : 'Ej bekräftat'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleAssignToSlot(collab.id, slotAddTargetFeedOrder).then(() => { setShowAddConceptPanel(false); resetAddConceptPanelState(); })}
+                    style={{
+                      padding: '6px 12px',
+                      background: LeTrendColors.brownDark,
+                      border: 'none',
+                      color: '#fff',
+                      borderRadius: LeTrendRadius.md,
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    Välj
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {filteredAddConcepts.map((concept, idx) => {
             const prevConcept = filteredAddConcepts[idx - 1];
