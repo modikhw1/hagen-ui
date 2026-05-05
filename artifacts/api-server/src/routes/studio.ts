@@ -8,9 +8,60 @@ import { proxyHagenJson } from '../lib/upstream-proxy.js';
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
 
+// ---------------------------------------------------------------------------
+// Per-user sliding-window rate limiter for the expensive analyze route.
+// Allows up to ANALYZE_LIMIT requests per ANALYZE_WINDOW_MS per user.
+// ---------------------------------------------------------------------------
+const ANALYZE_LIMIT = 5;
+const ANALYZE_WINDOW_MS = 60_000; // 1 minute
+
+const analyzeTimestamps = new Map<string, number[]>();
+
+// Evict stale keys every 5 minutes so the map doesn't grow unboundedly in
+// long-lived single-instance deployments where users stop calling the endpoint.
+setInterval(() => {
+  const windowStart = Date.now() - ANALYZE_WINDOW_MS;
+  for (const [userId, timestamps] of analyzeTimestamps) {
+    const fresh = timestamps.filter((t) => t > windowStart);
+    if (fresh.length === 0) {
+      analyzeTimestamps.delete(userId);
+    } else {
+      analyzeTimestamps.set(userId, fresh);
+    }
+  }
+}, 5 * 60_000).unref();
+
+function checkAnalyzeRateLimit(userId: string): { allowed: boolean; retryAfterMs: number } {
+  const now = Date.now();
+  const windowStart = now - ANALYZE_WINDOW_MS;
+  const timestamps = (analyzeTimestamps.get(userId) ?? []).filter((t) => t > windowStart);
+
+  if (timestamps.length >= ANALYZE_LIMIT) {
+    const oldest = timestamps[0]!;
+    const retryAfterMs = oldest + ANALYZE_WINDOW_MS - now;
+    analyzeTimestamps.set(userId, timestamps);
+    return { allowed: false, retryAfterMs: Math.max(retryAfterMs, 1000) };
+  }
+
+  timestamps.push(now);
+  analyzeTimestamps.set(userId, timestamps);
+  return { allowed: true, retryAfterMs: 0 };
+}
+
 // POST /api/studio/concepts/analyze
 // Proxies to Hagen analyze service
 router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
+  const userId = req.user?.id ?? req.user?.email ?? 'anonymous';
+  const { allowed, retryAfterMs } = checkAnalyzeRateLimit(String(userId));
+  if (!allowed) {
+    const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+    res.setHeader('Retry-After', String(retryAfterSec));
+    res.status(429).json({
+      error: `För många analyser. Du kan ladda upp max ${ANALYZE_LIMIT} videor per minut. Försök igen om ${retryAfterSec} sekunder.`,
+      retryAfterSeconds: retryAfterSec,
+    });
+    return;
+  }
   const body = req.body as Record<string, unknown>;
   const videoUrl = typeof body.videoUrl === 'string' ? body.videoUrl.trim() : '';
   if (!videoUrl) {

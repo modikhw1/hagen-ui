@@ -58,6 +58,7 @@ function detectPlatform(url: string): { key: string; label: string; color: strin
 async function readJsonResponse(response: Response) {
   return (await response.json().catch(() => ({}))) as {
     error?: string;
+    retryAfterSeconds?: number;
     stage?: string;
     upload?: { gcsUri?: string };
     analysis?: JsonRecord;
@@ -157,6 +158,14 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         body: JSON.stringify({ videoUrl, platform: platform?.key }),
       });
       const analyzePayload = await readJsonResponse(analyzeRes);
+      if (analyzeRes.status === 429) {
+        const retryAfter = analyzePayload.retryAfterSeconds as number | undefined;
+        const retryMsg = retryAfter ? ` Försök igen om ${retryAfter} sekunder.` : ' Försök igen om en stund.';
+        throw new Error(
+          analyzePayload.error ||
+            `För många analyser på kort tid. Du kan ladda upp max 5 videor per minut.${retryMsg}`,
+        );
+      }
       if (!analyzeRes.ok) throw new Error(analyzePayload.error || 'Upload eller analys misslyckades');
 
       const analyzeEnvelope = analyzePayload.analysis;
