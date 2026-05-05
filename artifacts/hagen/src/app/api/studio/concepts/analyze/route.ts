@@ -32,6 +32,7 @@ import { createVideoDownloader } from '@/lib/services/video/downloader'
 import { createVideoStorageService } from '@/lib/services/video/storage'
 import { GeminiVideoAnalyzer } from '@/lib/services/video/gemini'
 import type { VideoAnalysis } from '@/lib/services/types'
+import { getCachedGeminiUri, setCachedGeminiUri, evictExpiredEntries } from '@/lib/services/video/gemini-uri-cache'
 
 const bodySchema = z.object({
   videoUrl: z.string().url('videoUrl must be a valid URL'),
@@ -251,33 +252,48 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Step 1: Download ─────────────────────────────────────────────────────
-    console.log(`[studio/analyze] Downloading: ${videoUrl}`)
-    const dlResult = await downloadVideo(videoUrl)
-    if (!dlResult.ok) {
-      return NextResponse.json(
-        { error: 'download_failed', message: dlResult.error },
-        { status: 422 },
-      )
-    }
-    localFilePath = dlResult.filePath
-    console.log(`[studio/analyze] Downloaded to ${localFilePath}`)
+    // Opportunistically evict stale cache entries on each request (cheap O(n) scan).
+    evictExpiredEntries()
 
-    // ── Step 2: Upload to Gemini File API ────────────────────────────────────
-    console.log('[studio/analyze] Uploading to Gemini File API…')
+    // ── Step 1: Download (skipped on cache hit) ───────────────────────────────
+    const cachedUri = getCachedGeminiUri(videoUrl)
+    let geminiUri: string
+
     const storage = createVideoStorageService()
-    const geminiUpload = await storage.uploadToGeminiFileAPI(localFilePath)
-    if (!geminiUpload.success || !geminiUpload.gsUrl) {
-      return NextResponse.json(
-        {
-          error: 'upload_failed',
-          message: `Gemini File API upload failed: ${geminiUpload.error ?? 'unknown error'}`,
-        },
-        { status: 502 },
-      )
+
+    if (cachedUri) {
+      console.log(`[studio/analyze] Cache hit — reusing Gemini URI for: ${videoUrl}`)
+      geminiUri = cachedUri
+    } else {
+      console.log(`[studio/analyze] Downloading: ${videoUrl}`)
+      const dlResult = await downloadVideo(videoUrl)
+      if (!dlResult.ok) {
+        return NextResponse.json(
+          { error: 'download_failed', message: dlResult.error },
+          { status: 422 },
+        )
+      }
+      localFilePath = dlResult.filePath
+      console.log(`[studio/analyze] Downloaded to ${localFilePath}`)
+
+      // ── Step 2: Upload to Gemini File API ──────────────────────────────────
+      console.log('[studio/analyze] Uploading to Gemini File API…')
+      const geminiUpload = await storage.uploadToGeminiFileAPI(localFilePath)
+      if (!geminiUpload.success || !geminiUpload.gsUrl) {
+        return NextResponse.json(
+          {
+            error: 'upload_failed',
+            message: `Gemini File API upload failed: ${geminiUpload.error ?? 'unknown error'}`,
+          },
+          { status: 502 },
+        )
+      }
+      geminiUri = geminiUpload.gsUrl
+      console.log(`[studio/analyze] Uploaded to Gemini: ${geminiUri}`)
+
+      // Store in cache so subsequent requests for the same URL skip download+upload.
+      setCachedGeminiUri(videoUrl, geminiUri)
     }
-    const geminiUri = geminiUpload.gsUrl
-    console.log(`[studio/analyze] Uploaded to Gemini: ${geminiUri}`)
 
     // ── Step 3: Base Gemini analysis ─────────────────────────────────────────
     console.log('[studio/analyze] Running Gemini analysis…')
@@ -300,7 +316,7 @@ export async function POST(request: NextRequest) {
 
     let gcsUri: string | undefined
 
-    if (isHumorous && gcsConfigured) {
+    if (isHumorous && gcsConfigured && localFilePath) {
       console.log('[studio/analyze] Video is humorous — uploading to GCS for v7.B pass…')
       const destPath = `studio/analyze/${Date.now()}${path.extname(localFilePath)}`
       const gcsResult = await storage.uploadVideo(localFilePath, destPath)
@@ -340,9 +356,11 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Step 5: Cleanup ──────────────────────────────────────────────────────
-    const downloader = createVideoDownloader()
-    await downloader.cleanup(localFilePath).catch(() => {})
-    localFilePath = undefined
+    if (localFilePath) {
+      const downloader = createVideoDownloader()
+      await downloader.cleanup(localFilePath).catch(() => {})
+      localFilePath = undefined
+    }
 
     return NextResponse.json({
       analysis,
