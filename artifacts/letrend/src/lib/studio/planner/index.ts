@@ -4,6 +4,11 @@ export { buildPlannerOrdering } from './ordering';
 export { buildFeedPlannerViewModel } from './projection';
 export { buildPlannerCardActions, buildPlannerCardBadges } from './behavior';
 export { buildFeedPlannerGridProjection } from './grid-projection';
+export {
+  buildDenseFeedOrderInsertionUpdates,
+  buildDenseFeedOrderSwapUpdates,
+} from './queue-updates';
+export type { PlannerQueueFeedOrderUpdate } from './queue-updates';
 export type {
   FeedPlannerCardModel,
   FeedPlannerCurrentPlaceholder,

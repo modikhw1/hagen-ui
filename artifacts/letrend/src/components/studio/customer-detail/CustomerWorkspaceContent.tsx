@@ -90,6 +90,10 @@ import { KommunikationSection } from './KommunikationSection';
 import { useConceptWorkspace } from '@/hooks/useConceptWorkspace';
 import { useFeedPlannerState } from '@/hooks/useFeedPlannerState';
 import { useCommunicationState } from '@/hooks/useCommunicationState';
+import {
+  buildDenseFeedOrderInsertionUpdates,
+  buildDenseFeedOrderSwapUpdates,
+} from '@/lib/studio/planner';
 
 const MemoGamePlanSection = React.memo(GamePlanSection);
 const MemoKonceptSection = React.memo(KonceptSection);
@@ -1597,7 +1601,12 @@ function CustomerWorkspacePageContent() {
   // Feed planner handlers (uppdaterade för feed_order)
   const handleAssignToFeedOrder = async (conceptId: string, feedOrder: number) => {
     try {
-      await handleUpdateConcept(conceptId, { feed_order: feedOrder });
+      const updates = buildDenseFeedOrderInsertionUpdates(concepts, conceptId, feedOrder);
+      if (updates.length > 0) {
+        for (const update of updates) {
+          await handleUpdateConcept(update.conceptId, { feed_order: update.feedOrder });
+        }
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
       return;
@@ -1619,7 +1628,12 @@ function CustomerWorkspacePageContent() {
 
   const handleAssignToSlot = async (conceptId: string, feedOrder: number) => {
     try {
-      await handleUpdateConcept(conceptId, { feed_order: feedOrder });
+      const updates = buildDenseFeedOrderInsertionUpdates(concepts, conceptId, feedOrder);
+      if (updates.length > 0) {
+        for (const update of updates) {
+          await handleUpdateConcept(update.conceptId, { feed_order: update.feedOrder });
+        }
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
       return;
@@ -1629,16 +1643,14 @@ function CustomerWorkspacePageContent() {
     }
   };
 
-  // Atomically swaps the feed_order of two concepts (Task 12).
+  // Swaps two future-queue cards and writes back the dense queue order used by the planner model.
   const handleSwapFeedOrder = async (conceptIdA: string, conceptIdB: string) => {
     try {
-      const { error } = await supabase.rpc('swap_feed_order', {
-        p_concept_a: conceptIdA,
-        p_concept_b: conceptIdB,
-      });
-      if (error) throw new Error(error.message);
-
-      await fetchConcepts(true);
+      const updates = buildDenseFeedOrderSwapUpdates(concepts, conceptIdA, conceptIdB);
+      if (updates.length === 0) return;
+      for (const update of updates) {
+        await handleUpdateConcept(update.conceptId, { feed_order: update.feedOrder });
+      }
     } catch (err) {
       console.error('Swap feed_order error:', err);
       alert(err instanceof Error ? err.message : 'Kunde inte byta ordning');

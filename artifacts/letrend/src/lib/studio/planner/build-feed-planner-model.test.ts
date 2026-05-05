@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildFeedPlannerModel } from './build-feed-planner-model';
+import {
+  buildDenseFeedOrderInsertionUpdates,
+  buildDenseFeedOrderSwapUpdates,
+} from './queue-updates';
 import { normalizeStudioCustomerConcept } from '../customer-concepts';
 
 function rawRow(id: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -360,6 +364,45 @@ describe('buildFeedPlannerModel', () => {
     expect(model.grid.cells.slice(16, 18).map((cell) => cell.kind)).toEqual([
       'let_pad',
       'let_pad',
+    ]);
+  });
+});
+
+describe('planner queue updates', () => {
+  it('inserts a concept into the future queue and pushes later cards forward', () => {
+    const concepts = [
+      normalizeStudioCustomerConcept(rawRow('now', { feed_order: 0 })),
+      normalizeStudioCustomerConcept(rawRow('next', { feed_order: 1 })),
+      normalizeStudioCustomerConcept(rawRow('unplaced', { feed_order: null })),
+    ];
+
+    expect(buildDenseFeedOrderInsertionUpdates(concepts, 'unplaced', 1)).toEqual([
+      { conceptId: 'unplaced', feedOrder: 1 },
+      { conceptId: 'next', feedOrder: 2 },
+    ]);
+  });
+
+  it('clamps far future inserts to the next dense queue position', () => {
+    const concepts = [
+      normalizeStudioCustomerConcept(rawRow('now', { feed_order: 0 })),
+      normalizeStudioCustomerConcept(rawRow('unplaced', { feed_order: null })),
+    ];
+
+    expect(buildDenseFeedOrderInsertionUpdates(concepts, 'unplaced', 4)).toEqual([
+      { conceptId: 'unplaced', feedOrder: 1 },
+    ]);
+  });
+
+  it('swaps two queue cards and returns only changed feed orders', () => {
+    const concepts = [
+      normalizeStudioCustomerConcept(rawRow('now', { feed_order: 0 })),
+      normalizeStudioCustomerConcept(rawRow('next', { feed_order: 1 })),
+      normalizeStudioCustomerConcept(rawRow('later', { feed_order: 2 })),
+    ];
+
+    expect(buildDenseFeedOrderSwapUpdates(concepts, 'next', 'later')).toEqual([
+      { conceptId: 'later', feedOrder: 1 },
+      { conceptId: 'next', feedOrder: 2 },
     ]);
   });
 });

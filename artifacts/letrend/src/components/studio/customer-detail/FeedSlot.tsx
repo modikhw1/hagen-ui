@@ -84,14 +84,25 @@ function FeedSlot({
   const isPastSlot = slot.feedOrder < 0;
   const canAddConcept = type === 'empty' && !isPastSlot;
 
-  // Swap neighbors: find the concepts at feed_order ± 1 for "Flytta upp/ner" (Task 12)
-  const conceptFeedOrder = concept?.feed_order ?? null;
-  const swapUpNeighbor = (concept != null && conceptFeedOrder != null)
-    ? (allConcepts.find((c) => c.id !== concept.id && c.feed_order === conceptFeedOrder + 1) ?? null)
-    : null;
-  const swapDownNeighbor = (concept != null && conceptFeedOrder != null)
-    ? (allConcepts.find((c) => c.id !== concept.id && c.feed_order === conceptFeedOrder - 1) ?? null)
-    : null;
+  const futureQueueConcepts = (allConcepts ?? [])
+    .filter((item) => {
+      const feedOrder = item.placement?.feed_order ?? item.feed_order ?? null;
+      return item.row_kind === 'assignment' && typeof feedOrder === 'number' && feedOrder >= 0;
+    })
+    .sort((a, b) => {
+      const feedOrderA = a.placement?.feed_order ?? a.feed_order ?? Number.MAX_SAFE_INTEGER;
+      const feedOrderB = b.placement?.feed_order ?? b.feed_order ?? Number.MAX_SAFE_INTEGER;
+      if (feedOrderA !== feedOrderB) return feedOrderA - feedOrderB;
+      return a.added_at.localeCompare(b.added_at);
+    });
+  const currentQueueIndex = concept
+    ? futureQueueConcepts.findIndex((item) => item.id === concept.id)
+    : -1;
+  const swapUpNeighbor = currentQueueIndex > 0 ? futureQueueConcepts[currentQueueIndex - 1] : null;
+  const swapDownNeighbor =
+    currentQueueIndex >= 0 && currentQueueIndex < futureQueueConcepts.length - 1
+      ? futureQueueConcepts[currentQueueIndex + 1]
+      : null;
   const hasUnreadUpload = hasUnreadUploadMarker(concept);
   const linkedHistoryConcept =
     concept?.reconciliation.linked_customer_concept_id != null
