@@ -61,7 +61,6 @@ export function ProducedConceptCard({
   const [showResultNoteComposer, setShowResultNoteComposer] = React.useState(false);
   const [resultNoteText, setResultNoteText] = React.useState('');
   const [savingNote, setSavingNote] = React.useState(false);
-  const markerIdentity = concept.cm_id ? cmDisplayNames[concept.cm_id] : null;
   const sortedConceptNotes = React.useMemo(
     () =>
       [...conceptNotes].sort((left, right) => {

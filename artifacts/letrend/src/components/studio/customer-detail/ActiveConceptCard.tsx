@@ -871,7 +871,7 @@ export function ActiveConceptCard({
                 Placera i feed
               </button>
             ) : null}
-            {null /* delete handled by top-right × button */}
+            {null /* "Delad med kund" button removed — customer sharing is handled via the email flow (KommunikationSection) and automatically on production publish */}
           </div>
         </div>
       </article>
