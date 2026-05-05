@@ -2,12 +2,11 @@
  * POST /api/studio/concepts/analyze
  *
  * Studio ingest step 1 — download → Gemini File API upload → comprehensive
- * video analysis → optional v7.B fine-tuned humor pass (when clip is humorous
- * AND GCS is configured).
+ * video analysis (base Gemini only).
  *
- * The fine-tuning version is resolved from datasets/fine-tuning/model_versions.json
- * using the same getModelResource() logic as /api/fine-tuning/generate, with
- * 'v7.B' pinned as the humor-analysis version so behavior is predictable.
+ * The v7.B fine-tuned humor pass has been moved to
+ * POST /api/studio/concepts/humor-enrich, which LeTrend fires as a
+ * fire-and-forget background request after the concept is saved.
  *
  * Response shape:
  *   {
@@ -18,7 +17,6 @@
  * Error codes (always in JSON body as { error: string, message?: string }):
  *   400  validation_error
  *   422  download_failed
- *   422  gcs_upload_failed   (GCS upload to prepare fine-tuning pass)
  *   502  upload_failed       (Gemini File API upload)
  *   503  gemini_not_configured
  *   500  analyze_failed
@@ -26,8 +24,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import fs from 'fs'
-import path from 'path'
 import { createVideoDownloader } from '@/lib/services/video/downloader'
 import { createVideoStorageService } from '@/lib/services/video/storage'
 import { GeminiVideoAnalyzer } from '@/lib/services/video/gemini'
@@ -40,49 +36,6 @@ const bodySchema = z.object({
 })
 
 export const maxDuration = 60
-
-// ── Model version resolution (mirrors fine-tuning/generate/route.ts) ───────
-
-const DATASET_DIR = path.join(process.cwd(), 'datasets/fine-tuning')
-const MODEL_VERSIONS_FILE = path.join(DATASET_DIR, 'model_versions.json')
-const TUNED_MODEL_FILE = path.join(DATASET_DIR, 'tuned_model.json')
-
-/** Pinned fine-tuning version used for the humor sharpening pass. */
-const HUMOR_TUNING_VERSION = 'v7.B'
-
-function getModelResource(version: string): { resourceName: string; versionUsed: string } | null {
-  try {
-    if (fs.existsSync(MODEL_VERSIONS_FILE)) {
-      const versions = JSON.parse(fs.readFileSync(MODEL_VERSIONS_FILE, 'utf-8')) as {
-        versions?: Record<string, { endpoint?: string; model?: string }>
-        default?: string
-        latest?: string
-      }
-      const targetVersion = version || versions.default || versions.latest
-      const modelInfo = targetVersion ? versions.versions?.[targetVersion] : undefined
-      if (modelInfo?.endpoint || modelInfo?.model) {
-        return {
-          resourceName: (modelInfo.endpoint ?? modelInfo.model) as string,
-          versionUsed: targetVersion as string,
-        }
-      }
-    }
-    // Fallback: legacy single-model file
-    if (fs.existsSync(TUNED_MODEL_FILE)) {
-      const modelInfo = JSON.parse(fs.readFileSync(TUNED_MODEL_FILE, 'utf-8')) as {
-        endpoint?: string
-        model?: string
-      }
-      return {
-        resourceName: (modelInfo.endpoint ?? modelInfo.model) as string,
-        versionUsed: 'legacy',
-      }
-    }
-  } catch (err) {
-    console.warn('[studio/analyze] Could not read model_versions.json:', err instanceof Error ? err.message : String(err))
-  }
-  return null
-}
 
 // ── Downloader with chain-of-fallback ──────────────────────────────────────
 
@@ -109,123 +62,6 @@ async function downloadVideo(videoUrl: string): Promise<DownloadOutcome> {
   return {
     ok: false,
     error: `download_failed: all strategies exhausted — ${ytdlp.error ?? 'unknown'}`,
-  }
-}
-
-// ── Fine-tuning (v7.B) — structured humor sharpener ────────────────────────
-
-interface TunedHumorResult {
-  /** Parsed "Handling" field — a one-sentence description of what happens */
-  handlingSummary: string
-  /** Parsed "Mekanism" field — comma-separated mechanism keywords */
-  mechanism: string
-  /** Parsed "Varför" field — why it works */
-  whyItWorks: string
-  /** Raw full response text for auditing */
-  rawText: string
-  versionUsed: string
-}
-
-/**
- * Parse the concise v7.B response format into structured fields:
- *   **Handling:** <one sentence>
- *   **Mekanism:** <keywords>
- *   **Varför:** <one sentence>
- */
-function parseTunedResponse(text: string): Omit<TunedHumorResult, 'rawText' | 'versionUsed'> {
-  const extract = (label: string): string => {
-    const re = new RegExp(`\\*{0,2}${label}:\\*{0,2}\\s*(.+?)(?=\\n\\*{0,2}[A-ZÅÄÖ]|$)`, 'si')
-    const m = text.match(re)
-    return m ? m[1].trim().replace(/\*+/g, '').trim() : ''
-  }
-  return {
-    handlingSummary: extract('Handling'),
-    mechanism: extract('Mekanism'),
-    whyItWorks: extract('Varför'),
-  }
-}
-
-async function runTunedHumorModel(gcsUri: string): Promise<TunedHumorResult | null> {
-  const modelRes = getModelResource(HUMOR_TUNING_VERSION)
-  if (!modelRes) {
-    console.warn('[studio/analyze] v7.B model resource not found in model_versions.json — skipping')
-    return null
-  }
-
-  try {
-    // google-auth-library is installed but its types are missing in this workspace.
-    // Dynamic require avoids compile-time TS block; behavior is identical at runtime.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { GoogleAuth } = require('google-auth-library') as {
-      GoogleAuth: new (opts: { scopes: string[] }) => {
-        getClient(): Promise<{
-          getAccessToken(): Promise<{ token: string | null | undefined }>
-        }>
-      }
-    }
-    const auth = new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] })
-    const client = await auth.getClient()
-    const { token } = await client.getAccessToken()
-    if (!token) {
-      console.warn('[studio/analyze] v7.B: could not obtain access token')
-      return null
-    }
-
-    const endpoint = `https://us-central1-aiplatform.googleapis.com/v1/${modelRes.resourceName}:generateContent`
-
-    // Concise structured prompt — matches the PROMPT_CONCISE in fine-tuning/generate/route.ts
-    const prompt = `Analysera videon kort och koncist.
-
-Format:
-**Handling:** [En mening om vad som sker]
-**Mekanism:** [Nyckelord: t.ex. Subversion, Igenkänning]
-**Varför:** [En mening om poängen]
-
-Håll det extremt kort. Inget fluff.`
-
-    const resp = await fetch(endpoint, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { fileData: { mimeType: 'video/mp4', fileUri: gcsUri } },
-              { text: prompt },
-            ],
-          },
-        ],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 512 },
-        safetySettings: [
-          { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-          { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-        ],
-      }),
-      signal: AbortSignal.timeout(20000),
-    })
-
-    if (!resp.ok) {
-      console.warn(`[studio/analyze] v7.B (${modelRes.versionUsed}) call failed:`, resp.status)
-      return null
-    }
-
-    const data = (await resp.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
-    }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!text) return null
-
-    const parsed = parseTunedResponse(text)
-    return { ...parsed, rawText: text.trim(), versionUsed: modelRes.versionUsed }
-  } catch (err) {
-    console.warn(
-      '[studio/analyze] v7.B optional call failed:',
-      err instanceof Error ? err.message : String(err),
-    )
-    return null
   }
 }
 
@@ -304,72 +140,21 @@ export async function POST(request: NextRequest) {
     )
     analysis.analysisModel = 'gemini-2.0-flash-001'
 
-    // script.humor is typed as [key: string]: unknown — use keyed access
     const scriptHumor = analysis.script?.['humor'] as Record<string, unknown> | undefined
     console.log('[studio/analyze] Base analysis complete, isHumorous:', scriptHumor?.['isHumorous'])
 
-    // ── Step 4: Optional — fine-tuned humor pass (v7.B) ──────────────────────
-    const isHumorous = scriptHumor?.['isHumorous'] === true
-    const gcsConfigured = Boolean(
-      process.env.GOOGLE_CLOUD_PROJECT_ID && process.env.GOOGLE_CLOUD_STORAGE_BUCKET,
-    )
-
-    let gcsUri: string | undefined
-
-    // Note: the v7.B fine-tuned humor pass requires a local file to upload to GCS.
-    // On a Gemini URI cache hit `localFilePath` is undefined, so the pass is skipped
-    // intentionally — the speed benefit of the cache (skipping download + upload) takes
-    // priority over re-running the optional enrichment.  The pass runs in full on the
-    // first (cache-miss) call and on any call after the 47h TTL expires.
-    if (isHumorous && gcsConfigured && localFilePath) {
-      console.log('[studio/analyze] Video is humorous — uploading to GCS for v7.B pass…')
-      const destPath = `studio/analyze/${Date.now()}${path.extname(localFilePath)}`
-      const gcsResult = await storage.uploadVideo(localFilePath, destPath)
-
-      if (!gcsResult.success || !gcsResult.gsUrl) {
-        // GCS upload is only needed for the optional fine-tuning pass — treat
-        // failure as non-fatal. Return 200 with base analysis and a warning so
-        // the caller never gets blocked on a purely optional enrichment step.
-        console.warn('[studio/analyze] GCS upload failed (optional pass skipped):', gcsResult.error)
-        await (createVideoDownloader()).cleanup(localFilePath).catch(() => {})
-        localFilePath = undefined
-        return NextResponse.json({
-          analysis,
-          upload: { gcsUri: geminiUri },
-          warnings: [
-            {
-              code: 'gcs_upload_failed',
-              message: `Fine-tuned humor pass skipped — GCS upload failed: ${gcsResult.error ?? 'unknown error'}`,
-            },
-          ],
-        })
-      }
-
-      gcsUri = gcsResult.gsUrl
-      console.log(`[studio/analyze] GCS URI: ${gcsUri}`)
-
-      const tuned = await runTunedHumorModel(gcsUri)
-      if (tuned && scriptHumor) {
-        // Merge parsed structured fields — never inject raw multi-line text
-        if (tuned.handlingSummary) scriptHumor['handlingSummary'] = tuned.handlingSummary
-        if (tuned.mechanism) scriptHumor['humorMechanism'] = tuned.mechanism
-        if (tuned.whyItWorks) scriptHumor['whyItWorks'] = tuned.whyItWorks
-        scriptHumor['tunedRawText'] = tuned.rawText
-        analysis.analysisModel = `gemini-2.0-flash-001+${tuned.versionUsed}`
-        console.log(`[studio/analyze] v7.B fields merged, model=${analysis.analysisModel}`)
-      }
-    }
-
-    // ── Step 5: Cleanup ──────────────────────────────────────────────────────
+    // ── Step 4: Cleanup ──────────────────────────────────────────────────────
     if (localFilePath) {
       const downloader = createVideoDownloader()
       await downloader.cleanup(localFilePath).catch(() => {})
       localFilePath = undefined
     }
 
+    // The v7.B humor enrichment pass is fired as a background request from
+    // LeTrend after the concept is saved. See POST /api/studio/concepts/humor-enrich.
     return NextResponse.json({
       analysis,
-      upload: { gcsUri: gcsUri ?? geminiUri },
+      upload: { gcsUri: geminiUri },
     })
   } catch (err) {
     console.error('[studio/analyze] Error:', err)

@@ -215,6 +215,15 @@ export interface BackendClip {
     conceptCore?: string
     hasScript?: boolean
     scriptQuality?: number | null
+    humor?: {
+      isHumorous?: boolean
+      humorType?: string
+      humorMechanism?: string
+      handlingSummary?: string
+      whyItWorks?: string
+      tunedRawText?: string
+      [key: string]: unknown
+    }
   }
   scene_breakdown?: Array<{
     timestamp: string
@@ -394,6 +403,12 @@ function searchText(clip: BackendClip) {
 }
 
 function buildDescription(clip: BackendClip, businessTypes: BusinessType[]) {
+  // Prefer v7.B tuned handlingSummary as the primary description when available
+  const tunedHandling = clip.script?.humor?.handlingSummary
+  if (typeof tunedHandling === 'string' && tunedHandling.trim()) {
+    return trimToSentence(tunedHandling, 200)
+  }
+
   const concept = firstNonEmpty(clip.script?.conceptCore, clip.script?.transcript)
   const segment =
     businessTypes[0] === 'bar'
@@ -422,6 +437,12 @@ function buildWhyItWorks(
   hasScript: boolean,
   businessTypes: BusinessType[],
 ) {
+  // Prefer v7.B tuned humor fields when present (set by the async humor-enrich pass)
+  const tunedWhyItWorks = clip.script?.humor?.whyItWorks
+  if (typeof tunedWhyItWorks === 'string' && tunedWhyItWorks.trim()) {
+    return trimToSentence(tunedWhyItWorks, 220)
+  }
+
   // Prefer σTaste reasoning fields over legacy free-text when available
   const sigma = getSigma(clip)
   const why = firstNonEmpty(
@@ -631,6 +652,19 @@ function translateFilmTime(clip: BackendClip): FilmTime {
 }
 
 function translateMechanism(clip: BackendClip): HumorMechanism {
+  // Prefer v7.B tuned humorMechanism when present
+  const tunedMechanism = clip.script?.humor?.humorMechanism
+  if (typeof tunedMechanism === 'string' && tunedMechanism.trim()) {
+    const m = tunedMechanism.toLowerCase()
+    if (m.includes('contrast')) return 'contrast'
+    if (m.includes('recognition') || m.includes('relatable') || m.includes('igenk')) return 'recognition'
+    if (m.includes('dark')) return 'dark'
+    if (m.includes('escalat')) return 'escalation'
+    if (m.includes('deadpan') || m.includes('torr')) return 'deadpan'
+    if (m.includes('absurd')) return 'absurdism'
+    if (m.includes('subversion') || m.includes('subvers') || m.includes('twist')) return 'subversion'
+  }
+
   // Prefer σTaste-derived signals over legacy free-text humor fields when present
   const sigma = getSigma(clip)
   const payoff = sigma.payoff_analysis?.payoff_type

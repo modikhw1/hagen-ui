@@ -121,6 +121,8 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
   const [pendingBackend, setPendingBackend] = useState<BackendClip | null>(null);
   const [pendingOverrides, setPendingOverrides] = useState<Record<string, unknown>>({});
   const [classification, setClassification] = useState<ClassificationDraft | null>(null);
+  // Captured during analyze — used for the async v7.B humor enrichment pass.
+  const [analyzedGcsUri, setAnalyzedGcsUri] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -138,6 +140,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
     setPendingOverrides({});
     setClassification(null);
     setPendingHeadline('');
+    setAnalyzedGcsUri(null);
   };
 
   const handleClose = () => {
@@ -176,6 +179,9 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         typeof analyzePayload.upload?.gcsUri === 'string' && analyzePayload.upload.gcsUri.trim()
           ? analyzePayload.upload.gcsUri.trim()
           : undefined;
+
+      // Capture gcsUri so the async humor-enrich pass can use it after save.
+      setAnalyzedGcsUri(gcsUri ?? null);
 
       const baseId = getFirstString(analyzeData, [['videoId'], ['id']]);
       const conceptId = `clip-${slugFromVideo(videoUrl, baseId)}`;
@@ -261,6 +267,19 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
       const saveData = await readJsonResponse(saveRes);
       if (!saveRes.ok) throw new Error(saveData.error || 'Kunde inte spara konceptet');
       const id = saveData.concept?.id || pendingId;
+
+      // Fire v7.B humor enrichment as fire-and-forget background request.
+      // Only when the concept is humorous and we have a Gemini URI from analyze.
+      const scriptHumor = (pendingBackend?.script as Record<string, unknown> | undefined)?.['humor'] as Record<string, unknown> | undefined;
+      const isHumorous = scriptHumor?.['isHumorous'] === true;
+      if (isHumorous && analyzedGcsUri) {
+        fetch('/api/studio/concepts/humor-enrich', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoUrl, gcsUri: analyzedGcsUri }),
+        }).catch(() => {});
+      }
+
       reset();
       onSuccess(id);
     } catch (err) {
