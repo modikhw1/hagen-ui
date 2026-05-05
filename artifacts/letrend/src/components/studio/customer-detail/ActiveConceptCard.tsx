@@ -38,6 +38,7 @@ interface CustomizeModalProps {
   resolvedScript: string;
   resolvedHeadline: string;
   resolvedInstructions: string;
+  resolvedWhyItFits: string;
   onClose: () => void;
   onUpdateCmNote: (id: string, note: string) => Promise<void>;
   onUpdateWhyItFits: (id: string, text: string) => Promise<void>;
@@ -49,6 +50,7 @@ function CustomizeModal({
   resolvedScript,
   resolvedHeadline,
   resolvedInstructions,
+  resolvedWhyItFits,
   onClose,
   onUpdateCmNote,
   onUpdateWhyItFits,
@@ -57,7 +59,7 @@ function CustomizeModal({
   const [headline, setHeadline] = React.useState(
     (concept.content.content_overrides?.headline as string | undefined) ?? resolvedHeadline,
   );
-  const [whyItFits, setWhyItFits] = React.useState(concept.content.why_it_fits ?? '');
+  const [whyItFits, setWhyItFits] = React.useState(concept.content.why_it_fits || resolvedWhyItFits);
   const [instructions, setInstructions] = React.useState(
     (concept.content.content_overrides?.filming_instructions as string | undefined) ??
       concept.content.filming_instructions ??
@@ -70,7 +72,7 @@ function CustomizeModal({
     setHeadline(
       (concept.content.content_overrides?.headline as string | undefined) ?? resolvedHeadline,
     );
-    setWhyItFits(concept.content.why_it_fits ?? '');
+    setWhyItFits(concept.content.why_it_fits || resolvedWhyItFits);
     setInstructions(
       (concept.content.content_overrides?.filming_instructions as string | undefined) ??
         concept.content.filming_instructions ??
@@ -882,6 +884,7 @@ export function ActiveConceptCard({
           resolvedScript={resolved.script.script_sv ?? ''}
           resolvedHeadline={resolved.headline.headline_sv}
           resolvedInstructions={resolved.instructions.filming_instructions}
+          resolvedWhyItFits={resolved.fit.whyItWorks_sv}
           onClose={() => setShowCustomize(false)}
           onUpdateCmNote={onUpdateCmNote}
           onUpdateWhyItFits={onUpdateWhyItFits}
