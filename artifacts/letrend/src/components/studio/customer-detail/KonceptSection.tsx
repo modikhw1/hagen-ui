@@ -277,6 +277,18 @@ export const KonceptSection = React.memo(function KonceptSection({
     return sortedIds.map((id) => map.get(id)).filter((c): c is CustomerConcept => c !== undefined);
   }, [sortedIds, allActiveSortable]);
 
+  // Pre-compute per-unplaced index so position labels count only among unplaced concepts (#1, #2, …).
+  const unplacedIndexMap = React.useMemo(() => {
+    const result = new Map<string, number>();
+    let counter = 0;
+    for (const c of orderedActiveConcepts) {
+      if (c.placement.feed_order === null) {
+        result.set(c.id, ++counter);
+      }
+    }
+    return result;
+  }, [orderedActiveConcepts]);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
@@ -423,11 +435,11 @@ export const KonceptSection = React.memo(function KonceptSection({
             onDragEnd={(event) => void handleDragEnd(event)}
           >
             <SortableContext items={sortedIds} strategy={verticalListSortingStrategy}>
-              {orderedActiveConcepts.map((concept, index) => {
+              {orderedActiveConcepts.map((concept) => {
                 const feedOrder = concept.placement.feed_order;
                 const positionLabel = feedOrder !== null
                   ? feedOrder === 0 ? 'Nu' : String(feedOrder)
-                  : `#${index + 1}`;
+                  : `#${unplacedIndexMap.get(concept.id) ?? 1}`;
                 const isCollab = isCollaborationCustomerConcept(concept);
 
                 return (
