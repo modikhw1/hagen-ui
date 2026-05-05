@@ -302,7 +302,9 @@ export function FeedPlannerSection({
             concept.assignment.status === 'draft' &&
             concept.placement?.feed_order === null) ||
           (isCollaborationCustomerConcept(concept) &&
-            concept.placement?.feed_order === null)
+            concept.placement?.feed_order === null &&
+            concept.assignment.status !== 'produced' &&
+            concept.assignment.status !== 'archived')
       ),
     [concepts]
   );

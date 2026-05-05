@@ -39,8 +39,11 @@ export function CollaborationConceptRow({
     e.stopPropagation();
     if (deleting) return;
     setDeleting(true);
-    await onDelete(concept.id);
-    setDeleting(false);
+    try {
+      await onDelete(concept.id);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
