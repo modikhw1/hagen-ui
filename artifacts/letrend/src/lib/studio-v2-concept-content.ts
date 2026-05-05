@@ -98,7 +98,10 @@ export function resolveConceptContent(
       targetAudience_sv: overrides?.target_audience as string,
     },
     instructions: {
-      filming_instructions: overrides?.filming_instructions as string || '',
+      filming_instructions:
+        overrides?.filming_instructions as string ||
+        baseConcept?.productionNotes_sv?.join('\n\n') ||
+        '',
     },
     callToAction: overrides?.call_to_action ? {
       cta_sv: overrides.call_to_action as string,
