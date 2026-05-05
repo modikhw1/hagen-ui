@@ -1478,7 +1478,7 @@ function FeedSlot({
             )}
           </>)}
 
-          {showReconciliationPicker && type === 'history' && concept.row_kind === 'imported_history' && (
+          {allowsPlannerAction('reconcile_to_concept') && showReconciliationPicker && type === 'history' && concept.row_kind === 'imported_history' && (
             <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8, display: 'grid', gap: 8 }}>
               <div style={{ fontSize: 11, color: LeTrendColors.textSecondary, lineHeight: 1.5 }}>
                 {effectiveNowSlotTitle
@@ -1542,7 +1542,7 @@ function FeedSlot({
             </div>
           )}
 
-          {showClipPicker && type === 'history' && concept.row_kind === 'assignment' && (
+          {allowsPlannerAction('link_tiktok_clip') && showClipPicker && type === 'history' && concept.row_kind === 'assignment' && (
             <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8, display: 'grid', gap: 8 }}>
               <div style={{ fontSize: 11, color: LeTrendColors.textSecondary, lineHeight: 1.5 }}>
                 {unreconciledClips.length === 0
