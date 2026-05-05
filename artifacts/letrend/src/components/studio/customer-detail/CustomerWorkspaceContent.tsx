@@ -386,6 +386,10 @@ function buildGamePlanAiDefaults(
     effort_level: '',
     unique: '',
     audience: '',
+    focus: brief.current_focus || '',
+    tone: brief.tone || '',
+    constraints: brief.constraints || '',
+    notes: notes.slice(0, 8).map((note) => note.content).filter(Boolean),
     references: Array.from(referenceMap.values()).slice(0, 6),
     images: [],
   };

@@ -2,6 +2,7 @@
 
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from '@tiptap/react';
+import type { DragEvent } from 'react';
 import {
   detectLinkType,
   getHostname,
@@ -117,7 +118,7 @@ function LinkChipView({ node }: NodeViewProps) {
       style={{ display: 'inline' }}
       data-drag-handle=""
       draggable={true}
-      onDragStart={(e) => {
+      onDragStart={(e: DragEvent<HTMLSpanElement>) => {
         e.dataTransfer.effectAllowed = 'move';
       }}
     >

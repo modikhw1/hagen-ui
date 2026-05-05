@@ -14,6 +14,7 @@ export const demoStatusSchema = z.enum([
 export const demoCardDtoSchema = z.object({
   id: z.string().uuid(),
   companyName: z.string(),
+  contactName: z.string().nullable().optional(),
   contactEmail: z.string().email().nullable(),
   tiktokHandle: z.string().nullable(),
   proposedConceptsPerWeek: z.number().int().nullable(),
@@ -21,11 +22,15 @@ export const demoCardDtoSchema = z.object({
   status: demoStatusSchema,
   statusChangedAt: z.string().datetime({ offset: true }),
   ownerName: z.string().nullable(),
+  ownerAvatarUrl: z.string().nullable().optional(),
+  ownerAdminId: z.string().uuid().nullable().optional(),
   lostReason: z.string().nullable(),
   nextStatus: demoStatusSchema.nullable(),
   convertedCustomerId: z.string().uuid().nullable(),
   shareToken: z.string().nullable(),
   hasFeedplan: z.boolean(),
+  studioConceptCount: z.number().int().optional(),
+  hasGamePlan: z.boolean().optional(),
   createdAt: z.string().datetime({ offset: true }),
 });
 
@@ -68,6 +73,14 @@ export const createDemoInputSchema = z
     ),
     proposed_concepts_per_week: z.number().int().min(1).max(7).nullable().optional(),
     proposed_price_ore: z.number().int().min(0).nullable().optional(),
+    owner_admin_id: z.string().uuid().nullable().optional(),
+    game_plan: nullableTrimmedString.optional(),
+    game_plan_html: nullableTrimmedString.optional(),
+    game_plan_generation_context: z.record(z.string(), z.unknown()).optional(),
+    game_plan_source: nullableTrimmedString.optional(),
+    preview_notes: nullableTrimmedString.optional(),
+    preview_settings: z.record(z.string(), z.unknown()).optional(),
+    preview_metrics: z.record(z.string(), z.unknown()).optional(),
     status: demoStatusSchema.optional().default('draft'),
     lost_reason: nullableTrimmedString.optional(),
   })

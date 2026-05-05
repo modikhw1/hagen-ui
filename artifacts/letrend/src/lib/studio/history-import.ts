@@ -50,6 +50,13 @@ type ExistingClipRow = {
   first_observed_at: string | null;
 };
 
+type ImportedHistoryRow = {
+  id: string;
+  feed_order: number | null;
+  published_at: string | null;
+  tiktok_url: string | null;
+};
+
 type PartitionedHistoryClips = {
   existingByUrl: Map<string, ExistingClipRow>;
   newClips: NormalizedHistoryClip[];
@@ -359,16 +366,16 @@ export async function renumberImportedRows(
   const letrEndFloor = (letrEndHistorikRows?.[0]?.feed_order as number | undefined) ?? 0;
   const renumberOffset = letrEndFloor < 0 ? Math.abs(letrEndFloor) : 0;
 
-  const chronological = (allImported ?? []).sort((a, b) => {
-    const dateA = a.published_at ? new Date(a.published_at as string).getTime() : 0;
-    const dateB = b.published_at ? new Date(b.published_at as string).getTime() : 0;
+  const chronological = ((allImported ?? []) as ImportedHistoryRow[]).sort((a, b) => {
+    const dateA = a.published_at ? new Date(a.published_at).getTime() : 0;
+    const dateB = b.published_at ? new Date(b.published_at).getTime() : 0;
     if (dateB !== dateA) return dateB - dateA;
-    return (a.tiktok_url as string).localeCompare(b.tiktok_url as string);
+    return (a.tiktok_url ?? '').localeCompare(b.tiktok_url ?? '');
   });
 
   const renumberUpdates = chronological
     .map((row, i) => ({
-      id: row.id as string,
+      id: row.id,
       from: typeof row.feed_order === 'number' ? row.feed_order : null,
       to: -(renumberOffset + i + 1),
     }))

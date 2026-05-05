@@ -1,10 +1,10 @@
-'use client';
-
 import {
   ArrowRight,
   Calendar,
   CheckCircle2,
+  Handshake,
   MessageCircle,
+  Mic,
   Scissors,
   Smartphone,
   Sparkles,
@@ -12,573 +12,685 @@ import {
   Users,
   Wand2,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { GamePlanDisplay } from '@/components/gameplan-editor/GamePlanDisplay';
+import {
+  CustomerPlannerGrid,
+  type CustomerPlannerSlot,
+} from '@/components/demo/CustomerPlannerGrid';
 
-type FeedplanItem = {
-  title?: string;
-  description?: string;
-  source?: 'letrend' | 'tiktok' | string;
-  tag?: string;
+export type DemoPreviewPayload = {
+  demo: {
+    id: string;
+    companyName: string;
+    contactName: string | null;
+    contactEmail: string | null;
+    tiktokHandle: string | null;
+    tiktokProfilePicUrl: string | null;
+    proposedConceptsPerWeek: number | null;
+    proposedPriceOre: number | null;
+    status: string;
+    shareToken: string;
+    customerId: string | null;
+    logoUrl: string | null;
+    previewNotes: string | null;
+    previewSettings: Record<string, unknown>;
+    previewMetrics: Record<string, unknown>;
+    gamePlanText: string | null;
+    gamePlanHtml: string | null;
+    contentManager: {
+      id: string | null;
+      profileId: string | null;
+      name: string;
+      avatarUrl: string | null;
+      color: string | null;
+      city: string | null;
+    };
+  };
+  concepts: CustomerPlannerSlot[];
 };
-
-type DemoData = {
-  id: string;
-  company_name: string;
-  contact_name: string | null;
-  tiktok_handle: string | null;
-  tiktok_profile_pic_url: string | null;
-  proposed_concepts_per_week: number | null;
-  preliminary_feedplan: unknown;
-  status: string;
-};
-
-function extractFeedItems(plan: unknown): FeedplanItem[] {
-  if (!plan) return [];
-  if (Array.isArray(plan)) return plan as FeedplanItem[];
-  if (typeof plan === 'object' && plan !== null) {
-    const items = (plan as { items?: unknown }).items;
-    if (Array.isArray(items)) return items as FeedplanItem[];
-  }
-  return [];
-}
 
 const palette = {
-  cream: '#FAF6EE',
+  cream: '#FAF8F5',
   paper: '#FFFFFF',
   ink: '#1F1A14',
-  brand: '#3D2817',
+  brown: '#4A2F18',
+  brownSoft: '#6B4423',
   gold: '#C9A961',
   goldDeep: '#8B6914',
-  blush: '#F4D8C4',
-  sage: '#B8C9A8',
-  borderSoft: 'rgba(31,26,20,0.12)',
+  blush: '#F4E4D8',
+  sage: '#DCE6D5',
+  mint: '#E6EFE5',
+  line: 'rgba(74,47,24,0.12)',
+  lineStrong: 'rgba(74,47,24,0.22)',
   textMuted: '#7D6E5D',
-  textBody: '#3D352B',
-} as const;
+};
 
-const shadowHard = '4px 4px 0 0 #1F1A14';
-const shadowHardSmall = '2px 2px 0 0 #1F1A14';
+const sectionStyle = {
+  borderBottom: `1px solid ${palette.lineStrong}`,
+} satisfies CSSProperties;
 
-export function DemoLandingView({ demo }: { demo: DemoData }) {
-  const items = extractFeedItems(demo.preliminary_feedplan);
-  const grid = Array.from({ length: 9 }, (_, i) => items[i] ?? null);
-  const greeting = demo.contact_name ? `Hej ${demo.contact_name},` : `Hej ${demo.company_name},`;
-  const conceptsPerWeek = demo.proposed_concepts_per_week ?? 2;
-  const mailSubject = encodeURIComponent(`Demo för ${demo.company_name}`);
+export function DemoLandingView({ payload }: { payload: DemoPreviewPayload }) {
+  const { demo, concepts } = payload;
+  const slots = concepts;
+  const greetingName = demo.contactName?.trim() || 'friend';
+  const conceptsPerWeek = demo.proposedConceptsPerWeek ?? 2;
+  const cmName = demo.contentManager?.name?.trim() || 'LeTrend';
+  const mailSubject = encodeURIComponent(`Demo för ${demo.companyName}`);
   const mailBody = encodeURIComponent(
-    `Hej LeTrend,\n\nVi tittade på demoförslaget för ${demo.company_name} och vill höra mer.\n\n`,
+    `Hej LeTrend,\n\nVi tittade på demoförslaget för ${demo.companyName} och vill höra mer.\n\n`,
   );
+  const priceLabel =
+    typeof demo.proposedPriceOre === 'number'
+      ?
+       `${Math.round(demo.proposedPriceOre / 100).toLocaleString('sv-SE')} kr/mån`
+      : 'Pris sätts efter scope';
 
   return (
     <main
-      className="min-h-screen"
       style={{
+        minHeight: '100vh',
         background: palette.cream,
         color: palette.ink,
-        fontFamily: "'DM Sans', -apple-system, system-ui, sans-serif",
+        fontFamily: 'var(--app-font-sans)',
       }}
     >
       <section
-        className="relative overflow-hidden border-b-2 py-20 md:py-28"
-        style={{ borderColor: palette.ink, background: palette.brand, color: palette.cream }}
+        style={{
+          ...sectionStyle,
+          position: 'relative',
+          overflow: 'hidden',
+          background: `linear-gradient(145deg, ${palette.brown} 0%, #2D1B0F 72%)`,
+          color: palette.cream,
+          padding: '88px 0 92px',
+        }}
       >
-        <div className="pointer-events-none absolute inset-0 opacity-[0.06]" aria-hidden>
-          <div
-            className="absolute -right-20 -top-20 h-72 w-72 rounded-full"
-            style={{ background: palette.gold }}
-          />
-          <div
-            className="absolute -bottom-32 left-10 h-56 w-56 rounded-full"
-            style={{ background: palette.blush }}
-          />
-        </div>
-
-        <div className="container relative z-10 mx-auto max-w-4xl px-6">
-          <p
-            className="mb-5 text-xs font-bold uppercase tracking-[0.25em]"
-            style={{ color: palette.gold }}
-          >
-            LeTrend · Demo för {demo.company_name}
-          </p>
+        <Atmosphere />
+        <div style={containerStyle(920)}>
+          <p style={eyebrowStyle(palette.gold)}>LeTrend · Demo för {demo.companyName}</p>
           <h1
-            className="text-4xl font-black leading-[1.05] md:text-6xl"
-            style={{ fontFamily: 'Georgia, serif' }}
+            style={{
+              margin: 0,
+              maxWidth: 780,
+              fontFamily: 'var(--app-font-serif)',
+              fontSize: 'clamp(42px, 7vw, 76px)',
+              lineHeight: 0.98,
+              letterSpacing: '-0.045em',
+            }}
           >
-            {greeting}
-            <br />
-            så här tänker vi för er.
+            En kort interaktiv demo.
           </h1>
-          <p className="mt-6 max-w-2xl text-base leading-relaxed opacity-80 md:text-lg">
-            LeTrend är en kurerad innehållstjänst - vi kombinerar strategi, formatförståelse och en
-            plattform som guidar er produktion vecka för vecka. Nedan ser ni ett första utkast för{' '}
-            {demo.company_name}: <strong style={{ color: palette.gold }}>{conceptsPerWeek} koncept i veckan</strong>,
-            anpassade till er bransch, ton och era egna styrkor.
-          </p>
-
-          <div className="mt-10 flex flex-wrap gap-3">
-            <StatChip label="Koncept / vecka" value={String(conceptsPerWeek)} />
-            <StatChip label="Plattform + kuratering" value="Inkluderat" />
-            <StatChip label="Mätning" value="Likes / visning" />
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="border-b-2 py-16 md:py-20"
-        style={{ borderColor: palette.ink, background: palette.cream }}
-      >
-        <div className="container mx-auto max-w-4xl px-6">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p
-                className="mb-2 text-xs font-bold uppercase tracking-widest"
-                style={{ color: palette.goldDeep }}
-              >
-                Föreslagen feed-plan
-              </p>
-              <h2
-                className="text-2xl font-black md:text-3xl"
-                style={{ fontFamily: 'Georgia, serif', color: palette.brand }}
-              >
-                De första 9 koncepten för {demo.company_name}
-              </h2>
-            </div>
-            <div className="flex items-center gap-3 text-xs" style={{ color: palette.textMuted }}>
-              <span className="flex items-center gap-1.5">
-                <Pill bg={palette.gold} ink={palette.ink}>LeT</Pill> kurering
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Pill bg={palette.blush} ink={palette.ink}>TT</Pill> er historik
-              </span>
-            </div>
-          </div>
-
-          {items.length === 0 ? (
-            <div
-              className="rounded-2xl border-2 p-12 text-center shadow-[4px_4px_0_0_rgba(31,26,20,0.15)]"
-              style={{
-                borderColor: palette.ink,
-                background: palette.paper,
-                color: palette.textMuted,
-              }}
-            >
-              <Sparkles className="mx-auto mb-3 h-7 w-7" style={{ color: palette.goldDeep }} />
-              <div className="text-sm font-medium">
-                Demot förbereds - feedplanen läggs in inom kort.
-              </div>
-            </div>
-          ) : (
-            <div>
-              <div
-                className="rounded-2xl border-2 p-3 md:p-4"
-                style={{ borderColor: palette.ink, background: palette.paper, boxShadow: shadowHard }}
-              >
-                <div className="grid grid-cols-3 gap-2 md:gap-3">
-                  {grid.map((item, idx) => {
-                    const isTikTok = item?.source === 'tiktok';
-                    return (
-                      <div
-                        key={idx}
-                        className="relative aspect-[9/16] rounded-lg border-2 p-2.5 transition-transform hover:-translate-y-0.5 md:p-3"
-                        style={{
-                          borderColor: item ? palette.ink : palette.borderSoft,
-                          background: item
-                            ? isTikTok
-                              ? '#FFF8F2'
-                              : '#FFFAEC'
-                            : 'rgba(31,26,20,0.03)',
-                        }}
-                      >
-                        {item ? (
-                          <div className="flex h-full flex-col">
-                            <Pill bg={isTikTok ? palette.blush : palette.gold} ink={palette.ink}>
-                              {isTikTok ? 'TT' : 'LeT'}
-                            </Pill>
-                            <div
-                              className="mt-2 flex-1 text-[11px] font-medium leading-snug md:text-xs"
-                              style={{ color: palette.textBody }}
-                            >
-                              {item.title || item.description || '—'}
-                            </div>
-                            {item.tag ? (
-                              <span
-                                className="mt-1 truncate text-[10px] font-semibold"
-                                style={{ color: palette.goldDeep }}
-                              >
-                                #{item.tag}
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <div
-                            className="flex h-full items-center justify-center text-[10px] font-medium"
-                            style={{ color: palette.textMuted }}
-                          >
-                            —
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-              <p className="mt-4 text-xs leading-relaxed" style={{ color: palette.textMuted }}>
-                Varje ruta = ett koncept (idé/video). I planeringsverktyget grupperas koncepten i
-                kampanjer med taggar och tidsperiod - så att rätt budskap landar i rätt vecka.
-              </p>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section
-        className="border-b-2 py-16 md:py-20"
-        style={{ borderColor: palette.ink, background: palette.blush }}
-      >
-        <div className="container mx-auto max-w-4xl px-6">
-          <div className="mb-10 max-w-2xl">
-            <p
-              className="mb-2 text-xs font-bold uppercase tracking-widest"
-              style={{ color: palette.brand }}
-            >
-              Vad gör oss annorlunda
-            </p>
-            <h2
-              className="text-3xl font-black md:text-4xl"
-              style={{ fontFamily: 'Georgia, serif', color: palette.brand }}
-            >
-              En byrås tänk, en plattforms tempo.
-            </h2>
-          </div>
-          <div className="grid gap-5 md:grid-cols-3">
-            {[
-              {
-                icon: <Sparkles className="h-5 w-5" />,
-                title: 'Kurerat, inte slumpat',
-                body: 'Vi väljer koncept som passar er ton, era kunder och vad som faktiskt fungerar i ert format just nu.',
-                bg: palette.paper,
-              },
-              {
-                icon: <TrendingUp className="h-5 w-5" />,
-                title: 'Likes per visning',
-                body: 'Vi mäter engagemang i djup, inte bara räckvidd. Bra signaler bygger relation över tid.',
-                bg: palette.cream,
-              },
-              {
-                icon: <Calendar className="h-5 w-5" />,
-                title: 'Plattform + guidning',
-                body: 'Ni får en plan att jobba mot, inte bara tips. Mobilen räcker - vi hjälper er hela vägen.',
-                bg: palette.paper,
-              },
-            ].map((block) => (
-              <div
-                key={block.title}
-                className="rounded-2xl border-2 p-6"
-                style={{
-                  borderColor: palette.ink,
-                  background: block.bg,
-                  boxShadow: shadowHard,
-                }}
-              >
-                <div
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-lg border-2"
-                  style={{ borderColor: palette.ink, background: palette.gold, color: palette.ink }}
-                >
-                  {block.icon}
-                </div>
-                <h3 className="mt-4 text-lg font-bold" style={{ color: palette.brand }}>
-                  {block.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed" style={{ color: palette.textBody }}>
-                  {block.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="border-b-2 py-16 md:py-24"
-        style={{ borderColor: palette.ink, background: palette.cream }}
-      >
-        <div className="container mx-auto max-w-4xl px-6">
-          <div className="mb-10 max-w-2xl">
-            <p
-              className="mb-2 text-xs font-bold uppercase tracking-widest"
-              style={{ color: palette.goldDeep }}
-            >
-              Så jobbar vi
-            </p>
-            <h2
-              className="text-3xl font-black md:text-4xl"
-              style={{ fontFamily: 'Georgia, serif', color: palette.brand }}
-            >
-              Från strategi till publicering - varje vecka.
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed" style={{ color: palette.textBody }}>
-              En byrås strategiska tänk, levererat genom en plattform som gör det enkelt att
-              producera rätt sak i rätt vecka.
-            </p>
-          </div>
-
-          <ol className="grid gap-4 md:grid-cols-2">
-            {[
-              {
-                n: '01',
-                title: 'Vi sätter strategin',
-                body: 'Ert varumärke, era mål och er ton blir grunden. Vi anpassar antal koncept i veckan efter vad som är realistiskt och vad TikTok-formatet kräver.',
-              },
-              {
-                n: '02',
-                title: 'Plattformen guidar veckan',
-                body: 'Varje koncept kommer med syfte, format-tips och referens. Ni öppnar appen och vet vad som ska spelas in.',
-              },
-              {
-                n: '03',
-                title: 'AI hjälper i bakgrunden',
-                body: 'Vi analyserar innehåll och söker globala trender - så ni får chansen att synas innan andra hinner reagera.',
-              },
-              {
-                n: '04',
-                title: 'Mätning som betyder något',
-                body: 'Likes per visning visar djup i engagemanget. Det är så vi vet om innehållet bygger relation, inte bara räckvidd.',
-              },
-            ].map((step) => (
-              <li
-                key={step.n}
-                className="rounded-2xl border-2 p-6"
-                style={{ borderColor: palette.ink, background: palette.paper, boxShadow: shadowHardSmall }}
-              >
-                <div
-                  className="inline-flex h-9 items-center justify-center rounded-md border-2 px-2.5 text-sm font-black tracking-wider"
-                  style={{ borderColor: palette.ink, background: palette.gold, color: palette.ink }}
-                >
-                  {step.n}
-                </div>
-                <h3 className="mt-3 text-lg font-bold" style={{ color: palette.brand }}>
-                  {step.title}
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed" style={{ color: palette.textBody }}>
-                  {step.body}
-                </p>
-              </li>
-            ))}
-          </ol>
-        </div>
-      </section>
-
-      <section
-        className="border-b-2 py-16 md:py-24"
-        style={{ borderColor: palette.ink, background: palette.sage }}
-      >
-        <div className="container mx-auto grid max-w-4xl items-center gap-10 px-6 md:grid-cols-2">
-          <div className="flex justify-center">
-            <div
-              className="relative h-[460px] w-[230px] rounded-[44px] border-[12px] p-2"
-              style={{
-                borderColor: palette.ink,
-                background: palette.ink,
-                boxShadow: '8px 8px 0 0 #1F1A14',
-              }}
-            >
-              <div
-                className="absolute left-1/2 top-2.5 z-10 h-5 w-24 -translate-x-1/2 rounded-full"
-                style={{ background: palette.ink }}
-              />
-              <div
-                className="flex h-full w-full flex-col items-center justify-between rounded-[30px] p-5"
-                style={{
-                  background: `linear-gradient(160deg, ${palette.brand} 0%, ${palette.goldDeep} 60%, ${palette.gold} 100%)`,
-                }}
-              >
-                <div className="pt-6 text-center">
-                  <div
-                    className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border-2"
-                    style={{
-                      background: 'rgba(255,255,255,0.18)',
-                      borderColor: 'rgba(255,255,255,0.3)',
-                    }}
-                  >
-                    <span
-                      className="text-2xl font-black"
-                      style={{ fontFamily: 'Georgia, serif', color: palette.cream }}
-                    >
-                      LeT
-                    </span>
-                  </div>
-                  <div
-                    className="mt-3 text-[10px] font-bold uppercase tracking-[0.2em]"
-                    style={{ color: 'rgba(250,246,238,0.85)' }}
-                  >
-                    Auto-clip
-                  </div>
-                </div>
-                <div className="w-full space-y-2">
-                  {[
-                    { label: 'Scen 01 · Hook', state: '● REC' },
-                    { label: 'Scen 02 · Visa', state: '○' },
-                    { label: 'Scen 03 · Avslut', state: '○' },
-                  ].map((scene, index) => (
-                    <div
-                      key={scene.label}
-                      className="flex items-center justify-between rounded-lg px-3 py-2 text-[11px] font-medium"
-                      style={{
-                        background: 'rgba(250,246,238,0.14)',
-                        color: palette.cream,
-                        border: index === 0 ? '1px solid rgba(201,169,97,0.6)' : '1px solid transparent',
-                      }}
-                    >
-                      <span>{scene.label}</span>
-                      <span style={{ color: index === 0 ? palette.gold : 'rgba(250,246,238,0.5)' }}>
-                        {scene.state}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div
-                  className="mb-1 w-full rounded-lg border-2 py-2.5 text-center text-[11px] font-bold"
-                  style={{ background: palette.cream, color: palette.brand, borderColor: palette.ink }}
-                >
-                  Klipp ihop automatiskt
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div
-              className="inline-flex items-center gap-2 rounded-full border-2 px-3 py-1 text-[10px] font-black uppercase tracking-widest"
-              style={{ borderColor: palette.ink, background: palette.gold, color: palette.ink }}
-            >
-              <Wand2 className="h-3 w-3" /> Kommer i abonnemanget
-            </div>
-            <h2
-              className="mt-4 text-3xl font-black"
-              style={{ fontFamily: 'Georgia, serif', color: palette.brand }}
-            >
-              Spela in scenerna - vi klipper resten
-            </h2>
-            <p className="mt-3 text-sm leading-relaxed" style={{ color: palette.textBody }}>
-              Vår kommande mobilapp guidar er genom varje scen i ett koncept. Ni spelar in det som
-              krävs, appen klipper ihop till en färdig video. Mindre friktion, mer publicering.
-            </p>
-
-            <ul className="mt-5 space-y-3 text-sm" style={{ color: palette.brand }}>
-              {[
-                {
-                  icon: <Smartphone className="mt-0.5 h-4 w-4 shrink-0" />,
-                  text: 'Scen-baserad inspelning kopplad till varje koncept i feed-planen.',
-                },
-                {
-                  icon: <Scissors className="mt-0.5 h-4 w-4 shrink-0" />,
-                  text: 'Automatisk klippning enligt format som fungerar på TikTok just nu.',
-                },
-                {
-                  icon: <Users className="mt-0.5 h-4 w-4 shrink-0" />,
-                  text: 'Behöver ni mer hjälp? Klippning, samarbeten och produktion finns som byrå-tillägg.',
-                },
-              ].map((item, index) => (
-                <li key={index} className="flex gap-3">
-                  <span style={{ color: palette.goldDeep }}>{item.icon}</span>
-                  <span style={{ color: palette.textBody }}>{item.text}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section
-        className="border-b-2 py-16 md:py-20"
-        style={{ borderColor: palette.ink, background: palette.gold }}
-      >
-        <div className="container mx-auto max-w-3xl px-6 text-center">
-          <h2
-            className="text-3xl font-black md:text-4xl"
-            style={{ fontFamily: 'Georgia, serif', color: palette.ink }}
+          <div
+            style={{
+              marginTop: 28,
+              maxWidth: 720,
+              display: 'grid',
+              gap: 14,
+              color: 'rgba(250,248,245,0.86)',
+              fontSize: 17,
+              lineHeight: 1.68,
+            }}
           >
-            Vill ni se hur det här skulle fungera i praktiken?
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed" style={{ color: palette.brand }}>
-            Boka ett kort samtal så går vi igenom planen för {demo.company_name} och svarar på era
-            frågor.
-          </p>
-
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href={`mailto:hej@letrend.se?subject=${mailSubject}&body=${mailBody}`}
-              className="inline-flex items-center gap-2 rounded-full border-2 px-7 py-3 text-sm font-bold transition-all active:translate-x-[3px] active:translate-y-[3px] active:shadow-none"
-              style={{
-                borderColor: palette.ink,
-                background: palette.ink,
-                color: palette.cream,
-                boxShadow: shadowHardSmall,
-              }}
-            >
-              <MessageCircle className="h-4 w-4" />
-              Boka samtal
-              <ArrowRight className="h-4 w-4" />
-            </a>
-            <span className="text-xs font-medium" style={{ color: palette.brand }}>
-              eller svara direkt på mailet ni fick - vi återkopplar inom 1 arbetsdag
-            </span>
+            <p style={{ margin: 0 }}>
+              Hej {greetingName}. LeTrend är en marknadsföringstjänst för TikTok som kombinerar
+              mänsklig kurering, ett tydligt veckoflöde och en plattform där ni ser vad som ska
+              spelas in.
+            </p>
+            <p style={{ margin: 0 }}>
+              Nedan visar vi hur er feed kan byggas: befintliga TikTok-signaler, kommande
+              LeTrend-koncept och rekommenderad takt. För {demo.companyName} föreslår vi{' '}
+              <strong style={{ color: palette.gold }}>{conceptsPerWeek} koncept i veckan</strong>.
+            </p>
           </div>
-
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs font-medium" style={{ color: palette.brand }}>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Inga bindningar i samtalet
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Vi visar plattformen live
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5" /> 30 minuter räcker
-            </span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 32 }}>
+            <StatChip label="Koncept / vecka" value={String(conceptsPerWeek)} />
+            <StatChip label="Förslag" value={priceLabel} />
+            <StatChip label="CM" value={cmName} />
           </div>
         </div>
       </section>
 
-      <footer
-        className="py-8 text-center text-xs font-medium"
-        style={{ background: palette.cream, color: palette.textMuted }}
-      >
-        © LeTrend · Demo förberedd för {demo.company_name}
+      <section style={{ ...sectionStyle, background: palette.blush, padding: '72px 0' }}>
+        <div style={containerStyle(1100)}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 5fr) minmax(320px, 7fr)',
+              gap: 56,
+              alignItems: 'center',
+            }}
+            className="demo-preview-two-col"
+          >
+            <div>
+              <p style={eyebrowStyle(palette.goldDeep)}>Feedplan</p>
+              <h2 style={sectionHeadingStyle}>Så här skulle er feed kunna se ut</h2>
+              <div style={bodyCopyStackStyle}>
+                <p>
+                  LeTrend arbetar med kreativt bricolage: vi tar format, trender och bevis från
+                  verkliga klipp och gör dem användbara för ert varumärke.
+                </p>
+                <p>
+                  Feeden nedan hämtar innehåll från er Studio-plan. Historik och reconcilade
+                  TikTok-klipp används som bevis, medan kommande LeTrend-koncept visar vad som bör
+                  produceras härnäst.
+                </p>
+                <p>
+                  Hovra över rutorna för rubrik, varför konceptet fungerar och TikTok-länken när
+                  den finns kopplad.
+                </p>
+              </div>
+              <ContentManagerCard demo={demo} />
+            </div>
+
+            <div
+              style={{
+                maxWidth: 440,
+                width: '100%',
+                margin: '0 auto',
+                border: `1px solid ${palette.lineStrong}`,
+                background: 'rgba(255,255,255,0.54)',
+                borderRadius: 28,
+                padding: 16,
+                boxShadow: '0 28px 60px rgba(74,47,24,0.16)',
+              }}
+            >
+              <CustomerPlannerGrid slots={slots} companyName={demo.companyName} />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <GamePlanSection demo={demo} />
+
+      <MetricsSection demo={demo} conceptCount={slots.length} />
+
+      <section style={{ ...sectionStyle, background: palette.paper, padding: '72px 0' }}>
+        <div style={containerStyle(1000)}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              gap: 18,
+            }}
+            className="demo-preview-card-grid"
+          >
+            <ProofCard
+              icon={<Sparkles size={20} />}
+              title="Kurerat, inte slumpat"
+              body="Koncepten väljs efter er ton, era resurser och vilka signaler som redan finns i er feed."
+            />
+            <ProofCard
+              icon={<TrendingUp size={20} />}
+              title="Snabbare än byråtempo"
+              body="När en idé börjar röra sig kan den omsättas till ett kundanpassat koncept utan produktionstung startsträcka."
+            />
+            <ProofCard
+              icon={<Calendar size={20} />}
+              title="Planen styr veckan"
+              body="Feed plannern gör det tydligt vad som är nu, vad som kommer sen och vad som redan har publicerats."
+            />
+          </div>
+        </div>
+      </section>
+
+      <section style={{ ...sectionStyle, background: palette.sage, padding: '76px 0' }}>
+        <div
+          style={{
+            ...containerStyle(980),
+            display: 'grid',
+            gridTemplateColumns: 'minmax(220px, 4fr) minmax(0, 5fr)',
+            gap: 56,
+            alignItems: 'center',
+          }}
+          className="demo-preview-two-col"
+        >
+          <PhoneMock />
+          <div>
+            <Pill>
+              <Wand2 size={13} /> Kommer i abonnemanget
+            </Pill>
+            <h2 style={{ ...sectionHeadingStyle, marginTop: 16 }}>Spela in scenerna, vi klipper resten</h2>
+            <div style={bodyCopyStackStyle}>
+              <p>
+                Mobilflödet är tänkt att guida er genom varje scen i ett koncept. Ni spelar in det
+                som behövs, LeTrend hjälper med struktur, klippning och nästa steg.
+              </p>
+            </div>
+            <FeatureList
+              items={[
+                { icon: <Smartphone size={16} />, text: 'Scenbaserad inspelning kopplad till feedplanen.' },
+                { icon: <Scissors size={16} />, text: 'Tydligare produktion utan att köpa ett stort byråpaket.' },
+                { icon: <Users size={16} />, text: 'Extra hjälp, UGC och samarbeten kan läggas till vid behov.' },
+              ]}
+            />
+          </div>
+        </div>
+      </section>
+
+      <section style={{ ...sectionStyle, background: 'rgba(201,169,97,0.22)', padding: '72px 0' }}>
+        <div
+          style={{
+            ...containerStyle(980),
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 5fr) minmax(280px, 5fr)',
+            gap: 42,
+            alignItems: 'center',
+          }}
+          className="demo-preview-two-col"
+        >
+          <div>
+            <Pill>
+              <Handshake size={13} /> Byrå-tillägg
+            </Pill>
+            <h2 style={{ ...sectionHeadingStyle, marginTop: 16 }}>Samarbeten med UGC-kreatörer</h2>
+            <div style={bodyCopyStackStyle}>
+              <p>
+                När er egen feed inte räcker kan LeTrend matcha er med kreatörer som passar tonen,
+                branschen och budgeten.
+              </p>
+              <p>Ni godkänner samarbetet, vi hanterar brief, dialog, leverans och betalning.</p>
+            </div>
+          </div>
+          <AgencyCard />
+        </div>
+      </section>
+
+      <section style={{ padding: '76px 0 64px', background: palette.brown, color: palette.cream }}>
+        <div style={{ ...containerStyle(780), textAlign: 'center' }}>
+          <h2
+            style={{
+              margin: 0,
+              fontFamily: 'var(--app-font-serif)',
+              fontSize: 'clamp(30px, 5vw, 48px)',
+              lineHeight: 1.05,
+              letterSpacing: '-0.03em',
+            }}
+          >
+            Vill ni se hur det här fungerar i praktiken?
+          </h2>
+          <p style={{ margin: '18px auto 0', maxWidth: 560, color: 'rgba(250,248,245,0.76)', lineHeight: 1.65 }}>
+            Boka ett kort samtal så går vi igenom planen för {demo.companyName} och visar hur
+            Studio-flödet blir en konkret veckorutin.
+          </p>
+          <a
+            href={`mailto:hej@letrend.se?subject=${mailSubject}&body=${mailBody}`}
+            style={{
+              marginTop: 30,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              borderRadius: 999,
+              background: palette.cream,
+              color: palette.brown,
+              padding: '14px 22px',
+              fontSize: 13,
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              textDecoration: 'none',
+              boxShadow: '0 18px 35px rgba(0,0,0,0.22)',
+            }}
+          >
+            <MessageCircle size={16} /> Boka samtal <ArrowRight size={16} />
+          </a>
+          <div style={{ marginTop: 22, display: 'flex', justifyContent: 'center', gap: 18, flexWrap: 'wrap', color: 'rgba(250,248,245,0.72)', fontSize: 12 }}>
+            <InlineCheck>30 minuter räcker</InlineCheck>
+            <InlineCheck>Vi visar plattformen live</InlineCheck>
+            <InlineCheck>Ingen bindning i samtalet</InlineCheck>
+          </div>
+        </div>
+      </section>
+
+      <footer style={{ padding: 26, textAlign: 'center', color: palette.textMuted, fontSize: 12 }}>
+        © LeTrend · Demo förberedd för {demo.companyName}
       </footer>
     </main>
   );
 }
 
-function StatChip({ label, value }: { label: string; value: string }) {
+function Atmosphere() {
   return (
-    <div
-      className="rounded-full border-2 px-4 py-1.5"
-      style={{
-        borderColor: 'rgba(250,246,238,0.3)',
-        background: 'rgba(250,246,238,0.08)',
-      }}
-    >
-      <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">{label}</span>
-      <span className="ml-2 text-sm font-bold">{value}</span>
+    <div aria-hidden style={{ position: 'absolute', inset: 0, overflow: 'hidden', opacity: 0.16 }}>
+      <div style={{ position: 'absolute', right: -90, top: -90, width: 330, height: 330, borderRadius: '50%', background: palette.gold }} />
+      <div style={{ position: 'absolute', left: '8%', bottom: -130, width: 260, height: 260, borderRadius: '50%', background: palette.blush }} />
+      <div style={{ position: 'absolute', inset: 0, backgroundImage: 'radial-gradient(rgba(255,255,255,0.24) 1px, transparent 1px)', backgroundSize: '22px 22px' }} />
     </div>
   );
 }
 
-function Pill({
-  bg,
-  ink,
-  children,
-}: {
-  bg: string;
-  ink: string;
-  children: ReactNode;
-}) {
+function ContentManagerCard({ demo }: { demo: DemoPreviewPayload['demo'] }) {
+  const cm = demo.contentManager;
+  const initial = cm.name?.[0]?.toUpperCase() ?? 'L';
   return (
-    <span
-      className="inline-flex items-center self-start rounded border-2 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider"
-      style={{ background: bg, color: ink, borderColor: ink }}
+    <div
+      style={{
+        marginTop: 28,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+        border: `1px solid ${palette.lineStrong}`,
+        background: 'rgba(255,255,255,0.52)',
+        borderRadius: 18,
+        padding: 14,
+      }}
     >
+      {cm.avatarUrl ? (
+        <img
+          src={cm.avatarUrl}
+          alt={`${cm.name}, content manager på LeTrend`}
+          style={{ width: 52, height: 52, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${palette.brown}` }}
+        />
+      ) : (
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: '50%',
+            display: 'grid',
+            placeItems: 'center',
+            background: cm.color || palette.brown,
+            color: palette.cream,
+            border: `2px solid ${palette.brown}`,
+            fontWeight: 900,
+          }}
+        >
+          {initial}
+        </div>
+      )}
+      <div style={{ fontSize: 14, color: 'rgba(31,26,20,0.82)', lineHeight: 1.45 }}>
+        <strong style={{ color: palette.brown }}>{cm.name}</strong> är er content manager och
+        ansvarar för att kurera feeden, justera koncepten och hålla planen levande.
+        {cm.city ? <span style={{ color: palette.textMuted }}> · {cm.city}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+function GamePlanSection({ demo }: { demo: DemoPreviewPayload['demo'] }) {
+  const hasGamePlan = Boolean(demo.gamePlanHtml || demo.gamePlanText);
+
+  return (
+    <section style={{ ...sectionStyle, background: palette.mint, padding: '72px 0' }}>
+      <div
+        style={{
+          ...containerStyle(1040),
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 5fr) minmax(320px, 7fr)',
+          gap: 46,
+          alignItems: 'stretch',
+        }}
+        className="demo-preview-two-col"
+      >
+        <div>
+          <p style={eyebrowStyle(palette.goldDeep)}>Game Plan</p>
+          <h2 style={sectionHeadingStyle}>Våra första spaningar</h2>
+          <div style={bodyCopyStackStyle}>
+            <p>
+              Game Plan är arbetsdokumentet där er content manager samlar strategi, referenser,
+              möjliga format och vad vi vill testa först.
+            </p>
+            <p>
+              Previewn visar antingen ett demoanpassat AI-utkast, manuellt inskrivet material eller
+              det game-plan-dokument som redan finns på kundprofilen.
+            </p>
+          </div>
+        </div>
+
+        <div
+          style={{
+            border: `1px solid ${palette.lineStrong}`,
+            background: '#FDFCF7',
+            borderRadius: 18,
+            overflow: 'hidden',
+            boxShadow: '0 24px 50px rgba(74,47,24,0.12)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: 12,
+              borderBottom: `1px solid ${palette.line}`,
+              padding: '12px 18px',
+              color: palette.textMuted,
+              fontFamily: 'var(--app-font-mono)',
+              fontSize: 11,
+            }}
+          >
+            <span>game-plan / {demo.companyName.toLowerCase().replace(/\s+/g, '-')}.md</span>
+            <span>utkast</span>
+          </div>
+          <div style={{ padding: '24px 28px', minHeight: 300 }}>
+            {hasGamePlan ? (
+              demo.gamePlanHtml ? (
+                <GamePlanDisplay html={demo.gamePlanHtml} />
+              ) : (
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: 15, lineHeight: 1.75 }}>
+                  {demo.gamePlanText}
+                </div>
+              )
+            ) : (
+              <div style={{ color: palette.textMuted, lineHeight: 1.7 }}>
+                Game Plan fylls på av er content manager innan länken skickas vidare.
+              </div>
+            )}
+            <div
+              style={{
+                marginTop: 22,
+                borderTop: `1px dashed ${palette.lineStrong}`,
+                paddingTop: 12,
+                display: 'flex',
+                gap: 8,
+                alignItems: 'center',
+                color: palette.textMuted,
+                fontFamily: 'var(--app-font-mono)',
+                fontSize: 11,
+              }}
+            >
+              <span style={{ display: 'inline-block', width: 2, height: 14, background: palette.brown }} />
+              fortsätter skriva...
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MetricsSection({
+  demo,
+  conceptCount,
+}: {
+  demo: DemoPreviewPayload['demo'];
+  conceptCount: number;
+}) {
+  const metrics = demo.previewMetrics ?? {};
+  const avgViews = readMetric(metrics.avg_views) ?? readMetric(metrics.averageViews);
+  const followers = readMetric(metrics.followers) ?? readMetric(metrics.current_followers);
+  const likeRate = readMetric(metrics.like_rate) ?? readMetric(metrics.likeRate);
+  const engagement = readMetric(metrics.engagement_rate) ?? readMetric(metrics.avg_engagement);
+
+  return (
+    <section style={{ ...sectionStyle, background: 'rgba(244,228,216,0.55)', padding: '72px 0' }}>
+      <div
+        style={{
+          ...containerStyle(1040),
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 7fr) minmax(0, 5fr)',
+          gap: 46,
+          alignItems: 'center',
+        }}
+        className="demo-preview-two-col"
+      >
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }} className="demo-preview-card-grid">
+            <MetricCard label="Snittvisningar" value={avgViews ?? 'Live-data'} hint="TikTok / Studio" />
+            <MetricCard label="Följare" value={followers ?? 'Synkas'} hint="senaste snapshot" />
+            <MetricCard label="Koncept i plan" value={String(conceptCount)} hint="från feed planner" />
+            <MetricCard label="Engagemang" value={likeRate ?? engagement ?? 'Signal'} hint="kvalitet före räckvidd" />
+          </div>
+        </div>
+        <div>
+          <p style={eyebrowStyle(palette.goldDeep)}>Datadrivet</p>
+          <h2 style={sectionHeadingStyle}>Vi räknar på det som betyder något</h2>
+          <div style={bodyCopyStackStyle}>
+            <p>
+              Bra snittvisningar är trevligt, men säger inte allt. Vi tittar på återkommande
+              publicering, engagemang och vilka format som går att upprepa utan att tappa kvalitet.
+            </p>
+            <p>
+              När {demo.companyName} går från demo till kund uppdateras de här signalerna löpande
+              från Studio-flödet.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function readMetric(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value.toLocaleString('sv-SE');
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  return null;
+}
+
+function MetricCard({ label, value, hint }: { label: string; value: string; hint: string }) {
+  return (
+    <div style={{ border: `1px solid ${palette.lineStrong}`, background: palette.paper, borderRadius: 20, padding: 18, boxShadow: '0 14px 30px rgba(74,47,24,0.10)' }}>
+      <p style={{ margin: 0, color: palette.textMuted, fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</p>
+      <p style={{ margin: '10px 0 0', color: palette.brown, fontFamily: 'var(--app-font-serif)', fontSize: 28, fontWeight: 900, lineHeight: 1 }}>{value}</p>
+      <p style={{ margin: '8px 0 0', color: palette.textMuted, fontSize: 11 }}>{hint}</p>
+    </div>
+  );
+}
+
+function ProofCard({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
+  return (
+    <div style={{ border: `1px solid ${palette.lineStrong}`, background: palette.paper, borderRadius: 22, padding: 24, boxShadow: '0 18px 42px rgba(74,47,24,0.08)' }}>
+      <div style={{ width: 42, height: 42, borderRadius: 14, display: 'grid', placeItems: 'center', background: palette.brown, color: palette.cream }}>{icon}</div>
+      <h3 style={{ margin: '18px 0 0', color: palette.brown, fontSize: 20, fontFamily: 'var(--app-font-serif)' }}>{title}</h3>
+      <p style={{ margin: '8px 0 0', color: 'rgba(31,26,20,0.72)', fontSize: 14, lineHeight: 1.6 }}>{body}</p>
+    </div>
+  );
+}
+
+function PhoneMock() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <img
+        src="/demo-auto-clip-phone.svg"
+        alt="LeTrend Auto-clip mobilflöde"
+        style={{
+          width: 'min(100%, 360px)',
+          height: 'auto',
+          display: 'block',
+          filter: 'drop-shadow(0 30px 55px rgba(31,26,20,0.24))',
+        }}
+      />
+    </div>
+  );
+}
+
+function FeatureList({ items }: { items: Array<{ icon: ReactNode; text: string }> }) {
+  return (
+    <ul style={{ display: 'grid', gap: 12, margin: '22px 0 0', padding: 0, listStyle: 'none' }}>
+      {items.map((item) => (
+        <li key={item.text} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', color: 'rgba(31,26,20,0.78)', fontSize: 14, lineHeight: 1.5 }}>
+          <span style={{ color: palette.goldDeep, marginTop: 2 }}>{item.icon}</span>
+          <span>{item.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function AgencyCard() {
+  return (
+    <div style={{ border: `1px solid ${palette.lineStrong}`, background: palette.paper, borderRadius: 24, padding: 22, boxShadow: '0 22px 48px rgba(74,47,24,0.14)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Pill>
+          <Sparkles size={13} /> Nytt samarbete
+        </Pill>
+        <span style={{ borderRadius: 999, background: palette.mint, padding: '5px 8px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Förslag</span>
+      </div>
+      <div style={{ display: 'flex', gap: 14, alignItems: 'center', borderBottom: `1px dashed ${palette.lineStrong}`, padding: '20px 0' }}>
+        <div style={{ width: 64, height: 64, borderRadius: '50%', display: 'grid', placeItems: 'center', background: palette.brown, color: palette.cream, fontWeight: 900, border: `2px solid ${palette.ink}` }}>UGC</div>
+        <div>
+          <div style={{ fontFamily: 'var(--app-font-serif)', fontSize: 20, fontWeight: 900 }}>Matchad kreatör</div>
+          <div style={{ color: palette.textMuted, fontSize: 12 }}>Mat & livsstil · budget enligt scope</div>
+        </div>
+      </div>
+      <FeatureList
+        items={[
+          { icon: <CheckCircle2 size={15} />, text: 'Medverka i video' },
+          { icon: <Mic size={15} />, text: 'Skriva sketch eller manus' },
+          { icon: <Scissors size={15} />, text: 'Producera och regissera' },
+        ]}
+      />
+    </div>
+  );
+}
+
+function InlineCheck({ children }: { children: ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <CheckCircle2 size={14} /> {children}
+    </span>
+  );
+}
+
+function StatChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ border: '1px solid rgba(250,248,245,0.28)', background: 'rgba(250,248,245,0.09)', borderRadius: 999, padding: '9px 13px' }}>
+      <span style={{ fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.62 }}>{label}</span>
+      <span style={{ marginLeft: 8, fontSize: 14, fontWeight: 900 }}>{value}</span>
+    </div>
+  );
+}
+
+function Pill({ children }: { children: ReactNode }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, borderRadius: 999, background: 'rgba(74,47,24,0.10)', color: palette.brown, padding: '7px 10px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
       {children}
     </span>
   );
 }
+
+function containerStyle(maxWidth: number): CSSProperties {
+  return {
+    width: 'min(calc(100% - 40px), ' + maxWidth + 'px)',
+    margin: '0 auto',
+    position: 'relative',
+    zIndex: 1,
+  };
+}
+
+function eyebrowStyle(color: string): CSSProperties {
+  return {
+    margin: '0 0 12px',
+    color,
+    fontSize: 11,
+    fontWeight: 900,
+    textTransform: 'uppercase',
+    letterSpacing: '0.18em',
+  };
+}
+
+const sectionHeadingStyle: CSSProperties = {
+  margin: 0,
+  color: palette.brown,
+  fontFamily: 'var(--app-font-serif)',
+  fontSize: 'clamp(30px, 4.4vw, 46px)',
+  lineHeight: 1.05,
+  letterSpacing: '-0.035em',
+};
+
+const bodyCopyStackStyle: CSSProperties = {
+  marginTop: 20,
+  display: 'grid',
+  gap: 13,
+  color: 'rgba(31,26,20,0.76)',
+  fontSize: 15,
+  lineHeight: 1.72,
+};

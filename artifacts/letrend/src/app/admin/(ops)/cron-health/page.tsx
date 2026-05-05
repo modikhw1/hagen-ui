@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { apiClient } from '@/lib/admin/api-client';
 
 interface CronInvocation {
@@ -49,7 +49,7 @@ function fmtTs(value: string | null): string {
   try { return new Date(value).toLocaleString('sv-SE'); } catch { return value; }
 }
 
-export default function CronHealthPage(): JSX.Element {
+export default function CronHealthPage(): ReactElement {
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

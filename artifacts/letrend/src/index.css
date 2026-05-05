@@ -211,6 +211,27 @@
   }
 }
 
+@layer components {
+  .demo-planner-cell:hover .demo-planner-face {
+    opacity: 0;
+  }
+
+  .demo-planner-cell:hover .demo-planner-details {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+  }
+
+  @media (max-width: 860px) {
+    .demo-preview-two-col {
+      grid-template-columns: 1fr !important;
+    }
+
+    .demo-preview-card-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+}
+
 /* Admin tokens */
 @layer base {
   :root {

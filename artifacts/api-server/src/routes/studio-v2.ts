@@ -3,6 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
+import { buildGamePlanInput, generateGamePlanDraft } from '../lib/game-plan-generate.js';
 import { refreshReconciledThumbnails, runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
 import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
@@ -47,9 +48,9 @@ function sanitizePrice(input: unknown): number | null {
   return Math.round(n);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Customers
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // GET /api/studio-v2/customers
 router.get('/customers', requireAuth, CM_ONLY, async (req, res) => {
@@ -294,7 +295,7 @@ router.get('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, 
       })
       .map((row) => {
         // Overlay thumbnail + stats from reconciled imported_history row onto any
-        // assignment row that has a linked history clip — not just past (feed_order < 0)
+        // assignment row that has a linked history clip â€” not just past (feed_order < 0)
         // ones, so the Nu slot and future planned slots also surface the thumbnail.
         if (row.concept_id) {
           const importedStats = reconciledByTarget.get(row.id);
@@ -311,7 +312,7 @@ router.get('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, 
               // "Markera som gjord".
               published_at: importedStats.published_at ?? row.published_at,
               // Inject the imported clip's own ID so the frontend can surface
-              // "Ångra koppling" on the LeTrend (assignment) history card.
+              // "Ã…ngra koppling" on the LeTrend (assignment) history card.
               // The normalizer reads this as reconciliation.reconciled_clip_id.
               reconciled_imported_clip_id: importedStats.id,
             };
@@ -478,405 +479,12 @@ router.post('/customers/:customerId/game-plan/generate', requireAuth, CM_ONLY, a
     const { customerId } = req.params;
     if (!(await ensureCustomerAccess(req, res, customerId))) return;
 
-    const body = req.body as Record<string, unknown>;
+    const result = await generateGamePlanDraft({
+      input: buildGamePlanInput((req.body ?? {}) as Record<string, unknown>),
+      mode: 'studio',
+    });
 
-    function str(v: unknown): string {
-      return typeof v === 'string' ? v.trim() : '';
-    }
-
-    function safeReferenceArray(v: unknown): Array<{ url: string; label?: string; note?: string; platform?: string }> {
-      if (!Array.isArray(v)) return [];
-      return v
-        .filter((item) => item && typeof item === 'object' && typeof (item as Record<string, unknown>).url === 'string')
-        .slice(0, 8)
-        .map((item) => {
-          const r = item as Record<string, unknown>;
-          return {
-            url: str(r.url),
-            label: str(r.label) || undefined,
-            note: str(r.note) || undefined,
-            platform: str(r.platform) || undefined,
-          };
-        })
-        .filter((r) => r.url);
-    }
-
-    function safeImageArray(v: unknown): Array<{ url: string; caption?: string }> {
-      if (!Array.isArray(v)) return [];
-      return v
-        .filter((item) => item && typeof item === 'object' && typeof (item as Record<string, unknown>).url === 'string')
-        .slice(0, 4)
-        .map((item) => {
-          const i = item as Record<string, unknown>;
-          return { url: str(i.url), caption: str(i.caption) || undefined };
-        })
-        .filter((i) => i.url);
-    }
-
-    const input = {
-      customer_name: str(body.customer_name),
-      niche: str(body.niche),
-      platform: str(body.platform),
-      character: str(body.character),
-      people: str(body.people),
-      aesthetic: str(body.aesthetic),
-      goals: str(body.goals),
-      effort_level: str(body.effort_level),
-      unique: str(body.unique),
-      audience: str(body.audience),
-      references: safeReferenceArray(body.references),
-      images: safeImageArray(body.images),
-    };
-
-    // ── Inline server-side helpers (ported from frontend lib) ─────────────────
-
-    function escHtml(v: string): string {
-      return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
-
-    function normalizeHrefSrv(v: string): string {
-      const t = v.trim();
-      if (!t) return '';
-      if (/^(https?:\/\/|mailto:)/i.test(t)) return t;
-      return `https://${t}`;
-    }
-
-    type LinkPlatformSrv = 'tiktok' | 'instagram' | 'youtube' | 'article' | 'external';
-
-    function detectLinkSrv(url: string): LinkPlatformSrv {
-      const n = normalizeHrefSrv(url);
-      if (!n) return 'external';
-      if (/tiktok\.com/i.test(n)) return 'tiktok';
-      if (/instagram\.com/i.test(n)) return 'instagram';
-      if (/youtube\.com|youtu\.be/i.test(n)) return 'youtube';
-      try { const { protocol } = new URL(n); if (protocol === 'http:' || protocol === 'https:') return 'article'; } catch { /* noop */ }
-      return 'external';
-    }
-
-    function toLinkPlatformSrv(v: string): LinkPlatformSrv {
-      const valid: LinkPlatformSrv[] = ['tiktok', 'instagram', 'youtube', 'article', 'external'];
-      return valid.includes(v as LinkPlatformSrv) ? (v as LinkPlatformSrv) : 'external';
-    }
-
-    function getHostnameSrv(url: string): string {
-      try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
-    }
-
-    function parseAttrsSrv(s: string): Record<string, string> {
-      const out: Record<string, string> = {};
-      for (const m of s.matchAll(/([a-zA-Z0-9_-]+)\s*=\s*("([^"]*)"|'([^']*)')/g)) {
-        const k = m[1]?.toLowerCase(); const v = m[3] ?? m[4] ?? '';
-        if (k) out[k] = v;
-      }
-      return out;
-    }
-
-    function stripHtmlSrv(v: string): string {
-      return v.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/gi, ' ').replace(/\s+/g, ' ').trim();
-    }
-
-    function renderLinkChipSrv(rawHref: string, rawLabel?: string, rawPlatform?: string): string {
-      const href = normalizeHrefSrv(rawHref);
-      if (!href) return '';
-      const platform = rawPlatform ? toLinkPlatformSrv(rawPlatform) : detectLinkSrv(href);
-      const label = (rawLabel || '').trim() || getHostnameSrv(href) || href;
-      const icons: Record<LinkPlatformSrv, string> = {
-        tiktok: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z"/></svg>',
-        instagram: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>',
-        youtube: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.19a3.02 3.02 0 00-2.12-2.14C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.38.55A3.02 3.02 0 00.5 6.19 31.5 31.5 0 000 12a31.5 31.5 0 00.5 5.81 3.02 3.02 0 002.12 2.14c1.88.55 9.38.55 9.38.55s7.5 0 9.38-.55a3.02 3.02 0 002.12-2.14A31.5 31.5 0 0024 12a31.5 31.5 0 00-.5-5.81zM9.55 15.5V8.5l6.27 3.5-6.27 3.5z"/></svg>',
-        article: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
-        external: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15,3 21,3 21,9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
-      };
-      return `<span data-type="linkChip" style="display:inline;"><a class="gp-link-chip gp-link-chip--${platform}" href="${escHtml(href)}" target="_blank" rel="noopener noreferrer" data-gp-chip="1" data-platform="${platform}" data-label="${escHtml(label)}">${icons[platform]}<span class="gp-link-chip__label">${escHtml(label)}</span></a></span>`;
-    }
-
-    function renderImageFigureSrv(rawSrc: string, rawCaption?: string): string {
-      const src = normalizeHrefSrv(rawSrc);
-      if (!src) return '';
-      const caption = (rawCaption || '').trim();
-      return `<figure class="gp-image" data-width="100" style="width:100%"><img src="${escHtml(src)}" alt="${escHtml(caption || 'Game Plan image')}" loading="lazy" /><figcaption>${escHtml(caption)}</figcaption></figure>`;
-    }
-
-    function renderImageGallerySrv(items: Array<{ src: string; caption?: string }>): string {
-      const imgs = items.map((i) => ({ src: normalizeHrefSrv(i.src), caption: (i.caption || '').trim() })).filter((i) => i.src);
-      if (!imgs.length) return '';
-      const cols = Math.max(1, Math.min(imgs.length, 3));
-      return `<div class="gp-image-grid" style="display:grid;grid-template-columns:repeat(${cols}, 1fr);gap:8px;margin-bottom:12px">${imgs.map((i) => `<div data-gp-image-item="1"><img src="${escHtml(i.src)}" alt="${escHtml(i.caption || 'Game Plan image')}" loading="lazy" style="width:100%;aspect-ratio:4 / 3;object-fit:cover;border-radius:6px;display:block"/><div class="gp-image-grid__caption">${escHtml(i.caption)}</div></div>`).join('')}</div>`;
-    }
-
-    function sanitizeHtmlSrv(raw: string): string {
-      let out = raw.trim().replace(/<!--[\s\S]*?-->/g, '');
-      out = out.replace(/<(script|style|iframe|object|embed|form|input|button|textarea|select)\b[^>]*>[\s\S]*?<\/\1>/gi, '');
-      out = out.replace(/<(script|style|iframe|object|embed|form|input|button|textarea|select)\b[^>]*\/?>/gi, '');
-      out = out.replace(/<[^>]+>/g, (tag) => {
-        if (/^<!/i.test(tag) || /^<\//.test(tag)) return tag;
-        const m = tag.match(/^<([a-z0-9-]+)([\s\S]*?)\/?>$/i);
-        if (!m) return '';
-        const tagName = m[1].toLowerCase(); let attrs = m[2] || '';
-        attrs = attrs.replace(/\s+on[a-z-]+\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, '');
-        attrs = attrs.replace(/\s+(href|src)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi, (_f, name: string, _q, dq, sq, bare) => {
-          const v = dq ?? sq ?? bare ?? '';
-          const sv = (/^(javascript|data):/i.test(v.trim())) ? '' : normalizeHrefSrv(v);
-          return sv ? ` ${name}="${sv}"` : '';
-        });
-        if (tagName === 'a') {
-          attrs = attrs.replace(/\s+(target|rel)\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, '');
-          if (/\shref=/i.test(attrs)) attrs += ' target="_blank" rel="noopener noreferrer"';
-        }
-        if (tagName === 'img') {
-          if (!/\ssrc=/i.test(attrs)) return '';
-          if (!/\sloading=/i.test(attrs)) attrs += ' loading="lazy"';
-        }
-        return `<${tagName}${attrs}>`;
-      });
-      return out.trim();
-    }
-
-    function convertAndNormalizeSrv(rawText: string): string {
-      const fenceMatch = rawText.match(/```(?:html)?\s*([\s\S]*?)```/i);
-      let out = (fenceMatch ? fenceMatch[1].trim() : rawText.trim())
-        .replace(/<!doctype[^>]*>/gi, '')
-        .replace(/<\/?(html|body)\b[^>]*>/gi, '')
-        .replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, '');
-
-      out = out.replace(/<image-gallery\b[^>]*>([\s\S]*?)<\/image-gallery>/gi, (_f, inner) => {
-        const items: Array<{ src: string; caption?: string }> = [];
-        for (const m of inner.matchAll(/<image-item\b([^>]*)\/?>/gi)) {
-          const a = parseAttrsSrv(m[1] || ''); if (a.src) items.push({ src: a.src, caption: a.caption });
-        }
-        return renderImageGallerySrv(items);
-      });
-      out = out.replace(/<image-figure\b([^>]*)>([\s\S]*?)<\/image-figure>/gi, (_f, attrs, inner) => {
-        const a = parseAttrsSrv(attrs || ''); return renderImageFigureSrv(a.src || '', a.caption || stripHtmlSrv(inner));
-      });
-      out = out.replace(/<image-figure\b([^>]*)\/>/gi, (_f, attrs) => {
-        const a = parseAttrsSrv(attrs || ''); return renderImageFigureSrv(a.src || '', a.caption);
-      });
-      out = out.replace(/<figure\b[^>]*>([\s\S]*?)<\/figure>/gi, (_f, inner) => {
-        const imgM = inner.match(/<img\b([^>]*)\/?>/i); if (!imgM) return inner;
-        const ia = parseAttrsSrv(imgM[1] || ''); if (!ia.src) return inner;
-        const capM = inner.match(/<figcaption\b[^>]*>([\s\S]*?)<\/figcaption>/i);
-        const cap = capM ? stripHtmlSrv(capM[1]) : ia.alt || ia.caption || '';
-        return renderImageFigureSrv(ia.src, cap);
-      });
-      out = out.replace(/<link-chip\b([^>]*)>([\s\S]*?)<\/link-chip>/gi, (_f, attrs, inner) => {
-        const a = parseAttrsSrv(attrs || ''); return renderLinkChipSrv(a.url || a.href || '', a.label || stripHtmlSrv(inner), a.platform);
-      });
-      out = out.replace(/<link-chip\b([^>]*)\/>/gi, (_f, attrs) => {
-        const a = parseAttrsSrv(attrs || ''); return renderLinkChipSrv(a.url || a.href || '', a.label, a.platform);
-      });
-      out = out.replace(/<h[1-6]\b[^>]*>/gi, '<h3>').replace(/<\/h[1-6]>/gi, '</h3>');
-      out = out.replace(/<img\b([^>]*)\/?>/gi, (_f, attrs) => {
-        const a = parseAttrsSrv(attrs || ''); return renderImageFigureSrv(a.src || '', a.alt || a.caption || '');
-      });
-      out = out.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_f, attrs, inner) => {
-        const a = parseAttrsSrv(attrs || '');
-        const href = normalizeHrefSrv(a.href || a.url || '');
-        const label = stripHtmlSrv(inner).trim() || a.label || getHostnameSrv(href) || href;
-        if (!href) return escHtml(label);
-        const platform = detectLinkSrv(href);
-        if (platform === 'external' && label && label !== href) {
-          return `<a href="${escHtml(href)}" target="_blank" rel="noopener noreferrer">${escHtml(label)}</a>`;
-        }
-        return renderLinkChipSrv(href, label, platform);
-      });
-      out = out.replace(/<p>\s*(<figure\b[\s\S]*?<\/figure>)\s*<\/p>/gi, '$1').replace(/<p>\s*<\/p>/gi, '');
-      return sanitizeHtmlSrv(out).trim();
-    }
-
-    function buildFallbackHtmlSrv(): string {
-      function bp(v: string, fallback: string): string { const t = v.trim(); return `<p>${escHtml(t || fallback)}</p>`; }
-      const refs = input.references
-        .map((r) => { const u = normalizeHrefSrv(r.url); if (!u) return null; return { ...r, url: u }; })
-        .filter((r): r is NonNullable<typeof r> => Boolean(r));
-      const imgs = input.images
-        .map((i) => { const u = normalizeHrefSrv(i.url); if (!u) return null; return { ...i, url: u }; })
-        .filter((i): i is NonNullable<typeof i> => Boolean(i));
-
-      const refBlock = refs.length > 0
-        ? ['<h3>Referenser</h3>', ...refs.map((r, idx) => `<div style="margin-bottom:12px"><div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px">${renderLinkChipSrv(r.url, r.label || `Referens ${idx + 1}`, r.platform)}</div>${r.note ? bp(r.note, '') : ''}</div>`)].join('')
-        : '';
-      const imgBlock = imgs.length === 1
-        ? `<h3>Visuell riktning</h3>${renderImageFigureSrv(imgs[0].url, imgs[0].caption || 'Referensbild')}`
-        : imgs.length > 1
-          ? `<h3>Visuell riktning</h3>${renderImageGallerySrv(imgs.map((i, idx) => ({ src: i.url, caption: i.caption || `Referens ${idx + 1}` })))}`
-          : '';
-      const profileParts = [
-        input.customer_name.trim() ? `${input.customer_name.trim()} är kunden vi bygger planen för.` : 'Kunden är fokus för planen.',
-        input.niche.trim() ? `Nisch/bransch: ${input.niche.trim()}.` : '',
-        input.platform.trim() ? `Primär plattform: ${input.platform.trim()}.` : '',
-      ].filter(Boolean).join(' ');
-      const contextParts = [
-        input.character.trim() ? `<h3>Verksamhetens karaktär</h3>${bp(input.character, '')}` : '',
-        input.people.trim() ? `<h3>Personalen</h3>${bp(input.people, '')}` : '',
-        input.aesthetic.trim() ? `<h3>Lokal och estetik</h3>${bp(input.aesthetic, '')}` : '',
-        input.goals.trim() ? `<h3>Mål</h3>${bp(input.goals, '')}` : '',
-        input.unique.trim() ? `<h3>Det unika</h3>${bp(input.unique, '')}` : '',
-        input.audience.trim() ? `<h3>Målgrupp</h3>${bp(input.audience, '')}` : '',
-        input.effort_level.trim() ? `<h3>Ambitionsnivå</h3>${bp(input.effort_level, '')}` : '',
-      ].filter(Boolean).join('');
-      const raw = [
-        '<h3>Kundprofil</h3>',
-        bp(profileParts, 'Beskriv kunden, deras nisch och plattform.'),
-        contextParts, refBlock, imgBlock,
-        '<h3>Nästa steg</h3>',
-        '<p>Gå igenom planen, markera vad som känns mest relevant just nu och svara med eventuella justeringar eller fler referenser som vi ska ta vidare.</p>',
-      ].join('');
-      return sanitizeHtmlSrv(raw);
-    }
-
-    // ── Build prompt (exact two-part structure matching buildGamePlanGenerationPrompt) ──
-
-    const normRefs = input.references
-      .map((r) => { const u = normalizeHrefSrv(r.url); if (!u) return null; return { url: u, label: r.label || undefined, note: r.note || undefined, platform: r.platform || undefined }; })
-      .filter((r): r is NonNullable<typeof r> => Boolean(r));
-    const normImgs = input.images
-      .map((i) => { const u = normalizeHrefSrv(i.url); if (!u) return null; return { url: u, caption: i.caption || undefined }; })
-      .filter((i): i is NonNullable<typeof i> => Boolean(i));
-
-    const customerContext = {
-      kund: input.customer_name.trim() || '(okänd)',
-      nisch_och_bransch: input.niche.trim() || null,
-      primar_plattform: input.platform.trim() || null,
-      verksamhetens_karaktar: input.character.trim() || null,
-      personalen: input.people.trim() || null,
-      lokal_och_estetik: input.aesthetic.trim() || null,
-      vad_kunden_vill_uppna: input.goals.trim() || null,
-      ambitionsniva: input.effort_level.trim() || null,
-      nagot_som_sticker_ut: input.unique.trim() || null,
-      malgrupp: input.audience.trim() || null,
-      referenser: normRefs.length > 0 ? normRefs : null,
-      bilder: normImgs.length > 0 ? normImgs : null,
-    };
-
-    const part1 = [
-      'Du skriver ett Game Plan-utkast för LeTrend, en content',
-      'management-byrå som jobbar med restauranger, caféer och barer.',
-      '',
-      'PERSPEKTIV',
-      'Skriv direkt till verksamhetsägaren — använd "du", "er",',
-      '"ni". Referera till personal vid förnamn. Texten ska',
-      'kännas som att en person pratar med en annan person,',
-      'inte som ett företag som beskriver en kund.',
-      '',
-      'LeTrend är experten. Kunden har redan tackat ja. Skriv',
-      'som att planen är fastlagd och detta är genomgången av den.',
-      '',
-      'Undvik helt:',
-      '- "Vi ser", "Vi tror", "Vi hoppas", "Tänk dig",',
-      '  "Målet är", "Syftet är", "Detta ger", "Det handlar om"',
-      '- Tredjepersonsbeskrivningar av kunden: "Jonas har",',
-      '  "verksamheten erbjuder", "kaféet är" — skriv istället',
-      '  "du har", "ni erbjuder", "er lokal är"',
-      '- Adjektiv som värderar kundens förutsättningar: "perfekt",',
-      '  "klockren", "fantastisk", "otrolig", "guld", "dröm"',
-      '- Sista meningen i ett stycke ska vara ett påstående om',
-      '  vad som görs — inte en syftesmening eller ett crescendo.',
-      '',
-      'LETREND-FILOSOFI',
-      'LeTrend kurerar beprövade koncept — sketchbaserat och',
-      'humoristiskt innehåll som vi vet fungerar på TikTok,',
-      'anpassat till vad just den här verksamheten har att erbjuda.',
-      'LeTrend spelar inte in — vi tar fram koncepten och guidar',
-      'kunden. Det är verksamhetens personal som är på kamera',
-      'och spelar in med sin mobil utifrån de koncept vi ger dem.',
-      '',
-      'Koncepten lyfter fram det som redan är starkt. Humor och',
-      'igenkänning är primär drivkraft. Estetik är sekundärt.',
-      'Hög likes/view visar om ett koncept faktiskt landade.',
-      '',
-      'TON',
-      'Avsändaren är en 20–25-årig content manager på LeTrend —',
-      'kunnig, direkt och jordnära. Inte konsultspråk, inte',
-      'säljbrev. Tala som en person.',
-      'Hellre "vardagen" än "den dagliga driften".',
-      'Hellre "spela in" än "producera innehåll".',
-      'Hellre "fungera" än "uppnå genomslagskraft".',
-      'Entusiasm visas genom specifika observationer.',
-      '',
-      'FORMAT',
-      'Returnera ett HTML-fragment med exakt fyra stycken.',
-      'Varje stycke inleds med en <strong>-taggad fras (3–6 ord).',
-      'Inga H-rubriker. Inga punktlistor. Ingen avslutande',
-      'uppmaning till dialog. Använd <p>-taggar.',
-      'Varje stycke ska vara 75–100 ord. Total längd: 300–400 ord.',
-      '',
-      'Om referenslänkar finns: placera relevanta',
-      '<link-chip url="..." platform="tiktok|instagram|youtube|article|external" label="..."/>',
-      'i slutet av det stycke de informerar — inte samlade.',
-      '',
-      'STYCKEN I ORDNING',
-      '1. Verksamhetens förutsättningar — vad ni faktiskt har',
-      '   som LeTrend kan bygga koncept runt. Direkt tilltal.',
-      '   Inga värderingar.',
-      '2. Konceptrekommendation — vilken typ av sketch som',
-      '   passar, varför det matchar just er, hur det spelas in.',
-      '   Låt referensmaterial informera riktningen utan att',
-      '   nämnas explicit.',
-      '3. Insats — vem som är på kamera, hur ofta ni spelar in,',
-      '   hur LeTrend guidar er. Konstaterande.',
-      '4. Vad som byggs — awareness, kvalitetssignaler,',
-      '   tidshorisont. Realistiskt, inga löften.',
-      '',
-      'TOLKNINGSREGLER',
-      'Översätt inputen — återge den inte ordagrant.',
-      'Dra rimliga slutsatser. Fyll inte i luckor med påhittade',
-      'förutsättningar.',
-      'Referensmaterial informerar ton och konceptriktning —',
-      'nämn aldrig källorna explicit i texten.',
-    ].join('\n');
-
-    const part2 = ['Kundkontext (JSON):', JSON.stringify(customerContext, null, 2).slice(0, 5000)].join('\n');
-    const prompt = `${part1}\n\n${part2}`;
-
-    // ── Call Gemini ─────────────────────────────────────────────────────────────
-
-    const apiKey = process.env['REPLIT_AI_INTEGRATIONS_API_KEY'] ?? process.env['GEMINI_API_KEY'];
-    const baseUrl = process.env['REPLIT_AI_INTEGRATIONS_GEMINI_BASE_URL'] ?? 'https://generativelanguage.googleapis.com/v1beta';
-
-    if (!apiKey) {
-      logger.warn('game-plan/generate: no Gemini API key — using server fallback');
-      const html = buildFallbackHtmlSrv();
-      res.json({ html, source: 'fallback', reason: 'no_api_key' });
-      return;
-    }
-
-    let html = '';
-    let source = 'ai';
-    let errorReason = '';
-
-    try {
-      const upstream = await fetch(`${baseUrl}/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.65, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
-        }),
-        signal: AbortSignal.timeout(25000),
-      });
-
-      if (!upstream.ok) {
-        const txt = await upstream.text().catch(() => '');
-        throw new Error(`Gemini ${upstream.status}: ${txt.slice(0, 200)}`);
-      }
-
-      const data = await upstream.json() as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-      };
-
-      const rawText = (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
-      html = convertAndNormalizeSrv(rawText);
-
-      if (!html) throw new Error('empty_response');
-    } catch (err) {
-      logger.warn({ err }, 'game-plan/generate: Gemini call failed — using server fallback');
-      source = 'fallback';
-      errorReason = err instanceof Error ? err.message : String(err);
-      html = buildFallbackHtmlSrv();
-    }
-
-    res.json({ html, source, model: source === 'ai' ? 'gemini-2.5-flash' : undefined, reason: errorReason || undefined });
+    res.json(result);
   } catch (err) {
     logger.error(err, 'game-plan generate error');
     res.status(500).json({ error: 'Internt serverfel' });
@@ -1102,12 +710,12 @@ router.post('/internal/refresh-reconciled-thumbnails', async (req, res) => {
 });
 
 // POST /api/studio-v2/customers/:customerId/fetch-profile-history
-// Manual "Hämta historik"-knapp i Studio-UI. Hämtar fler sidor än cron-batchen.
+// Manual "HÃ¤mta historik"-knapp i Studio-UI. HÃ¤mtar fler sidor Ã¤n cron-batchen.
 router.post('/customers/:customerId/fetch-profile-history', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const customerId = String(req.params['customerId'] ?? '');
     if (!customerId) {
-      res.status(400).json({ error: 'customerId krävs' });
+      res.status(400).json({ error: 'customerId krÃ¤vs' });
       return;
     }
     if (!(await ensureCustomerAccess(req, res, customerId))) return;
@@ -1132,7 +740,7 @@ router.post('/customers/:customerId/fetch-profile-history', requireAuth, CM_ONLY
       res.status(400).json({ error: 'Kunden saknar TikTok-handle' });
       return;
     }
-    // Studio UI passes { count, cursor } for "Hämta historik" / load-more.
+    // Studio UI passes { count, cursor } for "HÃ¤mta historik" / load-more.
     // We accept either { count, cursor } (single-page pagination) or { pages }
     // (multi-page bulk fetch). Both are bounded for cost safety.
     const body = (req.body ?? {}) as { count?: number; cursor?: number; pages?: number };
@@ -1193,9 +801,9 @@ router.get('/customers/:customerId/hagen-clips', requireAuth, CM_ONLY, async (re
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Feed Spans
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // GET /api/studio-v2/feed-spans
 router.get('/feed-spans', requireAuth, CM_ONLY, async (req, res) => {
@@ -1321,9 +929,9 @@ router.delete('/feed-spans/:spanId', requireAuth, CM_ONLY, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Feed: Mark Produced
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // POST /api/studio-v2/feed/mark-produced
 router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
@@ -1409,17 +1017,17 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Email
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // POST /api/studio-v2/email/preview
 router.post('/email/preview', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const body = req.body as Record<string, unknown>;
     // Stub: return a preview based on available data
-    const subject = typeof body.subject === 'string' ? body.subject : 'Förhandsgranskning';
-    const html = typeof body.html === 'string' ? body.html : '<p>E-postinnehåll</p>';
+    const subject = typeof body.subject === 'string' ? body.subject : 'FÃ¶rhandsgranskning';
+    const html = typeof body.html === 'string' ? body.html : '<p>E-postinnehÃ¥ll</p>';
     res.json({ subject, html });
   } catch (err) {
     logger.error(err, 'studio-v2 email preview error');
@@ -1459,7 +1067,7 @@ router.post('/email/send', requireAuth, CM_ONLY, async (req, res) => {
       return;
     }
 
-    const subject = typeof body.subject === 'string' ? body.subject : 'Uppdatering från LeTrend';
+    const subject = typeof body.subject === 'string' ? body.subject : 'Uppdatering frÃ¥n LeTrend';
     const html = typeof body.html === 'string' ? body.html : '';
     const toEmail = typeof body.to === 'string' ? body.to : null;
 
@@ -1469,7 +1077,7 @@ router.post('/email/send', requireAuth, CM_ONLY, async (req, res) => {
     }
 
     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore – resend is an optional runtime dependency
+    // @ts-ignore â€“ resend is an optional runtime dependency
     const Resend = (await import('resend').catch(() => null)) as { Resend: new (key: string) => { emails: { send: (opts: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> } } } | null;
     if (!Resend) {
       res.status(503).json({ error: 'Resend package not available' });
@@ -1590,9 +1198,9 @@ router.patch('/email/jobs/:jobId', requireAuth, CM_ONLY, async (req, res) => {
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // History Reconciliation
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // POST /api/studio-v2/history/reconciliation
 router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) => {
@@ -1646,7 +1254,7 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
         .not('concept_id', 'is', null)
         .maybeSingle();
       if (!nowSlot) {
-        res.status(422).json({ error: 'Inget koncept i nu-slotten hittades. Välj manuellt.' });
+        res.status(422).json({ error: 'Inget koncept i nu-slotten hittades. VÃ¤lj manuellt.' });
         return;
       }
       resolvedLinkedConceptId = (nowSlot as { id: string }).id;
@@ -1809,9 +1417,9 @@ router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) 
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Concepts (library-level)
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // PATCH /api/studio-v2/library-concepts/:conceptId
 // Patches the overrides JSONB on the concepts library table.
@@ -1959,9 +1567,9 @@ router.delete('/concepts/:conceptId', requireAuth, requireRole(['admin']), async
   }
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Dashboard
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // GET /api/studio-v2/dashboard
 router.get('/dashboard', requireAuth, CM_ONLY, async (req, res) => {

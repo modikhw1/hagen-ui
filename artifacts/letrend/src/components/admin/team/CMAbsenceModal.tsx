@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { ModeButton } from '@/components/admin/_primitives';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { AdminField } from '@/components/admin/ui/form/AdminField';
-import { ADMIN_MODAL_INPUT_CLS } from '@/components/admin/ui/adminModalTokens';
+import { ADMIN_MODAL_INPUT_CLS, ADMIN_MODAL_LABEL_CLS } from '@/components/admin/ui/adminModalTokens';
 import { addAdminBreadcrumb, captureAdminError } from '@/lib/admin/admin-telemetry';
 import { apiClient } from '@/lib/admin/api-client';
 import { cmAbsenceCopy } from '@/lib/admin/copy/team';

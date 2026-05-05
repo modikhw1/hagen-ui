@@ -8,12 +8,17 @@ import studioRouter from "./studio.js";
 import studioV2Router from "./studio-v2.js";
 import letrendRouter from "./letrend.js";
 import onboardingRouter from "./onboarding.js";
+import publicRouter from "./public.js";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use("/me", meRouter);
 router.use("/admin", adminRouter);
+
+// Public, token-scoped preview endpoints. These do not require auth but only
+// expose data addressed by an unguessable share token.
+router.use("/public", publicRouter);
 
 // Customer-facing routes (requires auth, served to logged-in customers)
 router.use("/customer", customerRouter);

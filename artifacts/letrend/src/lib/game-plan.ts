@@ -52,6 +52,10 @@ export interface GamePlanGenerateInput {
   effort_level: string;
   unique: string;
   audience: string;
+  focus: string;
+  tone: string;
+  constraints: string;
+  notes: string[];
   references: GamePlanReferenceInput[];
   images: GamePlanImageInput[];
 }

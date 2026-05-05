@@ -21,6 +21,7 @@ import { useDemosBoard, useUpdateDemoStatus } from '@/hooks/admin/useDemos';
 import { useUrlState } from '@/hooks/useUrlState';
 import { demosCopy } from '@/lib/admin/copy/demos';
 import { demoStatusLabel, type DemoStatus } from '@/lib/admin-derive/demos';
+import { formatSek } from '@/lib/admin/money';
 import type { DemoCardDto } from '@/lib/admin/schemas/demos';
 import { shortDateSv } from '@/lib/admin/time';
 import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
@@ -125,7 +126,13 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
   const filteredCards = allCards
     .filter((card) => {
       if (normalizedSearch) {
-        const haystack = [card.companyName, card.contactEmail ?? '', card.tiktokHandle ?? '']
+        const haystack = [
+          card.companyName,
+          card.contactName ?? '',
+          card.contactEmail ?? '',
+          card.tiktokHandle ?? '',
+          card.ownerName ?? '',
+        ]
           .join(' ')
           .toLowerCase();
         if (!haystack.includes(normalizedSearch)) return false;
@@ -176,6 +183,15 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     } catch {
       toast.error('Kunde inte kopiera till urklipp.');
     }
+  };
+
+  const handleOpenPreview = (demo: DemoCardDto) => {
+    const url = buildShareUrl(demo.shareToken);
+    if (!url) {
+      toast.error(demosCopy.copyLinkMissing);
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleOpenStudio = async (demo: DemoCardDto) => {
@@ -280,6 +296,8 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
               <thead>
                 <tr className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="border-b border-border px-3 py-2">Bolag</th>
+                  <th className="border-b border-border px-3 py-2">CM / Studio</th>
+                  <th className="border-b border-border px-3 py-2">Pris</th>
                   <th className="border-b border-border px-3 py-2">Status</th>
                   <th className="border-b border-border px-3 py-2">Uppdaterad</th>
                   <th className="border-b border-border px-3 py-2 text-right">Åtgärder</th>
@@ -322,6 +340,24 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                           </div>
                         </div>
                       </td>
+                      <td className="px-3 py-3 align-top text-xs">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium text-foreground">
+                            {demo.ownerName ?? demosCopy.ownerMissing}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {demosCopy.studioConceptCountLabel(demo.studioConceptCount ?? 0)}
+                          </span>
+                          {demo.hasGamePlan ? (
+                            <span className="inline-flex w-fit rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+                              Game Plan
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 align-top text-xs text-muted-foreground">
+                        {formatSek(demo.proposedPriceOre, { fallback: demosCopy.noPrice })}
+                      </td>
                       <td className="px-3 py-3 align-top">
                         <span
                           className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold ${statusTone(
@@ -345,6 +381,16 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                           >
                             <Copy className="h-3 w-3" />
                             Länk
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenPreview(demo)}
+                            disabled={!demo.shareToken}
+                            title="Öppna preview"
+                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Preview
                           </button>
                           <button
                             type="button"
