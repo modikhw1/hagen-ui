@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "fMrcY-xu-aI55pCz6n61B"
+uri = "file://.local/demo-components.zip"
+type = "unspecified"
+title = "demo-components.zip — 5 filer klara att klistra in"
