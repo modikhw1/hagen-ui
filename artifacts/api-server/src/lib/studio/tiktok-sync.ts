@@ -393,11 +393,16 @@ export async function syncCustomerHistory(
   // exactly one clip is inserted per page (we track across pages to enforce the
   // "total == 1" guard after pagination completes).
   let singleInsertedRow: { id: string; clip: NormalizedClip } | null = null;
+  // Accumulate all clips across pages so we can write tiktok_videos + tiktok_stats
+  // using the same data the drift tab reads.
+  const allSyncedClips: NormalizedClip[] = [];
+  let latestFollowers = 0;
 
   try {
     // fetch user (1 call) + first page (1 call)
     const userInfo = await fetchProviderUser(cleanedHandle, rapidApiKey).catch(() => ({ followers: 0, avatar: null, callsUsed: 1 }));
     callsUsed += userInfo.callsUsed;
+    latestFollowers = userInfo.followers ?? 0;
     if (userInfo.avatar) {
       const { error: avatarErr } = await supabase
         .from('customer_profiles')
@@ -414,6 +419,7 @@ export async function syncCustomerHistory(
       const observedAt = new Date().toISOString();
       const clips = page.videos.map((v) => normalizeVideo(v, cleanedHandle)).filter((c): c is NormalizedClip => Boolean(c));
       totalFetched += clips.length;
+      allSyncedClips.push(...clips);
 
       if (clips.length > 0) {
         const { data: existing } = await supabase
@@ -555,6 +561,67 @@ export async function syncCustomerHistory(
       lastCursor = page.cursor;
       if (!page.has_more || page.cursor === null) break;
       cursor = page.cursor;
+    }
+
+    // ── Persist tiktok_videos + tiktok_stats ─────────────────────────────────
+    // These are the tables read by the drift tab and by loadPreviewMetrics in
+    // the demo preview. The customer_concepts inserts above handle the feed
+    // ingestion; this block keeps the analytics tables in sync so that any
+    // feature that reads tiktok_videos / tiktok_stats gets live data.
+    if (allSyncedClips.length > 0) {
+      const videoRows = allSyncedClips
+        .filter((c) => c.provider_video_id && c.published_at)
+        .map((c) => ({
+          customer_profile_id: customerId,
+          video_id: c.provider_video_id,
+          uploaded_at: c.published_at!,
+          views: c.tiktok_views ?? 0,
+          likes: c.tiktok_likes ?? 0,
+          comments: c.tiktok_comments ?? 0,
+          shares: 0,
+          cover_image_url: c.tiktok_thumbnail_url ?? null,
+          share_url: c.tiktok_url,
+          raw_payload: { provider: 'rapidapi:tiktok-scraper7', description: c.description },
+        }));
+
+      if (videoRows.length > 0) {
+        const { error: videoErr } = await supabase
+          .from('tiktok_videos')
+          .upsert(videoRows, { onConflict: 'customer_profile_id,video_id' });
+        if (videoErr) {
+          logger.warn({ err: videoErr }, 'tiktok-sync: tiktok_videos upsert failed (non-fatal)');
+        }
+      }
+
+      // Daily stats snapshot — one row per customer per day (upsert by date).
+      const snapshotDate = new Date().toISOString().slice(0, 10);
+      const totalViews = allSyncedClips.reduce((s, c) => s + (c.tiktok_views ?? 0), 0);
+      const totalLikes = allSyncedClips.reduce((s, c) => s + (c.tiktok_likes ?? 0), 0);
+      const cutoff24h = Date.now() - 86_400_000;
+      const last24h = allSyncedClips.filter((c) => c.published_at && new Date(c.published_at).getTime() >= cutoff24h);
+      const totalViews24h = last24h.reduce((s, c) => s + (c.tiktok_views ?? 0), 0);
+      const engagementRate = allSyncedClips.length > 0
+        ? Number(((totalLikes / Math.max(1, totalViews)) * 100).toFixed(2))
+        : 0;
+
+      const { error: statsErr } = await supabase
+        .from('tiktok_stats')
+        .upsert({
+          customer_profile_id: customerId,
+          snapshot_date: snapshotDate,
+          followers: latestFollowers,
+          total_videos: allSyncedClips.length,
+          videos_last_24h: last24h.length,
+          total_views_24h: totalViews24h,
+          engagement_rate: engagementRate,
+          raw_payload: {
+            provider: 'rapidapi:tiktok-scraper7',
+            clip_count: allSyncedClips.length,
+          },
+        }, { onConflict: 'customer_profile_id,snapshot_date' });
+      if (statsErr) {
+        logger.warn({ err: statsErr }, 'tiktok-sync: tiktok_stats upsert failed (non-fatal)');
+      }
     }
 
     // Auto-reconcile: runs once after all pages are processed so the guard is on
