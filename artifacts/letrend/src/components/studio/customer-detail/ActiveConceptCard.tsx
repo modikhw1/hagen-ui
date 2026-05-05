@@ -470,7 +470,10 @@ export function ActiveConceptCard({
 
   const title = getWorkspaceConceptTitle(concept, details ?? null);
   const initials = title.split(' ').slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase() || '?';
-  const thumbnailUrl = concept.result.tiktok_thumbnail_url ?? (details as { thumbnail_url?: string | null } | undefined)?.thumbnail_url ?? null;
+  const thumbnailUrl = concept.result.tiktok_thumbnail_url
+    ?? (details as { thumbnail_url?: string | null; preview_image_url?: string | null } | undefined)?.thumbnail_url
+    ?? (details as { thumbnail_url?: string | null; preview_image_url?: string | null } | undefined)?.preview_image_url
+    ?? null;
   const tiktokUrl = concept.result.tiktok_url;
   const addedDate = concept.assignment.added_at ?? concept.added_at;
   const plannedPublishAt = concept.result.planned_publish_at;

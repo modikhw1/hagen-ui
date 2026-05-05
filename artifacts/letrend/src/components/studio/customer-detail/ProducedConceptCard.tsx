@@ -133,22 +133,26 @@ export function ProducedConceptCard({
               ) : null}
               {concept.updated_at ? <span>Senast redigerad {formatDate(concept.updated_at)}</span> : null}
             </div>
-            {details?.description_sv ? (
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: 12,
-                  color: LeTrendColors.textSecondary,
-                  lineHeight: 1.45,
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
-                }}
-              >
-                {details.description_sv}
-              </div>
-            ) : null}
+            {(() => {
+              const bio = (details as { summary_sv?: string | null; summary?: string | null } | undefined)?.summary_sv
+                ?? (details as { summary_sv?: string | null; summary?: string | null } | undefined)?.summary;
+              return bio ? (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: 12,
+                    color: LeTrendColors.textSecondary,
+                    lineHeight: 1.45,
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {bio}
+                </div>
+              ) : null;
+            })()}
           </div>
           {highlight ? (
             <span style={{ padding: '4px 8px', borderRadius: 999, background: '#dcfce7', border: '1px solid #86efac', color: '#166534', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
