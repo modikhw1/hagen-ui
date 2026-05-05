@@ -13,6 +13,13 @@ import {
   hexToRgba,
 } from './shared';
 
+const COLLAB_SCOPE_LABELS: Record<string, string> = {
+  medverka: 'Medverka i video',
+  skriva: 'Skriva sketch / manus',
+  producera: 'Producera / regissera',
+  skriva_medverka: 'Skriva + medverka',
+};
+
 function FeedSlot({
   slot,
   tags,
@@ -671,75 +678,67 @@ function FeedSlot({
 
       {/* Koncept-innehåll — v2 layout för planned/current och history */}
       {concept && isCustomCollaboration ? (
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minHeight: 0, color: collaborationPalette.text }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 8px', borderRadius: 999, background: collaborationPalette.surface, border: collaborationPalette.border }}>
-                <img src="/lt-logo.png" alt="LeTrend" aria-hidden="true" style={{ width: 15, height: 15, objectFit: 'contain', flexShrink: 0 }} />
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: collaborationPalette.accent }}>
-                  Samarbete
-                </span>
-              </div>
-              {type === 'current' && (
-                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: collaborationPalette.accent, color: '#fff', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: collaborationPalette.secondary, flexShrink: 0 }} />
-                  Nu
-                </div>
-              )}
-            </div>
+        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minHeight: 0 }}>
+          {/* Diagonal stripe pattern — sits behind all content */}
+          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', backgroundImage: 'repeating-linear-gradient(-45deg, rgba(74,47,24,0.025) 0px, rgba(74,47,24,0.025) 1px, transparent 1px, transparent 8px)' }} />
 
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          {/* Nu pill — absolute top-right, matches regular card */}
+          {type === 'current' && (
+            <div style={{ position: 'absolute', top: 0, right: 0, zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: collaborationPalette.accent, color: '#FAF8F5', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>
+              <div style={{ width: 5, height: 5, borderRadius: '50%', background: collaborationPalette.secondary, flexShrink: 0 }} />
+              Nu
+            </div>
+          )}
+
+          {/* Top: badge + avatar/name */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, position: 'relative' }}>
+            <div style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 4, background: collaborationPalette.accent, color: '#FAF8F5', fontSize: 8.5, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase' as const, padding: '3px 7px', borderRadius: 5 }}>
+              <span>✦</span> Samarbete
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               {concept.profile_image_url ? (
                 <img
                   src={concept.profile_image_url}
                   alt={concept.profile_name ?? concept.partner_name ?? 'Profil'}
-                  style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${hexToRgba(collaborationPalette.accent, 0.18)}`, flexShrink: 0 }}
+                  style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid rgba(74,47,24,0.15)', flexShrink: 0 }}
                 />
               ) : (
-                <div style={{ width: 42, height: 42, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: hexToRgba(collaborationPalette.accent, 0.12), border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.2)}`, color: collaborationPalette.accent, fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #c4813a, #7a3f18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#FAF8F5', flexShrink: 0, border: '1.5px solid rgba(74,47,24,0.15)' }}>
                   {profileInitials}
                 </div>
               )}
-              <div style={{ minWidth: 0, display: 'grid', gap: 2 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.2, color: collaborationPalette.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: collaborationPalette.text, lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {concept.partner_name}
-                </span>
-                <span style={{ fontSize: 10, color: hexToRgba(collaborationPalette.text, 0.72), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {concept.profile_name ?? 'Utvalt samarbete'}
-                </span>
+                </div>
+                <div style={{ fontSize: 9, color: '#9CA3AF', lineHeight: 1 }}>
+                  {concept.collaborator_reach ? `${concept.collaborator_reach} följare` : (concept.profile_name ?? 'Samarbete')}
+                </div>
               </div>
-            </div>
-
-            <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.35, color: collaborationPalette.text, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical' as const }}>
-              {collaborationTitle}
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {markers && markers.tags.length > 0 && (
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                {markers.tags.slice(0, 2).map((tagName) => {
-                  const tag = tags.find(t => t.name === tagName);
-                  return (
-                    <span key={tagName} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 999, padding: '3px 8px 3px 6px', fontSize: 9.5, fontWeight: 600, background: collaborationPalette.surface, border: collaborationPalette.border, color: tag?.color ?? collaborationPalette.accent }}>
-                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: tag?.color ?? collaborationPalette.secondary, flexShrink: 0, display: 'inline-block' }} />
-                      {tagName}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
+          {/* Bottom: scope checklist + divider + date/price + confirmation + action */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}>
             {(concept.scope?.length ?? 0) > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {concept.scope.slice(0, 3).map((scopeId) => (
-                  <span key={scopeId} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 999, background: collaborationPalette.surface, border: collaborationPalette.border, fontSize: 9, fontWeight: 600, color: collaborationPalette.text }}>
-                    {scopeId === 'medverka' ? 'Medverkar' : scopeId === 'skriva' ? 'Skriver' : scopeId === 'producera' ? 'Producerar' : 'Skriver+Medverkar'}
-                  </span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {(concept.scope as string[]).map((scopeId) => (
+                  <div key={scopeId} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9.5, color: '#6B7280' }}>
+                    <div style={{ width: 11, height: 11, borderRadius: 3, border: `1.5px solid ${collaborationPalette.accent}`, background: collaborationPalette.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="7" height="5" viewBox="0 0 7 5">
+                        <polyline points="1,2.5 2.8,4.2 6,1" stroke="#FAF8F5" strokeWidth="1.4" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    {COLLAB_SCOPE_LABELS[scopeId] ?? scopeId}
+                  </div>
                 ))}
               </div>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 10.5, color: hexToRgba(collaborationPalette.text, 0.72) }}>
-              <span>
+
+            <div style={{ height: 1, background: 'rgba(74,47,24,0.08)', margin: '1px 0' }} />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: concept.confirmed ? 11.5 : 10.5, fontWeight: 500, color: concept.confirmed ? collaborationPalette.text : '#9CA3AF', fontStyle: concept.confirmed ? 'normal' : 'italic' }}>
                 {(() => {
                   const dt = concept.collaboration_date_type;
                   if (result?.planned_publish_at) {
@@ -748,18 +747,17 @@ function FeedSlot({
                   }
                   return projectedDate
                     ? `~${projectedDate.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`
-                    : 'Ingen plan satt';
+                    : 'Ingen plan';
                 })()}
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                {concept.price != null && (
-                  <span style={{ fontWeight: 700, color: collaborationPalette.text }}>{concept.price} kr</span>
-                )}
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: concept.confirmed ? '#10B981' : hexToRgba(collaborationPalette.text, 0.4) }} />
-                  {concept.confirmed ? 'Bekräftat' : 'Ej bekräftat'}
-                </span>
-              </span>
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: concept.price != null ? collaborationPalette.text : '#9CA3AF' }}>
+                {concept.price != null ? `${concept.price} kr` : '—'}
+              </div>
+            </div>
+
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, borderRadius: 4, padding: '2px 5px', background: concept.confirmed ? 'rgba(16,185,129,0.1)' : 'rgba(74,47,24,0.07)', fontSize: 8.5, fontWeight: 600, letterSpacing: '0.04em', color: concept.confirmed ? '#0a6644' : '#9CA3AF', alignSelf: 'flex-start' }}>
+              <div style={{ width: 4, height: 4, borderRadius: '50%', background: concept.confirmed ? '#10B981' : '#C4B5A0' }} />
+              {concept.confirmed ? 'Bekräftat' : 'Ej bekräftat'}
             </div>
 
             {type === 'current' && !checkingForClip && !noClipFound && (
@@ -777,102 +775,33 @@ function FeedSlot({
                     });
                   }
                 }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.2)}`,
-                  background: collaborationPalette.surface,
-                  borderRadius: 7,
-                  padding: '6px 9px',
-                  cursor: 'pointer',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  fontFamily: 'inherit',
-                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.2)}`, background: collaborationPalette.surface, borderRadius: 7, padding: '6px 9px', cursor: 'pointer', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit' }}
               >
-                <div style={{
-                  width: 15,
-                  height: 15,
-                  borderRadius: '50%',
-                  background: collaborationPalette.accent,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}>
+                <div style={{ width: 15, height: 15, borderRadius: '50%', background: collaborationPalette.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="8" height="6" viewBox="0 0 8 6">
                     <polyline points="1,3 3,5 7,1" stroke="#FAF8F5" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <span style={{ fontSize: 10, fontWeight: 600, color: collaborationPalette.text, whiteSpace: 'nowrap' }}>
-                  Markera som gjord
-                </span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: collaborationPalette.text, whiteSpace: 'nowrap' }}>Markera som gjord</span>
               </button>
             )}
 
             {type === 'current' && checkingForClip && (
               <div style={{ fontSize: 10, color: hexToRgba(collaborationPalette.text, 0.72), fontStyle: 'italic', padding: '6px 0' }}>
-                Soker efter nytt klipp...
+                Söker efter nytt klipp...
               </div>
             )}
 
             {type === 'current' && noClipFound && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.28)}`,
-                  borderRadius: 7,
-                  padding: '7px 9px',
-                  background: collaborationPalette.surface,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 6,
-                }}
-              >
+              <div onClick={(e) => e.stopPropagation()} style={{ border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.28)}`, borderRadius: 7, padding: '7px 9px', background: collaborationPalette.surface, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={{ fontSize: 9.5, fontWeight: 600, color: collaborationPalette.text, lineHeight: 1.4 }}>
-                  Inget nytt klipp hittades pa profilen.
+                  Inget nytt klipp hittades på profilen.
                 </span>
                 <div style={{ display: 'flex', gap: 5 }}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setNoClipFound(false);
-                      void onMarkProduced(concept.id);
-                    }}
-                    style={{
-                      flex: 1,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      padding: '5px 0',
-                      border: 'none',
-                      borderRadius: 5,
-                      cursor: 'pointer',
-                      background: collaborationPalette.accent,
-                      color: 'white',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    Markera anda
+                  <button onClick={(e) => { e.stopPropagation(); setNoClipFound(false); void onMarkProduced(concept.id); }} style={{ flex: 1, fontSize: 10, fontWeight: 600, padding: '5px 0', border: 'none', borderRadius: 5, cursor: 'pointer', background: collaborationPalette.accent, color: 'white', fontFamily: 'inherit' }}>
+                    Markera ändå
                   </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setNoClipFound(false);
-                    }}
-                    style={{
-                      flex: 1,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      padding: '5px 0',
-                      border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.16)}`,
-                      borderRadius: 5,
-                      cursor: 'pointer',
-                      background: 'transparent',
-                      color: collaborationPalette.text,
-                      fontFamily: 'inherit',
-                    }}
-                  >
+                  <button onClick={(e) => { e.stopPropagation(); setNoClipFound(false); }} style={{ flex: 1, fontSize: 10, fontWeight: 600, padding: '5px 0', border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.16)}`, borderRadius: 5, cursor: 'pointer', background: 'transparent', color: collaborationPalette.text, fontFamily: 'inherit' }}>
                     Avbryt
                   </button>
                 </div>

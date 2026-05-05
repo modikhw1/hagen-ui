@@ -6,7 +6,8 @@ import type { CustomerConcept } from '@/types/studio-v2';
 import { COLLABORATION_SCOPE_OPTIONS, type CollaborationScopeId } from './CollaborationModal';
 import { getCollaborationInitials, formatCollaborationDate } from './CollaborationCard';
 
-const BROWN = LeTrendColors.brownDark;
+const BROWN = '#4A2F18';
+const CREAM = '#FAF8F5';
 
 export interface CollaborationConceptRowProps {
   concept: CustomerConcept;
@@ -30,10 +31,6 @@ export function CollaborationConceptRow({
   const scopeIds = (concept.scope ?? []).filter((s): s is CollaborationScopeId =>
     s === 'medverka' || s === 'skriva' || s === 'producera' || s === 'skriva_medverka'
   );
-  const scopeLabel =
-    COLLABORATION_SCOPE_OPTIONS.filter((o) => scopeIds.includes(o.id))
-      .map((o) => o.label)
-      .join(', ') || 'Scope saknas';
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -46,163 +43,109 @@ export function CollaborationConceptRow({
     }
   };
 
+  const avatarUrl = concept.collaborator_avatar_url;
+
   return (
     <article
       onClick={onEdit}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: hovered ? 'rgba(74,47,24,0.02)' : LeTrendColors.surface,
-        borderRadius: LeTrendRadius.lg,
-        padding: '12px 14px',
-        border: `1.5px solid ${BROWN}`,
-        display: 'flex',
-        gap: 14,
-        alignItems: 'center',
         position: 'relative',
         cursor: 'pointer',
+        borderRadius: LeTrendRadius.lg,
+        border: `1.5px solid ${BROWN}`,
+        background: hovered ? 'rgba(74,47,24,0.02)' : LeTrendColors.surface,
+        padding: '12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        gap: 10,
+        overflow: 'hidden',
         transition: 'background 0.12s',
       }}
     >
-      {/* Left: badge + avatar */}
-      <div
-        style={{
-          flexShrink: 0,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 6,
-          width: 60,
-        }}
-      >
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 3,
-            background: BROWN,
-            color: LeTrendColors.cream,
-            fontSize: 7.5,
-            fontWeight: 700,
-            letterSpacing: '0.09em',
-            textTransform: 'uppercase',
-            padding: '3px 6px',
-            borderRadius: 5,
-            whiteSpace: 'nowrap',
-          }}
-        >
+      {/* Diagonal stripe pattern */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        backgroundImage: 'repeating-linear-gradient(-45deg, rgba(74,47,24,0.025) 0px, rgba(74,47,24,0.025) 1px, transparent 1px, transparent 8px)',
+      }} />
+
+      {/* Top section: badge + avatar + name/reach */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }}>
+        {/* ✦ Samarbete badge */}
+        <div style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 4, background: BROWN, color: CREAM, fontSize: 8.5, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', padding: '3px 7px', borderRadius: 5 }}>
           <span>✦</span> Samarbete
         </div>
-        {concept.collaborator_avatar_url ? (
-          <img
-            src={concept.collaborator_avatar_url}
-            alt={concept.partner_name ?? ''}
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: '50%',
-              objectFit: 'cover',
-              border: '1.5px solid rgba(74,47,24,0.15)',
-              flexShrink: 0,
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              width: 34,
-              height: 34,
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #c4813a, #7a3f18)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 12,
-              fontWeight: 700,
-              color: LeTrendColors.cream,
-              flexShrink: 0,
-              border: '1.5px solid rgba(74,47,24,0.15)',
-            }}
-          >
-            {initials}
+
+        {/* Avatar + name + reach */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={concept.partner_name ?? ''}
+              style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '1.5px solid rgba(74,47,24,0.15)', flexShrink: 0 }}
+            />
+          ) : (
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #c4813a, #7a3f18)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: CREAM, flexShrink: 0, border: '1.5px solid rgba(74,47,24,0.15)' }}>
+              {initials}
+            </div>
+          )}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: BROWN, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {concept.partner_name || 'Namn saknas'}
+            </div>
+            {concept.collaborator_reach ? (
+              <div style={{ fontSize: 11, color: LeTrendColors.textMuted, lineHeight: 1.2 }}>
+                {concept.collaborator_reach} följare
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        {/* Scope chips */}
+        {scopeIds.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {COLLABORATION_SCOPE_OPTIONS.filter((o) => scopeIds.includes(o.id)).map((o) => (
+              <span key={o.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 999, background: 'rgba(74,47,24,0.07)', border: '1px solid rgba(74,47,24,0.14)', fontSize: 10, fontWeight: 600, color: BROWN }}>
+                {o.label}
+              </span>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Main content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: BROWN, marginBottom: 3, lineHeight: 1.3 }}>
-          {concept.partner_name || 'Namn saknas'}
-          {concept.collaborator_reach ? (
-            <span style={{ fontSize: 12, fontWeight: 400, color: LeTrendColors.textMuted, marginLeft: 6 }}>
-              {concept.collaborator_reach} följare
-            </span>
-          ) : null}
-        </div>
-        <div style={{ fontSize: 12, color: LeTrendColors.textSecondary, marginBottom: 5 }}>
-          {scopeLabel}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      {/* Bottom section: divider + date/price + confirmation */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7, position: 'relative' }}>
+        <div style={{ height: 1, background: 'rgba(74,47,24,0.08)' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
           {dateLabel !== '—' ? (
             <span style={{ fontSize: 11, color: LeTrendColors.textMuted }}>{dateLabel}</span>
-          ) : null}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              borderRadius: 999,
-              padding: '2px 8px',
-              background: concept.confirmed ? 'rgba(16,185,129,0.1)' : 'rgba(74,47,24,0.07)',
-              fontSize: 11,
-              fontWeight: 600,
-              color: concept.confirmed ? '#0a6644' : LeTrendColors.textMuted,
-            }}
-          >
-            <div
-              style={{
-                width: 5,
-                height: 5,
-                borderRadius: '50%',
-                background: concept.confirmed ? '#10B981' : '#C4B5A0',
-              }}
-            />
-            {concept.confirmed ? 'Bekräftat' : 'Ej bekräftat'}
+          ) : (
+            <span style={{ fontSize: 11, color: LeTrendColors.textMuted, fontStyle: 'italic' }}>Inget datum satt</span>
+          )}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            {concept.price != null ? (
+              <span style={{ fontSize: 11, fontWeight: 700, color: BROWN }}>{concept.price} kr</span>
+            ) : null}
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, borderRadius: 4, padding: '2px 6px', background: concept.confirmed ? 'rgba(16,185,129,0.1)' : 'rgba(74,47,24,0.07)', fontSize: 10.5, fontWeight: 600, color: concept.confirmed ? '#0a6644' : LeTrendColors.textMuted }}>
+              <div style={{ width: 5, height: 5, borderRadius: '50%', background: concept.confirmed ? '#10B981' : '#C4B5A0' }} />
+              {concept.confirmed ? 'Bekräftat' : 'Ej bekräftat'}
+            </div>
           </div>
-          {concept.price != null ? (
-            <span style={{ fontSize: 11, fontWeight: 600, color: BROWN }}>{concept.price} kr</span>
-          ) : null}
         </div>
       </div>
 
-      {/* Edit button */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          onEdit();
-        }}
-        style={{
-          padding: '6px 12px',
-          background: '#fff',
-          border: `1px solid ${LeTrendColors.brownLight}`,
-          borderRadius: LeTrendRadius.md,
-          fontSize: 12,
-          fontWeight: 600,
-          color: BROWN,
-          cursor: 'pointer',
-          flexShrink: 0,
-        }}
-      >
-        Redigera
-      </button>
-
-      {/* Delete × */}
+      {/* Hover × delete */}
       <button
         type="button"
         onClick={handleDelete}
         disabled={deleting}
-        aria-label="Ta bort från plan"
-        title="Ta bort från plan"
+        aria-label="Ta bort samarbete"
+        title="Ta bort samarbete"
         style={{
           position: 'absolute',
           top: 7,
@@ -222,6 +165,7 @@ export function CollaborationConceptRow({
           transition: 'opacity 0.15s, background 0.15s',
           lineHeight: 1,
           padding: 0,
+          zIndex: 1,
         }}
       >
         ×

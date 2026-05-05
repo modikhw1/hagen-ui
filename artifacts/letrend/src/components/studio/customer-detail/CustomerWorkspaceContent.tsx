@@ -1708,29 +1708,29 @@ function CustomerWorkspacePageContent() {
 
   const handleReorderConcepts = React.useCallback(async (newOrderIds: string[]) => {
     const conceptMap = new Map(concepts.map((c) => [c.id, c]));
-    // Only placed concepts (those with a feed_order) need to be persisted
+    // Only placed concepts (those with a feed_order) need to be persisted.
+    // Use placement.feed_order (canonical); fall back to the deprecated top-level
+    // field for concepts that haven't been migrated yet.
+    const getFeedOrder = (c: CustomerConcept): number | null =>
+      c.placement?.feed_order ?? (c as unknown as { feed_order?: number | null }).feed_order ?? null;
+
     const placedInNewOrder = newOrderIds
       .map((id) => conceptMap.get(id))
-      .filter((c): c is CustomerConcept => {
-        if (!c) return false;
-        const fo = (c as Record<string, unknown>)['feed_order'] ?? ((c as Record<string, unknown>)['placement'] as Record<string, unknown> | undefined)?.['feed_order'];
-        return fo != null;
-      });
+      .filter((c): c is CustomerConcept => c != null && getFeedOrder(c) != null);
 
     if (placedInNewOrder.length === 0) return;
 
-    // Preserve the set of feed_order values; reassign them by new position
+    // Preserve the set of feed_order values and assign them to concepts in their
+    // new drag order. Sort descending so position 0 (top of list) always gets
+    // the highest (most-future) value, producing labels "Nu, 2, 3" not "-2, Nu, 1".
     const sortedFeedOrders = placedInNewOrder
-      .map((c) => {
-        const fo = (c as Record<string, unknown>)['feed_order'] ?? ((c as Record<string, unknown>)['placement'] as Record<string, unknown> | undefined)?.['feed_order'];
-        return fo as number;
-      })
-      .sort((a, b) => a - b);
+      .map(getFeedOrder)
+      .sort((a, b) => (b ?? 0) - (a ?? 0)) as number[];
 
     try {
       await Promise.all(
         placedInNewOrder.map((concept, idx) => {
-          const curFo = (concept as Record<string, unknown>)['feed_order'] ?? ((concept as Record<string, unknown>)['placement'] as Record<string, unknown> | undefined)?.['feed_order'];
+          const curFo = getFeedOrder(concept);
           const newFo = sortedFeedOrders[idx];
           if (newFo === curFo) return Promise.resolve();
           return handleUpdateConcept(concept.id, { feed_order: newFo } as Partial<CustomerConcept>);
