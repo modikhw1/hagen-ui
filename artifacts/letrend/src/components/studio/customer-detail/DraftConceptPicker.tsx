@@ -5,6 +5,7 @@ import type { CustomerConcept } from '@/types/studio-v2';
 import type { TranslatedConcept } from '@/lib/translator';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import { getWorkspaceConceptDetails, getWorkspaceConceptTitle } from './shared';
+import { isCollaborationCustomerConcept } from '@/lib/studio/customer-concepts';
 
 type DraftConceptPickerProps = {
   drafts: CustomerConcept[];
@@ -65,7 +66,10 @@ export const DraftConceptPicker = React.memo(function DraftConceptPicker({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {drafts.map((concept) => {
-              const details = getWorkspaceConceptDetails(concept, getConceptDetails);
+              const isCollab = isCollaborationCustomerConcept(concept);
+              const details = isCollab
+                ? undefined
+                : getWorkspaceConceptDetails(concept, getConceptDetails);
 
               return (
                 <div
@@ -77,7 +81,7 @@ export const DraftConceptPicker = React.memo(function DraftConceptPicker({
                   }}
                   style={{
                     background: 'white',
-                    border: `1px solid ${LeTrendColors.border}`,
+                    border: `1px solid ${isCollab ? LeTrendColors.brownLight : LeTrendColors.border}`,
                     borderRadius: LeTrendRadius.sm,
                     padding: '10px 12px',
                     textAlign: 'left',
@@ -93,14 +97,46 @@ export const DraftConceptPicker = React.memo(function DraftConceptPicker({
                     event.currentTarget.style.background = '#F9FAFB';
                   }}
                   onMouseLeave={(event) => {
-                    event.currentTarget.style.borderColor = LeTrendColors.border;
+                    event.currentTarget.style.borderColor = isCollab ? LeTrendColors.brownLight : LeTrendColors.border;
                     event.currentTarget.style.background = 'white';
                   }}
                 >
-                  {getWorkspaceConceptTitle(concept, details ?? null)}
-                  <span style={{ fontSize: 10, color: LeTrendColors.textMuted, marginLeft: 8 }}>
-                    dra till tom kommande slot
-                  </span>
+                  {isCollab ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          background: LeTrendColors.brownDark,
+                          color: LeTrendColors.cream,
+                          fontSize: 7.5,
+                          fontWeight: 700,
+                          letterSpacing: '0.09em',
+                          textTransform: 'uppercase',
+                          padding: '2px 5px',
+                          borderRadius: 4,
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                        }}
+                      >
+                        ✦ Samarbete
+                      </span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {concept.partner_name || 'Partner saknas'}
+                      </span>
+                      <span style={{ fontSize: 10, color: LeTrendColors.textMuted, flexShrink: 0 }}>
+                        dra till tom kommande slot
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {getWorkspaceConceptTitle(concept, details ?? null)}
+                      <span style={{ fontSize: 10, color: LeTrendColors.textMuted, marginLeft: 8 }}>
+                        dra till tom kommande slot
+                      </span>
+                    </>
+                  )}
                 </div>
               );
             })}

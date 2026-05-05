@@ -178,6 +178,9 @@ export function FeedPlannerSection({
   );
   const pendingPlacementTitle = React.useMemo(() => {
     if (!pendingPlacementConcept) return null;
+    if (isCollaborationCustomerConcept(pendingPlacementConcept)) {
+      return pendingPlacementConcept.partner_name || 'Samarbetspartner';
+    }
     const details = getWorkspaceConceptDetails(pendingPlacementConcept, getConceptDetails) ?? null;
     return getWorkspaceConceptTitle(pendingPlacementConcept, details);
   }, [getConceptDetails, pendingPlacementConcept]);
