@@ -26,6 +26,12 @@ function asRecord(value: unknown): JsonRecord {
   return value as JsonRecord;
 }
 
+function firstRecord(value: unknown): JsonRecord | null {
+  if (!value) return null;
+  if (!Array.isArray(value)) return asRecord(value);
+  return value.length > 0 ? asRecord(value[0]) : null;
+}
+
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -316,16 +322,17 @@ router.get('/demos/:token', async (req, res) => {
     }
 
     const supabase = createSupabaseAdmin();
-    const { data: demo, error: demoError } = await (supabase as any)
+    const { data: demoRows, error: demoError } = await (supabase as any)
       .from('demos')
       .select('*')
       .eq('share_token', token)
-      .maybeSingle();
+      .limit(1);
 
     if (demoError) {
       res.status(500).json({ error: demoError.message });
       return;
     }
+    const demo = firstRecord(demoRows);
     if (!demo || demo.status === 'expired') {
       res.status(404).json({ error: 'Demo hittades inte' });
       return;
@@ -340,21 +347,32 @@ router.get('/demos/:token', async (req, res) => {
     let livePreviewMetrics: JsonRecord = {};
 
     if (customerId) {
-      const [{ data: customerData }, { data: gamePlanData }] = await Promise.all([
+      const [customerResult, gamePlanResult] = await Promise.all([
         (supabase as any)
           .from('customer_profiles')
           .select('*')
           .eq('id', customerId)
-          .maybeSingle(),
+          .limit(1),
         (supabase as any)
           .from('customer_game_plans')
           .select('html, plain_text, updated_at')
           .eq('customer_id', customerId)
-          .maybeSingle(),
+          .limit(1),
       ]);
-      customer = (customerData as JsonRecord | null) ?? null;
-      gamePlanRecord = (gamePlanData as JsonRecord | null) ?? null;
-      concepts = await loadPreviewConcepts(supabase, customerId);
+      if (customerResult.error) {
+        logger.warn({ err: customerResult.error, customerId }, 'public demo customer fetch failed');
+      }
+      if (gamePlanResult.error) {
+        logger.warn({ err: gamePlanResult.error, customerId }, 'public demo game plan fetch failed');
+      }
+      customer = firstRecord(customerResult.data);
+      gamePlanRecord = firstRecord(gamePlanResult.data);
+      try {
+        concepts = await loadPreviewConcepts(supabase, customerId);
+      } catch (err) {
+        logger.warn({ err, customerId }, 'public demo concepts fetch failed');
+        concepts = [];
+      }
     }
 
     if (concepts.length === 0) {
@@ -362,29 +380,34 @@ router.get('/demos/:token', async (req, res) => {
     }
 
     if (customerId) {
-      livePreviewMetrics = await loadPreviewMetrics(supabase, customerId, concepts);
+      try {
+        livePreviewMetrics = await loadPreviewMetrics(supabase, customerId, concepts);
+      } catch (err) {
+        logger.warn({ err, customerId }, 'public demo metrics fetch failed');
+        livePreviewMetrics = {};
+      }
     }
 
     const ownerAdminId = readString(demoRow['owner_admin_id']);
     let owner: JsonRecord | null = null;
     if (ownerAdminId) {
-      const { data: ownerData } = await (supabase as any)
+      const { data: ownerRows } = await (supabase as any)
         .from('team_members')
         .select('id, profile_id, name, avatar_url, color, city, region')
         .eq('id', ownerAdminId)
-        .maybeSingle();
-      owner = (ownerData as JsonRecord | null) ?? null;
+        .limit(1);
+      owner = firstRecord(ownerRows);
     }
 
     if (!owner && customer) {
       const ownerProfileId = readString(customer['account_manager_profile_id']);
       if (ownerProfileId) {
-        const { data: ownerData } = await (supabase as any)
+        const { data: ownerRows } = await (supabase as any)
           .from('team_members')
           .select('id, profile_id, name, avatar_url, color, city, region')
           .eq('profile_id', ownerProfileId)
-          .maybeSingle();
-        owner = (ownerData as JsonRecord | null) ?? null;
+          .limit(1);
+        owner = firstRecord(ownerRows);
       }
     }
 

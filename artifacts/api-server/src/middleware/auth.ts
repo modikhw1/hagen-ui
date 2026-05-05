@@ -13,6 +13,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthUser;
+      authToken?: string;
     }
   }
 }
@@ -62,6 +63,8 @@ export async function requireAuth(
       res.status(401).json({ error: 'Du måste logga in' });
       return;
     }
+
+    req.authToken = token;
 
     const userClient = createSupabaseUserClient(token);
     const { data: { user: authUser }, error } = await userClient.auth.getUser();

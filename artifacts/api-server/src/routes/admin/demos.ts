@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
-import { createSupabaseAdmin } from '../../lib/supabase.js';
+import { createSupabaseAdmin, createSupabaseUserClient } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 import { buildGamePlanInput, generateGamePlanDraft, stripGamePlanHtml } from '../../lib/game-plan-generate.js';
 import { syncCustomerHistory } from '../../lib/studio/tiktok-sync.js';
@@ -177,6 +177,29 @@ async function runDemoHistorySync(
     pages: result.pages,
     ...(result.error ? { error: result.error } : {}),
   };
+}
+
+function createDemoWriteClient(req: { user?: { is_admin?: boolean }; authToken?: string }) {
+  if (req.user?.is_admin && req.authToken) {
+    return createSupabaseUserClient(req.authToken) as ReturnType<typeof createSupabaseAdmin>;
+  }
+  return createSupabaseAdmin();
+}
+
+async function updateDemoReturning(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  id: string,
+  updates: Record<string, any>,
+) {
+  const { data, error } = await (supabase as any)
+    .from('demos')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .limit(1);
+
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] as Record<string, any> | undefined) ?? null : null;
 }
 
 function hasPreliminaryFeedplan(row: Record<string, any>) {
@@ -752,9 +775,13 @@ router.post('/:id/convert', requireAuth, ADMIN_ONLY, async (req, res) => {
 // PATCH /api/admin/demos/:id
 router.patch('/:id', requireAuth, ADMIN_OR_CM, async (req, res) => {
   try {
-    const supabase = createSupabaseAdmin();
-    const { id } = req.params;
+    const supabase = createDemoWriteClient(req);
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const body = req.body ?? {};
+    if (!id) {
+      res.status(400).json({ error: 'Demo-id saknas' });
+      return;
+    }
 
     const updates: Record<string, any> = {};
     if (body.status !== undefined) {
@@ -798,15 +825,14 @@ router.patch('/:id', requireAuth, ADMIN_OR_CM, async (req, res) => {
       updates['preview_metrics'] = body.preview_metrics ?? {};
     }
 
-    const { data, error } = await supabase
-      .from('demos')
-      .update(updates as any)
-      .eq('id', id)
-      .select()
-      .single();
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ error: 'Inga giltiga andringar att spara.' });
+      return;
+    }
 
-    if (error) {
-      res.status(500).json({ error: error.message });
+    const data = await updateDemoReturning(supabase, id, updates);
+    if (!data) {
+      res.status(404).json({ error: 'Demot hittades inte eller kunde inte uppdateras med nuvarande behorighet.' });
       return;
     }
 
