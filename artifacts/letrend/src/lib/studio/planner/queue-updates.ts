@@ -67,3 +67,17 @@ export function buildDenseFeedOrderSwapUpdates(
   [nextQueue[indexA], nextQueue[indexB]] = [nextQueue[indexB], nextQueue[indexA]];
   return toChangedDenseUpdates(nextQueue);
 }
+
+export function buildDenseFeedOrderReorderUpdates(
+  concepts: CustomerConcept[],
+  orderedConceptIds: string[]
+): PlannerQueueFeedOrderUpdate[] {
+  const conceptMap = new Map(concepts.map((concept) => [concept.id, concept]));
+  const nextQueue = orderedConceptIds
+    .map((id) => conceptMap.get(id))
+    .filter((concept): concept is CustomerConcept =>
+      concept != null && isFutureQueueConcept(concept)
+    );
+
+  return toChangedDenseUpdates(nextQueue);
+}

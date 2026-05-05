@@ -92,6 +92,7 @@ import { useFeedPlannerState } from '@/hooks/useFeedPlannerState';
 import { useCommunicationState } from '@/hooks/useCommunicationState';
 import {
   buildDenseFeedOrderInsertionUpdates,
+  buildDenseFeedOrderReorderUpdates,
   buildDenseFeedOrderSwapUpdates,
 } from '@/lib/studio/planner';
 
@@ -1719,35 +1720,13 @@ function CustomerWorkspacePageContent() {
   };
 
   const handleReorderConcepts = React.useCallback(async (newOrderIds: string[]) => {
-    const conceptMap = new Map(concepts.map((c) => [c.id, c]));
-    // Only placed concepts (those with a feed_order) need to be persisted.
-    // Use placement.feed_order (canonical); fall back to the deprecated top-level
-    // field for concepts that haven't been migrated yet.
-    const getFeedOrder = (c: CustomerConcept): number | null =>
-      c.placement?.feed_order ?? (c as unknown as { feed_order?: number | null }).feed_order ?? null;
-
-    const placedInNewOrder = newOrderIds
-      .map((id) => conceptMap.get(id))
-      .filter((c): c is CustomerConcept => c != null && getFeedOrder(c) != null);
-
-    if (placedInNewOrder.length === 0) return;
-
-    // Preserve the set of feed_order values and assign them to concepts in their
-    // new drag order. Sort descending so position 0 (top of list) always gets
-    // the highest (most-future) value, producing labels "Nu, 2, 3" not "-2, Nu, 1".
-    const sortedFeedOrders = placedInNewOrder
-      .map(getFeedOrder)
-      .sort((a, b) => (b ?? 0) - (a ?? 0)) as number[];
+    const updates = buildDenseFeedOrderReorderUpdates(concepts, newOrderIds);
+    if (updates.length === 0) return;
 
     try {
-      await Promise.all(
-        placedInNewOrder.map((concept, idx) => {
-          const curFo = getFeedOrder(concept);
-          const newFo = sortedFeedOrders[idx];
-          if (newFo === curFo) return Promise.resolve();
-          return handleUpdateConcept(concept.id, { feed_order: newFo } as Partial<CustomerConcept>);
-        })
-      );
+      for (const update of updates) {
+        await handleUpdateConcept(update.conceptId, { feed_order: update.feedOrder } as Partial<CustomerConcept>);
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Kunde inte uppdatera koncept');
     }

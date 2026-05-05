@@ -6,6 +6,7 @@ export { buildPlannerCardActions, buildPlannerCardBadges } from './behavior';
 export { buildFeedPlannerGridProjection } from './grid-projection';
 export {
   buildDenseFeedOrderInsertionUpdates,
+  buildDenseFeedOrderReorderUpdates,
   buildDenseFeedOrderSwapUpdates,
 } from './queue-updates';
 export type { PlannerQueueFeedOrderUpdate } from './queue-updates';

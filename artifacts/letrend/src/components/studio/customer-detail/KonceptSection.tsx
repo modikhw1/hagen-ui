@@ -32,6 +32,7 @@ import {
   type CollaborationScopeId,
 } from './CollaborationModal';
 import { TagManager } from '@/features/studio/customer-workspace/components/TagManager';
+import { buildFeedPlannerModel } from '@/lib/studio/planner';
 
 function toCollaborationFormValues(concept: CustomerConcept): CollaborationFormValues {
   return {
@@ -234,17 +235,35 @@ export const KonceptSection = React.memo(function KonceptSection({
     [collaborationConcepts]
   );
 
+  const plannerOrder = React.useMemo(() => {
+    const model = buildFeedPlannerModel({ concepts });
+    return [model.currentCard, ...model.upcomingCards]
+      .filter((card): card is NonNullable<typeof card> => card != null)
+      .map((card, index) => ({ id: card.id, displayIndex: index }));
+  }, [concepts]);
+
+  const plannerOrderIndex = React.useMemo(
+    () => new Map(plannerOrder.map((item, index) => [item.id, index])),
+    [plannerOrder]
+  );
+
+  const plannerDisplayIndex = React.useMemo(
+    () => new Map(plannerOrder.map((item) => [item.id, item.displayIndex])),
+    [plannerOrder]
+  );
+
   const allActiveSortable = React.useMemo(
     () => [...activeConcepts, ...activeCollaborationConcepts].sort((a, b) => {
-      const fa = a.placement?.feed_order ?? null;
-      const fb = b.placement?.feed_order ?? null;
-      // Placed concepts (non-null feed_order) sort before unplaced, then descending
-      if (fa !== null && fb !== null) return fb - fa;
-      if (fa !== null) return -1;
-      if (fb !== null) return 1;
-      return 0;
+      const plannerA = plannerOrderIndex.get(a.id);
+      const plannerB = plannerOrderIndex.get(b.id);
+      if (plannerA != null && plannerB != null) return plannerA - plannerB;
+      if (plannerA != null) return -1;
+      if (plannerB != null) return 1;
+      const priorityDelta = getConceptPriority(b) - getConceptPriority(a);
+      if (priorityDelta !== 0) return priorityDelta;
+      return b.added_at.localeCompare(a.added_at);
     }),
-    [activeConcepts, activeCollaborationConcepts]
+    [activeConcepts, activeCollaborationConcepts, plannerOrderIndex]
   );
 
   const producedConcepts = React.useMemo(
@@ -263,21 +282,15 @@ export const KonceptSection = React.memo(function KonceptSection({
     allActiveSortable.map((c) => c.id)
   );
 
-  // Sync sorted IDs when allActiveSortable changes (concepts added/removed).
-  // Initialize prevIds to match sortedIds so the first effect run doesn't
-  // treat all existing IDs as "new" additions (which caused duplicate keys).
-  const prevIds = React.useRef<string[]>(allActiveSortable.map((c) => c.id));
+  // Sync local DnD order whenever the planner-derived order changes.
   React.useEffect(() => {
     const newIds = allActiveSortable.map((c) => c.id);
-    const added = newIds.filter((id) => !prevIds.current.includes(id));
-    const removed = new Set(prevIds.current.filter((id) => !newIds.includes(id)));
-    if (added.length > 0 || removed.size > 0) {
-      setSortedIds((current) => [
-        ...current.filter((id) => !removed.has(id)),
-        ...added,
-      ]);
-    }
-    prevIds.current = newIds;
+    setSortedIds((current) => {
+      if (current.length === newIds.length && current.every((id, index) => id === newIds[index])) {
+        return current;
+      }
+      return newIds;
+    });
   }, [allActiveSortable]);
 
   const orderedActiveConcepts = React.useMemo(() => {
@@ -444,9 +457,9 @@ export const KonceptSection = React.memo(function KonceptSection({
           >
             <SortableContext items={sortedIds} strategy={verticalListSortingStrategy}>
               {orderedActiveConcepts.map((concept) => {
-                const feedOrder = concept.placement.feed_order;
-                const positionLabel = feedOrder !== null
-                  ? feedOrder === 0 ? 'Nu' : String(feedOrder)
+                const displayIndex = plannerDisplayIndex.get(concept.id);
+                const positionLabel = displayIndex != null
+                  ? displayIndex === 0 ? 'Nu' : String(displayIndex + 1)
                   : `#${unplacedIndexMap.get(concept.id) ?? 1}`;
                 const isCollab = isCollaborationCustomerConcept(concept);
 

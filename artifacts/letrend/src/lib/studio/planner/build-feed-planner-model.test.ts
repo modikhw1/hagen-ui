@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildFeedPlannerModel } from './build-feed-planner-model';
 import {
   buildDenseFeedOrderInsertionUpdates,
+  buildDenseFeedOrderReorderUpdates,
   buildDenseFeedOrderSwapUpdates,
 } from './queue-updates';
 import { normalizeStudioCustomerConcept } from '../customer-concepts';
@@ -403,6 +404,20 @@ describe('planner queue updates', () => {
     expect(buildDenseFeedOrderSwapUpdates(concepts, 'next', 'later')).toEqual([
       { conceptId: 'later', feedOrder: 1 },
       { conceptId: 'next', feedOrder: 2 },
+    ]);
+  });
+
+  it('reorders placed concept rows using the same top-to-bottom queue as Koncept', () => {
+    const concepts = [
+      normalizeStudioCustomerConcept(rawRow('now', { feed_order: 0 })),
+      normalizeStudioCustomerConcept(rawRow('next', { feed_order: 1 })),
+      normalizeStudioCustomerConcept(rawRow('later', { feed_order: 2 })),
+      normalizeStudioCustomerConcept(rawRow('unplaced', { feed_order: null })),
+    ];
+
+    expect(buildDenseFeedOrderReorderUpdates(concepts, ['next', 'unplaced', 'now', 'later'])).toEqual([
+      { conceptId: 'next', feedOrder: 0 },
+      { conceptId: 'now', feedOrder: 1 },
     ]);
   });
 });
