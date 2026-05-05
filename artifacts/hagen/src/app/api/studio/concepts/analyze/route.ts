@@ -316,6 +316,11 @@ export async function POST(request: NextRequest) {
 
     let gcsUri: string | undefined
 
+    // Note: the v7.B fine-tuned humor pass requires a local file to upload to GCS.
+    // On a Gemini URI cache hit `localFilePath` is undefined, so the pass is skipped
+    // intentionally — the speed benefit of the cache (skipping download + upload) takes
+    // priority over re-running the optional enrichment.  The pass runs in full on the
+    // first (cache-miss) call and on any call after the 47h TTL expires.
     if (isHumorous && gcsConfigured && localFilePath) {
       console.log('[studio/analyze] Video is humorous — uploading to GCS for v7.B pass…')
       const destPath = `studio/analyze/${Date.now()}${path.extname(localFilePath)}`
