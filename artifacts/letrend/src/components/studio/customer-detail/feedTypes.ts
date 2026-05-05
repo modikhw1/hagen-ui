@@ -16,6 +16,7 @@ import type { CustomerConceptAssignmentStatus } from '@/types/customer-lifecycle
 import type { GamePlanGenerateInput } from '@/lib/game-plan';
 import type { WeeklySummaryPreferences } from '@/lib/email/types';
 import type { EmailScheduleRecord } from './shared';
+import type { PlannerVisualCell } from '@/lib/studio/planner';
 
 export type InlineFeedbackTone = 'success' | 'warning' | 'error' | 'info';
 
@@ -131,6 +132,7 @@ export interface FeedPlannerSectionProps {
 
 export interface FeedSlotProps {
   slot: FeedSlotData;
+  plannerCell?: PlannerVisualCell;
   tags: CmTag[];
   config: GridConfig;
   historyReconciliationTargets: CustomerConcept[];

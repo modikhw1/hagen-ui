@@ -4,6 +4,8 @@ import React from 'react';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import type { FeedPlannerSectionProps } from './feedTypes';
 import { FeedSlot } from './FeedSlot';
+import { buildFeedPlannerModel } from '@/lib/studio/planner';
+import type { PlannerVisualCell } from '@/lib/studio/planner';
 import {
   WORKSPACE_CACHE_TTL_MS,
   WORKSPACE_CACHE_MAX_STALE_MS,
@@ -11,7 +13,6 @@ import {
   getWorkspaceConceptTitle,
 } from './shared';
 import {
-  buildSlotMap,
   feedOrderToFrac,
   fracToFeedOrder,
   getMaxHistoryOffset,
@@ -32,6 +33,7 @@ import type { SpanHandlerRefs } from '@/components/studio-v2/SpanHandlers';
 import { TagManager } from '@/features/studio/customer-workspace/components/TagManager';
 import type {
   CustomerConcept,
+  FeedSlot as FeedSlotData,
   FeedSpan,
 } from '@/types/studio-v2';
 import { SPAN_COLOR_PALETTE } from '@/types/studio-v2';
@@ -67,6 +69,33 @@ function formatCompactViews(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.0', '')}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1).replace('.0', '')}k`;
   return String(n);
+}
+
+function visualCellToFeedSlot(cell: PlannerVisualCell): FeedSlotData {
+  const concept = cell.card?.concept ?? null;
+  const type: FeedSlotData['type'] =
+    cell.kind === 'let_pad'
+      ? 'brand_pad'
+      : concept
+        ? cell.card?.state === 'past'
+          ? 'history'
+          : cell.card?.state === 'now'
+            ? 'current'
+            : 'planned'
+        : 'empty';
+
+  return {
+    slotIndex: cell.cellIndex,
+    feedOrder: cell.relativePosition,
+    concept,
+    type,
+  };
+}
+
+function parseProjectedDate(value: string | null): Date | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 // ---------------------------------------------------------------------------
@@ -330,22 +359,32 @@ export function FeedPlannerSection({
     return span;
   }, [gridConfig]);
 
-  // Bygg slot-map
-  const slotMap = React.useMemo(() =>
-    buildSlotMap(
-      concepts.filter((concept) => concept.placement != null && concept.placement.feed_order !== null),
-      gridConfig,
-      historyOffset
-    ),
-    [concepts, gridConfig, historyOffset]
+  const plannerModel = React.useMemo(
+    () =>
+      buildFeedPlannerModel({
+        concepts,
+        now: new Date(),
+        tempoWeekdays,
+      }),
+    [concepts, tempoWeekdays]
   );
-  const slotRows = React.useMemo(() => {
-    const rows: Array<typeof slotMap> = [];
-    for (let index = 0; index < slotMap.length; index += gridConfig.columns) {
-      rows.push(slotMap.slice(index, index + gridConfig.columns));
+  const projectedDateBySlotIndex = React.useMemo(() => {
+    const map = new Map<number, Date>();
+    for (const cell of plannerModel.grid.cells) {
+      const projectedDate = parseProjectedDate(cell.projectedDate);
+      if (projectedDate) map.set(cell.cellIndex, projectedDate);
     }
-    return rows;
-  }, [gridConfig.columns, slotMap]);
+    return map;
+  }, [plannerModel.grid.cells]);
+  const visualCellRows = plannerModel.grid.rows;
+  const slotRows = React.useMemo(
+    () => visualCellRows.map((row) => row.map(visualCellToFeedSlot)),
+    [visualCellRows]
+  );
+  const slotMap = React.useMemo(
+    () => slotRows.flat(),
+    [slotRows]
+  );
   const upwardOffset = historyOffset < 0 ? Math.abs(historyOffset) : 0;
   const downwardOffset = historyOffset > 0 ? historyOffset : 0;
 
@@ -367,12 +406,12 @@ export function FeedPlannerSection({
     const map = new Map<number, Date>();
     for (const slot of slotMap) {
       if (slot.feedOrder > 0) {
-        const d = projectTempoDate(slot.feedOrder, tempoAnchor, tempoWeekdays);
+        const d = projectedDateBySlotIndex.get(slot.slotIndex) ?? projectTempoDate(slot.feedOrder, tempoAnchor, tempoWeekdays);
         if (d) map.set(slot.feedOrder, d);
       }
     }
     return map;
-  }, [slotMap, tempoAnchor, tempoWeekdays]);
+  }, [projectedDateBySlotIndex, slotMap, tempoAnchor, tempoWeekdays]);
   /**
    * Position-based slot selection.
    *
@@ -1760,6 +1799,7 @@ export function FeedPlannerSection({
                   <FeedSlot
                     key={slot.slotIndex}
                     slot={slot}
+                    plannerCell={visualCellRows[rowIndex]?.[columnIndex]}
                     tags={cmTags}
                     config={gridConfig}
                     spanCoverage={spanData?.coverage ?? 0}

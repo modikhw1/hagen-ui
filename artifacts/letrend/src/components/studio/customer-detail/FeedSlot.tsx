@@ -22,6 +22,7 @@ const COLLAB_SCOPE_LABELS: Record<string, string> = {
 
 function FeedSlot({
   slot,
+  plannerCell,
   tags,
   historyReconciliationTargets,
   currentHistoryDefaultTarget,
@@ -71,6 +72,11 @@ function FeedSlot({
   const [refThumbnailUrl, setRefThumbnailUrl] = React.useState<string | null>(null);
 
   const { concept, type } = slot;
+  const plannerCard = plannerCell?.card ?? null;
+  const plannerActions = plannerCard?.actions ?? [];
+  const historyIdentity = plannerCard?.historyIdentity ?? 'none';
+  const allowsPlannerAction = (action: typeof plannerActions[number]) =>
+    plannerActions.length === 0 || plannerActions.includes(action);
   const showContextMenu = openMenuConceptId === concept?.id && concept?.id != null;
   const details = concept ? getWorkspaceConceptDetails(concept, getConceptDetails) ?? null : null;
   const result = concept?.result ?? null;
@@ -154,6 +160,8 @@ function FeedSlot({
   })();
   const historySourceLabel = (() => {
     if (type !== 'history') return null;
+    if (historyIdentity === 'letrend_linked') return 'LeTrend';
+    if (historyIdentity === 'tiktok_standalone') return 'TikTok';
     if (concept?.origin.history_source === 'tiktok_profile') return 'TikTok ground truth';
     if (concept?.origin.history_source === 'hagen_library') return 'Hagen-import';
     return null;
@@ -760,7 +768,7 @@ function FeedSlot({
               {concept.confirmed ? 'Bekräftat' : 'Ej bekräftat'}
             </div>
 
-            {type === 'current' && !checkingForClip && !noClipFound && (
+            {allowsPlannerAction('mark_produced') && type === 'current' && !checkingForClip && !noClipFound && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -786,13 +794,13 @@ function FeedSlot({
               </button>
             )}
 
-            {type === 'current' && checkingForClip && (
+            {allowsPlannerAction('mark_produced') && type === 'current' && checkingForClip && (
               <div style={{ fontSize: 10, color: hexToRgba(collaborationPalette.text, 0.72), fontStyle: 'italic', padding: '6px 0' }}>
                 Söker efter nytt klipp...
               </div>
             )}
 
-            {type === 'current' && noClipFound && (
+            {allowsPlannerAction('mark_produced') && type === 'current' && noClipFound && (
               <div onClick={(e) => e.stopPropagation()} style={{ border: `1px solid ${hexToRgba(collaborationPalette.accent, 0.28)}`, borderRadius: 7, padding: '7px 9px', background: collaborationPalette.surface, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={{ fontSize: 9.5, fontWeight: 600, color: collaborationPalette.text, lineHeight: 1.4 }}>
                   Inget nytt klipp hittades på profilen.
@@ -923,7 +931,7 @@ function FeedSlot({
             })()}
 
             {/* Markera-knapp — bara på Nu-kort — öppnar MarkProducedDialog */}
-            {type === 'current' && !checkingForClip && !noClipFound && (
+            {allowsPlannerAction('mark_produced') && type === 'current' && !checkingForClip && !noClipFound && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -974,14 +982,14 @@ function FeedSlot({
             )}
 
             {/* Söker efter klipp — loading state */}
-            {type === 'current' && checkingForClip && (
+            {allowsPlannerAction('mark_produced') && type === 'current' && checkingForClip && (
               <div style={{ fontSize: 10, color: LeTrendColors.textMuted, fontStyle: 'italic', padding: '6px 0' }}>
                 Söker efter nytt klipp...
               </div>
             )}
 
             {/* Inget klipp hittat — CM kan ändå bekräfta eller avbryta */}
-            {type === 'current' && noClipFound && (
+            {allowsPlannerAction('mark_produced') && type === 'current' && noClipFound && (
               <div
                 onClick={(e) => e.stopPropagation()}
                 style={{
@@ -1049,7 +1057,7 @@ function FeedSlot({
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, minHeight: 0 }}>
           {/* Top row: source identity */}
           <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-            {concept.row_kind === 'assignment' ? (
+            {historyIdentity === 'letrend_linked' ? (
               <img
                 src="/lt-logo.png"
                 alt="LeTrend"
@@ -1244,9 +1252,12 @@ function FeedSlot({
         >
           {/* ── KOMMANDE ── */}
           {type === 'planned' && (<>
+            {allowsPlannerAction('open_details') && (
             <button onClick={(e) => { e.stopPropagation(); onOpenConcept(concept.id, ['script', 'instructions', 'fit']); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
               Redigera koncept
             </button>
+            )}
+            {allowsPlannerAction('edit_planned_date') && (
             <button onClick={(e) => {
               e.stopPropagation();
               if (!editingPlannedDate && !result?.planned_publish_at && projectedDate) {
@@ -1262,30 +1273,38 @@ function FeedSlot({
                     ? `Sätt planerad publicering (~${projectedDate.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })})`
                     : 'Sätt planerad publicering'}
             </button>
+            )}
+            {allowsPlannerAction('manage_tags') && (
             <button onClick={(e) => { e.stopPropagation(); setShowTagPicker(p => !p); }} style={feedSlotMenuBtnStyle}>
               {showTagPicker ? 'Dölj taggar' : 'Hantera taggar'}
             </button>
+            )}
+            {allowsPlannerAction('edit_note') && (
             <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
               {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
             </button>
+            )}
             {/* Flytta upp/ner — byter feed_order med grannen atomärt (Task 12) */}
-            {swapUpNeighbor && onSwapFeedOrder && (
+            {allowsPlannerAction('move_up') && swapUpNeighbor && onSwapFeedOrder && (
               <button onClick={(e) => { e.stopPropagation(); void onSwapFeedOrder(concept.id, swapUpNeighbor.id); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
                 ↑ Flytta upp
               </button>
             )}
-            {swapDownNeighbor && onSwapFeedOrder && (
+            {allowsPlannerAction('move_down') && swapDownNeighbor && onSwapFeedOrder && (
               <button onClick={(e) => { e.stopPropagation(); void onSwapFeedOrder(concept.id, swapDownNeighbor.id); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
                 ↓ Flytta ner
               </button>
             )}
+            {allowsPlannerAction('remove_from_queue') && (
             <button onClick={(e) => { e.stopPropagation(); void onRemoveFromSlot(concept.id); setOpenMenuConceptId(null); }} style={{ ...feedSlotMenuBtnStyle, color: '#b91c1c' }}>
               Ta bort från flödet
             </button>
+            )}
           </>)}
 
           {/* ── NU ── */}
           {type === 'current' && (<>
+            {allowsPlannerAction('mark_produced') && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1296,9 +1315,13 @@ function FeedSlot({
             >
               Markera som gjord
             </button>
+            )}
+            {allowsPlannerAction('open_details') && (
             <button onClick={(e) => { e.stopPropagation(); onOpenConcept(concept.id, ['script', 'instructions', 'fit']); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
               Redigera koncept
             </button>
+            )}
+            {allowsPlannerAction('edit_planned_date') && (
             <button onClick={(e) => {
               e.stopPropagation();
               if (!editingPlannedDate && !result?.planned_publish_at && projectedDate) {
@@ -1314,25 +1337,32 @@ function FeedSlot({
                     ? `Sätt planerad publicering (~${projectedDate.toLocaleDateString('sv-SE', { weekday: 'short', day: 'numeric', month: 'short' })})`
                     : 'Sätt planerad publicering'}
             </button>
+            )}
+            {allowsPlannerAction('manage_tags') && (
             <button onClick={(e) => { e.stopPropagation(); setShowTagPicker(p => !p); }} style={feedSlotMenuBtnStyle}>
               {showTagPicker ? 'Dölj taggar' : 'Hantera taggar'}
             </button>
+            )}
+            {allowsPlannerAction('edit_note') && (
             <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
               {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
             </button>
+            )}
+            {allowsPlannerAction('remove_from_queue') && (
             <button onClick={(e) => { e.stopPropagation(); void onRemoveFromSlot(concept.id); setOpenMenuConceptId(null); }} style={{ ...feedSlotMenuBtnStyle, color: '#b91c1c' }}>
               Ta bort från flödet
             </button>
+            )}
           </>)}
 
           {/* ── HISTORIK ── */}
           {type === 'history' && (<>
-            {result?.tiktok_url && (
+            {allowsPlannerAction('open_tiktok') && result?.tiktok_url && (
               <button onClick={(e) => { e.stopPropagation(); window.open(result.tiktok_url!, '_blank', 'noopener,noreferrer'); setOpenMenuConceptId(null); }} style={feedSlotMenuBtnStyle}>
                 Öppna TikTok ↗
               </button>
             )}
-            {linkedHistoryConcept && (
+            {allowsPlannerAction('open_reconciled_concept') && linkedHistoryConcept && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1344,7 +1374,7 @@ function FeedSlot({
                 Öppna kopplat LeTrend-koncept
               </button>
             )}
-            {concept.row_kind === 'assignment' && (
+            {allowsPlannerAction('edit_note') && concept.row_kind === 'assignment' && (
               <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
                 {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
               </button>
@@ -1356,7 +1386,7 @@ function FeedSlot({
                 this ID to onUndoHistoryReconciliation sends DELETE /history/reconciliation
                 which clears reconciled_customer_concept_id on the imported row, restoring
                 it as a standalone TikTok card and stripping the stats overlay from here. */}
-            {concept.row_kind === 'assignment' && concept.reconciliation.reconciled_clip_id && (
+            {allowsPlannerAction('undo_reconciliation') && concept.row_kind === 'assignment' && concept.reconciliation.reconciled_clip_id && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1374,7 +1404,7 @@ function FeedSlot({
                 {savingReconciliation ? 'Sparar...' : 'Ångra koppling (visa som TikTok)'}
               </button>
             )}
-            {concept.row_kind === 'assignment' && !concept.reconciliation.reconciled_clip_id && (
+            {allowsPlannerAction('link_tiktok_clip') && concept.row_kind === 'assignment' && !concept.reconciliation.reconciled_clip_id && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1385,7 +1415,7 @@ function FeedSlot({
                 {showClipPicker ? 'Dölj klippval' : 'Koppla till TikTok-klipp'}
               </button>
             )}
-            {concept.row_kind === 'imported_history' && (
+            {concept.row_kind === 'imported_history' && (allowsPlannerAction('reconcile_to_now') || allowsPlannerAction('undo_reconciliation')) && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1409,7 +1439,7 @@ function FeedSlot({
                     : 'Markera som LeTrend'}
               </button>
             )}
-            {concept.row_kind === 'imported_history' && (
+            {allowsPlannerAction('reconcile_to_concept') && concept.row_kind === 'imported_history' && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1425,10 +1455,12 @@ function FeedSlot({
                 {showReconciliationPicker ? 'Dölj konceptval' : 'Välj LeTrend-koncept...'}
               </button>
             )}
+            {allowsPlannerAction('edit_tiktok_url') && (
             <button onClick={(e) => { e.stopPropagation(); setEditingTikTok(p => !p); }} style={feedSlotMenuBtnStyle}>
               {editingTikTok ? 'Avbryt' : result?.tiktok_url ? 'Redigera TikTok-länk' : 'Lägg till TikTok-länk'}
             </button>
-            {concept.row_kind !== 'assignment' && (
+            )}
+            {allowsPlannerAction('edit_note') && concept.row_kind !== 'assignment' && (
               <button onClick={(e) => { e.stopPropagation(); setEditingNote(p => !p); }} style={feedSlotMenuBtnStyle}>
                 {editingNote ? 'Avbryt notering' : markers?.assignment_note ? 'Redigera notering' : 'Lägg till notering'}
               </button>
@@ -1566,7 +1598,7 @@ function FeedSlot({
           )}
 
           {/* Shared: tag picker (kommande + nu only) */}
-          {showTagPicker && type !== 'history' && (
+          {allowsPlannerAction('manage_tags') && showTagPicker && type !== 'history' && (
             <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, maxHeight: 160, overflowY: 'auto' }}>
               {tags.length === 0 ? (
                 <div style={{ padding: 8, fontSize: 12, color: LeTrendColors.textMuted }}>Inga taggar skapade ännu</div>
@@ -1585,7 +1617,7 @@ function FeedSlot({
           )}
 
           {/* Shared: note editor */}
-          {editingNote && (
+          {allowsPlannerAction('edit_note') && editingNote && (
             <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8 }}>
               <textarea value={localNote} onChange={(e) => setLocalNote(e.target.value)} rows={3} placeholder="Intern notering..."
                 style={{ width: '100%', border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, padding: 6, fontSize: 12, resize: 'vertical' }} />
@@ -1605,7 +1637,7 @@ function FeedSlot({
           )}
 
           {/* Historik: TikTok URL editor */}
-          {editingTikTok && type === 'history' && (
+          {allowsPlannerAction('edit_tiktok_url') && editingTikTok && type === 'history' && (
             <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8 }}>
               <input value={localTikTokUrl} onChange={(e) => setLocalTikTokUrl(e.target.value)} placeholder="https://www.tiktok.com/..."
                 style={{ width: '100%', border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, padding: 6, fontSize: 12 }} />
@@ -1617,7 +1649,7 @@ function FeedSlot({
           )}
 
           {/* Planerat datum editor — kommande + nu */}
-          {editingPlannedDate && (type === 'planned' || type === 'current') && (
+          {allowsPlannerAction('edit_planned_date') && editingPlannedDate && (type === 'planned' || type === 'current') && (
             <div style={{ borderTop: `1px solid ${LeTrendColors.border}`, padding: 8 }}>
               <input type="date" value={localPlannedDate} onChange={(e) => setLocalPlannedDate(e.target.value)}
                 style={{ width: '100%', border: `1px solid ${LeTrendColors.border}`, borderRadius: LeTrendRadius.sm, padding: 6, fontSize: 12 }} />
