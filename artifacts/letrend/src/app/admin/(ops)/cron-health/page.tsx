@@ -12,6 +12,7 @@ interface CronInvocation {
   budget_remaining: number;
   budget_exceeded: boolean;
   stale_locks_cleared: number;
+  thumbnails_refreshed: number | null;
   errors: Array<{ customerId: string; error: string }> | null;
 }
 
@@ -107,6 +108,7 @@ export default function CronHealthPage(): JSX.Element {
                   <td className="px-3 py-2 text-xs text-muted-foreground">
                     {row.budget_exceeded ? 'Budget nådd · ' : ''}
                     {row.stale_locks_cleared > 0 ? `Rensade lås: ${row.stale_locks_cleared} · ` : ''}
+                    {(row.thumbnails_refreshed ?? 0) > 0 ? `Miniatyrer: ${row.thumbnails_refreshed} · ` : ''}
                     {row.errors && row.errors.length > 0 ? `${row.errors.length} fel` : 'OK'}
                   </td>
                 </tr>

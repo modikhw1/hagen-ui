@@ -710,6 +710,7 @@ export interface BatchResult {
   budgetRemaining: number;
   budgetExceeded: boolean;
   staleLocksCleared: number;
+  thumbnailsRefreshed?: number;
 }
 
 interface EligibleCustomer {
@@ -813,18 +814,20 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
 
   // After all per-customer syncs complete, run a global thumbnail-refresh pass
   // so any assignment row that missed a thumbnail update during a prior sync is
-  // corrected.  This is intentionally fire-and-forget — a failure here must not
-  // affect the cron response.
+  // corrected.
+  let thumbnailsRefreshed: number | undefined;
   try {
-    await refreshReconciledThumbnails(supabase);
+    const refreshResult = await refreshReconciledThumbnails(supabase);
+    thumbnailsRefreshed = refreshResult.updated;
   } catch (refreshErr) {
     logger.warn({ err: refreshErr }, 'tiktok-sync: refreshReconciledThumbnails failed (non-fatal)');
   }
 
-  const result = {
+  const result: BatchResult = {
     processed, imported, statsUpdated, errors, callsUsed,
     budgetRemaining: Math.max(0, dailyBudget - priorCallsToday - callsUsed),
     budgetExceeded, staleLocksCleared,
+    thumbnailsRefreshed,
   };
 
   // Write a single aggregate cron-invocation row to cron_run_log so the
@@ -842,6 +845,7 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
     budget_exceeded: budgetExceeded,
     stale_locks_cleared: staleLocksCleared,
     errors: errors.length > 0 ? errors : null,
+    thumbnails_refreshed: thumbnailsRefreshed ?? 0,
   });
   if (cronLogError) {
     logger.warn({ err: cronLogError.message }, 'cron_run_log insert failed (non-fatal)');
