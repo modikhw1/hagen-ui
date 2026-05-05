@@ -811,6 +811,16 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
     await new Promise((r) => setTimeout(r, 300));
   }
 
+  // After all per-customer syncs complete, run a global thumbnail-refresh pass
+  // so any assignment row that missed a thumbnail update during a prior sync is
+  // corrected.  This is intentionally fire-and-forget — a failure here must not
+  // affect the cron response.
+  try {
+    await refreshReconciledThumbnails(supabase);
+  } catch (refreshErr) {
+    logger.warn({ err: refreshErr }, 'tiktok-sync: refreshReconciledThumbnails failed (non-fatal)');
+  }
+
   const result = {
     processed, imported, statsUpdated, errors, callsUsed,
     budgetRemaining: Math.max(0, dailyBudget - priorCallsToday - callsUsed),
@@ -838,6 +848,70 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
   }
 
   return result;
+}
+
+// ── reconciled-thumbnail refresh ──────────────────────────────────────────────
+// Sweeps all imported_history rows that are linked to an assignment row and
+// copies the latest thumbnail_url from the history row onto the assignment row.
+//
+// This is a safety-net for the edge case where TikTok rotates a thumbnail URL
+// after a stats-only sync already wrote the new URL to the imported_history row
+// but failed (or hadn't yet been added) to propagate it to the assignment row.
+//
+// Runs at the end of every `runHistorySyncBatch` call and can also be triggered
+// independently via the /internal/refresh-reconciled-thumbnails endpoint.
+//
+// customerId is optional: when supplied only that customer's rows are swept;
+// when omitted the entire customer_concepts table is swept globally.
+export async function refreshReconciledThumbnails(
+  supabase: SupabaseAdmin,
+  customerId?: string,
+): Promise<{ updated: number; errors: number }> {
+  // Fetch all imported_history rows that are reconciled to an assignment row and
+  // carry a thumbnail URL worth propagating.
+  let query = supabase
+    .from('customer_concepts')
+    .select('id, tiktok_thumbnail_url, reconciled_customer_concept_id')
+    .is('concept_id', null)
+    .not('reconciled_customer_concept_id', 'is', null)
+    .not('tiktok_thumbnail_url', 'is', null);
+
+  if (customerId) {
+    query = query.eq('customer_profile_id', customerId);
+  }
+
+  const { data: reconciledRows, error: fetchErr } = await query;
+  if (fetchErr) throw new Error(`refreshReconciledThumbnails: fetch failed: ${fetchErr.message}`);
+
+  const rows = (reconciledRows ?? []) as Array<{
+    id: string;
+    tiktok_thumbnail_url: string;
+    reconciled_customer_concept_id: string;
+  }>;
+
+  if (rows.length === 0) return { updated: 0, errors: 0 };
+
+  let updated = 0;
+  let errors = 0;
+
+  await Promise.all(rows.map(async (row) => {
+    const { error } = await supabase
+      .from('customer_concepts')
+      .update({ tiktok_thumbnail_url: row.tiktok_thumbnail_url })
+      .eq('id', row.reconciled_customer_concept_id);
+    if (error) {
+      logger.warn(
+        { err: error, historyId: row.id, assignmentId: row.reconciled_customer_concept_id },
+        'tiktok-sync: refreshReconciledThumbnails update failed',
+      );
+      errors += 1;
+    } else {
+      updated += 1;
+    }
+  }));
+
+  logger.info({ customerId: customerId ?? 'all', updated, errors }, 'tiktok-sync: refreshReconciledThumbnails done');
+  return { updated, errors };
 }
 
 // ── helper: background fire-and-forget initial backfill on linkage ───────────

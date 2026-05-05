@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
-import { runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
+import { refreshReconciledThumbnails, runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
 import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
 const router = Router();
@@ -1068,6 +1068,35 @@ router.post('/internal/sync-history-all', async (req, res) => {
     res.json(result);
   } catch (err) {
     logger.error(err, 'sync-history-all cron error');
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
+  }
+});
+
+// POST /api/studio-v2/internal/refresh-reconciled-thumbnails
+// Bearer-token-only cron route. Sweeps all reconciled imported_history rows and
+// re-mirrors the latest tiktok_thumbnail_url onto the linked assignment row.
+// Accepts an optional JSON body { customerId: string } to scope to one customer.
+// This runs automatically at the end of every sync-history-all batch; this
+// endpoint lets it be triggered independently when needed.
+router.post('/internal/refresh-reconciled-thumbnails', async (req, res) => {
+  try {
+    const cronSecret = process.env['CRON_SECRET'];
+    if (!cronSecret) {
+      res.status(500).json({ error: 'CRON_SECRET not configured' });
+      return;
+    }
+    const auth = req.headers['authorization'] ?? '';
+    if (auth !== `Bearer ${cronSecret}`) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const customerId = typeof body['customerId'] === 'string' && body['customerId'] ? body['customerId'] : undefined;
+    const supabase = createSupabaseAdmin();
+    const result = await refreshReconciledThumbnails(supabase, customerId);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    logger.error(err, 'refresh-reconciled-thumbnails cron error');
     res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
   }
 });
