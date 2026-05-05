@@ -339,21 +339,34 @@ export async function syncCustomerHistory(
   // second worker can never clear a first worker's still-valid lock.
   let currentLockUntil = new Date(now.getTime() + LOCK_WINDOW_MS + Math.floor(Math.random() * 1000)).toISOString();
 
+  let lockColumnExists = true;
   const { data: lockRows, error: lockError } = await supabase
     .from('customer_profiles')
     .update({ operation_lock_until: currentLockUntil })
     .eq('id', customerId)
     .or(`operation_lock_until.is.null,operation_lock_until.lt.${startedAt}`)
     .select('id');
-  if (lockError) return { fetched: 0, imported: 0, statsUpdated: 0, skipped: 0, callsUsed: 0, pages: 0, has_more: false, cursor: null, error: `lock_error: ${lockError.message}` };
-  if (!lockRows || lockRows.length === 0) {
+  if (lockError) {
+    // Gracefully handle the case where the operation_lock_until column has not
+    // yet been added to customer_profiles. In that case we proceed without a
+    // distributed lock — the worst outcome is two concurrent syncs for the same
+    // customer, which is safe (upserts are idempotent).
+    const msg = lockError.message ?? '';
+    if (msg.includes('operation_lock_until') && msg.includes('does not exist')) {
+      logger.warn({ customerId }, 'tiktok-sync: operation_lock_until column missing, continuing without lock');
+      lockColumnExists = false;
+    } else {
+      return { fetched: 0, imported: 0, statsUpdated: 0, skipped: 0, callsUsed: 0, pages: 0, has_more: false, cursor: null, error: `lock_error: ${lockError.message}` };
+    }
+  } else if (!lockRows || lockRows.length === 0) {
     return { fetched: 0, imported: 0, statsUpdated: 0, skipped: 0, callsUsed: 0, pages: 0, has_more: false, cursor: null, error: 'already_locked' };
   }
 
   // Heartbeat: extend our lock every minute so long-running syncs aren't
   // mistakenly treated as stuck. Each heartbeat checks ownership via the
   // previous timestamp value before writing the new one.
-  const heartbeat = setInterval(() => {
+  // Skipped entirely when the column does not exist in this schema version.
+  const heartbeat = lockColumnExists ? setInterval(() => {
     void (async () => {
       const next = new Date(Date.now() + LOCK_WINDOW_MS + Math.floor(Math.random() * 1000)).toISOString();
       const { data, error } = await supabase
@@ -364,7 +377,7 @@ export async function syncCustomerHistory(
         .select('id');
       if (!error && data && data.length > 0) currentLockUntil = next;
     })();
-  }, LOCK_HEARTBEAT_MS);
+  }, LOCK_HEARTBEAT_MS) : null;
 
   const { data: syncRun } = await supabase
     .from('sync_runs')
@@ -747,15 +760,17 @@ export async function syncCustomerHistory(
     }
     await supabase.from('customer_profiles').update({ last_sync_error: errorMessage }).eq('id', customerId);
   } finally {
-    clearInterval(heartbeat);
+    if (heartbeat !== null) clearInterval(heartbeat);
     // Ownership-safe release: only clear the lock if it still matches the
     // value we last wrote. A second worker that already took the lock will
-    // not be affected.
-    await supabase
-      .from('customer_profiles')
-      .update({ operation_lock_until: null })
-      .eq('id', customerId)
-      .eq('operation_lock_until', currentLockUntil);
+    // not be affected. Skip entirely when the column does not exist.
+    if (lockColumnExists) {
+      await supabase
+        .from('customer_profiles')
+        .update({ operation_lock_until: null })
+        .eq('id', customerId)
+        .eq('operation_lock_until', currentLockUntil);
+    }
   }
 
   const skipped = Math.max(0, totalFetched - totalImported - totalStatsUpdated);
@@ -794,14 +809,14 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
   const quietDays = QUIET_DAYS();
   const dailyBudget = RAPIDAPI_DAILY_BUDGET();
 
-  // Clear stuck locks
+  // Clear stuck locks (best-effort — silently skipped when the column does not exist)
   const stuckCutoff = new Date(Date.now() - STUCK_LOCK_MS).toISOString();
-  const { data: clearedLocks } = await supabase
+  const { data: clearedLocks, error: clearLocksErr } = await supabase
     .from('customer_profiles')
     .update({ operation_lock_until: null })
     .lt('operation_lock_until', stuckCutoff)
     .select('id');
-  const staleLocksCleared = clearedLocks?.length ?? 0;
+  const staleLocksCleared = clearLocksErr ? 0 : (clearedLocks?.length ?? 0);
   if (staleLocksCleared > 0) {
     logger.warn({ staleLocksCleared }, 'tiktok-sync cleared stuck locks');
   }
@@ -811,7 +826,7 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
   const { data: customers, error } = await supabase
     .from('customer_profiles')
     .select('id, tiktok_handle, status, last_history_sync_at, last_upload_at')
-    .in('status', ['active', 'agreed', 'invited'])
+    .in('status', ['active', 'agreed', 'invited', 'prospect'])
     .not('tiktok_handle', 'is', null)
     .neq('tiktok_handle', '');
   if (error) throw new Error(error.message);
