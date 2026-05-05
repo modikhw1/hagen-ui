@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin, createSupabaseUserClient } from '../../lib/supabase.js';
@@ -422,6 +423,7 @@ router.post('/', requireAuth, ADMIN_OR_CM, async (req, res) => {
             : {},
         status: readString(body.status) ?? 'draft',
         lost_reason: readString(body.lost_reason),
+        share_token: randomBytes(19).toString('hex'),
       } as any)
       .select()
       .single();
@@ -775,7 +777,7 @@ router.post('/:id/convert', requireAuth, ADMIN_ONLY, async (req, res) => {
 // PATCH /api/admin/demos/:id
 router.patch('/:id', requireAuth, ADMIN_OR_CM, async (req, res) => {
   try {
-    const supabase = createDemoWriteClient(req);
+    const supabase = createSupabaseAdmin();
     const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const body = req.body ?? {};
     if (!id) {

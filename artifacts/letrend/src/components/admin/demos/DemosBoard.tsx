@@ -85,9 +85,14 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
   const [studioPendingId, setStudioPendingId] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [convertTarget, setConvertTarget] = useState<{
+    id: string;
+    company_name: string;
+    contact_email: string | null;
+    proposed_price_ore: number | null;
+  } | null>(null);
 
   const createOpen = createDialogOpen || get('action') === 'create';
-  const convertId = get('convert');
 
   const allCards = useMemo<DemoCardDto[]>(
     () =>
@@ -102,17 +107,6 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
         : [],
     [data],
   );
-
-  const convertTarget = useMemo(() => {
-    const card = allCards.find((item) => item.id === convertId);
-    if (!card) return null;
-    return {
-      id: card.id,
-      company_name: card.companyName,
-      contact_email: card.contactEmail,
-      proposed_price_ore: card.proposedPriceOre,
-    };
-  }, [allCards, convertId]);
 
   const editTarget = useMemo(
     () => allCards.find((item) => item.id === editId) ?? null,
@@ -454,7 +448,14 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                             <>
                               <button
                                 type="button"
-                                onClick={() => set({ convert: demo.id })}
+                                onClick={() =>
+                                  setConvertTarget({
+                                    id: demo.id,
+                                    company_name: demo.companyName,
+                                    contact_email: demo.contactEmail,
+                                    proposed_price_ore: demo.proposedPriceOre,
+                                  })
+                                }
                                 className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2 py-1 text-xs font-semibold text-success hover:bg-success/15"
                               >
                                 <Check className="h-3 w-3" />
@@ -514,7 +515,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
       <ConvertDemoDialog
         demo={convertTarget}
         open={Boolean(convertTarget)}
-        onClose={() => set({ convert: null })}
+        onClose={() => setConvertTarget(null)}
         onSaved={(result) => {
           if (result.warning) {
             toast.warning(result.warning);
