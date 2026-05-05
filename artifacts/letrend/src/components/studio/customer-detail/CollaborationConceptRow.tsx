@@ -62,6 +62,7 @@ export function CollaborationConceptRow({
         justifyContent: 'space-between',
         gap: 10,
         overflow: 'hidden',
+        minHeight: 160,
         transition: 'background 0.12s',
       }}
     >

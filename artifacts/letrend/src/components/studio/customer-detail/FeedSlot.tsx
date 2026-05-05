@@ -684,7 +684,7 @@ function FeedSlot({
 
           {/* Nu pill — absolute top-right, matches regular card */}
           {type === 'current' && (
-            <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: collaborationPalette.accent, color: '#FAF8F5', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>
+            <div style={{ position: 'absolute', top: 8, right: 36, zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 999, background: collaborationPalette.accent, color: '#FAF8F5', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>
               <div style={{ width: 5, height: 5, borderRadius: '50%', background: collaborationPalette.secondary, flexShrink: 0 }} />
               Nu
             </div>
