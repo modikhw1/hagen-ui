@@ -306,6 +306,10 @@ router.get('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req, 
               tiktok_views: importedStats.tiktok_views ?? row.tiktok_views,
               tiktok_likes: importedStats.tiktok_likes ?? row.tiktok_likes,
               tiktok_comments: importedStats.tiktok_comments ?? row.tiktok_comments,
+              // Overlay the real TikTok publish date so the history card shows
+              // when the clip was actually uploaded, not when the CM clicked
+              // "Markera som gjord".
+              published_at: importedStats.published_at ?? row.published_at,
               // Inject the imported clip's own ID so the frontend can surface
               // "Ångra koppling" on the LeTrend (assignment) history card.
               // The normalizer reads this as reconciliation.reconciled_clip_id.
