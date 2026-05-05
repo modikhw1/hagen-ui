@@ -235,7 +235,15 @@ export const KonceptSection = React.memo(function KonceptSection({
   );
 
   const allActiveSortable = React.useMemo(
-    () => [...activeConcepts, ...activeCollaborationConcepts],
+    () => [...activeConcepts, ...activeCollaborationConcepts].sort((a, b) => {
+      const fa = a.placement?.feed_order ?? null;
+      const fb = b.placement?.feed_order ?? null;
+      // Placed concepts (non-null feed_order) sort before unplaced, then descending
+      if (fa !== null && fb !== null) return fb - fa;
+      if (fa !== null) return -1;
+      if (fb !== null) return 1;
+      return 0;
+    }),
     [activeConcepts, activeCollaborationConcepts]
   );
 
