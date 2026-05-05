@@ -81,6 +81,8 @@ export const createDemoInputSchema = z
     preview_notes: nullableTrimmedString.optional(),
     preview_settings: z.record(z.string(), z.unknown()).optional(),
     preview_metrics: z.record(z.string(), z.unknown()).optional(),
+    prepare_studio: z.boolean().optional(),
+    sync_tiktok_history: z.boolean().optional(),
     status: demoStatusSchema.optional().default('draft'),
     lost_reason: nullableTrimmedString.optional(),
   })

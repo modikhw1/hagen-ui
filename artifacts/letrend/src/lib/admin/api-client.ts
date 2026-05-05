@@ -40,6 +40,28 @@ type ErrorPayload = {
   field?: string;
 };
 
+function htmlToErrorMessage(value: string) {
+  const text = value
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const routeMiss = text.match(/\bCannot\s+(GET|POST|PATCH|DELETE)\s+\S+/i);
+  if (routeMiss?.[0]) {
+    return `Servern saknar endpointen (${routeMiss[0]}). Starta om API-servern eller deploya senaste backend.`;
+  }
+
+  return text || 'Servern svarade med HTML istället för JSON.';
+}
+
 function buildUrl(path: string, query?: Record<string, QueryValue>) {
   if (!query) return path;
 
@@ -101,7 +123,7 @@ async function parsePayload(response: Response) {
     return {};
   }
 
-  return { error: text };
+  return { error: htmlToErrorMessage(text) };
 }
 
 function resolveMessage(payload: unknown, fallback: string) {

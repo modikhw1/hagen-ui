@@ -98,3 +98,15 @@ export function useCreateDemo() {
     },
   });
 }
+
+export function useUpdateDemo() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { id: string; payload: Partial<CreateDemoInput> }) =>
+      apiClient.patch(`/api/admin/demos/${input.id}`, input.payload),
+    onSuccess: async () => {
+      await invalidateFor(queryClient, 'demos.update');
+    },
+  });
+}

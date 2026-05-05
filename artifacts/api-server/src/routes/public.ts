@@ -405,6 +405,7 @@ router.get('/demos/:token', async (req, res) => {
         .update({
           status: 'opened',
           status_changed_at: new Date().toISOString(),
+          opened_at: new Date().toISOString(),
           preview_metrics: previewMetrics,
         })
         .eq('id', demoRow['id']);

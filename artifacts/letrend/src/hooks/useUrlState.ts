@@ -50,7 +50,7 @@ export function useUrlState(
   const router = useRouter();
   const pathname = usePathname();
   const [searchParams] = useSearchParams();
-  const currentPathname = pathname ?? '/';
+  const currentPathname = (pathname ?? '/').split('?')[0] || '/';
   const key = typeof keyOrOptions === 'string' ? keyOrOptions : null;
   const { replace = true, scroll = false, defaultValue } = maybeOptions;
 

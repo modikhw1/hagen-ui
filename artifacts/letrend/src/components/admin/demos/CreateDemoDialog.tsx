@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { AdminField } from '@/components/admin/shared/AdminField';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
 import { useCreateDemo } from '@/hooks/admin/useDemos';
@@ -11,7 +12,23 @@ import { demosCopy } from '@/lib/admin/copy/demos';
 type Props = {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void | Promise<void>;
+  onCreated: (result?: CreateDemoResult) => void | Promise<void>;
+};
+
+type CreateDemoResult = {
+  demo?: unknown;
+  studio?: {
+    customerId?: string;
+    created?: boolean;
+  };
+  sync?: {
+    status?: 'ok' | 'skipped' | 'error';
+    fetched?: number;
+    imported?: number;
+    statsUpdated?: number;
+    error?: string;
+    reason?: string;
+  };
 };
 
 type FormState = {
@@ -69,10 +86,20 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
   const [gamePlanMessage, setGamePlanMessage] = useState<string | null>(null);
   const [gamePlanError, setGamePlanError] = useState<string | null>(null);
   const [generatingGamePlan, setGeneratingGamePlan] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<string | null>(null);
   const createDemo = useCreateDemo();
-  const { data: contentManagers = [] } = useTeamLite('content_manager');
+  const { data: teamMembers = [] } = useTeamLite();
+  const contentManagers = useMemo(
+    () =>
+      teamMembers.filter(
+        (member) => member.role === 'content_manager' || member.role === 'admin',
+      ),
+    [teamMembers],
+  );
 
   const canSubmit = useMemo(() => form.company_name.trim().length > 0, [form.company_name]);
+  const creating = createDemo.isPending;
+  const normalizedTikTokHandle = normalizeHandle(form.tiktok_handle);
 
   useEffect(() => {
     if (form.owner_admin_id || contentManagers.length === 0) return;
@@ -80,27 +107,39 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
   }, [contentManagers, form.owner_admin_id]);
 
   const handleSubmit = async () => {
-    if (!canSubmit || createDemo.isPending) return;
+    if (!canSubmit || creating) return;
 
-    await createDemo.mutateAsync({
-      company_name: form.company_name.trim(),
-      contact_name: form.contact_name.trim() || null,
-      contact_email: form.contact_email.trim() || null,
-      tiktok_handle: normalizeHandle(form.tiktok_handle),
-      proposed_concepts_per_week: parseOptionalInt(form.proposed_concepts_per_week),
-      proposed_price_ore: parseOptionalSekToOre(form.proposed_price_sek),
-      owner_admin_id: form.owner_admin_id || null,
-      game_plan: form.game_plan.trim() || null,
-      game_plan_html: form.game_plan_html.trim() || null,
-      game_plan_generation_context: buildGamePlanContext(form),
-      game_plan_source: form.game_plan_source || null,
-      preview_notes: form.preview_notes.trim() || null,
-      status: 'draft',
-      lost_reason: null,
-    });
+    setSubmitStatus(
+      normalizedTikTokHandle
+        ? 'Skapar demo, kundprofil och hamtar TikTok-historik...'
+        : 'Skapar demo och kundprofil...',
+    );
 
-    await onCreated();
-    onClose();
+    try {
+      const result = await createDemo.mutateAsync({
+        company_name: form.company_name.trim(),
+        contact_name: form.contact_name.trim() || null,
+        contact_email: form.contact_email.trim() || null,
+        tiktok_handle: normalizedTikTokHandle,
+        proposed_concepts_per_week: parseOptionalInt(form.proposed_concepts_per_week),
+        proposed_price_ore: parseOptionalSekToOre(form.proposed_price_sek),
+        owner_admin_id: form.owner_admin_id || null,
+        game_plan: form.game_plan.trim() || null,
+        game_plan_html: form.game_plan_html.trim() || null,
+        game_plan_generation_context: buildGamePlanContext(form),
+        game_plan_source: form.game_plan_source || null,
+        preview_notes: form.preview_notes.trim() || null,
+        prepare_studio: true,
+        sync_tiktok_history: Boolean(normalizedTikTokHandle),
+        status: 'draft',
+        lost_reason: null,
+      }) as CreateDemoResult;
+
+      await onCreated(result);
+      onClose();
+    } catch {
+      setSubmitStatus(null);
+    }
   };
 
   const handleGenerateGamePlan = async () => {
@@ -111,10 +150,11 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
     setGamePlanError(null);
 
     try {
+      setGamePlanMessage(demosCopy.gamePlanAiGenerating);
       const result = await apiClient.post('/api/admin/demos/game-plan/generate', {
         company_name: form.company_name.trim(),
         contact_name: form.contact_name.trim() || null,
-        tiktok_handle: normalizeHandle(form.tiktok_handle),
+        tiktok_handle: normalizedTikTokHandle,
         platform: 'TikTok',
         proposed_concepts_per_week: parseOptionalInt(form.proposed_concepts_per_week),
         strategy_view: form.strategy_view.trim(),
@@ -156,21 +196,27 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
       description={demosCopy.createDescription}
       error={createDemo.error instanceof Error ? createDemo.error.message : null}
       size="lg"
+      loading={creating}
       footer={
         <>
           <button
             onClick={onClose}
-            disabled={createDemo.isPending}
+            disabled={creating}
             className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent"
           >
             Avbryt
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!canSubmit || createDemo.isPending}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            disabled={!canSubmit || creating}
+            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {createDemo.isPending ? demosCopy.createDialogSubmitting : demosCopy.createDialogSubmit}
+            {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {creating
+              ? normalizedTikTokHandle
+                ? demosCopy.createDialogSubmittingWithSync
+                : demosCopy.createDialogSubmitting
+              : demosCopy.createDialogSubmit}
           </button>
         </>
       }
@@ -352,12 +398,15 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
                   type="button"
                   onClick={() => void handleGenerateGamePlan()}
                   disabled={!canSubmit || generatingGamePlan}
-                  className="rounded-md border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-semibold hover:bg-accent disabled:opacity-50"
                 >
+                  {generatingGamePlan ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                   {generatingGamePlan ? demosCopy.gamePlanAiGenerating : demosCopy.gamePlanAiButton}
                 </button>
                 {gamePlanMessage ? (
-                  <span className="text-xs text-success">{gamePlanMessage}</span>
+                  <span className="text-xs text-muted-foreground" aria-live="polite">
+                    {gamePlanMessage}
+                  </span>
                 ) : null}
                 {gamePlanError ? (
                   <span className="text-xs text-destructive">{gamePlanError}</span>
@@ -370,6 +419,16 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
         <p className="rounded-lg border border-border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
           Efter att demot skapats kan du öppna det i Studio för att fylla feedplanen, och sedan kopiera den publika demo-länken från listan.
         </p>
+
+        {submitStatus ? (
+          <div
+            className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-primary"
+            aria-live="polite"
+          >
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>{submitStatus}</span>
+          </div>
+        ) : null}
       </div>
     </AdminFormDialog>
   );
@@ -378,7 +437,19 @@ function CreateDemoDialogSession({ onClose, onCreated }: Omit<Props, 'open'>) {
 function normalizeHandle(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return trimmed.startsWith('@') ? trimmed.slice(1) : trimmed;
+  if (trimmed.startsWith('@')) return trimmed.slice(1).split('/')[0] ?? null;
+  try {
+    const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+    if (url.hostname.includes('tiktok.com')) {
+      const parts = url.pathname.split('/').filter(Boolean);
+      const handlePart = parts.find((part) => part.startsWith('@'));
+      if (handlePart) return handlePart.slice(1);
+      return parts[0]?.replace('@', '') || null;
+    }
+  } catch {
+    // Treat non-URL input as a plain handle below.
+  }
+  return trimmed.replace('@', '').split('/')[0] ?? null;
 }
 
 function parseOptionalInt(value: string) {

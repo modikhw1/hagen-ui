@@ -36,9 +36,9 @@ function nextStatusFor(status: DemoStatus): DemoStatus | null {
     case 'draft':
       return 'sent';
     case 'sent':
-      return 'responded';
+      return 'opened';
     case 'opened':
-      return 'responded';
+      return 'quoted';
     case 'responded':
       return 'quoted';
     case 'quoted':

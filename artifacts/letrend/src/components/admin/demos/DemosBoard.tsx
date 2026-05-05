@@ -9,12 +9,14 @@ import {
   ExternalLink,
   Inbox,
   Loader2,
+  Pencil,
   Send,
   UserCheck,
   X,
 } from 'lucide-react';
 import CreateDemoDialog from '@/components/admin/demos/CreateDemoDialog';
 import ConvertDemoDialog from '@/components/admin/demos/ConvertDemoDialog';
+import EditDemoDialog from '@/components/admin/demos/EditDemoDialog';
 import { DemoBoardSkeleton } from '@/components/admin/demos/DemoBoardSkeleton';
 import { DemosFunnelBar } from '@/components/admin/demos/DemosFunnelBar';
 import { useDemosBoard, useUpdateDemoStatus } from '@/hooks/admin/useDemos';
@@ -81,8 +83,10 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
   const [studioPendingId, setStudioPendingId] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
 
-  const createOpen = get('action') === 'create';
+  const createOpen = createDialogOpen || get('action') === 'create';
   const convertId = get('convert');
 
   const allCards = useMemo<DemoCardDto[]>(
@@ -109,6 +113,11 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
       proposed_price_ore: card.proposedPriceOre,
     };
   }, [allCards, convertId]);
+
+  const editTarget = useMemo(
+    () => allCards.find((item) => item.id === editId) ?? null,
+    [allCards, editId],
+  );
 
   if (isLoading) {
     return <DemoBoardSkeleton />;
@@ -198,9 +207,21 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     if (studioPendingId) return;
     setStudioPendingId(demo.id);
     try {
-      const result = await apiClient.post(`/api/admin/demos/${demo.id}/prepare-studio`, {}) as { success: boolean; customerId?: string; error?: string };
+      const result = await apiClient.post(`/api/admin/demos/${demo.id}/prepare-studio`, {
+        sync_tiktok_history: true,
+      }) as {
+        success: boolean;
+        customerId?: string;
+        error?: string;
+        sync?: { status?: string; imported?: number; error?: string; reason?: string };
+      };
       if (result.success && result.customerId) {
-        window.open(`/studio/customers/${result.customerId}`, '_blank');
+        if (result.sync?.status === 'error') {
+          toast.warning(`Studio öppnas, men TikTok-ingest misslyckades: ${result.sync.error}`);
+        } else if (result.sync?.status === 'ok') {
+          toast.success(`TikTok-historik hämtad: ${result.sync.imported ?? 0} nya klipp.`);
+        }
+        window.open(`/studio/customers/${result.customerId}?section=feed`, '_blank');
       } else {
         toast.error(result.error || 'Kunde inte förbereda Studio.');
       }
@@ -219,7 +240,10 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
         actions={
           <button
             type="button"
-            onClick={() => set({ action: 'create' })}
+            onClick={() => {
+              setCreateDialogOpen(true);
+              set({ action: 'create' });
+            }}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
             {demosCopy.createButton}
@@ -374,6 +398,15 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                         <div className="flex flex-wrap items-center justify-end gap-1.5">
                           <button
                             type="button"
+                            onClick={() => setEditId(demo.id)}
+                            title={demosCopy.editDialogTitle}
+                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Redigera
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => void handleCopyLink(demo)}
                             disabled={!demo.shareToken}
                             title={demosCopy.copyLink}
@@ -414,7 +447,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                               className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/15 disabled:opacity-50"
                             >
                               <ArrowRight className="h-3 w-3" />
-                              {demoStatusLabel(demo.nextStatus)}
+                              Till {demoStatusLabel(demo.nextStatus)}
                             </button>
                           ) : null}
                           {!isClosed ? (
@@ -451,9 +484,30 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
 
       <CreateDemoDialog
         open={createOpen}
-        onClose={() => set({ action: null })}
-        onCreated={() => {
+        onClose={() => {
+          setCreateDialogOpen(false);
+          set({ action: null });
+        }}
+        onCreated={(result) => {
+          const sync = result?.sync;
+          if (sync?.status === 'error') {
+            toast.warning(`Demo skapades, men TikTok-ingest misslyckades: ${sync.error}`);
+            return;
+          }
+          if (sync?.status === 'ok') {
+            toast.success(`Ny demo skapades. ${sync.imported ?? 0} historikklipp importerade.`);
+            return;
+          }
           toast.success(demosCopy.createSuccess);
+        }}
+      />
+
+      <EditDemoDialog
+        demo={editTarget}
+        open={Boolean(editTarget)}
+        onClose={() => setEditId(null)}
+        onSaved={() => {
+          toast.success(demosCopy.editSuccess);
         }}
       />
 

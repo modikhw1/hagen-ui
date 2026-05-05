@@ -18,6 +18,7 @@ const overviewAttentionKeys: QueryKeyFactory[] = [
 
 export const INVALIDATION_MAP = {
   'demos.create': [qk.demos.root, ...overviewMetricKeys] as QueryKeyFactory[],
+  'demos.update': [qk.demos.root, ...overviewMetricKeys] as QueryKeyFactory[],
   'demos.update_status': [
     qk.demos.root,
     ...overviewMetricKeys,

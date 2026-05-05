@@ -489,7 +489,7 @@ router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
 });
 
 // GET /api/admin/team/lite
-router.get('/lite', requireAuth, ADMIN_ONLY, async (req, res) => {
+router.get('/lite', requireAuth, requireRole(['admin', 'content_manager']), async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
     const includeInactive = req.query['includeInactive'] === '1';
@@ -497,7 +497,7 @@ router.get('/lite', requireAuth, ADMIN_ONLY, async (req, res) => {
 
     let query = (supabase as any)
       .from('team_members')
-      .select('id, name, email, role, is_active, avatar_url, color')
+      .select('id, profile_id, name, email, role, is_active, avatar_url, color')
       .order('name');
 
     if (!includeInactive) query = query.eq('is_active', true);
@@ -515,7 +515,38 @@ router.get('/lite', requireAuth, ADMIN_ONLY, async (req, res) => {
       return;
     }
 
-    res.json({ members: data ?? [] });
+    const members = [...(data ?? [])];
+    const includeAdminProfiles = !role || role === 'admin';
+
+    if (includeAdminProfiles) {
+      const linkedProfileIds = new Set(
+        members
+          .map((member: Record<string, unknown>) => member['profile_id'])
+          .filter(Boolean),
+      );
+      const { data: adminProfiles } = await (supabase as any)
+        .from('profiles')
+        .select('id, email, avatar_url, role, is_admin')
+        .or('role.eq.admin,is_admin.eq.true')
+        .order('email');
+
+      for (const profile of adminProfiles ?? []) {
+        if (linkedProfileIds.has(profile.id)) continue;
+        const email = typeof profile.email === 'string' ? profile.email : '';
+        members.push({
+          id: profile.id,
+          name: email.split('@')[0] || email || `Admin ${String(profile.id).slice(0, 8)}`,
+          email,
+          role: 'admin',
+          is_active: true,
+          avatar_url: profile.avatar_url ?? null,
+          color: '#4f46e5',
+          commission_rate: 0,
+        });
+      }
+    }
+
+    res.json({ members });
   } catch (err) {
     logger.error(err, 'team lite error');
     res.status(500).json({ error: 'Internt serverfel' });

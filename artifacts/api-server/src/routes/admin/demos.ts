@@ -3,9 +3,10 @@ import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 import { buildGamePlanInput, generateGamePlanDraft, stripGamePlanHtml } from '../../lib/game-plan-generate.js';
+import { syncCustomerHistory } from '../../lib/studio/tiktok-sync.js';
 
 const router = Router();
-const ADMIN_OR_CM = requireRole(['admin']);
+const ADMIN_OR_CM = requireRole(['admin', 'content_manager']);
 const ADMIN_ONLY = requireRole(['admin']);
 
 type OwnerLite = {
@@ -14,10 +15,19 @@ type OwnerLite = {
   profileId: string | null;
 };
 
+type OwnerMember = {
+  id: string;
+  profile_id: string | null;
+  name: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
+  color?: string | null;
+};
+
 const NEXT_STATUS: Record<string, string | null> = {
   draft: 'sent',
-  sent: 'responded',
-  opened: 'responded',
+  sent: 'opened',
+  opened: 'quoted',
   responded: 'quoted',
   quoted: 'won',
   won: null,
@@ -36,7 +46,19 @@ function readNumber(value: unknown): number | null {
 function normalizeHandle(value: unknown): string | null {
   const raw = readString(value);
   if (!raw) return null;
-  return raw.replace(/^@/, '');
+  if (raw.startsWith('@')) return raw.slice(1).split('/')[0] || null;
+  try {
+    const url = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+    if (url.hostname.includes('tiktok.com')) {
+      const parts = url.pathname.split('/').filter(Boolean);
+      const handlePart = parts.find((part) => part.startsWith('@'));
+      if (handlePart) return handlePart.slice(1) || null;
+      return parts[0]?.replace('@', '') || null;
+    }
+  } catch {
+    // Treat non-URL input as a plain handle below.
+  }
+  return raw.replace('@', '').split('/')[0] || null;
 }
 
 function escapeHtml(value: string): string {
@@ -56,6 +78,105 @@ function plainTextToHtml(value: string): string {
     .filter(Boolean)
     .map((block) => `<p>${escapeHtml(block).replace(/\n/g, '<br>')}</p>`)
     .join('');
+}
+
+function deriveOwnerName(email: string | null, fallbackId: string): string {
+  if (!email) return `Admin ${fallbackId.slice(0, 8)}`;
+  return email.split('@')[0] || email;
+}
+
+async function resolveOwnerMemberForWrite(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  ownerId: unknown,
+): Promise<OwnerMember | null> {
+  const id = readString(ownerId);
+  if (!id) return null;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('team_members')
+    .select('id, profile_id, name, email, avatar_url, color')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+  if (existing) return existing as OwnerMember;
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, email, role, is_admin, avatar_url')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (profileError) throw profileError;
+  if (!profile || !(profile.is_admin || profile.role === 'admin')) return null;
+
+  const email = readString(profile.email);
+  const { data: created, error: createError } = await (supabase as any)
+    .from('team_members')
+    .insert({
+      profile_id: profile.id,
+      name: deriveOwnerName(email, profile.id),
+      email: email ?? `${profile.id}@admin.local`,
+      role: 'admin',
+      is_active: true,
+      avatar_url: readString(profile.avatar_url),
+      color: '#4f46e5',
+      commission_rate: 0,
+    })
+    .select('id, profile_id, name, email, avatar_url, color')
+    .single();
+
+  if (createError) throw createError;
+  return created as OwnerMember;
+}
+
+type DemoHistorySyncResult =
+  | { status: 'skipped'; reason: 'missing_handle' | 'missing_api_key' }
+  | {
+      status: 'ok' | 'error';
+      fetched: number;
+      imported: number;
+      statsUpdated: number;
+      callsUsed: number;
+      pages: number;
+      error?: string;
+    };
+
+function envInt(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  const parsed = raw ? Number(raw) : fallback;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
+
+async function runDemoHistorySync(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  customerId: string,
+  tiktokHandle: unknown,
+): Promise<DemoHistorySyncResult> {
+  const handle = normalizeHandle(tiktokHandle);
+  if (!handle) return { status: 'skipped', reason: 'missing_handle' };
+
+  const rapidApiKey = process.env['RAPIDAPI_KEY'];
+  if (!rapidApiKey) return { status: 'skipped', reason: 'missing_api_key' };
+
+  const pages = envInt('DEMO_SYNC_PAGES', envInt('SYNC_FULL_HISTORY_PAGES', 5, 1, 10), 1, 10);
+  const pageSize = envInt('DEMO_SYNC_PAGE_SIZE', 50, 5, 50);
+  const result = await syncCustomerHistory(supabase, customerId, handle, rapidApiKey, {
+    mode: 'manual',
+    pages,
+    pageSize,
+  });
+
+  return {
+    status: result.error && result.error !== 'already_locked' ? 'error' : 'ok',
+    fetched: result.fetched,
+    imported: result.imported,
+    statsUpdated: result.statsUpdated,
+    callsUsed: result.callsUsed,
+    pages: result.pages,
+    ...(result.error ? { error: result.error } : {}),
+  };
 }
 
 function hasPreliminaryFeedplan(row: Record<string, any>) {
@@ -247,6 +368,8 @@ router.post('/', requireAuth, ADMIN_OR_CM, async (req, res) => {
       return;
     }
 
+    const ownerMember = await resolveOwnerMemberForWrite(supabase, body.owner_admin_id);
+
     const { data, error } = await supabase
       .from('demos')
       .insert({
@@ -256,7 +379,7 @@ router.post('/', requireAuth, ADMIN_OR_CM, async (req, res) => {
         tiktok_handle: normalizeHandle(body.tiktok_handle),
         proposed_concepts_per_week: readNumber(body.proposed_concepts_per_week),
         proposed_price_ore: readNumber(body.proposed_price_ore),
-        owner_admin_id: readString(body.owner_admin_id),
+        owner_admin_id: ownerMember?.id ?? null,
         game_plan: readString(body.game_plan),
         game_plan_html: readString(body.game_plan_html),
         game_plan_generation_context:
@@ -285,7 +408,21 @@ router.post('/', requireAuth, ADMIN_OR_CM, async (req, res) => {
       return;
     }
 
-    res.status(201).json({ demo: mapRow(data as any, new Map()) });
+    let studio: { customerId: string; created: boolean } | null = null;
+    let sync: DemoHistorySyncResult | null = null;
+    if (body.prepare_studio === true) {
+      const prepared = await ensureStudioCustomerForDemo(supabase, (data as any).id, {
+        syncHistory: body.sync_tiktok_history === true,
+      });
+      if (!prepared.success) {
+        res.status(prepared.status).json({ error: prepared.error });
+        return;
+      }
+      studio = { customerId: prepared.customerId, created: prepared.created };
+      sync = prepared.sync ?? null;
+    }
+
+    res.status(201).json({ demo: mapRow(data as any, new Map()), studio, sync });
   } catch (err) {
     logger.error(err, 'demos create error');
     res.status(500).json({ error: 'Internt serverfel' });
@@ -347,10 +484,83 @@ async function seedGamePlanFromDemo(
   }
 }
 
+async function syncConvertedCustomerFromDemoPatch(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  demo: Record<string, any>,
+  changed: Record<string, any>,
+) {
+  const customerId = readString(demo['converted_customer_id']);
+  if (!customerId) return;
+
+  const patch: Record<string, any> = {};
+  if (Object.prototype.hasOwnProperty.call(changed, 'company_name')) {
+    patch.business_name = readString(demo['company_name']) ?? '';
+  }
+  if (Object.prototype.hasOwnProperty.call(changed, 'contact_name')) {
+    patch.customer_contact_name = readString(demo['contact_name']);
+  }
+  if (Object.prototype.hasOwnProperty.call(changed, 'contact_email')) {
+    patch.contact_email = readString(demo['contact_email']);
+  }
+  if (Object.prototype.hasOwnProperty.call(changed, 'tiktok_handle')) {
+    patch.tiktok_handle = normalizeHandle(demo['tiktok_handle']);
+  }
+  if (Object.prototype.hasOwnProperty.call(changed, 'proposed_concepts_per_week')) {
+    const cpw = Math.min(Math.max(readNumber(demo['proposed_concepts_per_week']) ?? 2, 0), 7);
+    patch.expected_concepts_per_week = cpw;
+    patch.concepts_per_week = cpw;
+  }
+  if (Object.prototype.hasOwnProperty.call(changed, 'proposed_price_ore')) {
+    const priceOre = readNumber(demo['proposed_price_ore']);
+    patch.monthly_price = priceOre ? priceOre / 100 : 0;
+    patch.pricing_status = priceOre ? 'fixed' : 'unknown';
+  }
+  if (Object.prototype.hasOwnProperty.call(changed, 'owner_admin_id')) {
+    const ownerId = readString(demo['owner_admin_id']);
+    if (ownerId) {
+      const { data: owner } = await supabase
+        .from('team_members')
+        .select('profile_id, name, avatar_url, color')
+        .eq('id', ownerId)
+        .maybeSingle();
+      patch.account_manager = owner?.name ?? null;
+      patch.account_manager_profile_id = owner?.profile_id ?? null;
+      patch.cm_avatar_url = owner?.avatar_url ?? null;
+      patch.cm_initial_color = owner?.color ?? null;
+    } else {
+      patch.account_manager = null;
+      patch.account_manager_profile_id = null;
+      patch.cm_avatar_url = null;
+      patch.cm_initial_color = null;
+    }
+  }
+
+  if (Object.keys(patch).length === 0) return;
+
+  const { error } = await (supabase as any)
+    .from('customer_profiles')
+    .update(patch)
+    .eq('id', customerId);
+
+  if (error) {
+    logger.warn({ err: error, customerId }, 'demo patch customer sync failed');
+  }
+}
+
 async function ensureStudioCustomerForDemo(
   supabase: ReturnType<typeof createSupabaseAdmin>,
   id: string,
-): Promise<{ success: true; demo: Record<string, any>; customerId: string } | { success: false; status: number; error: string }> {
+  options: { syncHistory?: boolean } = {},
+): Promise<
+  | {
+      success: true;
+      demo: Record<string, any>;
+      customerId: string;
+      created: boolean;
+      sync?: DemoHistorySyncResult;
+    }
+  | { success: false; status: number; error: string }
+> {
   const { data: demo, error: demoError } = await supabase
     .from('demos')
     .select('*, converted_customer_id')
@@ -364,7 +574,16 @@ async function ensureStudioCustomerForDemo(
   const demoRow = demo as Record<string, any>;
   if (demoRow.converted_customer_id) {
     await seedGamePlanFromDemo(supabase, demoRow.converted_customer_id, demoRow);
-    return { success: true, demo: demoRow, customerId: demoRow.converted_customer_id };
+    const sync = options.syncHistory
+      ? await runDemoHistorySync(supabase, demoRow.converted_customer_id, demoRow.tiktok_handle)
+      : undefined;
+    return {
+      success: true,
+      demo: demoRow,
+      customerId: demoRow.converted_customer_id,
+      created: false,
+      ...(sync ? { sync } : {}),
+    };
   }
 
   let ownerMember: Record<string, any> | null = null;
@@ -417,7 +636,17 @@ async function ensureStudioCustomerForDemo(
 
   await seedGamePlanFromDemo(supabase, newProfile.id, demoRow);
 
-  return { success: true, demo: demoRow, customerId: newProfile.id };
+  const sync = options.syncHistory
+    ? await runDemoHistorySync(supabase, newProfile.id, demoRow.tiktok_handle)
+    : undefined;
+
+  return {
+    success: true,
+    demo: demoRow,
+    customerId: newProfile.id,
+    created: true,
+    ...(sync ? { sync } : {}),
+  };
 }
 // POST /api/admin/demos/:id/prepare-studio
 router.post('/:id/prepare-studio', requireAuth, ADMIN_OR_CM, async (req, res) => {
@@ -428,14 +657,22 @@ router.post('/:id/prepare-studio', requireAuth, ADMIN_OR_CM, async (req, res) =>
       res.status(400).json({ success: false, error: 'Demo-id saknas' });
       return;
     }
-    const result = await ensureStudioCustomerForDemo(supabase, id);
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const result = await ensureStudioCustomerForDemo(supabase, id, {
+      syncHistory: body.sync_tiktok_history === true,
+    });
 
     if (!result.success) {
       res.status(result.status).json({ success: false, error: result.error });
       return;
     }
 
-    res.json({ success: true, customerId: result.customerId });
+    res.json({
+      success: true,
+      customerId: result.customerId,
+      created: result.created,
+      sync: result.sync ?? null,
+    });
   } catch (err) {
     logger.error(err, 'demos prepare-studio error');
     res.status(500).json({ success: false, error: 'Internt serverfel' });
@@ -521,8 +758,15 @@ router.patch('/:id', requireAuth, ADMIN_OR_CM, async (req, res) => {
 
     const updates: Record<string, any> = {};
     if (body.status !== undefined) {
+      const now = new Date().toISOString();
       updates['status'] = body.status;
-      updates['status_changed_at'] = new Date().toISOString();
+      updates['status_changed_at'] = now;
+      if (body.status === 'sent') updates['sent_at'] = now;
+      if (body.status === 'opened') updates['opened_at'] = now;
+      if (body.status === 'responded') updates['responded_at'] = now;
+      if (body.status === 'won' || body.status === 'lost' || body.status === 'expired') {
+        updates['resolved_at'] = now;
+      }
     }
     if (body.lost_reason !== undefined) updates['lost_reason'] = readString(body.lost_reason);
     if (body.company_name !== undefined) updates['company_name'] = readString(body.company_name);
@@ -533,7 +777,10 @@ router.patch('/:id', requireAuth, ADMIN_OR_CM, async (req, res) => {
       updates['proposed_concepts_per_week'] = readNumber(body.proposed_concepts_per_week);
     }
     if (body.proposed_price_ore !== undefined) updates['proposed_price_ore'] = readNumber(body.proposed_price_ore);
-    if (body.owner_admin_id !== undefined) updates['owner_admin_id'] = readString(body.owner_admin_id);
+    if (body.owner_admin_id !== undefined) {
+      const ownerMember = await resolveOwnerMemberForWrite(supabase, body.owner_admin_id);
+      updates['owner_admin_id'] = ownerMember?.id ?? null;
+    }
     if (body.game_plan !== undefined) updates['game_plan'] = readString(body.game_plan);
     if (body.game_plan_html !== undefined) {
       updates['game_plan_html'] = readString(body.game_plan_html);
@@ -562,6 +809,8 @@ router.patch('/:id', requireAuth, ADMIN_OR_CM, async (req, res) => {
       res.status(500).json({ error: error.message });
       return;
     }
+
+    await syncConvertedCustomerFromDemoPatch(supabase, data as any, updates);
 
     res.json({ demo: mapRow(data as any, new Map()) });
   } catch (err) {
