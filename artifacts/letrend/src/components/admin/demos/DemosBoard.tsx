@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import {
   ArrowRight,
   CalendarCheck,
-  Check,
   Copy,
   ExternalLink,
   FileText,
@@ -14,7 +13,6 @@ import {
   Loader2,
   MoreHorizontal,
   Pencil,
-  RotateCcw,
   Send,
   Trash2,
   UserCheck,
@@ -225,7 +223,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
       }
       if (stageFilter === 'won') return card.status === 'won';
       if (stageFilter === 'lost') return card.status === 'lost' || card.status === 'expired';
-      return true;
+      return !['lost', 'expired'].includes(card.status);
     })
     .sort(
       (a, b) =>
@@ -247,20 +245,6 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
   const handleLose = async (demo: DemoCardDto) => {
     await updateStatus.mutateAsync({ id: demo.id, status: 'lost', lost_reason: null });
     toast.warning(demosCopy.statusLost(demo.companyName));
-  };
-
-  const handleReopen = async (demo: DemoCardDto) => {
-    await updateStatus.mutateAsync({ id: demo.id, status: 'draft', lost_reason: null });
-    toast.success(`${demo.companyName} återöppnad som förberedd.`);
-  };
-
-  const handleWin = (demo: DemoCardDto) => {
-    setConvertTarget({
-      id: demo.id,
-      company_name: demo.companyName,
-      contact_email: demo.contactEmail,
-      proposed_price_ore: demo.proposedPriceOre,
-    });
   };
 
   const handleCopyLink = async (demo: DemoCardDto) => {
@@ -473,8 +457,6 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                     demo.status === 'won' ||
                     demo.status === 'lost' ||
                     demo.status === 'expired';
-                  const isLostOrExpired =
-                    demo.status === 'lost' || demo.status === 'expired';
                   return (
                     <tr
                       key={demo.id}
@@ -495,16 +477,6 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                                 {demosCopy.staleWarning}
                               </span>
                             </div>
-                          ) : null}
-                          {demo.convertedCustomerId ? (
-                            <a
-                              href={`/studio/customers/${demo.convertedCustomerId}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-1 text-xs text-primary hover:underline"
-                            >
-                              Kund →
-                            </a>
                           ) : null}
                         </div>
                       </td>
@@ -536,33 +508,11 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                         {shortDateSv(demo.statusChangedAt)}
                       </td>
 
-                      {/* ─── ACTIONS ─── max 3 inline + 1 advance + overflow menu */}
+                      {/* ─── ACTIONS ─── 2 inline + conditional advance + overflow menu */}
                       <td className="px-3 py-3 align-top">
                         <div className="flex items-center justify-end gap-1">
 
-                          {/* Static icon buttons */}
-                          <button
-                            type="button"
-                            onClick={() => setEditId(demo.id)}
-                            title={demosCopy.editDialogTitle}
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent"
-                          >
-                            <Pencil className="h-3 w-3" />
-                            Redigera
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenGamePlanDrawer(demo)}
-                            title={demosCopy.gamePlanDrawerTitle}
-                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-accent ${
-                              demo.hasGamePlan
-                                ? 'border-border bg-background'
-                                : 'border-info/30 bg-info/5 text-info hover:bg-info/10'
-                            }`}
-                          >
-                            <FileText className="h-3 w-3" />
-                            {demosCopy.gamePlanDrawerActionLabel}
-                          </button>
+                          {/* Kopiera länk */}
                           <button
                             type="button"
                             onClick={() => void handleCopyLink(demo)}
@@ -571,20 +521,10 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                             className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-40"
                           >
                             <Copy className="h-3 w-3" />
-                            Länk
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenPreview(demo)}
-                            disabled={!demo.shareToken}
-                            title="Öppna preview"
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-40"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            Preview
+                            Kopiera länk
                           </button>
 
-                          {/* Advance — only for active demos with a next step */}
+                          {/* Flytta framåt — only for active demos with a next step */}
                           {!isClosed && demo.nextStatus ? (
                             <button
                               type="button"
@@ -597,7 +537,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                               ) : (
                                 <ArrowRight className="h-3 w-3" />
                               )}
-                              {demoStatusLabel(demo.nextStatus)}
+                              Flytta framåt
                             </button>
                           ) : null}
 
@@ -622,18 +562,25 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                                 ) : (
                                   <ExternalLink className="mr-2 h-3.5 w-3.5" />
                                 )}
-                                Studio
+                                Öppna Studio
                               </DropdownMenuItem>
-
+                              <DropdownMenuItem
+                                onClick={() => handleOpenPreview(demo)}
+                                disabled={!demo.shareToken}
+                              >
+                                <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                                Preview
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => setEditId(demo.id)}
+                              >
+                                <Pencil className="mr-2 h-3.5 w-3.5" />
+                                Redigera
+                              </DropdownMenuItem>
                               {!isClosed ? (
                                 <>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => handleWin(demo)}
-                                  >
-                                    <Check className="mr-2 h-3.5 w-3.5 text-success" />
-                                    Win — konvertera
-                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     onClick={() => void handleLose(demo)}
                                     disabled={busy}
@@ -644,20 +591,6 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                                   </DropdownMenuItem>
                                 </>
                               ) : null}
-
-                              {isLostOrExpired ? (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() => void handleReopen(demo)}
-                                    disabled={busy}
-                                  >
-                                    <RotateCcw className="mr-2 h-3.5 w-3.5" />
-                                    Återöppna
-                                  </DropdownMenuItem>
-                                </>
-                              ) : null}
-
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => void handleDelete(demo)}
