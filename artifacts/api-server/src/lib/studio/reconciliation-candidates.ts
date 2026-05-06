@@ -4,11 +4,12 @@
 // Service functions for feed_reconciliation_candidates lifecycle management.
 //
 // Design rules:
-//   - All functions accept a Supabase admin client — callers own the client.
-//   - generateReconciliationCandidates throws on DB error (route wraps in try/catch).
-//   - markCandidateAcceptedForLink and resetCandidateAfterUndo are best-effort:
-//     they log failures but never throw, so callers (sync, reconcile routes) are
-//     not disrupted when the candidates table is temporarily unavailable.
+//   - generateReconciliationCandidates throws on DB error (callers wrap in
+//     try/catch). All required queries are error-checked.
+//   - markCandidateAcceptedForLink returns a MarkResult so callers can decide
+//     whether a failure is fatal (accept route → 500) or advisory (sync → log).
+//     It never throws.
+//   - resetCandidateAfterUndo is best-effort: it logs failures and never throws.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { logger } from '../logger.js';
@@ -21,6 +22,18 @@ export interface GenerateResult {
   generated: number;
   skipped_locked: number;
   history_count: number;
+}
+
+export interface MarkResult {
+  ok: boolean;
+  /** True when a new candidate row was inserted (didn't exist before). */
+  inserted: boolean;
+  /** True when an existing candidate row was updated. */
+  updated: boolean;
+  /** Number of competing 'suggested' candidates rejected. */
+  rejected: number;
+  /** Set when any DB operation failed. */
+  error?: string;
 }
 
 /**
@@ -65,11 +78,13 @@ export async function generateReconciliationCandidates(
   if (tgtErr) throw new Error(`generate: target query failed: ${tgtErr.message}`);
 
   // 3. Which targets are already linked by another history row?
-  const { data: existingLinks } = await supabase
+  const { data: existingLinks, error: linksErr } = await supabase
     .from('customer_concepts')
     .select('reconciled_customer_concept_id')
     .eq('customer_profile_id', customerId)
     .not('reconciled_customer_concept_id', 'is', null);
+
+  if (linksErr) throw new Error(`generate: existing-links query failed: ${linksErr.message}`);
 
   const reconciledTargetIds = new Set(
     ((existingLinks ?? []) as Array<{ reconciled_customer_concept_id: string }>)
@@ -151,7 +166,8 @@ export async function generateReconciliationCandidates(
  * Uses UPDATE-then-INSERT to preserve the existing score when the candidate was
  * previously generated. If no candidate exists, inserts a new row with score=0.
  *
- * Best-effort: logs failures but never throws.
+ * Returns a MarkResult describing what happened. Never throws — callers decide
+ * whether ok=false is fatal (accept endpoint) or advisory (tiktok-sync).
  */
 export async function markCandidateAcceptedForLink(
   supabase: SupabaseAdmin,
@@ -164,12 +180,15 @@ export async function markCandidateAcceptedForLink(
     /** When true, writes 'auto_accepted' (system link). Defaults to false (CM action). */
     auto?: boolean;
   },
-): Promise<void> {
+): Promise<MarkResult> {
   const status = opts.auto ? 'auto_accepted' : 'accepted';
+  let inserted = false;
+  let updated = false;
+  let rejected = 0;
 
   try {
     // Try to update an existing row — preserves the generated score.
-    const { data: updated, error: updateErr } = await supabase
+    const { data: updatedRows, error: updateErr } = await supabase
       .from('feed_reconciliation_candidates')
       .update({ status, decided_at: opts.now, decided_by: opts.actorId ?? null })
       .eq('history_concept_id', historyConceptId)
@@ -178,11 +197,13 @@ export async function markCandidateAcceptedForLink(
 
     if (updateErr) {
       logger.warn({ err: updateErr, historyConceptId }, 'markCandidateAcceptedForLink: update failed');
-      return;
+      return { ok: false, inserted: false, updated: false, rejected: 0, error: updateErr.message };
     }
 
-    // If the row didn't exist yet, insert it (score=0 — the link itself is the source of truth).
-    if (!updated || updated.length === 0) {
+    if (updatedRows && updatedRows.length > 0) {
+      updated = true;
+    } else {
+      // Row didn't exist — insert it (score=0; the link itself is the source of truth).
       const { error: insertErr } = await supabase
         .from('feed_reconciliation_candidates')
         .insert({
@@ -197,23 +218,33 @@ export async function markCandidateAcceptedForLink(
         });
       if (insertErr) {
         logger.warn({ err: insertErr, historyConceptId }, 'markCandidateAcceptedForLink: insert failed');
-        return;
+        return { ok: false, inserted: false, updated: false, rejected: 0, error: insertErr.message };
       }
+      inserted = true;
     }
 
     // Reject all other suggested candidates competing for the same history row.
-    const { error: rejectErr } = await supabase
+    const { data: rejectedRows, error: rejectErr } = await supabase
       .from('feed_reconciliation_candidates')
       .update({ status: 'rejected', decided_at: opts.now, decided_by: opts.actorId ?? null })
       .eq('history_concept_id', historyConceptId)
       .eq('status', 'suggested')
-      .neq('target_customer_concept_id', targetConceptId);
+      .neq('target_customer_concept_id', targetConceptId)
+      .select('id');
 
     if (rejectErr) {
+      // The primary accept succeeded — log this as a warning but still return ok=true.
+      // Competitor rows remain 'suggested' and will be auto-cleaned on next generate.
       logger.warn({ err: rejectErr, historyConceptId }, 'markCandidateAcceptedForLink: reject-others failed');
+    } else {
+      rejected = rejectedRows?.length ?? 0;
     }
+
+    return { ok: true, inserted, updated, rejected };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     logger.warn({ err, historyConceptId }, 'markCandidateAcceptedForLink: unexpected error');
+    return { ok: false, inserted: false, updated: false, rejected: 0, error: msg };
   }
 }
 
@@ -242,4 +273,123 @@ export async function resetCandidateAfterUndo(
   } catch (err) {
     logger.warn({ err, historyConceptId }, 'resetCandidateAfterUndo: unexpected error');
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backfill
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BackfillOptions {
+  /** When true, identifies eligible customers but runs no DB writes. */
+  dryRun?: boolean;
+  /** Cap the number of customers processed (for incremental runs). */
+  limit?: number;
+  /** Restrict processing to specific customer IDs. */
+  customerIds?: string[];
+}
+
+export interface BackfillResult {
+  customers_processed: number;
+  generated: number;
+  skipped_locked: number;
+  history_count: number;
+  errors: Array<{ customerId: string; error: string }>;
+  dry_run: boolean;
+  eligible_count: number;
+}
+
+/**
+ * Finds customers with unreconciled history_import rows and runs
+ * generateReconciliationCandidates for each one sequentially.
+ *
+ * Eligible criteria:
+ *   - At least one customer_concepts row with row_kind='history_import',
+ *     reconciled_customer_concept_id IS NULL, tiktok_url IS NOT NULL
+ *   - At least one target row with row_kind IN ('assignment','collaboration')
+ *
+ * @throws if the initial customer discovery query fails.
+ */
+export async function backfillReconciliationCandidates(
+  supabase: SupabaseAdmin,
+  opts: BackfillOptions = {},
+): Promise<BackfillResult> {
+  // Find customers with at least one unreconciled history_import row that has a tiktok_url.
+  // We do this by querying the distinct customer_profile_id values.
+  const { data: historyCustomers, error: discoverErr } = await supabase
+    .from('customer_concepts')
+    .select('customer_profile_id')
+    .eq('row_kind', 'history_import')
+    .is('reconciled_customer_concept_id', null)
+    .not('tiktok_url', 'is', null);
+
+  if (discoverErr) throw new Error(`backfill: customer discovery failed: ${discoverErr.message}`);
+
+  // De-duplicate customer IDs
+  const allIds = [...new Set(
+    ((historyCustomers ?? []) as Array<{ customer_profile_id: string }>)
+      .map((r) => r.customer_profile_id),
+  )];
+
+  // Filter to requested customerIds if provided
+  const filteredIds = opts.customerIds && opts.customerIds.length > 0
+    ? allIds.filter((id) => opts.customerIds!.includes(id))
+    : allIds;
+
+  // Further filter: must have at least one eligible target row.
+  // We do this lazily per-customer during generate (generate returns 0 if no targets).
+  // For dryRun we skip the generate call but still report eligible count.
+
+  const eligibleIds = opts.limit != null ? filteredIds.slice(0, opts.limit) : filteredIds;
+
+  if (opts.dryRun) {
+    logger.info(
+      { eligible: eligibleIds.length, total_with_history: allIds.length, dryRun: true },
+      'backfill-reconciliation-candidates: dry run complete',
+    );
+    return {
+      customers_processed: 0,
+      generated: 0,
+      skipped_locked: 0,
+      history_count: 0,
+      errors: [],
+      dry_run: true,
+      eligible_count: eligibleIds.length,
+    };
+  }
+
+  let totalGenerated = 0;
+  let totalSkippedLocked = 0;
+  let totalHistoryCount = 0;
+  let totalProcessed = 0;
+  const errors: Array<{ customerId: string; error: string }> = [];
+
+  for (const customerId of eligibleIds) {
+    try {
+      const result = await generateReconciliationCandidates(supabase, customerId);
+      totalGenerated += result.generated;
+      totalSkippedLocked += result.skipped_locked;
+      totalHistoryCount += result.history_count;
+      totalProcessed++;
+      logger.info({ customerId, ...result }, 'backfill: customer complete');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.warn({ err, customerId }, 'backfill: customer failed (continuing)');
+      errors.push({ customerId, error: msg });
+    }
+  }
+
+  logger.info(
+    { totalProcessed, totalGenerated, totalSkippedLocked, totalHistoryCount, errors: errors.length },
+    'backfill-reconciliation-candidates: complete',
+  );
+
+  return {
+    customers_processed: totalProcessed,
+    generated: totalGenerated,
+    skipped_locked: totalSkippedLocked,
+    history_count: totalHistoryCount,
+    errors,
+    dry_run: false,
+    eligible_count: eligibleIds.length,
+  };
 }

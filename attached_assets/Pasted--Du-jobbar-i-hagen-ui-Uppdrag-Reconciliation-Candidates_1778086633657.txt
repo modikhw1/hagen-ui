@@ -1,0 +1,47 @@
+ Du jobbar i hagen-ui.
+
+  Uppdrag: Reconciliation Candidates Phase 3 — hardening + backfill tooling.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Skapa inga Supabase-migrationer.
+  - Orkestratorn har Supabase MCP och kör/verifierar live-backfill senare.
+  - Du ska skapa kod/runbook, inte köra mot live-Supabase.
+
+  Gör:
+
+  1. Hardening i artifacts/api-server/src/lib/studio/reconciliation-candidates.ts
+     - generateReconciliationCandidates ska kontrollera error från existingLinks-queryn.
+     - markCandidateAcceptedForLink ska returnera ett resultat, t.ex. { ok, inserted, updated, rejected, error? }, i
+  stället för enbart void.
+     - Behåll best-effort-läge för tiktok-sync och manual POST/DELETE om du vill, men candidate accept-endpointen bör
+  kunna veta om status-sync misslyckades.
+
+  2. Uppdatera POST /reconciliation-candidates/:candidateId/accept
+     - Om länken lyckas men kandidatstatus misslyckas, returnera tydlig 500 eller åtminstone explicit partial-failure
+  response.
+     - Målet är att UI inte ska tro att accept är komplett om candidate-tabellen inte uppdaterades.
+
+  3. Lägg backfill tooling
+     - Antingen ett skyddat admin/internal endpoint eller ett repo-script.
+     - Det ska hitta kunder med:
+       - row_kind='history_import'
+       - reconciled_customer_concept_id is null
+       - tiktok_url is not null
+       - minst en target row_kind in ('assignment','collaboration')
+     - Stöd dryRun, limit och customerIds.
+     - Kör generateReconciliationCandidates sekventiellt per kund.
+     - Returnera totals: customers_processed, generated, skipped_locked, history_count, errors.
+
+  4. Uppdatera docs/agent-plans/10-reconciliation-candidates.md
+     - Lägg en backfill-runbook:
+       - dry run
+       - skarp körning
+       - verifieringsquery
+       - rollback/cleanup om något blir fel
+     - Markera att UI är nästa fas efter backfill.
+
+  Kör:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend exec tsc --noEmit
+  - pnpm --filter @workspace/api-server run test -- src/lib/studio/reconciliation-candidates-routes.test.ts src/lib/

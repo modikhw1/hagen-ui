@@ -10,6 +10,7 @@ import {
   generateReconciliationCandidates,
   markCandidateAcceptedForLink,
   resetCandidateAfterUndo,
+  backfillReconciliationCandidates,
 } from '../lib/studio/reconciliation-candidates.js';
 import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
@@ -726,6 +727,40 @@ router.post('/internal/refresh-reconciled-thumbnails', async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (err) {
     logger.error(err, 'refresh-reconciled-thumbnails cron error');
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
+  }
+});
+
+// POST /api/studio-v2/internal/backfill-reconciliation-candidates
+// Bearer-token-only internal endpoint. Finds customers with unreconciled
+// history_import rows and runs generateReconciliationCandidates for each one.
+// Body: { dryRun?: boolean, limit?: number, customerIds?: string[] }
+router.post('/internal/backfill-reconciliation-candidates', async (req, res) => {
+  try {
+    const cronSecret = process.env['CRON_SECRET'];
+    if (!cronSecret) {
+      res.status(500).json({ error: 'CRON_SECRET not configured' });
+      return;
+    }
+    const auth = req.headers['authorization'] ?? '';
+    if (auth !== `Bearer ${cronSecret}`) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const dryRun = body['dryRun'] === true;
+    const rawLimit = Number(body['limit']);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : undefined;
+    const rawIds = body['customerIds'];
+    const customerIds = Array.isArray(rawIds)
+      ? (rawIds as unknown[]).filter((x): x is string => typeof x === 'string')
+      : undefined;
+
+    const supabase = createSupabaseAdmin();
+    const result = await backfillReconciliationCandidates(supabase, { dryRun, limit, customerIds });
+    res.json(result);
+  } catch (err) {
+    logger.error(err, 'backfill-reconciliation-candidates error');
     res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
   }
 });
@@ -1684,15 +1719,23 @@ router.post('/reconciliation-candidates/:candidateId/accept', requireAuth, CM_ON
     );
     if (linkError) { res.status(500).json({ error: linkError }); return; }
 
-    // Update candidate status + reject competitors via shared helper
-    await markCandidateAcceptedForLink(supabase, c['history_concept_id'] as string, c['target_customer_concept_id'] as string, {
-      customerId: c['customer_id'] as string,
-      actorId,
-      now,
-      auto: false,
-    });
+    // Update candidate status + reject competitors via shared helper.
+    // The accept route treats failure as fatal — UI must not show success if
+    // the candidate table was not updated.
+    const markResult = await markCandidateAcceptedForLink(
+      supabase, c['history_concept_id'] as string, c['target_customer_concept_id'] as string,
+      { customerId: c['customer_id'] as string, actorId, now, auto: false },
+    );
+    if (!markResult.ok) {
+      logger.error({ candidateId, err: markResult.error }, 'reconciliation-candidates: candidate status sync failed after link');
+      res.status(500).json({
+        error: 'Länken skapades men kandidatstatus kunde inte uppdateras',
+        candidate_sync_error: markResult.error,
+      });
+      return;
+    }
 
-    logger.info({ candidateId, actorId }, 'reconciliation-candidates: accepted');
+    logger.info({ candidateId, actorId, ...markResult }, 'reconciliation-candidates: accepted');
     res.json({ success: true });
   } catch (err) {
     logger.error(err, 'reconciliation-candidates accept error');

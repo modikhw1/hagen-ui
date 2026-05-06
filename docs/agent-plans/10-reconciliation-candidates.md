@@ -154,7 +154,8 @@ POST /api/studio-v2/reconciliation-candidates/:candidateId/accept
 - Anropar intern `applyReconciliationLink(supabase, historyId, targetId, actorId, now)` som:
   - Sätter `reconciled_customer_concept_id / reconciled_by_cm_id / reconciled_at` på history-raden.
   - Propagerar TikTok-stats (thumbnail, url, views, likes, comments, published_at) till assignment-raden.
-- Anropar `markCandidateAcceptedForLink` (service): UPDATE → INSERT om saknas, avvisar `suggested`-konkurrenter. Best-effort.
+- Anropar `markCandidateAcceptedForLink` (service): UPDATE → INSERT om saknas, avvisar `suggested`-konkurrenter.
+- Kontrollerar `MarkResult.ok`: om `ok=false`, returneras **500** med `candidate_sync_error` — UI får aldrig tro att accept är klar om kandidattabellen misslyckades.
 
 ### 4. Avvisa kandidat ✅
 
@@ -211,7 +212,7 @@ Exporterar tre funktioner:
 | Funktion | Beskrivning |
 |---|---|
 | `generateReconciliationCandidates(supabase, customerId)` | Poängsätter alla (history, target)-par och upsert:ar `suggested`-rader; skippar låsta. Kastar vid DB-fel. |
-| `markCandidateAcceptedForLink(supabase, histId, tgtId, opts)` | UPDATE befintlig rad (bevarar score) → INSERT om saknas; avvisar `suggested`-konkurrenter. Best-effort. |
+| `markCandidateAcceptedForLink(supabase, histId, tgtId, opts)` | UPDATE befintlig rad (bevarar score) → INSERT om saknas; avvisar `suggested`-konkurrenter. Returnerar `MarkResult { ok, inserted, updated, rejected, error? }`. Kastar aldrig. |
 | `resetCandidateAfterUndo(supabase, histId, tgtId)` | Återställer `accepted/auto_accepted` → `suggested`, rensar `decided_at/by`. Best-effort. |
 
 ### Beroenden — status
@@ -262,10 +263,125 @@ täcks bättre med tester mot staging-DB. Dokumenterat som teknisk skuld.
 8. ✅ ~~Post-sync generate hook~~ — tiktok-sync anropar generate efter import (non-fatal).
 9. ✅ ~~Auto-reconcile kandidatstatus~~ — tiktok-sync anropar markCandidateAcceptedForLink vid auto-link.
 10. ✅ ~~Manual reconciliation status sync~~ — POST/DELETE /history/reconciliation synkar kandidatstatus.
+11. ✅ ~~Hardening~~ — `existingLinks`-query error-checkad; `markCandidateAcceptedForLink` returnerar `MarkResult`; accept-routen returnerar 500 om kandidatsynk misslyckas.
+12. ✅ ~~Backfill endpoint~~ — `POST /internal/backfill-reconciliation-candidates` (CRON_SECRET-skyddad) med `dryRun`, `limit`, `customerIds`-stöd.
 
 **Nästa steg:**
 
 - ✅ ~~Post-sync generate hook~~ — `generateReconciliationCandidates` anropas från `tiktok-sync.ts` post-import.
 - ✅ ~~Manual reconciliation status sync~~ — POST/DELETE /history/reconciliation synkar kandidatstatus.
+- ✅ ~~Hardening + backfill endpoint~~ — `MarkResult`, error-check existingLinks, `/internal/backfill-reconciliation-candidates`.
+- **Bulk-backfill** — kör backfill-endpoint mot produktion (se runbook nedan). Verifiera med verifieringsquery.
 - **FeedPlanner UI** — kandidatlista per historik-rad med Godkänn/Avvisa-knappar; integrera i `FeedSlot.tsx` eller nytt sidopanel.
-- **Bulk-backfill** — anropa generate för de ~335 befintliga unreconciled history_import-raderna (engångs-skript eller admin-endpoint).
+
+---
+
+## Backfill Runbook
+
+Endpoint: `POST /api/studio-v2/internal/backfill-reconciliation-candidates`  
+Auth: `Authorization: Bearer $CRON_SECRET`
+
+### 1. Dry run — se vilka kunder som berörs
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun": true}' \
+  https://<api-host>/api/studio-v2/internal/backfill-reconciliation-candidates | jq .
+```
+
+Svar: `{ eligible_count, customers_processed: 0, dry_run: true, errors: [] }`
+
+### 2. Skarp körning — begränsat antal (rekommenderas vid första körning)
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun": false, "limit": 50}' \
+  https://<api-host>/api/studio-v2/internal/backfill-reconciliation-candidates | jq .
+```
+
+Svar: `{ customers_processed, generated, skipped_locked, history_count, errors, eligible_count, dry_run: false }`
+
+Kontrollera `errors`-arrayen — om tom är allt OK. Kör igen med nästa batch tills `customers_processed < limit`.
+
+### 3. Skarp körning — alla kunder
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun": false}' \
+  https://<api-host>/api/studio-v2/internal/backfill-reconciliation-candidates | jq .
+```
+
+### 4. Specificerade kunder
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $CRON_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun": false, "customerIds": ["<uuid1>", "<uuid2>"]}' \
+  https://<api-host>/api/studio-v2/internal/backfill-reconciliation-candidates | jq .
+```
+
+### 5. Verifieringsquery (kör via Supabase SQL Editor)
+
+```sql
+-- Kontrollera täckning: kunder med unreconciled history men utan några candidates
+SELECT
+  cc.customer_profile_id,
+  COUNT(*) AS unreconciled_history_count,
+  (
+    SELECT COUNT(*)
+    FROM feed_reconciliation_candidates frc
+    WHERE frc.customer_id = cc.customer_profile_id
+  ) AS candidate_rows
+FROM customer_concepts cc
+WHERE cc.row_kind = 'history_import'
+  AND cc.reconciled_customer_concept_id IS NULL
+  AND cc.tiktok_url IS NOT NULL
+GROUP BY cc.customer_profile_id
+HAVING (
+  SELECT COUNT(*)
+  FROM feed_reconciliation_candidates frc
+  WHERE frc.customer_id = cc.customer_profile_id
+) = 0
+ORDER BY unreconciled_history_count DESC;
+-- Förväntat resultat efter fullständig backfill: 0 rader
+```
+
+```sql
+-- Totalt antal kandidater per status efter backfill
+SELECT status, COUNT(*) AS cnt
+FROM feed_reconciliation_candidates
+GROUP BY status
+ORDER BY cnt DESC;
+```
+
+### 6. Rollback / cleanup om något blir fel
+
+Backfill skriver **enbart** `status='suggested'`-rader och skippar par som redan är locked
+(accepted/rejected/auto_accepted). Det är därmed alltid säkert att köra om.
+
+Om du behöver rensa **alla** suggested-kandidater för en kund:
+
+```sql
+-- OBS: kör i Supabase med WHERE-filter, aldrig utan
+DELETE FROM feed_reconciliation_candidates
+WHERE customer_id = '<customer-uuid>'
+  AND status = 'suggested';
+-- Accepterade/auto_accepted/rejected påverkas INTE av ovanstående.
+```
+
+Om du behöver rensa **alla** kandidater för en kund (inkl. beslutade):
+
+```sql
+-- VARSAM — tar bort hela kandidathistoriken för kunden
+DELETE FROM feed_reconciliation_candidates
+WHERE customer_id = '<customer-uuid>';
+```
+
+Kör backfill-endpoint igen för att återskapa suggested-kandidater.
