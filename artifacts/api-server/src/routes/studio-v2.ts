@@ -1000,6 +1000,7 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
     const customerId = typeof body.customer_id === 'string' ? body.customer_id.trim() : '';
     const tiktokUrl = typeof body.tiktok_url === 'string' ? body.tiktok_url : null;
     const publishedAt = typeof body.published_at === 'string' ? body.published_at : null;
+    const feedMotorSignalId = typeof body.feed_motor_signal_id === 'string' ? body.feed_motor_signal_id.trim() : null;
     const now = new Date().toISOString();
 
     if (!conceptId) {
@@ -1034,6 +1035,29 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
         return;
       }
       advanceLockAcquired = true;
+
+      // Idempotency guard: if the request was triggered from a specific motor signal,
+      // verify it hasn't already been resolved or acknowledged before running the advance.
+      if (feedMotorSignalId) {
+        const { data: signalRow, error: signalFetchErr } = await supabase
+          .from('feed_motor_signals')
+          .select('id, customer_id, auto_resolved_at, acknowledged_at')
+          .eq('id', feedMotorSignalId)
+          .maybeSingle();
+
+        if (signalFetchErr) {
+          res.status(500).json({ error: signalFetchErr.message });
+          return;
+        }
+        if (!signalRow || signalRow.customer_id !== customerId) {
+          res.status(409).json({ error: 'Den här signalen är redan hanterad. Uppdatera sidan.' });
+          return;
+        }
+        if (signalRow.auto_resolved_at !== null || signalRow.acknowledged_at !== null) {
+          res.status(409).json({ error: 'Den här signalen är redan hanterad. Uppdatera sidan.' });
+          return;
+        }
+      }
 
       // Delegate all business logic (validation + update + feed reorder) to the DB RPC.
       const { data: rpcResult, error: rpcError } = await supabase.rpc(
@@ -1100,16 +1124,30 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
         return;
       }
 
-      // Auto-resolve any open feed motor signals for this customer.
-      const { error: signalError } = await supabase
-        .from('feed_motor_signals')
-        .update({ auto_resolved_at: now })
-        .eq('customer_id', customerId)
-        .is('acknowledged_at', null)
-        .is('auto_resolved_at', null);
+      // Auto-resolve the triggering motor signal (targeted) or all open signals (legacy fallback).
+      if (feedMotorSignalId) {
+        const { error: signalError } = await supabase
+          .from('feed_motor_signals')
+          .update({ auto_resolved_at: now })
+          .eq('id', feedMotorSignalId)
+          .eq('customer_id', customerId)
+          .is('acknowledged_at', null)
+          .is('auto_resolved_at', null);
 
-      if (signalError) {
-        logger.warn({ err: signalError, customerId }, 'failed to auto-resolve feed motor signals');
+        if (signalError) {
+          logger.warn({ err: signalError, customerId, feedMotorSignalId }, 'failed to auto-resolve feed motor signal');
+        }
+      } else {
+        const { error: signalError } = await supabase
+          .from('feed_motor_signals')
+          .update({ auto_resolved_at: now })
+          .eq('customer_id', customerId)
+          .is('acknowledged_at', null)
+          .is('auto_resolved_at', null);
+
+        if (signalError) {
+          logger.warn({ err: signalError, customerId }, 'failed to auto-resolve feed motor signals');
+        }
       }
 
       // Renumber unreconciled imported-history rows so the TikTok grid stays

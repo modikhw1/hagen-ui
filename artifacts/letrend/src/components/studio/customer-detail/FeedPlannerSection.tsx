@@ -1109,6 +1109,7 @@ export function FeedPlannerSection({
             handleOpenMarkProducedDialog(
               nuConcept!.id,
               freshImportedConcepts[0]?.id,
+              activeNudges[0]?.id,
             );
           }}
           onDismissCue={onDismissAdvanceCue}

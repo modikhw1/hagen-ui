@@ -12,10 +12,12 @@ export interface MarkProducedDialogProps {
   nuConceptId: string;
   importedConcepts: CustomerConcept[];
   freshestImportedConcept: CustomerConcept | null;
+  sourceSignalId?: string;
   onMarkProduced: (
     conceptId: string,
     tiktokUrl?: string,
     publishedAt?: string,
+    signalId?: string,
   ) => Promise<void>;
   onReconcileHistory: (
     historyConceptId: string,
@@ -46,6 +48,7 @@ export function MarkProducedDialog({
   nuConceptId,
   importedConcepts,
   freshestImportedConcept,
+  sourceSignalId,
   onMarkProduced,
   onReconcileHistory,
 }: MarkProducedDialogProps) {
@@ -88,6 +91,7 @@ export function MarkProducedDialog({
               nuConceptId,
               clip.result.tiktok_url ?? undefined,
               clip.result.published_at ?? undefined,
+              sourceSignalId,
             );
           } catch {
             throw new Error(
@@ -97,7 +101,7 @@ export function MarkProducedDialog({
           }
         } else {
           // No imported clip available — advance plan without a clip link.
-          await onMarkProduced(nuConceptId);
+          await onMarkProduced(nuConceptId, undefined, undefined, sourceSignalId);
         }
       } else if (mode === 'manual') {
         // Step 1: link the selected clip (if any) to the nu-slot.
@@ -111,6 +115,7 @@ export function MarkProducedDialog({
             nuConceptId,
             clip?.result.tiktok_url ?? undefined,
             clip?.result.published_at ?? undefined,
+            sourceSignalId,
           );
         } catch {
           if (clip) {
@@ -122,7 +127,7 @@ export function MarkProducedDialog({
           throw new Error('Kunde inte markera som producerat. Försök igen.');
         }
       } else {
-        await onMarkProduced(nuConceptId);
+        await onMarkProduced(nuConceptId, undefined, undefined, sourceSignalId);
       }
 
       onClose();

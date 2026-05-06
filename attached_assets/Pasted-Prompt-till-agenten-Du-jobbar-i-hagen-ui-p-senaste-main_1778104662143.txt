@@ -1,0 +1,63 @@
+Prompt till agenten:
+
+  Du jobbar i hagen-ui på senaste main. Gör Phase 12a: feedplanner mark-produced idempotency guard.
+
+  Läs först:
+  - docs/agent-plans/21-feedplanner-live-qa-checklist.md
+  - docs/agent-plans/22-feedplanner-live-qa-results.md
+  - docs/agent-plans/23-feedplanner-live-ui-confirmation-results.md
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen bred refaktor.
+  - Målet är att förhindra att samma FeedAdvanceCue / feed_motor_signal kan avancera planen mer än en gång.
+  - Bevara befintligt UX-flöde och designspråk.
+
+  Problem att fixa:
+  Phase 11c visade att kunden `bcbbdb19` avancerade två steg. Supabase-state visar två producerade assignments i följd
+  och samma motor-signal var redan auto_resolved efter första advance. Patchen ska göra mark-produced idempotent när den
+  startas från en cue/signal.
+
+  Implementation:
+  1. Lägg till `sourceSignalId` / `feedMotorSignalId` i MarkProducedDialog-flödet.
+     - `useFeedPlannerState` ska kunna spara signal-id när dialogen öppnas.
+     - `FeedPlannerSection` ska skicka `activeNudges[0]?.id` när `handleOpenMarkProducedDialog(...)` öppnas från
+  `FeedAdvanceCue`.
+     - `MarkProducedDialog` ska skicka signal-id vidare till `onMarkProduced`.
+
+  2. Uppdatera `markProducedRequest` i `CustomerWorkspaceContent.tsx`.
+     - Skicka `feed_motor_signal_id` i body till `/api/studio-v2/feed/mark-produced` när signal-id finns.
+     - Vid stale/resolved signal-fel: visa begripligt fel och refetcha concepts + motorSignals.
+
+  3. Uppdatera API-endpointen i `artifacts/api-server/src/routes/studio-v2.ts`.
+     - Parsea optional `feed_motor_signal_id`.
+     - Efter customer access och efter att customer-level lock tagits: om signal-id finns, verifiera att signalen
+  tillhör kunden och att `auto_resolved_at IS NULL` och `acknowledged_at IS NULL`.
+     - Om signalen redan är resolved/acknowledged/missing: returnera 409 med svensk text, exempel: “Den här signalen är
+  redan hanterad. Uppdatera sidan.”
+     - Kör inte `advance_customer_feed_plan` när signalen redan är hanterad.
+     - Efter lyckad RPC: sätt `auto_resolved_at` på just den signalen om signal-id finns. Behåll befintlig fallback för
+  gamla anrop utan signal-id.
+
+  4. Lägg till skydd mot dubbelklick/stale dialog där det är rimligt.
+     - Dialogen har redan submitting-state, men stale sessions ska stoppas server-side.
+
+  5. Testa:
+     - Typecheck.
+     - Lägg gärna till ett smalt API-test om teststruktur finns.
+     - Verifiera manuellt/kodmässigt att mark-produced utan signal-id fortfarande fungerar för vanlig “markera som
+  producerad”-knapp.
+     - Verifiera att cue-baserat mark-produced med redan resolved signal ger 409 och inte flyttar feed_order.
+
+  Skapa dokument:
+  docs/agent-plans/24-feedplanner-idempotency-guard.md
+
+  Dokumentera:
+  - ändrade filer
+  - exakt guard-logik
+  - varför detta stoppar dubbel advance
+  - kvarvarande risker
+  - testresultat
+  - rekommenderat nästa live-test
+
+  Committa och pusha till main.

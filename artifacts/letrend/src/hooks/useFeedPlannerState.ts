@@ -19,11 +19,13 @@ export function useFeedPlannerState() {
   const [markProducedDialogOpen, setMarkProducedDialogOpen] = useState(false);
   const [markProducedDialogConceptId, setMarkProducedDialogConceptId] = useState<string | null>(null);
   const [preferredImportedConceptId, setPreferredImportedConceptId] = useState<string | null>(null);
+  const [cueSignalId, setCueSignalId] = useState<string | null>(null);
   const [motorSignals, setMotorSignals] = useState<MotorSignalRow[]>([]);
 
-  const handleOpenMarkProducedDialog = (conceptId: string, preferredClipId?: string) => {
+  const handleOpenMarkProducedDialog = (conceptId: string, preferredClipId?: string, signalId?: string) => {
     setMarkProducedDialogConceptId(conceptId);
     setPreferredImportedConceptId(preferredClipId ?? null);
+    setCueSignalId(signalId ?? null);
     setMarkProducedDialogOpen(true);
   };
 
@@ -31,6 +33,7 @@ export function useFeedPlannerState() {
     setMarkProducedDialogOpen(false);
     setMarkProducedDialogConceptId(null);
     setPreferredImportedConceptId(null);
+    setCueSignalId(null);
   };
 
   return {
@@ -48,6 +51,8 @@ export function useFeedPlannerState() {
     setMarkProducedDialogConceptId,
     preferredImportedConceptId,
     setPreferredImportedConceptId,
+    cueSignalId,
+    setCueSignalId,
     motorSignals,
     setMotorSignals,
     handleOpenMarkProducedDialog,

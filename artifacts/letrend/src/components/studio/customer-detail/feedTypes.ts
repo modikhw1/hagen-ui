@@ -109,7 +109,7 @@ export interface FeedPlannerSectionProps {
   handleRemoveFromSlot: (conceptId: string) => Promise<void>;
   handleAssignToSlot: (conceptId: string, feedOrder: number) => Promise<void>;
   handleSwapFeedOrder: (conceptIdA: string, conceptIdB: string) => Promise<void>;
-  handleOpenMarkProducedDialog: (conceptId: string, preferredImportedConceptId?: string) => void;
+  handleOpenMarkProducedDialog: (conceptId: string, preferredImportedConceptId?: string, signalId?: string) => void;
   onOpenConcept: (conceptId: string, sections?: ConceptSectionKey[]) => void;
   onSlotClick: (slot: FeedSlotData, concept: CustomerConcept | null, details: TranslatedConcept | null) => void;
   showTagManager: boolean;
@@ -156,7 +156,7 @@ export interface FeedSlotProps {
   // or 'no_clip' if nothing new was found on the profile.
   onCheckAndMarkProduced: (conceptId: string) => Promise<'advanced' | 'no_clip'>;
   onMarkProduced: (conceptId: string, tiktokUrl?: string, publishedAt?: string) => Promise<void>;
-  onOpenMarkProducedDialog: (conceptId: string, preferredImportedConceptId?: string) => void;
+  onOpenMarkProducedDialog: (conceptId: string, preferredImportedConceptId?: string, signalId?: string) => void;
   onReconcileHistory: (
     historyConceptId: string,
     options?: { mode?: 'use_now_slot'; linkedCustomerConceptId?: string }

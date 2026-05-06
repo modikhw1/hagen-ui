@@ -510,6 +510,7 @@ function CustomerWorkspacePageContent() {
     markProducedDialogOpen,
     markProducedDialogConceptId,
     preferredImportedConceptId,
+    cueSignalId,
     motorSignals,
     setMotorSignals,
     handleOpenMarkProducedDialog,
@@ -1731,7 +1732,7 @@ function CustomerWorkspacePageContent() {
 
   // Low-level request — throws on failure, does cache work on success.
   // Used directly by MarkProducedDialog so the dialog's two-step error handling works.
-  const markProducedRequest = async (conceptId: string, tiktokUrl?: string, publishedAt?: string) => {
+  const markProducedRequest = async (conceptId: string, tiktokUrl?: string, publishedAt?: string, signalId?: string) => {
     const response = await fetch('/api/studio-v2/feed/mark-produced', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1740,11 +1741,16 @@ function CustomerWorkspacePageContent() {
         customer_id: customerId,
         tiktok_url: tiktokUrl,
         published_at: publishedAt,
+        feed_motor_signal_id: signalId,
       }),
     });
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => null) as { error?: string } | null;
+      // If signal was already handled (stale dialog), refetch signals so the cue disappears.
+      if (response.status === 409 && errorBody?.error?.includes('signalen är redan hanterad')) {
+        void fetchMotorSignals();
+      }
       throw new Error(errorBody?.error ?? 'Kunde inte markera som producerat');
     }
 
@@ -4235,6 +4241,7 @@ function CustomerWorkspacePageContent() {
           isOpen={markProducedDialogOpen}
           onClose={handleCloseMarkProducedDialog}
           nuConceptId={markProducedDialogConceptId}
+          sourceSignalId={cueSignalId ?? undefined}
           importedConcepts={concepts.filter((c) => c.row_kind === 'imported_history' && !c.reconciliation.is_reconciled)}
           freshestImportedConcept={(() => {
             const unreconciled = concepts.filter(
