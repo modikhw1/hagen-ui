@@ -4,8 +4,8 @@
 // Service functions for feed_reconciliation_candidates lifecycle management.
 //
 // Design rules:
-//   - generateReconciliationCandidates throws on DB error (callers wrap in
-//     try/catch). All required queries are error-checked.
+//   - generateReconciliationCandidates throws on any required DB error so that
+//     locked (decided) pairs are never at risk of being overwritten.
 //   - markCandidateAcceptedForLink returns a MarkResult so callers can decide
 //     whether a failure is fatal (accept route → 500) or advisory (sync → log).
 //     It never throws.
@@ -42,6 +42,10 @@ export interface MarkResult {
  * Scores every unreconciled history_import row against every active
  * assignment/collaboration row, upserts the eligible pairs as 'suggested',
  * and skips any pair already decided (accepted/rejected/auto_accepted).
+ *
+ * All required DB queries are error-checked and throw on failure — this ensures
+ * that locked (decided) pairs are never at risk of being overwritten when
+ * a query fails silently.
  *
  * @throws if any required DB query fails.
  */
@@ -99,11 +103,15 @@ export async function generateReconciliationCandidates(
   }));
 
   // 4. Which (history, target) pairs are already decided? Don't overwrite them.
-  const { data: lockedRows } = await supabase
+  //    This query MUST succeed — if it fails we throw rather than risk overwriting
+  //    accepted/rejected/auto_accepted rows with 'suggested'.
+  const { data: lockedRows, error: lockedErr } = await supabase
     .from('feed_reconciliation_candidates')
     .select('history_concept_id, target_customer_concept_id')
     .eq('customer_id', customerId)
     .in('status', ['accepted', 'rejected', 'auto_accepted']);
+
+  if (lockedErr) throw new Error(`generate: locked-pairs query failed: ${lockedErr.message}`);
 
   const lockedPairs = new Set(
     ((lockedRows ?? []) as Array<{ history_concept_id: string; target_customer_concept_id: string }>)
@@ -282,7 +290,7 @@ export async function resetCandidateAfterUndo(
 export interface BackfillOptions {
   /** When true, identifies eligible customers but runs no DB writes. */
   dryRun?: boolean;
-  /** Cap the number of customers processed (for incremental runs). */
+  /** Cap the number of eligible customers processed (for incremental runs). */
   limit?: number;
   /** Restrict processing to specific customer IDs. */
   customerIds?: string[];
@@ -295,26 +303,41 @@ export interface BackfillResult {
   history_count: number;
   errors: Array<{ customerId: string; error: string }>;
   dry_run: boolean;
+  /**
+   * Number of customers with at least one unreconciled history_import row
+   * (tiktok_url IS NOT NULL). This is the raw history universe before the
+   * target-availability filter is applied.
+   */
+  customers_with_history: number;
+  /**
+   * Number of customers that are actually processable: they have at least one
+   * unreconciled history row AND at least one eligible target row
+   * (row_kind IN ('assignment','collaboration'), concept_id IS NOT NULL, status != 'archived').
+   * This is the count used for limit and customerIds filtering.
+   */
   eligible_count: number;
 }
 
 /**
- * Finds customers with unreconciled history_import rows and runs
- * generateReconciliationCandidates for each one sequentially.
+ * Finds customers with unreconciled history_import rows AND at least one
+ * eligible target row, then runs generateReconciliationCandidates for each
+ * one sequentially.
  *
- * Eligible criteria:
+ * Eligible criteria (both must hold):
  *   - At least one customer_concepts row with row_kind='history_import',
  *     reconciled_customer_concept_id IS NULL, tiktok_url IS NOT NULL
- *   - At least one target row with row_kind IN ('assignment','collaboration')
+ *   - At least one customer_concepts row with row_kind IN ('assignment','collaboration'),
+ *     concept_id IS NOT NULL, status != 'archived'
  *
- * @throws if the initial customer discovery query fails.
+ * In dryRun mode: classifies customers and returns counts without any DB writes.
+ *
+ * @throws if the initial customer discovery queries fail.
  */
 export async function backfillReconciliationCandidates(
   supabase: SupabaseAdmin,
   opts: BackfillOptions = {},
 ): Promise<BackfillResult> {
-  // Find customers with at least one unreconciled history_import row that has a tiktok_url.
-  // We do this by querying the distinct customer_profile_id values.
+  // Step A: customers with at least one unreconciled history_import row
   const { data: historyCustomers, error: discoverErr } = await supabase
     .from('customer_concepts')
     .select('customer_profile_id')
@@ -324,26 +347,53 @@ export async function backfillReconciliationCandidates(
 
   if (discoverErr) throw new Error(`backfill: customer discovery failed: ${discoverErr.message}`);
 
-  // De-duplicate customer IDs
-  const allIds = [...new Set(
+  const idsWithHistory = [...new Set(
     ((historyCustomers ?? []) as Array<{ customer_profile_id: string }>)
       .map((r) => r.customer_profile_id),
   )];
 
-  // Filter to requested customerIds if provided
-  const filteredIds = opts.customerIds && opts.customerIds.length > 0
-    ? allIds.filter((id) => opts.customerIds!.includes(id))
-    : allIds;
+  const customersWithHistory = idsWithHistory.length;
 
-  // Further filter: must have at least one eligible target row.
-  // We do this lazily per-customer during generate (generate returns 0 if no targets).
-  // For dryRun we skip the generate call but still report eligible count.
+  if (customersWithHistory === 0) {
+    return {
+      customers_processed: 0, generated: 0, skipped_locked: 0, history_count: 0,
+      errors: [], dry_run: opts.dryRun ?? false,
+      customers_with_history: 0, eligible_count: 0,
+    };
+  }
 
-  const eligibleIds = opts.limit != null ? filteredIds.slice(0, opts.limit) : filteredIds;
+  // Step B: of those, which also have at least one eligible target row?
+  const { data: targetCustomers, error: targetErr } = await supabase
+    .from('customer_concepts')
+    .select('customer_profile_id')
+    .in('customer_profile_id', idsWithHistory)
+    .in('row_kind', ['assignment', 'collaboration'])
+    .not('concept_id', 'is', null)
+    .neq('status', 'archived');
+
+  if (targetErr) throw new Error(`backfill: target discovery failed: ${targetErr.message}`);
+
+  const idsWithTargets = new Set(
+    ((targetCustomers ?? []) as Array<{ customer_profile_id: string }>)
+      .map((r) => r.customer_profile_id),
+  );
+
+  // Eligible = has both history rows AND target rows
+  let eligibleIds = idsWithHistory.filter((id) => idsWithTargets.has(id));
+
+  // Apply customerIds filter if requested
+  if (opts.customerIds && opts.customerIds.length > 0) {
+    eligibleIds = eligibleIds.filter((id) => opts.customerIds!.includes(id));
+  }
+
+  const eligibleCount = eligibleIds.length;
+
+  // Apply limit
+  const processList = opts.limit != null ? eligibleIds.slice(0, opts.limit) : eligibleIds;
 
   if (opts.dryRun) {
     logger.info(
-      { eligible: eligibleIds.length, total_with_history: allIds.length, dryRun: true },
+      { customers_with_history: customersWithHistory, eligible_count: eligibleCount, dryRun: true },
       'backfill-reconciliation-candidates: dry run complete',
     );
     return {
@@ -353,7 +403,8 @@ export async function backfillReconciliationCandidates(
       history_count: 0,
       errors: [],
       dry_run: true,
-      eligible_count: eligibleIds.length,
+      customers_with_history: customersWithHistory,
+      eligible_count: eligibleCount,
     };
   }
 
@@ -363,7 +414,7 @@ export async function backfillReconciliationCandidates(
   let totalProcessed = 0;
   const errors: Array<{ customerId: string; error: string }> = [];
 
-  for (const customerId of eligibleIds) {
+  for (const customerId of processList) {
     try {
       const result = await generateReconciliationCandidates(supabase, customerId);
       totalGenerated += result.generated;
@@ -379,7 +430,7 @@ export async function backfillReconciliationCandidates(
   }
 
   logger.info(
-    { totalProcessed, totalGenerated, totalSkippedLocked, totalHistoryCount, errors: errors.length },
+    { totalProcessed, totalGenerated, totalSkippedLocked, totalHistoryCount, errors: errors.length, customers_with_history: customersWithHistory, eligible_count: eligibleCount },
     'backfill-reconciliation-candidates: complete',
   );
 
@@ -390,6 +441,7 @@ export async function backfillReconciliationCandidates(
     history_count: totalHistoryCount,
     errors,
     dry_run: false,
-    eligible_count: eligibleIds.length,
+    customers_with_history: customersWithHistory,
+    eligible_count: eligibleCount,
   };
 }

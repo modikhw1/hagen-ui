@@ -211,7 +211,7 @@ Exporterar tre funktioner:
 
 | Funktion | Beskrivning |
 |---|---|
-| `generateReconciliationCandidates(supabase, customerId)` | Poängsätter alla (history, target)-par och upsert:ar `suggested`-rader; skippar låsta. Kastar vid DB-fel. |
+| `generateReconciliationCandidates(supabase, customerId)` | Poängsätter alla (history, target)-par och upsert:ar `suggested`-rader; skippar låsta. Alla 4 required queries error-checkade — kastar vid fel (inkl. `lockedRows`-query) så decided-rader aldrig riskerar överskrivning. |
 | `markCandidateAcceptedForLink(supabase, histId, tgtId, opts)` | UPDATE befintlig rad (bevarar score) → INSERT om saknas; avvisar `suggested`-konkurrenter. Returnerar `MarkResult { ok, inserted, updated, rejected, error? }`. Kastar aldrig. |
 | `resetCandidateAfterUndo(supabase, histId, tgtId)` | Återställer `accepted/auto_accepted` → `suggested`, rensar `decided_at/by`. Best-effort. |
 
@@ -263,14 +263,14 @@ täcks bättre med tester mot staging-DB. Dokumenterat som teknisk skuld.
 8. ✅ ~~Post-sync generate hook~~ — tiktok-sync anropar generate efter import (non-fatal).
 9. ✅ ~~Auto-reconcile kandidatstatus~~ — tiktok-sync anropar markCandidateAcceptedForLink vid auto-link.
 10. ✅ ~~Manual reconciliation status sync~~ — POST/DELETE /history/reconciliation synkar kandidatstatus.
-11. ✅ ~~Hardening~~ — `existingLinks`-query error-checkad; `markCandidateAcceptedForLink` returnerar `MarkResult`; accept-routen returnerar 500 om kandidatsynk misslyckas.
-12. ✅ ~~Backfill endpoint~~ — `POST /internal/backfill-reconciliation-candidates` (CRON_SECRET-skyddad) med `dryRun`, `limit`, `customerIds`-stöd.
+11. ✅ ~~Hardening~~ — `existingLinks`- och `lockedRows`-queries error-checkade; `markCandidateAcceptedForLink` returnerar `MarkResult`; accept-routen returnerar 500 om kandidatsynk misslyckas.
+12. ✅ ~~Backfill endpoint~~ — `POST /internal/backfill-reconciliation-candidates` (CRON_SECRET-skyddad) med `dryRun`, `limit`, `customerIds`-stöd. Returnerar `customers_with_history` (rå universe) och `eligible_count` (faktiskt processbart: har både history-rader och target-rader).
 
 **Nästa steg:**
 
 - ✅ ~~Post-sync generate hook~~ — `generateReconciliationCandidates` anropas från `tiktok-sync.ts` post-import.
 - ✅ ~~Manual reconciliation status sync~~ — POST/DELETE /history/reconciliation synkar kandidatstatus.
-- ✅ ~~Hardening + backfill endpoint~~ — `MarkResult`, error-check existingLinks, `/internal/backfill-reconciliation-candidates`.
+- ✅ ~~Hardening + backfill endpoint~~ — `MarkResult`, error-check alla required queries (inkl. `lockedRows`), `/internal/backfill-reconciliation-candidates` med korrekt `eligible_count`-semantik.
 - **Bulk-backfill** — kör backfill-endpoint mot produktion (se runbook nedan). Verifiera med verifieringsquery.
 - **FeedPlanner UI** — kandidatlista per historik-rad med Godkänn/Avvisa-knappar; integrera i `FeedSlot.tsx` eller nytt sidopanel.
 
@@ -291,7 +291,21 @@ curl -s -X POST \
   https://<api-host>/api/studio-v2/internal/backfill-reconciliation-candidates | jq .
 ```
 
-Svar: `{ eligible_count, customers_processed: 0, dry_run: true, errors: [] }`
+Svar:
+```json
+{
+  "customers_with_history": 42,
+  "eligible_count": 38,
+  "customers_processed": 0,
+  "dry_run": true,
+  "errors": []
+}
+```
+
+- **`customers_with_history`** — kunder med minst en unreconciled `history_import`-rad med `tiktok_url`.
+- **`eligible_count`** — faktiskt processbart: har BÅDE history-rader OCH minst en aktiv target-rad
+  (`row_kind IN ('assignment','collaboration')`, `concept_id IS NOT NULL`, `status != 'archived'`).
+  Det är detta antal som `limit` räknas mot och som orkestratorn bör verifiera mot Supabase.
 
 ### 2. Skarp körning — begränsat antal (rekommenderas vid första körning)
 
@@ -303,9 +317,13 @@ curl -s -X POST \
   https://<api-host>/api/studio-v2/internal/backfill-reconciliation-candidates | jq .
 ```
 
-Svar: `{ customers_processed, generated, skipped_locked, history_count, errors, eligible_count, dry_run: false }`
+Svar innehåller bl.a. `customers_processed`, `generated`, `skipped_locked`, `history_count`,
+`customers_with_history`, `eligible_count`, `errors[]`, `dry_run: false`.
 
 Kontrollera `errors`-arrayen — om tom är allt OK. Kör igen med nästa batch tills `customers_processed < limit`.
+
+> **Orkestratorn-flöde:** kör alltid dry run först och jämför `eligible_count` mot SQL-verifieringsqueryn
+> nedan innan live-körning körs. Om siffrorna inte stämmer, pausa och undersök.
 
 ### 3. Skarp körning — alla kunder
 
