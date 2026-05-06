@@ -1,0 +1,52 @@
+ Du jobbar i hagen-ui.
+
+  Uppdrag: Stäng Feed Planner / row_kind-spåret efter senaste Supabase-migrationerna.
+
+  Viktigt scope:
+  - Rör inte /admin/demos.
+  - Gör ingen Supabase live-interaktion.
+  - Pusha till main när klart.
+
+  Live Supabase-migrationer som redan är applicerade:
+  - 20260506131441 add_customer_concepts_row_kind
+  - 20260506132453 advance_customer_feed_plan_row_kind
+  - 20260506133502 fix_advance_customer_feed_plan_timeline_shift
+  - 20260506133646 dedupe_letrend_negative_feed_order
+  - 20260506133716 restrict_feed_plan_rpc_execute
+
+  Live-kontrakt:
+  - `customer_concepts.row_kind`: `assignment | collaboration | history_import`
+  - `public.advance_customer_feed_plan(...)`:
+    - markerar aktuell `assignment`/`collaboration` i `feed_order=0` som producerad
+    - skiftar hela LeTrend-tidslinjen för `assignment`/`collaboration`
+    - skiftar inte `history_import`
+    - körs endast via `service_role`
+  - `public.shift_feed_order(...)` är legacy och row_kind-scopad, men bör inte vara primär väg.
+
+  Gör:
+  1. Uppdatera `docs/agent-plans/09-row-kind-implementation.md` med migrationerna ovan och den faktiska live-statusen.
+
+  2. Kontrollera/uppdatera genererade typer:
+     - `artifacts/letrend/src/types/database.ts`
+     - `artifacts/letrend/src/types/database.gen.ts`
+     Särskilt:
+     - `advance_customer_feed_plan`
+     - `shift_feed_order` med `p_advance_count?`
+
+  3. Auditera och fixa legacy-vägen:
+     - `artifacts/letrend/src/lib/studio/perform-mark-produced.ts`
+     - `artifacts/letrend/src/lib/studio/auto-reconcile.ts`
+     - `artifacts/letrend/src/lib/studio/sync-customer-history.ts`
+
+     Målet är att ingen aktiv kodväg längre ska använda `shift_feed_order` för mark-produced/feed advance om
+  `advance_customer_feed_plan` är rätt väg.
+     Antingen:
+     - byt aktiv kod till `advance_customer_feed_plan`, eller
+     - om filerna är dead/legacy, dokumentera det tydligt och ta bort/avgränsa importerna så de inte misstas för aktiv
+  logik.
+
+  4. Kontrollera att `POST /api/studio-v2/feed/mark-produced` fortfarande använder `advance_customer_feed_plan` och inte
+  duplicerar feed-shift-logik i JS.
+
+  Verifiering:
+  - `pnpm --filter @workspace/letrend exec tsc --noEmit`

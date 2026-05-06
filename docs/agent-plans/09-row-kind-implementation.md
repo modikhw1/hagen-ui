@@ -12,6 +12,9 @@
 |---|---|---|
 | `20260506131441_add_customer_concepts_row_kind` | Lägger till `row_kind TEXT CHECK IN (...)` på `customer_concepts` | ✅ Live |
 | `20260506132453_advance_customer_feed_plan_row_kind` | RPC `public.advance_customer_feed_plan(...)` — row_kind-aware feed-advance | ✅ Live |
+| `20260506133502_fix_advance_customer_feed_plan_timeline_shift` | Fixar tidslinje-shift i `advance_customer_feed_plan` | ✅ Live |
+| `20260506133646_dedupe_letrend_negative_feed_order` | Deduplicerar negativa feed_order-värden för LeTrend-rader | ✅ Live |
+| `20260506133716_restrict_feed_plan_rpc_execute` | Begränsar `advance_customer_feed_plan` EXECUTE-rättigheter till `service_role` | ✅ Live |
 
 ### RPC-signatur
 ```sql

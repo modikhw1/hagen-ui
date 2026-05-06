@@ -1,20 +1,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // performMarkProduced
 //
-// Shared three-phase mark-produced logic, extracted so it can be called from
-// both the HTTP route (CM action) and the auto-reconcile cron path.
+// Shared mark-produced logic for the auto-reconcile cron path.
+//
+// Delegates all business logic (validation + status update + feed timeline
+// shift) to the row_kind-aware `advance_customer_feed_plan` RPC introduced in
+// migration 20260506132453.  The legacy `shift_feed_order` + manual
+// customer_concepts UPDATE approach has been retired.
 //
 // Phases:
 //   1. Set pending_history_advance_at = now() (operation lock for frontend badge).
-//   2. Atomically shift ALL feed_order values via shift_feed_order RPC.
-//   3. Stamp the produced row: status=produced, produced_at, tiktok_url,
-//      published_at, feed_order=-1.
-//   4. Clear pending_history_advance_at (operation complete).
-//   5. Clear the motor signal (plan has advanced — nudge is no longer needed).
+//   2. Call advance_customer_feed_plan RPC (validation + update + timeline shift).
+//   3. Clear pending_history_advance_at (operation complete).
+//   4. Clear the motor signal (plan has advanced — nudge is no longer needed).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createSupabaseAdmin } from '@/lib/server/supabase-admin';
-import { buildMarkProducedPayload } from '@/lib/customer-concept-lifecycle';
 
 type SupabaseAdmin = ReturnType<typeof createSupabaseAdmin>;
 
@@ -38,7 +39,7 @@ export async function performMarkProduced(
   supabase: SupabaseAdmin,
   input: PerformMarkProducedInput
 ): Promise<PerformMarkProducedResult> {
-  const { customerId, conceptId, tiktok_url, published_at, marker_cm_id, now } = input;
+  const { customerId, conceptId, tiktok_url, published_at, now } = input;
 
   // ── Phase 1: mark operation as in-progress ────────────────────────────────
   // Frontend shows a "syncing..." badge if this is set for >60s.
@@ -47,60 +48,50 @@ export async function performMarkProduced(
     .update({ pending_history_advance_at: now })
     .eq('id', customerId);
 
-  // ── Phase 2: atomically shift all feed_order values ───────────────────────
-  // Replaces the previous JS-loop approach (Phases 1 + 2) with a single
-  // PL/pgSQL RPC call that runs inside an implicit transaction.
-  const { error: shiftError } = await supabase.rpc('shift_feed_order', {
-    p_customer_id: customerId,
-    p_advance_count: 1,
-  });
+  // ── Phase 2: delegate to row_kind-aware RPC ───────────────────────────────
+  // advance_customer_feed_plan validates row_kind, stamps the produced row,
+  // and shifts the LeTrend timeline — all inside one DB transaction.
+  const { data: rpcResult, error: rpcError } = await supabase.rpc(
+    'advance_customer_feed_plan',
+    {
+      p_customer_id: customerId,
+      p_concept_id: conceptId,
+      p_tiktok_url: tiktok_url ?? null,
+      p_published_at: published_at ?? null,
+      p_now: now,
+    },
+  );
 
-  if (shiftError) {
-    // Clear the lock even on failure so the frontend badge doesn't get stuck.
+  if (rpcError) {
     await supabase
       .from('customer_profiles')
       .update({ pending_history_advance_at: null })
       .eq('id', customerId);
-    return { success: false, letrend_shifted: 0, imported_shifted: 0, error: shiftError.message };
+    return { success: false, letrend_shifted: 0, imported_shifted: 0, error: rpcError.message };
   }
 
-  // ── Phase 3: stamp the produced row at feed_order -1 ─────────────────────
-  // shift_feed_order already moved the nu-slot (feed_order 0) to -1.
-  // We re-set it explicitly here alongside the status/timestamp changes.
-  const { error: produceError } = await supabase
-    .from('customer_concepts')
-    .update({
-      ...buildMarkProducedPayload({
-        tiktok_url: tiktok_url ?? null,
-        published_at: published_at ?? null,
-        now,
-      }),
-      ...(marker_cm_id ? { cm_id: marker_cm_id } : {}),
-      feed_order: -1,
-    })
-    .eq('id', conceptId)
-    .eq('customer_profile_id', customerId);
+  // Check for soft error encoded in returned JSONB.
+  const rpcData = rpcResult as Record<string, unknown> | null;
+  const errorCode =
+    rpcData && typeof rpcData['error_code'] === 'string' ? rpcData['error_code'] : null;
 
-  if (produceError) {
+  if (errorCode) {
     await supabase
       .from('customer_profiles')
       .update({ pending_history_advance_at: null })
       .eq('id', customerId);
-    return {
-      success: false,
-      letrend_shifted: 0,
-      imported_shifted: 0,
-      error: produceError.message,
-    };
+    const message =
+      typeof rpcData?.['message'] === 'string' ? rpcData['message'] : errorCode;
+    return { success: false, letrend_shifted: 0, imported_shifted: 0, error: message };
   }
 
-  // ── Phase 4: clear operation lock ─────────────────────────────────────────
+  // ── Phase 3: clear operation lock ─────────────────────────────────────────
   await supabase
     .from('customer_profiles')
     .update({ pending_history_advance_at: null })
     .eq('id', customerId);
 
-  // ── Phase 5: mark any active feed_motor_signals as auto-resolved ──────────
+  // ── Phase 4: mark any active feed_motor_signals as auto-resolved ──────────
   // The plan has advanced — active nudges are no longer actionable.
   await supabase
     .from('feed_motor_signals')

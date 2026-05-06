@@ -11,7 +11,8 @@
 //   2. Find the newest unreconciled imported clip (feed_order closest to 0
 //      among negative orders, i.e. most-recently-published).
 //   3. Reconcile: set reconciled_customer_concept_id on the imported clip.
-//   4. Advance the plan: call performMarkProduced (3-phase shift + clear signal).
+//   4. Advance the plan: call performMarkProduced (advance_customer_feed_plan
+//      RPC — row_kind-aware; stamps produced row + shifts timeline atomically).
 //
 // The concepts API GET enriches LeTrend history cards with TikTok stats from
 // their reconciled imported clips at read-time, so no stats are copied here.
@@ -143,9 +144,10 @@ export async function autoReconcileAndAdvance(
   }
 
   // ── 5. Remove reconciled clip from the grid sequence ─────────────────────
-  // After performMarkProduced, the reconciled clip sits at -2 (Phase 2 shifted
-  // it there). The concepts API hides it, but the gap at -2 would leave an
-  // empty slot between the new LeTrend card at -1 and the next TikTok card.
+  // After performMarkProduced the timeline has been shifted: the produced
+  // nu-slot sits at -1 and the reconciled imported clip may sit at -2.
+  // The concepts API hides it, but the gap would leave an empty slot between
+  // the new LeTrend card at -1 and the next TikTok card.
   // Setting feed_order = null takes it out of the numbered sequence entirely
   // while keeping it available for the in-memory stats join in the concepts API.
   await supabase

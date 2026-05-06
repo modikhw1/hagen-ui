@@ -1973,7 +1973,10 @@ export type Database = {
         }
         Returns: string
       }
-      shift_feed_order: { Args: { p_customer_id: string }; Returns: undefined }
+      shift_feed_order: {
+        Args: { p_advance_count?: number; p_customer_id: string }
+        Returns: undefined
+      }
       update_concept_with_version: {
         Args: {
           p_backend_data: Json
