@@ -3,7 +3,8 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
-import { proxyHagenJson } from '../lib/upstream-proxy.js';
+import { fetchHagenJson, proxyHagenJson } from '../lib/upstream-proxy.js';
+import { updateIngestRun, safeRunId } from '../lib/ingest-runs.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -48,8 +49,89 @@ function checkAnalyzeRateLimit(userId: string): { allowed: boolean; retryAfterMs
   return { allowed: true, retryAfterMs: 0 };
 }
 
+// ---------------------------------------------------------------------------
+// Ingest runs — POST create / GET by id
+// ---------------------------------------------------------------------------
+
+// POST /api/studio/ingest-runs
+router.post('/ingest-runs', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const body = req.body as Record<string, unknown>;
+    const sourceUrl = typeof body.source_url === 'string' ? body.source_url.trim() : '';
+    if (!sourceUrl) {
+      res.status(400).json({ error: 'source_url is required' });
+      return;
+    }
+
+    const insert = {
+      source: typeof body.source === 'string' ? body.source : 'studio_upload',
+      source_url: sourceUrl,
+      platform: typeof body.platform === 'string' ? body.platform : null,
+      status: 'queued',
+      created_by: req.user!.id,
+      customer_profile_id:
+        typeof body.customer_profile_id === 'string' ? body.customer_profile_id : null,
+      input: { source_url: sourceUrl, platform: body.platform ?? null },
+    };
+
+    const { data, error } = await supabase
+      .from('ingest_runs')
+      .insert(insert)
+      .select()
+      .single();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.status(201).json({ ingest_run: data });
+  } catch (err) {
+    logger.error(err, 'studio ingest-runs POST error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/studio/ingest-runs/:id
+router.get('/ingest-runs/:id', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { data, error } = await supabase
+      .from('ingest_runs')
+      .select('*')
+      .eq('id', req.params['id'])
+      .maybeSingle();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    if (!data) {
+      res.status(404).json({ error: 'Ingest run hittades inte' });
+      return;
+    }
+
+    // Only allow the creator or admin to see the run.
+    const row = data as Record<string, unknown>;
+    const isAdmin = Boolean(req.user?.is_admin || req.user?.role === 'admin');
+    if (!isAdmin && row['created_by'] !== req.user!.id) {
+      res.status(403).json({ error: 'Åtkomst nekad' });
+      return;
+    }
+
+    res.json({ ingest_run: data });
+  } catch (err) {
+    logger.error(err, 'studio ingest-runs GET error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Concepts — analyze / enrich / humor-enrich
+// ---------------------------------------------------------------------------
+
 // POST /api/studio/concepts/analyze
-// Proxies to Hagen analyze service
+// Proxies to Hagen analyze service. Optionally instruments an ingest_run row.
 router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
   const userId = req.user?.id ?? req.user?.email ?? 'anonymous';
   const { allowed, retryAfterMs } = checkAnalyzeRateLimit(String(userId));
@@ -62,19 +144,64 @@ router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
     });
     return;
   }
+
   const body = req.body as Record<string, unknown>;
   const videoUrl = typeof body.videoUrl === 'string' ? body.videoUrl.trim() : '';
   if (!videoUrl) {
     res.status(400).json({ error: 'videoUrl is required' });
     return;
   }
-  await proxyHagenJson(res, {
+
+  const ingestRunId = safeRunId(body.ingest_run_id);
+  const now = new Date().toISOString();
+
+  // Mark run as running/analyzing before the slow proxy call.
+  if (ingestRunId) {
+    void updateIngestRun(ingestRunId, {
+      status: 'running',
+      stage: 'analyzing',
+      started_at: now,
+    });
+  }
+
+  const result = await fetchHagenJson({
     method: 'POST',
     path: '/api/studio/concepts/analyze',
     body: { videoUrl },
     timeoutMs: 45000,
     routeTag: 'studio.concepts.analyze',
   });
+
+  // Instrument run with outcome before forwarding response.
+  if (ingestRunId) {
+    if (result.ok) {
+      const data = result.data as Record<string, unknown>;
+      const upload = data['upload'] as Record<string, unknown> | undefined;
+      void updateIngestRun(ingestRunId, {
+        result: {
+          analyze_summary: {
+            gcs_uri: upload?.['gcsUri'] ?? null,
+            has_analysis: Boolean(data['analysis']),
+          },
+        },
+      });
+    } else {
+      void updateIngestRun(ingestRunId, {
+        status: 'failed',
+        stage: 'analyzing',
+        finished_at: new Date().toISOString(),
+        error_code: 'analyze_failed',
+        error_message: String(result.body['error'] ?? result.body['message'] ?? 'analyze proxy error'),
+      });
+    }
+  }
+
+  res.setHeader('x-letrend-request-id', result.requestId);
+  if (result.ok) {
+    res.status(result.status).json(result.data);
+  } else {
+    res.status(result.clientStatus).json(result.body);
+  }
 });
 
 // POST /api/studio/concepts/enrich
@@ -84,16 +211,49 @@ router.post('/concepts/enrich', requireAuth, CM_ONLY, async (req, res) => {
     res.status(400).json({ error: 'backend_data is required' });
     return;
   }
-  await proxyHagenJson(res, {
+
+  const ingestRunId = safeRunId(body.ingest_run_id);
+
+  if (ingestRunId) {
+    void updateIngestRun(ingestRunId, { stage: 'enriching' });
+  }
+
+  const result = await fetchHagenJson({
     method: 'POST',
     path: '/api/studio/concepts/enrich',
     body: { backend_data: body.backend_data },
     timeoutMs: 30000,
     routeTag: 'studio.concepts.enrich',
   });
+
+  if (ingestRunId) {
+    if (result.ok) {
+      void updateIngestRun(ingestRunId, {
+        result: {
+          enrich_summary: { has_overrides: Boolean(result.data['overrides']) },
+        },
+      });
+    } else {
+      void updateIngestRun(ingestRunId, {
+        status: 'failed',
+        stage: 'enriching',
+        finished_at: new Date().toISOString(),
+        error_code: 'enrich_failed',
+        error_message: String(result.body['error'] ?? result.body['message'] ?? 'enrich proxy error'),
+      });
+    }
+  }
+
+  res.setHeader('x-letrend-request-id', result.requestId);
+  if (result.ok) {
+    res.status(result.status).json(result.data);
+  } else {
+    res.status(result.clientStatus).json(result.body);
+  }
 });
 
 // POST /api/studio/concepts/humor-enrich
+// Fire-and-forget safe: still responds quickly, but instruments run in background.
 router.post('/concepts/humor-enrich', requireAuth, CM_ONLY, async (req, res) => {
   const body = req.body as Record<string, unknown>;
   const videoUrl = typeof body.videoUrl === 'string' ? body.videoUrl.trim() : '';
@@ -106,14 +266,47 @@ router.post('/concepts/humor-enrich', requireAuth, CM_ONLY, async (req, res) => 
     res.status(400).json({ error: 'gcsUri is required' });
     return;
   }
-  await proxyHagenJson(res, {
+
+  const ingestRunId = safeRunId(body.ingest_run_id);
+
+  if (ingestRunId) {
+    void updateIngestRun(ingestRunId, { stage: 'humor_enriching' });
+  }
+
+  // Run the proxy and instrument the run result asynchronously — callers
+  // treat this as fire-and-forget so we still respond even if hagen is slow.
+  const proxyPromise = fetchHagenJson({
     method: 'POST',
     path: '/api/studio/concepts/humor-enrich',
     body: { videoUrl, gcsUri },
     timeoutMs: 90000,
     routeTag: 'studio.concepts.humor-enrich',
   });
+
+  proxyPromise.then((result) => {
+    if (!ingestRunId) return;
+    if (result.ok) {
+      const fields = (result.data['fields'] ?? {}) as Record<string, unknown>;
+      void updateIngestRun(ingestRunId, {
+        result: { humor_enrich: { ok: true, fields } },
+      });
+    } else {
+      void updateIngestRun(ingestRunId, {
+        warnings: [{ stage: 'humor_enriching', error: result.body['error'] ?? 'humor-enrich failed' }],
+        result: { humor_enrich: { ok: false, error: result.body['error'] } },
+      });
+    }
+  }).catch(() => {
+    // Non-fatal — fire-and-forget
+  });
+
+  // Acknowledge immediately. Frontend treats this endpoint as fire-and-forget.
+  res.status(202).json({ accepted: true });
 });
+
+// ---------------------------------------------------------------------------
+// Email schedules
+// ---------------------------------------------------------------------------
 
 // GET /api/studio/email/schedules
 router.get('/email/schedules', requireAuth, CM_ONLY, async (req, res) => {

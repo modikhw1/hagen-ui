@@ -1,0 +1,133 @@
+Du jobbar i hagen-ui på senaste main. Gör Phase 26a: Ingest Engine Foundation.
+
+  Mål:
+  Skapa en persistent grundstruktur för upload/ingest-flödet så att videoanalys inte bara lever i UploadConceptModal-
+  state och concepts.backend_data. Vi vill ha ett centralt ingest-run-objekt som följer processen: queued/running/
+  ready_for_review/completed/failed, med aktuell stage, fel, input, output och concept-koppling.
+
+  Läs först:
+  - docs/agent-plans/03-hagen-ingest-contract.md
+  - docs/audits/hagen-letrend-ingestion-audit.md
+  - docs/audits/orchestrator-live-follow-up-2026-05-06.md
+  - artifacts/letrend/src/components/studio/UploadConceptModal.tsx
+  - artifacts/api-server/src/routes/studio.ts
+  - artifacts/api-server/src/routes/admin/concepts.ts
+  - artifacts/api-server/src/lib/upstream-proxy.ts
+  - artifacts/hagen/src/app/api/studio/concepts/analyze/route.ts
+  - artifacts/hagen/src/app/api/studio/concepts/enrich/route.ts
+  - artifacts/hagen/src/app/api/studio/concepts/humor-enrich/route.ts
+  - artifacts/hagen/src/app/api/letrend/version/route.ts
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Rör inte feedplanner.
+  - Gör ingen bred prompt-/metadata-refaktor i denna fas.
+  - Behandla artifacts/hagen som kontraktsreferens. Om ändringar krävs i riktiga hagen-repot, dokumentera dem separat i
+  md-filen i stället för att anta att artifacts/hagen deployas.
+  - Skapa inte full background queue ännu. Phase 26a är persistent status + API-instrumentering runt nuvarande synkrona
+  flöde.
+
+  Implementera i hagen-ui:
+
+  1. Supabase migration
+  Skapa en migration för `public.ingest_runs`.
+
+  Föreslagen struktur:
+  - `id uuid primary key default gen_random_uuid()`
+  - `source text not null default 'studio_upload'`
+  - `source_url text not null`
+  - `platform text null`
+  - `status text not null default 'queued'`
+    - check: `queued`, `running`, `ready_for_review`, `completed`, `failed`, `canceled`
+  - `stage text null`
+    - exempel: `analyzing`, `enriching`, `classifying`, `saving`, `humor_enriching`
+  - `created_by uuid null references public.profiles(id)`
+  - `customer_profile_id uuid null references public.customer_profiles(id)`
+  - `concept_id text null references public.concepts(id)`
+  - `hagen_contract_version text null`
+  - `hagen_video_id text null`
+  - `hagen_request_id text null`
+  - `input jsonb not null default '{}'`
+  - `result jsonb not null default '{}'`
+  - `warnings jsonb not null default '[]'`
+  - `error_code text null`
+  - `error_message text null`
+  - `started_at timestamptz null`
+  - `finished_at timestamptz null`
+  - `created_at timestamptz not null default now()`
+  - `updated_at timestamptz not null default now()`
+
+  RLS:
+  - enable RLS
+  - block anon/authenticated direct access med restrictive policy, samma stil som interna admin-tabeller
+  - åtkomst ska gå via api-server/service role
+
+  Index:
+  - `created_by, created_at desc`
+  - `status, created_at desc`
+  - `concept_id`
+  - `customer_profile_id`
+
+  2. API-server
+  Lägg till routes under `artifacts/api-server/src/routes/studio.ts` eller en liten helperfil:
+  - `POST /api/studio/ingest-runs`
+    - skapar run
+    - kräver auth + CM/admin
+    - body: `{ source_url, platform?, source? }`
+  - `GET /api/studio/ingest-runs/:id`
+    - hämtar run för skaparen/admin
+  - intern helper för att uppdatera run-status från analyze/enrich/save/humor-enrich-flödet
+
+  Instrumentera befintliga endpoints:
+  - `/api/studio/concepts/analyze`
+    - accepterar optional `ingest_run_id`
+    - sätter status running/stage analyzing innan proxy
+    - sparar analysis/upload summary i `result`
+    - sätter failed med `error_code/error_message` vid fel
+  - `/api/studio/concepts/enrich`
+    - accepterar optional `ingest_run_id`
+    - sätter stage enriching
+    - sparar enrichment summary
+  - `/api/admin/concepts`
+    - accepterar optional `ingest_run_id`
+    - efter lyckad insert: sätt `concept_id`, status `completed`, stage `saving`, finished_at
+  - `/api/studio/concepts/humor-enrich`
+    - accepterar optional `ingest_run_id`
+    - får fortsätta vara async/non-blocking men ska inte vara helt osynlig
+    - uppdatera `result.humor_enrich` eller `warnings` med success/failure om möjligt
+
+  3. Frontend
+  Uppdatera `UploadConceptModal`:
+  - skapa `ingest_run` när användaren startar analyze
+  - spara `ingestRunId` i state
+  - skicka `ingest_run_id` till analyze, enrich, save och humor-enrich
+  - visa befintliga steg som idag, men basera feltext på stage när det går
+  - om humor-enrich startas i bakgrunden, visa inte blockerande spinner efter save, men se till att run-id skickas
+
+  4. Hagen capability check
+  Gör en liten kontraktsnotering:
+  - Kontrollera om `/api/letrend/version` annonserar `studio_concepts_humor_enrich`.
+  - Om manifestet saknar humor-route men route finns, dokumentera detta som separat hagen-patch.
+  - Ändra inte riktiga hagen-repot i denna fas.
+
+  5. Dokumentation
+  Skapa:
+  docs/agent-plans/26-ingest-engine-foundation.md
+
+  Dokumentera:
+  - ändrade filer
+  - migrationens schema
+  - status/stage-modellen
+  - hur UploadConceptModal nu kopplas till ingest_runs
+  - vad som fortfarande saknas för riktig background queue
+  - vilka Hagen-kontraktsluckor som återstår
+  - testresultat
+
+  Testa:
+  - `pnpm --filter @workspace/api-server run typecheck`
+  - `pnpm --filter @workspace/letrend run typecheck`
+  - Om möjligt, lägg till smala tester för helpern/statusövergångar.
+  - Kör inte live Supabase migration själv om du saknar MCP; skapa migrationen i repo:t. Orkestratorn applicerar/
+  verifierar live senare.
+
+  Committa och pusha till main.

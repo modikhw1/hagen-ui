@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 import { proxyHagenJson } from '../../lib/upstream-proxy.js';
+import { updateIngestRun } from '../../lib/ingest-runs.js';
 import regenerateRouter from './concept-regenerate.js';
 
 const router = Router();
@@ -70,6 +71,7 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
     const supabase = createSupabaseAdmin();
     const body = req.body as Record<string, unknown>;
     const requestedId = typeof body.id === 'string' ? body.id.trim() : '';
+    const ingestRunId = typeof body.ingest_run_id === 'string' ? body.ingest_run_id.trim() : null;
     const insert = {
       id: requestedId || `concept-${randomUUID()}`,
       source: typeof body.source === 'string' ? body.source : 'cm_created',
@@ -90,6 +92,18 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
       res.status(500).json({ error: error.message });
       return;
     }
+
+    // Mark ingest run as completed after successful concept save.
+    if (ingestRunId) {
+      const savedId = (data as Record<string, unknown>)['id'] as string | undefined ?? insert.id;
+      void updateIngestRun(ingestRunId, {
+        status: 'completed',
+        stage: 'saving',
+        concept_id: savedId,
+        finished_at: new Date().toISOString(),
+      });
+    }
+
     res.status(201).json({ concept: data });
   } catch (err) {
     logger.error(err, 'admin concepts POST error');

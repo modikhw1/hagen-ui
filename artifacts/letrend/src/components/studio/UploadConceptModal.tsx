@@ -64,6 +64,7 @@ async function readJsonResponse(response: Response) {
     analysis?: JsonRecord;
     overrides?: Record<string, unknown>;
     concept?: { id?: string };
+    ingest_run?: { id?: string };
   };
 }
 
@@ -123,6 +124,8 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
   const [classification, setClassification] = useState<ClassificationDraft | null>(null);
   // Captured during analyze — used for the async v7.B humor enrichment pass.
   const [analyzedGcsUri, setAnalyzedGcsUri] = useState<string | null>(null);
+  // Ingest run tracking — created before analyze, forwarded to all subsequent steps.
+  const [ingestRunId, setIngestRunId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -141,6 +144,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
     setClassification(null);
     setPendingHeadline('');
     setAnalyzedGcsUri(null);
+    setIngestRunId(null);
   };
 
   const handleClose = () => {
@@ -155,10 +159,33 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
 
     try {
       setStep('analyzing');
+
+      // Create a persistent ingest run before the slow analyze call so we can
+      // track status/stage regardless of whether the user stays on this screen.
+      let runId: string | null = null;
+      try {
+        const runRes = await fetch('/api/studio/ingest-runs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source_url: videoUrl, platform: platform?.key }),
+        });
+        if (runRes.ok) {
+          const runData = await readJsonResponse(runRes);
+          runId = runData.ingest_run?.id ?? null;
+          if (runId) setIngestRunId(runId);
+        }
+      } catch {
+        // Non-fatal — ingest run creation failure must not block upload
+      }
+
       const analyzeRes = await fetch('/api/studio/concepts/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoUrl, platform: platform?.key }),
+        body: JSON.stringify({
+          videoUrl,
+          platform: platform?.key,
+          ingest_run_id: runId,
+        }),
       });
       const analyzePayload = await readJsonResponse(analyzeRes);
       if (analyzeRes.status === 429) {
@@ -198,7 +225,10 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
       const enrichRes = await fetch('/api/studio/concepts/enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ backend_data: backendData }),
+        body: JSON.stringify({
+          backend_data: backendData,
+          ingest_run_id: runId,
+        }),
       });
       const enrichPayload = await readJsonResponse(enrichRes);
       if (!enrichRes.ok) throw new Error(enrichPayload.error || 'Kunde inte förädla konceptet');
@@ -262,7 +292,12 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
       const saveRes = await fetch('/api/admin/concepts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: pendingId, backend_data: pendingBackend, overrides }),
+        body: JSON.stringify({
+          id: pendingId,
+          backend_data: pendingBackend,
+          overrides,
+          ingest_run_id: ingestRunId,
+        }),
       });
       const saveData = await readJsonResponse(saveRes);
       if (!saveRes.ok) throw new Error(saveData.error || 'Kunde inte spara konceptet');
@@ -276,7 +311,11 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         fetch('/api/studio/concepts/humor-enrich', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ videoUrl, gcsUri: analyzedGcsUri }),
+          body: JSON.stringify({
+            videoUrl,
+            gcsUri: analyzedGcsUri,
+            ingest_run_id: ingestRunId,
+          }),
         }).catch(() => {});
       }
 
