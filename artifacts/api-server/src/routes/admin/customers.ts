@@ -19,6 +19,39 @@ function escapeLike(value: string) {
   return value.replaceAll('%', '\\%').replaceAll(',', ' ');
 }
 
+function readTrimmedString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function normalizeTikTokProfile(input: unknown): { handle: string | null; url: string | null } {
+  const raw = readTrimmedString(input);
+  if (!raw) return { handle: null, url: null };
+
+  const fromAt = raw.match(/@([A-Za-z0-9._]+)/)?.[1] ?? null;
+  const candidate = (fromAt ?? raw.replace(/^@/, '').split(/[/?#]/)[0] ?? '').trim().toLowerCase();
+  if (!/^[a-z0-9._]{2,24}$/.test(candidate)) return { handle: null, url: null };
+
+  return {
+    handle: candidate,
+    url: `https://www.tiktok.com/@${candidate}`,
+  };
+}
+
+function resolveAppOrigin(req: { headers: Record<string, unknown>; protocol: string }): string {
+  const configured = process.env['APP_URL'] ?? process.env['VITE_APP_URL'];
+  if (configured?.trim()) return configured.trim().replace(/\/$/, '');
+
+  const origin = typeof req.headers['origin'] === 'string' ? req.headers['origin'] : '';
+  if (origin) return origin.replace(/\/$/, '');
+
+  const host = typeof req.headers['host'] === 'string' ? req.headers['host'] : '';
+  return host ? `${req.protocol}://${host}` : 'https://letrend.se';
+}
+
 // GET /api/admin/customers
 router.get('/', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
@@ -1166,27 +1199,45 @@ router.post('/create', requireAuth, requireRole(['admin']), async (req, res) => 
     const supabase = createSupabaseAdmin();
     const body = req.body as Record<string, unknown>;
     const sendInviteNow = body.send_invite_now === true;
+    const businessName = readTrimmedString(body.business_name);
+    const contactEmail = readTrimmedString(body.contact_email)?.toLowerCase() ?? null;
+    const tiktokProfile = normalizeTikTokProfile(body.tiktok_profile_url);
+
+    if (!businessName) {
+      res.status(400).json({ error: 'business_name is required' });
+      return;
+    }
 
     const insert: Record<string, unknown> = {
-      business_name: typeof body.business_name === 'string' ? body.business_name.trim() : null,
-      contact_email: typeof body.contact_email === 'string' ? body.contact_email.trim().toLowerCase() : null,
-      customer_contact_name: typeof body.customer_contact_name === 'string' ? body.customer_contact_name.trim() : null,
-      phone: typeof body.phone === 'string' ? body.phone.trim() : null,
-      account_manager: typeof body.account_manager === 'string' ? body.account_manager.trim() : null,
-      account_manager_profile_id: typeof body.account_manager_profile_id === 'string' ? body.account_manager_profile_id : null,
-      monthly_price: typeof body.monthly_price === 'number' ? body.monthly_price : null,
-      status: sendInviteNow ? 'invited' : 'draft',
-      concepts_per_week: typeof body.concepts_per_week === 'number' ? body.concepts_per_week : 1,
-      subscription_interval: typeof body.subscription_interval === 'string' ? body.subscription_interval : 'month',
-      tiktok_profile_url: typeof body.tiktok_profile_url === 'string' ? body.tiktok_profile_url : null,
-      contract_start_date: typeof body.contract_start_date === 'string' ? body.contract_start_date : null,
-      billing_day_of_month: typeof body.billing_day_of_month === 'number' ? body.billing_day_of_month : 25,
+      business_name: businessName,
+      contact_email: contactEmail,
+      customer_contact_name: readTrimmedString(body.customer_contact_name),
+      phone: readTrimmedString(body.phone),
+      account_manager: readTrimmedString(body.account_manager),
+      account_manager_profile_id: readTrimmedString(body.account_manager_profile_id),
+      monthly_price: readNumber(body.monthly_price),
+      status: sendInviteNow ? 'invited' : 'pending',
+      lifecycle_state: sendInviteNow ? 'invited' : 'draft',
+      concepts_per_week: readNumber(body.concepts_per_week) ?? 1,
+      expected_concepts_per_week: readNumber(body.concepts_per_week) ?? 1,
+      subscription_interval: readTrimmedString(body.subscription_interval) ?? 'month',
+      pricing_status: readTrimmedString(body.pricing_status) ?? 'fixed',
+      first_invoice_behavior: readTrimmedString(body.first_invoice_behavior) ?? 'prorated',
+      tiktok_profile_url: tiktokProfile.url,
+      tiktok_handle: tiktokProfile.handle,
+      last_history_sync_at: null,
+      last_upload_at: null,
+      contract_start_date: readTrimmedString(body.contract_start_date),
+      billing_day_of_month: readNumber(body.billing_day_of_month) ?? 25,
+      invoice_text: readTrimmedString(body.invoice_text),
+      scope_items: Array.isArray(body.scope_items) ? body.scope_items : [],
+      ...(sendInviteNow ? { invited_at: new Date().toISOString() } : {}),
     };
 
     const { data, error } = await supabase
       .from('customer_profiles')
       .insert(insert)
-      .select('id, business_name, contact_email, status')
+      .select('id, business_name, contact_email, status, lifecycle_state, tiktok_handle')
       .single();
 
     if (error) {
@@ -1196,14 +1247,90 @@ router.post('/create', requireAuth, requireRole(['admin']), async (req, res) => 
 
     const customer = data as Record<string, unknown>;
     const customerId = customer.id as string;
+    const savedEmail = typeof customer.contact_email === 'string' ? customer.contact_email : null;
+    const savedHandle = typeof customer.tiktok_handle === 'string' ? customer.tiktok_handle : null;
+
+    let inviteSent = false;
+    let initialSyncStarted = false;
+    const warnings: string[] = [];
+
+    if (sendInviteNow) {
+      if (!savedEmail) {
+        warnings.push('Kontaktens e-post saknas - inbjudan skickades inte.');
+      } else {
+        try {
+          const appOrigin = resolveAppOrigin(req);
+          const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+            type: 'invite',
+            email: savedEmail,
+            options: { redirectTo: `${appOrigin}/auth/callback` },
+          });
+
+          const inviteUrl = linkData?.properties?.action_link;
+          if (linkError || !inviteUrl) {
+            warnings.push(`Supabase invite-lank kunde inte skapas: ${linkError?.message ?? 'okant fel'}`);
+          } else {
+            const resendApiKey = process.env['RESEND_API_KEY'];
+            if (!resendApiKey) {
+              warnings.push('RESEND_API_KEY saknas - e-post skickades inte.');
+            } else {
+              const ResendMod = (await import('resend').catch(() => null)) as {
+                Resend: new (key: string) => {
+                  emails: {
+                    send: (opts: Record<string, unknown>) => Promise<{ data: unknown; error: { message?: string } | null }>;
+                  };
+                };
+              } | null;
+
+              if (!ResendMod) {
+                warnings.push('Resend-paketet saknas - e-post skickades inte.');
+              } else {
+                const resend = new ResendMod.Resend(resendApiKey);
+                const fromEmail = process.env['RESEND_FROM_EMAIL'] ?? 'LeTrend <hej@letrend.se>';
+                const html = [
+                  '<p>Hej!</p>',
+                  `<p>Du har blivit inbjuden till ${businessName} pa LeTrend-plattformen.</p>`,
+                  `<p><a href="${inviteUrl}">Aktivera ditt konto</a></p>`,
+                  '<p>Lanken ar giltig i 24 timmar.</p>',
+                  '<p>Valkommen!<br>LeTrend-teamet</p>',
+                ].join('\n');
+
+                const { error: sendError } = await resend.emails.send({
+                  from: fromEmail,
+                  to: [savedEmail],
+                  subject: 'Du ar inbjuden till LeTrend',
+                  html,
+                });
+
+                if (sendError) {
+                  warnings.push(`E-post kunde inte skickas: ${sendError.message ?? 'okant fel'}`);
+                } else {
+                  inviteSent = true;
+                }
+              }
+            }
+          }
+        } catch (inviteErr) {
+          logger.error(inviteErr, 'admin customer create: invite send failed');
+          warnings.push('Inbjudan kunde inte skickas - se serverlogen.');
+        }
+      }
+    }
+
+    if (savedHandle) {
+      const { triggerInitialTikTokSyncBackground } = await import('../../lib/studio/tiktok-sync.js');
+      triggerInitialTikTokSyncBackground({ customerId, tiktokHandle: savedHandle, source: 'invite' });
+      initialSyncStarted = true;
+    }
 
     // Return shape compatible with legacy _actions/billing inviteCustomer response
-    const origin = `${req.protocol}://${req.headers.host}`;
+    const origin = resolveAppOrigin(req);
     res.status(201).json({
       customerId,
-      inviteSent: false, // email invite requires separate service; stub as false
+      inviteSent,
+      initialSyncStarted,
       profileUrl: `${origin}/admin/customers/${customerId}`,
-      warnings: sendInviteNow ? ['E-postinbjudan skickas inte automatiskt i Express-läge. Skicka manuellt via kundprofilen.'] : [],
+      warnings,
       customer,
     });
   } catch (err) {

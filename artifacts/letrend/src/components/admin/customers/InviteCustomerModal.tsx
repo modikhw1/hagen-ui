@@ -34,6 +34,7 @@ type InviteState = CreateCustomerPayload;
 type InviteCustomerResult = {
   customerId: string;
   inviteSent: boolean;
+  initialSyncStarted?: boolean;
   profileUrl: string;
   warnings: string[];
 };
@@ -142,6 +143,10 @@ export default function InviteCustomerModal({
       warnings
         .filter((warning) => !warning.toLowerCase().includes('inbjudan kunde inte skickas'))
         .forEach((warning) => toast.warning(warning, { duration: 6000 }));
+
+      if (payload.initialSyncStarted) {
+        toast.success('TikTok-historik hämtas i bakgrunden');
+      }
 
       onCreated(payload.customerId, payload);
       onClose();
