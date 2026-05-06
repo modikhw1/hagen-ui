@@ -21,6 +21,7 @@ export const demosCopy = {
   summarySent30: 'Skickade 30 dagar',
   summaryConverted30: 'Konverterade 30 dagar',
   summaryTotal: 'Totalt i boarden',
+  advanceDemo: 'Flytta fram\u00e5t',
   copyLink: 'Kopiera demo-l\u00e4nk',
   copyLinkSuccess: 'Demo-l\u00e4nk kopierad.',
   copyLinkMissing: 'L\u00e4nk saknas \u2014 ladda om sidan.',

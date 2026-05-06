@@ -33,7 +33,7 @@ export function DemosFunnelBar({ cards }: Props) {
     <div className="rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-          Konverterings­tratt
+          Konverteringsflöde
         </h3>
         <span className="text-xs text-muted-foreground">
           {lost} förlorade · {cards.length} totalt

@@ -8,14 +8,11 @@ import {
   Copy,
   ExternalLink,
   FileText,
-  Inbox,
   LayoutList,
   Loader2,
   MoreHorizontal,
   Pencil,
-  Send,
   Trash2,
-  UserCheck,
   X,
 } from 'lucide-react';
 import CreateDemoDialog, { type CreateDemoResult } from '@/components/admin/demos/CreateDemoDialog';
@@ -32,7 +29,6 @@ import { formatSek } from '@/lib/admin/money';
 import type { DemoCardDto } from '@/lib/admin/schemas/demos';
 import { shortDateSv } from '@/lib/admin/time';
 import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
-import KpiCard from '@/components/admin/ui/KpiCard';
 import EmptyState from '@/components/admin/ui/EmptyState';
 import { apiClient } from '@/lib/admin/api-client';
 import {
@@ -372,39 +368,6 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <KpiCard
-          icon={<Send className="h-4 w-4" />}
-          label="Skickade"
-          value={String(data.sentLast30)}
-          delta={{
-            value: `${data.sentLast30 - data.sentPrev30 >= 0 ? '+' : ''}${data.sentLast30 - data.sentPrev30}`,
-            label: '30d',
-            tone: data.sentLast30 >= data.sentPrev30 ? 'success' : 'danger',
-          }}
-        />
-        <KpiCard
-          icon={<Inbox className="h-4 w-4" />}
-          label="I dialog"
-          value={String(data.openedLast30)}
-          delta={{
-            value: `${data.openedLast30 - data.openedPrev30 >= 0 ? '+' : ''}${data.openedLast30 - data.openedPrev30}`,
-            label: '30d',
-            tone: data.openedLast30 >= data.openedPrev30 ? 'success' : 'danger',
-          }}
-        />
-        <KpiCard
-          icon={<UserCheck className="h-4 w-4" />}
-          label="Konverterade"
-          value={String(data.convertedLast30)}
-          delta={{
-            value: `${data.convertedLast30 - data.convertedPrev30 >= 0 ? '+' : ''}${data.convertedLast30 - data.convertedPrev30}`,
-            label: '30d',
-            tone: data.convertedLast30 >= data.convertedPrev30 ? 'success' : 'danger',
-          }}
-        />
-      </div>
-
       <DemosFunnelBar cards={allCards} />
 
       <div className="space-y-3 rounded-lg border border-border bg-card p-4">
@@ -518,10 +481,9 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                             onClick={() => void handleCopyLink(demo)}
                             disabled={!demo.shareToken}
                             title={demosCopy.copyLink}
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-40"
+                            className="inline-flex items-center justify-center rounded-md border border-border bg-background p-1.5 text-xs font-medium hover:bg-accent disabled:opacity-40"
                           >
-                            <Copy className="h-3 w-3" />
-                            Kopiera länk
+                            <Copy className="h-3.5 w-3.5" />
                           </button>
 
                           {/* Flytta framåt — only for active demos with a next step */}
@@ -530,14 +492,14 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                               type="button"
                               onClick={() => void handleAdvance(demo)}
                               disabled={busy}
-                              className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/20 disabled:opacity-50"
+                              title={demosCopy.advanceDemo}
+                              className="inline-flex items-center justify-center rounded-md bg-primary/10 p-1.5 text-xs font-semibold text-primary hover:bg-primary/20 disabled:opacity-50"
                             >
                               {busy ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
                               ) : (
-                                <ArrowRight className="h-3 w-3" />
+                                <ArrowRight className="h-3.5 w-3.5" />
                               )}
-                              Flytta framåt
                             </button>
                           ) : null}
 
