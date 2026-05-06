@@ -1,0 +1,75 @@
+Du jobbar i hagen-ui.
+
+  Uppdrag: Reconciliation Candidates Phase 4 — FeedPlanner UI.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Skapa inga Supabase-migrationer.
+  - Backend finns redan och live backfill är körd.
+  - Behåll befintligt designspråk i Studio/FeedPlanner. Gör ingen ny dashboard/landing-sida.
+
+  Backend endpoints:
+  - GET /api/studio-v2/customers/:customerId/reconciliation-candidates?status=suggested
+  - POST /api/studio-v2/customers/:customerId/reconciliation-candidates/generate
+  - POST /api/studio-v2/reconciliation-candidates/:candidateId/accept
+  - POST /api/studio-v2/reconciliation-candidates/:candidateId/reject
+
+  Läs först:
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedPlannerSection.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedSlot.tsx
+  - artifacts/letrend/src/types/studio-v2.ts
+  - artifacts/api-server/src/routes/studio-v2.ts, candidate endpoints
+  - docs/agent-plans/10-reconciliation-candidates.md
+
+  Implementera:
+
+  1. Lägg frontend-typer för reconciliation candidates.
+     - Candidate fields: id, customer_id, history_concept_id, target_customer_concept_id, score, reasons, status,
+  created_at, decided_at, decided_by.
+     - Include enriched `history` och `target` från GET endpointen.
+
+  2. Fetch candidates i CustomerWorkspaceContent.
+     - Läs suggested candidates när customer workspace/concepts laddas.
+     - Behåll loading/error state.
+     - Lägg refresh-funktion som kan köras efter accept/reject/generate.
+     - Passa candidates vidare till FeedPlannerSection och FeedSlot på ett minimalt sätt.
+
+  3. Visa kandidater i FeedPlanner.
+     - På imported history cards med candidates: visa diskret badge/indikator, t.ex. "Förslag".
+     - I card action/menu: visa kandidatlista sorterad score desc.
+     - Visa target-title, feed_order/planned date om tillgängligt, score och reason labels.
+     - Reason labels på svenska:
+       - current_slot: Nu-slot
+       - date_proximity_high: Nära datum
+       - date_proximity_medium: Rimligt datum
+       - date_proximity_low: Svagt datum
+       - feed_order_adjacent: Nära i plan
+       - no_published_at: Saknar publiceringsdatum
+       - no_planned_date: Saknar planerat datum
+     - För history-rader utan candidates: lämna befintligt manuellt reconcile-flöde orört.
+
+  4. Actions:
+     - "Godkänn" candidate: POST accept endpoint.
+     - On success: refresh concepts + candidates så reconciliation syns i planner direkt.
+     - "Avvisa": POST reject endpoint.
+     - On success: refresh candidates.
+     - Visa pending state per candidate/action.
+     - Visa fel om endpoint svarar 409/500; UI ska inte optimistiskt markera success vid fel.
+
+  5. Generate button:
+     - Lägg en liten "Uppdatera förslag" action i relevant FeedPlanner/CM-yta.
+     - Den ska POST:a generate endpoint och sedan refresh:a candidates.
+     - Visa spinner medan den körs.
+
+  6. Behåll befintliga manual flows:
+     - "Länka till nu"
+     - "Välj manuellt"
+     - "Ångra koppling"
+     Dessa får inte regressa.
+
+  Verifiera:
+  - pnpm --filter @workspace/letrend exec tsc --noEmit
+  - pnpm --filter @workspace/api-server run typecheck
+  - Kör relevanta tester om Vitest fungerar lokalt.
+  - Dokumentera kort i docs/agent-plans/10-reconciliation-candidates.md vad UI:t gör och kvarvarande luckor.

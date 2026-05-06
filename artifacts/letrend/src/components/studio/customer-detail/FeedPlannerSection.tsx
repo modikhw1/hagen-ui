@@ -226,6 +226,10 @@ export function FeedPlannerSection({
   onOpenKonceptSection,
   onCancelPendingPlacement,
   onCreateEmailDraft,
+  reconciliationCandidates = [],
+  onAcceptCandidate,
+  onRejectCandidate,
+  onGenerateCandidates,
 }: FeedPlannerSectionProps) {
   const gridRef = React.useRef<HTMLDivElement>(null);
   const gridWrapperRef = React.useRef<HTMLDivElement>(null);
@@ -1913,6 +1917,16 @@ export function FeedPlannerSection({
                     onCreateEmailDraft={onCreateEmailDraft}
                     openMenuConceptId={openMenuConceptId}
                     setOpenMenuConceptId={setOpenMenuConceptId}
+                    candidates={
+                      slot.concept?.row_kind === 'imported_history'
+                        ? reconciliationCandidates.filter(
+                            (c) => c.history_concept_id === slot.concept!.id
+                          )
+                        : undefined
+                    }
+                    onAcceptCandidate={onAcceptCandidate}
+                    onRejectCandidate={onRejectCandidate}
+                    onGenerateCandidates={onGenerateCandidates}
                   />
                 );
               })}

@@ -45,6 +45,7 @@ import type {
   GridConfig,
   CmTag,
   ConceptContentOverrides,
+  ReconciliationCandidate,
 } from '@/types/studio-v2';
 import { DEFAULT_GRID_CONFIG } from '@/types/studio-v2';
 import { DEFAULT_TEMPO_WEEKDAYS } from '@/lib/feed-planner-utils';
@@ -612,6 +613,7 @@ function CustomerWorkspacePageContent() {
     availableUsernames?: string[];
   } | null>(null);
   const [syncPreviewError, setSyncPreviewError] = useState<string | null>(null);
+  const [reconciliationCandidates, setReconciliationCandidates] = useState<ReconciliationCandidate[]>([]);
 
   const customerCacheKey = `studio-v2:workspace:${customerId}:customer`;
   const gamePlanCacheKey = `studio-v2:workspace:${customerId}:game-plan`;
@@ -789,6 +791,7 @@ function CustomerWorkspacePageContent() {
           fetchEmailJobs(hasCachedState),
           fetchEmailSchedule(),
           fetchMotorSignals(),
+          fetchCandidates(),
         ]);
       } finally {
         if (isMounted) {
@@ -1110,6 +1113,69 @@ function CustomerWorkspacePageContent() {
       setConcepts(conceptData);
     } catch (err) {
       console.error('Error fetching concepts:', err);
+    }
+  };
+
+  const fetchCandidates = async () => {
+    try {
+      const response = await fetch(
+        `/api/studio-v2/customers/${customerId}/reconciliation-candidates?status=suggested`
+      );
+      if (!response.ok) return;
+      const data = await response.json().catch(() => ({}));
+      setReconciliationCandidates(
+        Array.isArray(data.candidates) ? (data.candidates as ReconciliationCandidate[]) : []
+      );
+    } catch {
+      // Non-fatal — candidates are a UX enhancement, silently ignore errors
+    }
+  };
+
+  const handleAcceptCandidate = async (candidateId: string) => {
+    setReconciliationCandidates((prev) => prev.filter((c) => c.id !== candidateId));
+    try {
+      const response = await fetch(
+        `/api/studio-v2/reconciliation-candidates/${candidateId}/accept`,
+        { method: 'POST' }
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as Record<string, string>).error || 'Accept misslyckades');
+      }
+      clearClientCache(conceptsCacheKey);
+      await Promise.all([fetchConcepts(true), fetchCandidates()]);
+    } catch (err) {
+      await fetchCandidates();
+      alert(err instanceof Error ? err.message : 'Kunde inte acceptera förslaget');
+    }
+  };
+
+  const handleRejectCandidate = async (candidateId: string) => {
+    setReconciliationCandidates((prev) => prev.filter((c) => c.id !== candidateId));
+    try {
+      const response = await fetch(
+        `/api/studio-v2/reconciliation-candidates/${candidateId}/reject`,
+        { method: 'POST' }
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as Record<string, string>).error || 'Reject misslyckades');
+      }
+    } catch (err) {
+      await fetchCandidates();
+      alert(err instanceof Error ? err.message : 'Kunde inte avvisa förslaget');
+    }
+  };
+
+  const handleGenerateCandidates = async () => {
+    try {
+      await fetch(
+        `/api/studio-v2/customers/${customerId}/reconciliation-candidates/generate`,
+        { method: 'POST' }
+      );
+      await fetchCandidates();
+    } catch {
+      // Non-fatal
     }
   };
 
@@ -1776,7 +1842,7 @@ function CustomerWorkspacePageContent() {
       // Reconciliation affects two rows simultaneously: the imported clip (visibility)
       // and the LeTrend assignment card (enrichment/stats). A full refetch is required.
       clearClientCache(conceptsCacheKey);
-      await fetchConcepts(true);
+      await Promise.all([fetchConcepts(true), fetchCandidates()]);
     } catch (err) {
       console.error('Error reconciling history:', err);
       alert(err instanceof Error ? err.message : 'Kunde inte koppla historiken');
@@ -1799,7 +1865,7 @@ function CustomerWorkspacePageContent() {
       // Same as reconcile: two rows change at once. Full refetch required so the
       // LeTrend card loses its enrichment and the imported clip reappears in the grid.
       clearClientCache(conceptsCacheKey);
-      await fetchConcepts(true);
+      await Promise.all([fetchConcepts(true), fetchCandidates()]);
     } catch (err) {
       console.error('Error removing history reconciliation:', err);
       alert(err instanceof Error ? err.message : 'Kunde inte ta bort kopplingen');
@@ -3343,6 +3409,10 @@ function CustomerWorkspacePageContent() {
               onOpenKonceptSection={() => setWorkspaceSection('koncept')}
               onCancelPendingPlacement={() => setPendingFeedPlacementConceptId(null)}
               onCreateEmailDraft={handleCreateEmailDraftFromNote}
+              reconciliationCandidates={reconciliationCandidates}
+              onAcceptCandidate={handleAcceptCandidate}
+              onRejectCandidate={handleRejectCandidate}
+              onGenerateCandidates={handleGenerateCandidates}
             />
             </>
           )}

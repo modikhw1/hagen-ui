@@ -697,3 +697,36 @@ export const SPAN_COLOR_PALETTE = [
   { name: 'Autumn', color: '#A78BFA' },
   { name: 'Neutral', color: '#C4B5A0' },
 ] as const;
+
+// =====================================================
+// Reconciliation Candidates
+// =====================================================
+
+export type ReconciliationCandidateStatus = 'suggested' | 'accepted' | 'rejected' | 'auto_accepted';
+
+export interface ReconciliationCandidate {
+  id: string;
+  customer_id: string;
+  history_concept_id: string;
+  target_customer_concept_id: string;
+  score: number;
+  reasons: string[];
+  status: ReconciliationCandidateStatus;
+  created_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+  history: {
+    id: string;
+    published_at: string | null;
+    tiktok_url: string | null;
+    tiktok_thumbnail_url: string | null;
+    feed_order: number | null;
+  } | null;
+  target: {
+    id: string;
+    feed_order: number | null;
+    planned_publish_at: string | null;
+    status: string | null;
+    concepts: { id: string; backend_data: unknown; overrides: unknown } | null;
+  } | null;
+}

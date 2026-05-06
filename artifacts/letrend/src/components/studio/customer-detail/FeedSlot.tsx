@@ -20,6 +20,16 @@ const COLLAB_SCOPE_LABELS: Record<string, string> = {
   skriva_medverka: 'Skriva + medverka',
 };
 
+const CANDIDATE_REASON_LABELS: Record<string, string> = {
+  current_slot: 'Nu-slot',
+  date_proximity_high: 'Nära datum',
+  date_proximity_medium: 'Rimligt datum',
+  date_proximity_low: 'Svagt datum',
+  feed_order_adjacent: 'Nära i plan',
+  no_published_at: 'Saknar publiceringsdatum',
+  no_planned_date: 'Saknar planerat datum',
+};
+
 function FeedSlot({
   slot,
   plannerCell,
@@ -50,6 +60,10 @@ function FeedSlot({
   onSlotClick,
   openMenuConceptId,
   setOpenMenuConceptId,
+  candidates = [],
+  onAcceptCandidate,
+  onRejectCandidate,
+  onGenerateCandidates,
 }: FeedSlotProps) {
   const [isHovered, setIsHovered] = React.useState(false);
   const menuBtnRef = React.useRef<HTMLButtonElement>(null);
@@ -70,6 +84,7 @@ function FeedSlot({
   const [localTikTokUrl, setLocalTikTokUrl] = React.useState('');
   const [localPlannedDate, setLocalPlannedDate] = React.useState('');
   const [refThumbnailUrl, setRefThumbnailUrl] = React.useState<string | null>(null);
+  const [candidateActionId, setCandidateActionId] = React.useState<string | null>(null);
 
   const { concept, type } = slot;
   const plannerCard = plannerCell?.card ?? null;
@@ -639,6 +654,28 @@ function FeedSlot({
         </div>
       )}
 
+      {/* Reconciliation candidate badge — discrete "Förslag" pill for unreconciled history cards */}
+      {type === 'history' && concept?.row_kind === 'imported_history' && !concept.reconciliation.is_reconciled && candidates.length > 0 && !isFreshEvidence && (
+        <div style={{
+          position: 'absolute',
+          top: 6,
+          right: 6,
+          background: hasHistoryThumbnail ? 'rgba(217,119,6,0.82)' : 'rgba(251,191,36,0.18)',
+          color: hasHistoryThumbnail ? '#fff' : '#92400e',
+          border: hasHistoryThumbnail ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(217,119,6,0.25)',
+          padding: '1px 5px',
+          borderRadius: LeTrendRadius.sm,
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: '0.04em',
+          backdropFilter: hasHistoryThumbnail ? 'blur(4px)' : undefined,
+          pointerEvents: 'none',
+          zIndex: 3,
+        }}>
+          Förslag
+        </div>
+      )}
+
       {result?.content_loaded_at && (
         <div
           style={{
@@ -1192,6 +1229,121 @@ function FeedSlot({
                 </span>
               </div>
             )}
+            {/* Reconciliation candidate inline suggestion panel */}
+            {concept.row_kind === 'imported_history' && !concept.reconciliation.is_reconciled && candidates.length > 0 && (() => {
+              const topCandidate = candidates[0];
+              const reasonKey = topCandidate.reasons[0] ?? '';
+              const reasonLabel = CANDIDATE_REASON_LABELS[reasonKey] ?? reasonKey;
+              const targetFeedOrder = topCandidate.target?.feed_order;
+              const targetLabel = typeof targetFeedOrder === 'number'
+                ? targetFeedOrder === 0
+                  ? 'Nu-slot'
+                  : targetFeedOrder > 0
+                    ? `+${targetFeedOrder}`
+                    : `${targetFeedOrder}`
+                : null;
+              const isLoading = candidateActionId === topCandidate.id;
+              return (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    border: hasHistoryThumbnail
+                      ? '1px solid rgba(255,255,255,0.15)'
+                      : '1px solid rgba(217,119,6,0.22)',
+                    borderRadius: 6,
+                    padding: '5px 6px',
+                    background: hasHistoryThumbnail
+                      ? 'rgba(0,0,0,0.42)'
+                      : 'rgba(251,191,36,0.09)',
+                    backdropFilter: hasHistoryThumbnail ? 'blur(6px)' : undefined,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                    {reasonLabel && (
+                      <span style={{
+                        fontSize: 8.5,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color: hasHistoryThumbnail ? 'rgba(255,255,255,0.7)' : '#92400e',
+                        background: hasHistoryThumbnail ? 'rgba(255,255,255,0.12)' : 'rgba(217,119,6,0.12)',
+                        borderRadius: 3,
+                        padding: '1px 4px',
+                      }}>
+                        {reasonLabel}
+                      </span>
+                    )}
+                    {targetLabel && (
+                      <span style={{
+                        fontSize: 8.5,
+                        fontWeight: 600,
+                        color: hasHistoryThumbnail ? 'rgba(255,255,255,0.55)' : LeTrendColors.textMuted,
+                      }}>
+                        → {targetLabel}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      disabled={isLoading}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!onAcceptCandidate) return;
+                        setCandidateActionId(topCandidate.id);
+                        onAcceptCandidate(topCandidate.id).finally(() => setCandidateActionId(null));
+                      }}
+                      style={{
+                        flex: 1,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: '3px 0',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: isLoading ? 'default' : 'pointer',
+                        background: hasHistoryThumbnail ? 'rgba(22,163,74,0.82)' : '#166534',
+                        color: '#fff',
+                        fontFamily: 'inherit',
+                        opacity: isLoading ? 0.6 : 1,
+                      }}
+                      title="Acceptera förslag"
+                    >
+                      {isLoading ? '...' : '✓'}
+                    </button>
+                    <button
+                      disabled={isLoading}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!onRejectCandidate) return;
+                        setCandidateActionId(topCandidate.id);
+                        onRejectCandidate(topCandidate.id).finally(() => setCandidateActionId(null));
+                      }}
+                      style={{
+                        flex: 1,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: '3px 0',
+                        border: hasHistoryThumbnail
+                          ? '1px solid rgba(255,255,255,0.22)'
+                          : '1px solid rgba(74,47,24,0.2)',
+                        borderRadius: 4,
+                        cursor: isLoading ? 'default' : 'pointer',
+                        background: 'transparent',
+                        color: hasHistoryThumbnail ? 'rgba(255,255,255,0.8)' : '#4A2F18',
+                        fontFamily: 'inherit',
+                        opacity: isLoading ? 0.6 : 1,
+                      }}
+                      title="Avvisa förslag"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* StatRow: views | likes | comments — shown for both LeTrend and TikTok cards when stats are available */}
             {(() => {
               const statItems = [
@@ -1424,6 +1576,18 @@ function FeedSlot({
                 style={feedSlotMenuBtnStyle}
               >
                 {showClipPicker ? 'Dölj klippval' : 'Koppla till TikTok-klipp'}
+              </button>
+            )}
+            {concept.row_kind === 'imported_history' && !concept.reconciliation.is_reconciled && onGenerateCandidates && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onGenerateCandidates();
+                  setOpenMenuConceptId(null);
+                }}
+                style={feedSlotMenuBtnStyle}
+              >
+                Generera förslag
               </button>
             )}
             {concept.row_kind === 'imported_history' && (allowsPlannerAction('reconcile_to_now') || allowsPlannerAction('undo_reconciliation')) && (

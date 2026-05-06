@@ -9,6 +9,7 @@ import type {
   GridConfig,
   CmTag,
   FeedSlot as FeedSlotData,
+  ReconciliationCandidate,
 } from '@/types/studio-v2';
 import type { TranslatedConcept } from '@/lib/translator';
 import type { ConceptSectionKey } from '@/lib/studio-v2-concept-content';
@@ -128,6 +129,11 @@ export interface FeedPlannerSectionProps {
   onOpenKonceptSection?: () => void;
   onCancelPendingPlacement?: () => void;
   onCreateEmailDraft?: (noteContent: string) => void;
+  // Reconciliation candidates
+  reconciliationCandidates?: ReconciliationCandidate[];
+  onAcceptCandidate?: (candidateId: string) => Promise<void>;
+  onRejectCandidate?: (candidateId: string) => Promise<void>;
+  onGenerateCandidates?: () => Promise<void>;
 }
 
 export interface FeedSlotProps {
@@ -168,6 +174,11 @@ export interface FeedSlotProps {
   /** Lifted context-menu state — only one menu open at a time across the planner. */
   openMenuConceptId: string | null;
   setOpenMenuConceptId: (id: string | null) => void;
+  // Reconciliation candidates for this history card
+  candidates?: ReconciliationCandidate[];
+  onAcceptCandidate?: (candidateId: string) => Promise<void>;
+  onRejectCandidate?: (candidateId: string) => Promise<void>;
+  onGenerateCandidates?: () => Promise<void>;
 }
 
 export interface KommunikationSectionProps {
