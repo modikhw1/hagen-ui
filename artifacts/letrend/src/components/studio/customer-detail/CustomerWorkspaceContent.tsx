@@ -596,7 +596,7 @@ function CustomerWorkspacePageContent() {
   const [historyNextCursor, setHistoryNextCursor] = useState<number | null>(null);
   const [pendingFeedPlacementConceptId, setPendingFeedPlacementConceptId] = useState<string | null>(null);
 
-  // Derived: active nudges need CM action; auto-resolved nudges are informational (cron handled them)
+  // Derived: active nudges need CM action; auto-resolved nudges are resolved after mark-produced/planflytt
   const activeNudges = motorSignals.filter(s => !s.auto_resolved_at);
   const autoResolvedNudges = motorSignals.filter(s => s.auto_resolved_at !== null);
   // Guard: prevents auto-fetch from firing more than once per workspace open cycle
@@ -2503,7 +2503,7 @@ function CustomerWorkspacePageContent() {
     }
   };
 
-  // Dismiss all auto-resolved motor signals (informational badge). Sets acknowledged_at on each.
+  // Dismiss auto-resolved motor signals (resolved after mark-produced/plan-advance). Sets acknowledged_at on each.
   const handleDismissAutoResolvedSignals = () => {
     const now = new Date().toISOString();
     const ids = autoResolvedNudges.map(s => s.id);

@@ -1,0 +1,42 @@
+Du jobbar i hagen-ui. Implementera Phase 10b: städa feedplanner-copy och död cue-kod efter confirmation-flödet.
+
+  Läs först:
+  - docs/agent-plans/19-candidate-now-slot-confirmation-flow.md
+  - artifacts/letrend/src/components/studio/customer-detail/FeedPlannerSection.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedAdvanceCue.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+
+  Problem:
+  Efter Phase 8–10 flyttas planen inte längre av “autopilot” i aktivt UI-flöde. Planflytt sker via CM-bekräftelse/mark-
+  produced. Men några kommentarer och UI-strängar antyder fortfarande att cron/autopilot flyttade planen automatiskt.
+
+  Mål:
+  Gör copy och kommentarer korrekta utan att ändra backend eller beteende.
+
+  Scope:
+  1. Sök och åtgärda missvisande copy/kommentarer kring:
+     - `Autopilot`
+     - `cron handled them`
+     - `auto-reconcile already advanced`
+     - `flyttade/flyttning automatiskt`
+  2. I `FeedPlannerSection.tsx`, ändra auto-resolved-nudge texten från t.ex.
+     `Autopilot hanterade ... framflyttning automatiskt`
+     till något neutralt, t.ex.:
+     `Signal hanterad efter planflytt`
+     eller `Planen är flyttad och signalen hanterad`
+  3. I `CustomerWorkspaceContent.tsx`, ändra kommentaren:
+     `auto-resolved nudges are informational (cron handled them)`
+     till att signalen är hanterad efter mark-produced/planflytt.
+  4. Behåll korrekt copy om auto-linking, t.ex. att ett klipp automatiskt kan ha kopplats till nu-slotten. Ändra inte
+  den semantiken till planflytt.
+  5. Ta bort kvarvarande död cue-/review-kod om den är gated bakom `false && ...` och ersatt av aktiv komponent.
+  6. Rör inte API-server.
+  7. Rör inte `/admin/demos`.
+  8. Kör:
+     - `pnpm --filter @workspace/letrend exec tsc --noEmit`
+     - `git diff --check HEAD~1..HEAD`
+  9. Skapa `docs/agent-plans/20-feedplanner-copy-and-dead-code-cleanup.md` med:
+     - vad som ändrades
+     - vilka missvisande auto-advance-termer som togs bort
+     - vilken auto-linking-copy som medvetet behölls
+     - teststatus

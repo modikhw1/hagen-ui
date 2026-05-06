@@ -1116,7 +1116,7 @@ export function FeedPlannerSection({
         />
       )}
 
-      {/* Auto-resolved nudge badge — cron advanced the plan automatically; informational only.
+      {/* Auto-resolved nudge badge — signal resolved after CM confirmation (mark-produced).
           Disappears permanently when CM clicks Stäng (sets acknowledged_at on all rows). */}
       {autoResolvedNudges.length > 0 && (
         <div style={{
@@ -1134,7 +1134,9 @@ export function FeedPlannerSection({
         }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ color: '#16a34a', fontWeight: 600 }}>✓</span>
-            Autopilot hanterade {autoResolvedNudges.length} framflyttning{autoResolvedNudges.length > 1 ? 'ar' : ''} automatiskt
+            {autoResolvedNudges.length === 1
+              ? 'Planen är uppdaterad och signalen hanterad'
+              : `Planen är uppdaterad och ${autoResolvedNudges.length} signaler hanterade`}
           </span>
           <button
             onClick={onDismissAutoResolvedSignals}
@@ -1209,57 +1211,6 @@ export function FeedPlannerSection({
           onClose={() => setFocusedEvidenceIds(new Set())}
         />
       )}
-      {false && focusedEvidenceIds.size > 0 && effectiveCue && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-          marginBottom: 6,
-          padding: '5px 10px',
-          background: 'rgba(22,101,52,0.06)',
-          border: '1px solid rgba(22,101,52,0.18)',
-          borderRadius: LeTrendRadius.sm,
-          fontSize: 11,
-          color: '#166534',
-        }}>
-          <span style={{ opacity: 0.75, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span>
-              Granskningsläge
-              {' · '}
-              {focusedEvidenceIds.size} {effectiveCue?.kind === 'fresh_activity' ? 'nya' : 'historiska'} klipp markerade med <strong style={{ fontWeight: 700 }}>nytt</strong>
-            </span>
-            {/* When cue is deferred: signal the deferred state and offer to re-open the cue */}
-            {deferredAdvanceCue && (
-              <>
-                <span style={{ opacity: 0.4 }}>·</span>
-                <span style={{ opacity: 0.6 }}>signal pausad</span>
-                <button
-                  onClick={() => setDeferredAdvanceCue(false)}
-                  style={{
-                    background: 'none', border: 'none', fontSize: 11,
-                    color: '#166534', cursor: 'pointer', padding: 0,
-                    textDecoration: 'underline', textUnderlineOffset: 2,
-                  }}
-                >
-                  Återuppta
-                </button>
-              </>
-            )}
-          </span>
-          <button
-            onClick={() => setFocusedEvidenceIds(new Set())}
-            style={{
-              background: 'none', border: 'none', fontSize: 13, lineHeight: 1,
-              color: '#166534', opacity: 0.45, cursor: 'pointer', padding: 0, flexShrink: 0,
-            }}
-            title="Stäng granskningsläge"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       {/* Grid med Åliden till vänster */}
       <div
         ref={gridWrapperRef}
