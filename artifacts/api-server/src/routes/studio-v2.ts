@@ -48,6 +48,17 @@ function sanitizePrice(input: unknown): number | null {
   return Math.round(n);
 }
 
+function isPlannedUpcomingFeedRow(row: Record<string, unknown>): boolean {
+  const status = typeof row.status === 'string' ? row.status : null;
+  return (
+    typeof row.feed_order === 'number'
+    && row.feed_order > 0
+    && status !== 'produced'
+    && status !== 'archived'
+    && status !== 'history_import'
+  );
+}
+
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Customers
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -954,63 +965,136 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
     if (!(await ensureCustomerAccess(req, res, customerId))) return;
 
     const supabase = createSupabaseAdmin();
+    let advanceLockAcquired = false;
 
-    // Mark current concept (feed_order 0) as produced
-    const { error: updateError } = await supabase
-      .from('customer_concepts')
-      .update({
-        status: 'produced',
-        produced_at: now,
-        published_at: publishedAt,
-        tiktok_url: tiktokUrl,
-        feed_order: -1,
-      })
-      .eq('id', conceptId)
-      .eq('customer_profile_id', customerId);
-
-    if (updateError) {
-      res.status(500).json({ error: updateError.message });
-      return;
-    }
-
-    // Advance the planning window: shift all upcoming concepts down by 1
-    const { data: upcoming } = await supabase
-      .from('customer_concepts')
-      .select('id, feed_order')
-      .eq('customer_profile_id', customerId)
-      .gt('feed_order', 0)
-      .order('feed_order', { ascending: true });
-
-    if (upcoming && upcoming.length > 0) {
-      // Move first upcoming concept to now slot (0)
-      await supabase
+    try {
+      const { data: targetRow, error: targetError } = await supabase
         .from('customer_concepts')
-        .update({ feed_order: 0 })
-        .eq('id', upcoming[0].id);
+        .select('id, status, feed_order, concept_id, visual_variant')
+        .eq('id', conceptId)
+        .eq('customer_profile_id', customerId)
+        .maybeSingle();
 
-      // Shift rest down
-      for (let i = 1; i < upcoming.length; i++) {
-        await supabase
+      if (targetError) {
+        res.status(500).json({ error: targetError.message });
+        return;
+      }
+      if (!targetRow) {
+        res.status(404).json({ error: 'Konceptet hittades inte' });
+        return;
+      }
+
+      const target = targetRow as Record<string, unknown>;
+      const targetStatus = typeof target.status === 'string' ? target.status : null;
+      if (targetStatus === 'produced') {
+        res.status(409).json({ error: 'Konceptet är redan markerat som producerat' });
+        return;
+      }
+      if (targetStatus === 'archived' || targetStatus === 'history_import') {
+        res.status(409).json({ error: 'Endast planerade koncept kan markeras som producerade' });
+        return;
+      }
+      if (target.feed_order !== 0) {
+        res.status(409).json({ error: 'Endast nu-slotten kan markeras som producerad' });
+        return;
+      }
+
+      const { data: lockRow, error: lockError } = await supabase
+        .from('customer_profiles')
+        .update({ pending_history_advance_at: now })
+        .eq('id', customerId)
+        .is('pending_history_advance_at', null)
+        .select('id')
+        .maybeSingle();
+
+      if (lockError) {
+        res.status(500).json({ error: lockError.message });
+        return;
+      }
+      if (!lockRow) {
+        res.status(409).json({ error: 'Planen flyttas redan fram. Försök igen om en stund.' });
+        return;
+      }
+      advanceLockAcquired = true;
+
+      const { data: producedConcept, error: updateError } = await supabase
+        .from('customer_concepts')
+        .update({
+          status: 'produced',
+          produced_at: now,
+          published_at: publishedAt,
+          tiktok_url: tiktokUrl,
+          feed_order: -1,
+        })
+        .eq('id', conceptId)
+        .eq('customer_profile_id', customerId)
+        .eq('feed_order', 0)
+        .neq('status', 'produced')
+        .select(STUDIO_CONCEPT_SELECT)
+        .maybeSingle();
+
+      if (updateError) {
+        res.status(500).json({ error: updateError.message });
+        return;
+      }
+      if (!producedConcept) {
+        res.status(409).json({ error: 'Konceptet kunde inte flyttas. Ladda om och försök igen.' });
+        return;
+      }
+
+      const { data: upcoming, error: upcomingError } = await supabase
+        .from('customer_concepts')
+        .select('id, feed_order, status, concept_id, visual_variant')
+        .eq('customer_profile_id', customerId)
+        .gt('feed_order', 0)
+        .order('feed_order', { ascending: true });
+
+      if (upcomingError) {
+        res.status(500).json({ error: upcomingError.message });
+        return;
+      }
+
+      const plannedUpcoming = ((upcoming ?? []) as Record<string, unknown>[])
+        .filter(isPlannedUpcomingFeedRow);
+
+      for (const [index, row] of plannedUpcoming.entries()) {
+        const nextFeedOrder = index;
+        const { error: shiftError } = await supabase
           .from('customer_concepts')
-          .update({ feed_order: (upcoming[i].feed_order as number) - 1 })
-          .eq('id', upcoming[i].id);
+          .update({ feed_order: nextFeedOrder })
+          .eq('id', row.id as string)
+          .eq('customer_profile_id', customerId);
+
+        if (shiftError) {
+          res.status(500).json({ error: shiftError.message });
+          return;
+        }
+      }
+
+      const { error: signalError } = await supabase
+        .from('feed_motor_signals')
+        .update({ auto_resolved_at: now })
+        .eq('customer_id', customerId)
+        .is('acknowledged_at', null)
+        .is('auto_resolved_at', null);
+
+      if (signalError) {
+        logger.warn({ err: signalError, customerId }, 'failed to auto-resolve feed motor signals');
+      }
+
+      res.json({ success: true, concept: producedConcept });
+    } finally {
+      if (advanceLockAcquired) {
+        const { error: unlockError } = await supabase
+          .from('customer_profiles')
+          .update({ pending_history_advance_at: null })
+          .eq('id', customerId);
+
+        if (unlockError) {
+          logger.warn({ err: unlockError, customerId }, 'failed to clear feed advance lock');
+        }
       }
     }
-
-    // Return updated concept
-    const { data, error: fetchError } = await supabase
-      .from('customer_concepts')
-      .select(STUDIO_CONCEPT_SELECT)
-      .eq('id', conceptId)
-      .eq('customer_profile_id', customerId)
-      .maybeSingle();
-
-    if (fetchError) {
-      res.status(500).json({ error: fetchError.message });
-      return;
-    }
-
-    res.json({ success: true, concept: data });
   } catch (err) {
     logger.error(err, 'studio-v2 feed mark-produced error');
     res.status(500).json({ error: 'Internt serverfel' });
