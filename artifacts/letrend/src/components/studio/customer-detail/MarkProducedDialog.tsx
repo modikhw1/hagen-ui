@@ -78,30 +78,56 @@ export function MarkProducedDialog({
     try {
       if (mode === 'auto') {
         const clip = freshestImportedConcept;
-        await onMarkProduced(
-          nuConceptId,
-          clip?.result.tiktok_url ?? undefined,
-          clip?.result.published_at ?? undefined,
-        );
+        if (clip) {
+          // Step 1: link the TikTok clip to the nu-slot assignment row.
+          await onReconcileHistory(clip.id, { mode: 'use_now_slot' });
+          // Step 2: advance the plan. If this fails the link is already saved —
+          // tell the CM explicitly so they can refresh and verify manually.
+          try {
+            await onMarkProduced(
+              nuConceptId,
+              clip.result.tiktok_url ?? undefined,
+              clip.result.published_at ?? undefined,
+            );
+          } catch {
+            throw new Error(
+              'Klippet kopplades till konceptet men planflytten misslyckades. ' +
+              'Kopplingen är sparad — uppdatera sidan och kontrollera att nu-kortet har markerats som gjort.',
+            );
+          }
+        } else {
+          // No imported clip available — advance plan without a clip link.
+          await onMarkProduced(nuConceptId);
+        }
       } else if (mode === 'manual') {
+        // Step 1: link the selected clip (if any) to the nu-slot.
         const clip = importedConcepts.find((concept) => concept.id === selectedClipId) ?? null;
-
         if (clip) {
           await onReconcileHistory(clip.id, { mode: 'use_now_slot' });
         }
-
-        await onMarkProduced(
-          nuConceptId,
-          clip?.result.tiktok_url ?? undefined,
-          clip?.result.published_at ?? undefined,
-        );
+        // Step 2: advance the plan.
+        try {
+          await onMarkProduced(
+            nuConceptId,
+            clip?.result.tiktok_url ?? undefined,
+            clip?.result.published_at ?? undefined,
+          );
+        } catch {
+          if (clip) {
+            throw new Error(
+              'Klippet kopplades till konceptet men planflytten misslyckades. ' +
+              'Kopplingen är sparad — uppdatera sidan och kontrollera att nu-kortet har markerats som gjort.',
+            );
+          }
+          throw new Error('Kunde inte markera som producerat. Försök igen.');
+        }
       } else {
         await onMarkProduced(nuConceptId);
       }
 
       onClose();
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : 'Okant fel');
+      setSubmitError(error instanceof Error ? error.message : 'Okänt fel');
     } finally {
       setSubmitting(false);
     }

@@ -1,0 +1,40 @@
+Du jobbar i hagen-ui. Implementera Phase 9a: korrekt confirmation i MarkProducedDialog.
+
+  Läs först:
+  - docs/agent-plans/10-reconciliation-candidates.md
+  - docs/agent-plans/11-confirmation-engine.md
+  - docs/agent-plans/14-confirmation-engine-phase-8c.md
+  - artifacts/letrend/src/components/studio/customer-detail/MarkProducedDialog.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+
+  Mål:
+  När CM markerar nu-kortet som gjort och väljer/har ett importerat TikTok-klipp ska flödet både:
+  1. länka TikTok-klippet till nu-slotten
+  2. flytta planen framåt via mark-produced
+
+  Scope:
+  1. I `MarkProducedDialog.tsx`, ändra `mode === 'auto'`:
+     - Om `freshestImportedConcept` finns:
+       - anropa `onReconcileHistory(freshestImportedConcept.id, { mode: 'use_now_slot' })`
+       - därefter anropa `onMarkProduced(nuConceptId, clip.result.tiktok_url, clip.result.published_at)`
+     - Om inget klipp finns:
+       - behåll nuvarande fallback: bara `onMarkProduced(nuConceptId)`
+  2. Behåll `mode === 'manual'`-beteendet, men verifiera att det redan gör samma ordning: reconcile först, mark-produced
+  sen.
+  3. Lägg till tydlig feltext om mark-produced misslyckas efter lyckad länkning:
+     - ingen rollback
+     - förklara att kopplingen kan vara sparad men planflytten misslyckades
+  4. Uppdatera stale kommentarer/typer som säger att auto-reconcile redan avancerar planen:
+     - `CustomerWorkspaceContent.tsx`
+     - `feedTypes.ts`
+     - ändra bara text/semantik, inte bred UI-refactor
+  5. Rör inte API-server.
+  6. Rör inte `/admin/demos`.
+  7. Rör inte legacy `artifacts/letrend/src/lib/studio/auto-reconcile.ts`.
+  8. Kör:
+     - `pnpm --filter @workspace/letrend exec tsc --noEmit`
+  9. Skapa `docs/agent-plans/15-mark-produced-confirmation-flow.md` med:
+     - vad som ändrades
+     - varför auto-läget nu länkar innan advance
+     - kvarvarande arbete: candidate accept för nu-slot kan senare få “bekräfta och flytta”-action
+     - teststatus

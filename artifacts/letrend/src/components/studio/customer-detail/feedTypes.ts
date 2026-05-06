@@ -151,8 +151,9 @@ export interface FeedSlotProps {
   isFreshEvidence?: boolean;
   onCreateEmailDraft?: (noteContent: string) => void;
   getConceptDetails: (conceptId: string) => TranslatedConcept | undefined;
-  // Checks TikTok for a new clip before producing. Returns 'advanced' if a clip was found and
-  // auto-reconcile already advanced the plan, or 'no_clip' if nothing new was found.
+  // Checks TikTok for a new clip before producing. Returns 'advanced' if new clips were
+  // imported (caller should open MarkProducedDialog to link and advance the plan),
+  // or 'no_clip' if nothing new was found on the profile.
   onCheckAndMarkProduced: (conceptId: string) => Promise<'advanced' | 'no_clip'>;
   onMarkProduced: (conceptId: string, tiktokUrl?: string, publishedAt?: string) => Promise<void>;
   onOpenMarkProducedDialog: (conceptId: string) => void;

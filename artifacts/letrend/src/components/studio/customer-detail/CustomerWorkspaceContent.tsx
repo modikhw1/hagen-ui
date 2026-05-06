@@ -1753,9 +1753,10 @@ function CustomerWorkspacePageContent() {
   };
 
   // Called when CM clicks "Markera som gjord" on the nu card.
-  // Fetches the latest clips from TikTok first. If a new clip was imported,
-  // auto-reconcile already advanced the plan — no separate mark-produced needed.
-  // Returns 'advanced' (clip found, plan moved) or 'no_clip' (nothing new on profile).
+  // Fetches the latest clips from TikTok first to update the imported history.
+  // Returns 'advanced' if new clips were imported — MarkProducedDialog will then
+  // handle linking the clip and advancing the plan via reconcile + mark-produced.
+  // Returns 'no_clip' if nothing new was found on the profile.
   const handleCheckAndMarkProduced = async (conceptId: string): Promise<'advanced' | 'no_clip'> => {
     void conceptId;
     try {
@@ -1770,7 +1771,7 @@ function CustomerWorkspacePageContent() {
       if (!response.ok) return 'no_clip';
       const data = await response.json() as { imported?: number };
       if ((data.imported ?? 0) > 0) {
-        // Auto-reconcile ran inside the fetch and already marked nu as produced.
+        // New clips were imported — refresh concepts so MarkProducedDialog sees them.
         clearClientCache(conceptsCacheKey);
         await fetchConcepts(true);
         return 'advanced';
