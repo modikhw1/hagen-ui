@@ -112,9 +112,10 @@ rankCandidates(history, targets): Array<{ target, result }>
 
 ---
 
-## API-endpoints (implementerat ✅)
+## API-endpoints (implementerat och stabiliserat ✅)
 
-Alla 4 endpoints är implementerade i `artifacts/api-server/src/routes/studio-v2.ts`.
+Alla 4 endpoints är implementerade och stabiliserade i `artifacts/api-server/src/routes/studio-v2.ts`.
+Alla routes är registrerade på modulnivå — inte nästlade inuti andra route-handlers.
 
 ### 1. Generera kandidater ✅
 
@@ -123,8 +124,8 @@ POST /api/studio-v2/customers/:customerId/reconciliation-candidates/generate
 ```
 
 - Kräver CM-auth + `ensureCustomerAccess`.
-- Hämtar unreconciled history-rader (`concept_id IS NULL`, `reconciled_customer_concept_id IS NULL`, `tiktok_url IS NOT NULL`).
-- Hämtar target-rader (`concept_id IS NOT NULL`, `status != 'archived'`).
+- Hämtar unreconciled history-rader (`row_kind='history_import'`, `reconciled_customer_concept_id IS NULL`, `tiktok_url IS NOT NULL`).
+- Hämtar target-rader (`row_kind IN ('assignment','collaboration')`, `concept_id IS NOT NULL`, `status != 'archived'`).
 - Avgör `is_already_reconciled` via befintliga `reconciled_customer_concept_id`-värden.
 - Skippar par med status `accepted/rejected/auto_accepted` i DB.
 - Kör `rankCandidates` per history-rad och upsert:ar med `onConflict: 'history_concept_id,target_customer_concept_id'`.
@@ -153,8 +154,8 @@ POST /api/studio-v2/reconciliation-candidates/:candidateId/accept
 - Anropar intern `applyReconciliationLink(supabase, historyId, targetId, actorId, now)` som:
   - Sätter `reconciled_customer_concept_id / reconciled_by_cm_id / reconciled_at` på history-raden.
   - Propagerar TikTok-stats (thumbnail, url, views, likes, comments, published_at) till assignment-raden.
-- Uppdaterar kandidaten: `status='accepted', decided_at, decided_by`.
-- Avvisar automatiskt alla andra `suggested`-kandidater för samma `history_concept_id`.
+- Uppdaterar kandidaten: `status='accepted', decided_at, decided_by` — returnerar 500 om DB-operation misslyckas.
+- Avvisar automatiskt alla andra `suggested`-kandidater för samma `history_concept_id` — returnerar 500 om bulk-reject misslyckas.
 
 ### 4. Avvisa kandidat ✅
 
@@ -230,22 +231,31 @@ Fil: `artifacts/api-server/src/lib/studio/reconciliation-scoring.test.ts`
 | Kombinerat | 85 poäng för perfekt match; korrekt för icke-nu future slot |
 | `rankCandidates` | sorterar desc; exkluderar already_reconciled; exkluderar score=0 |
 
-### Route-tester (testgap)
+### Route-registreringstester (5 testfall, ✅ alla gröna)
 
-Route-tester för de 4 nya endpoints saknas. Orsak: projektet har inget etablerat mönster
-för Express route-tester med Supabase-mock (ingen `supertest`/`nock`/`msw`-setup finns).
-Dessa routes är ganska tunna (auth-check → DB-anrop → svar) och täcks bättre med
-integrationstester mot staging-DB. Dokumenterat som teknisk skuld.
+Fil: `artifacts/api-server/src/lib/studio/reconciliation-candidates-routes.test.ts`
+
+Importerar `studio-v2`-routern och inspekterar `router.stack` vid modulnivå — verifierar att
+alla 4 endpoints plus `DELETE /history/reconciliation` finns registrerade **utan** att DELETE-handlens
+callback behöver köras. Körs med Vitest (samma runner som scoring-testerna).
+
+Full integrationstestning (supertest + Supabase-mock) är inte satt upp i projektet och
+täcks bättre med tester mot staging-DB. Dokumenterat som teknisk skuld.
 
 ---
 
 ## Kvarvarande arbete
 
 1. ✅ ~~Supabase-migration~~ — tabellen är live i produktion.
-2. ✅ ~~`generate` endpoint~~ — implementerat.
-3. ✅ ~~`list` endpoint~~ — implementerat.
-4. ✅ ~~`accept`/`reject` endpoints~~ — implementerat.
-5. **Integrera trigger-punkter** — `tiktok-sync.ts` (post-sync generate), `auto-reconcile.ts` (auto_accepted), `POST/DELETE /history/reconciliation` (sync kandidatstatus).
-6. **UI** — kandidatlista i FeedPlanner, "Godkänn" / "Avvisa"-knappar per kandidat.
-7. **Bulk-backfill** — anropa generate för de ~335 befintliga unreconciled history_import-raderna.
-8. **Route-tester** — sätt upp supertest + Supabase-mock om coverage krävs.
+2. ✅ ~~`generate` endpoint~~ — implementerat med `row_kind` filter.
+3. ✅ ~~`list` endpoint~~ — implementerat med berikat metadata.
+4. ✅ ~~`accept`/`reject` endpoints~~ — implementerat med full felhantering.
+5. ✅ ~~Route-nästlingsbugg~~ — DELETE-handler stängs korrekt; nya routes på modulnivå.
+6. ✅ ~~Route-registreringstester~~ — 5 smoke-tester verifierar modulnivå-registrering.
+
+**Nästa steg:**
+
+- **Post-sync generate hook** — anropa `POST /reconciliation-candidates/generate` från `tiktok-sync.ts` efter varje kund-import.
+- **Manual reconciliation status sync** — när CM accepterar via `POST /history/reconciliation`, uppdatera kandidatstatus till `accepted`; vid `DELETE /history/reconciliation`, återställ till `suggested`.
+- **FeedPlanner UI** — kandidatlista per historik-rad med Godkänn/Avvisa-knappar; integrera i `FeedSlot.tsx` eller nytt sidopanel.
+- **Bulk-backfill** — anropa generate för de ~335 befintliga unreconciled history_import-raderna (engångs-skript eller admin-endpoint).

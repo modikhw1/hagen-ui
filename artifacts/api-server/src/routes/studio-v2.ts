@@ -1486,6 +1486,7 @@ router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) 
     logger.error(err, 'studio-v2 history reconciliation DELETE error');
     res.status(500).json({ error: 'Internt serverfel' });
   }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Reconciliation Candidates
@@ -1556,12 +1557,12 @@ router.post('/customers/:customerId/reconciliation-candidates/generate', require
     if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
 
-    // 1. Unreconciled history rows (TikTok imports not yet linked to a concept)
+    // 1. Unreconciled history rows (row_kind='history_import', no existing link)
     const { data: historyRows, error: histErr } = await supabase
       .from('customer_concepts')
       .select('id, published_at, tiktok_url, feed_order')
       .eq('customer_profile_id', customerId)
-      .is('concept_id', null)
+      .eq('row_kind', 'history_import')
       .is('reconciled_customer_concept_id', null)
       .not('tiktok_url', 'is', null);
 
@@ -1576,11 +1577,12 @@ router.post('/customers/:customerId/reconciliation-candidates/generate', require
       return;
     }
 
-    // 2. Target rows: assignment / collaboration, not archived
+    // 2. Target rows: assignment or collaboration rows, not archived
     const { data: targetRows, error: tgtErr } = await supabase
       .from('customer_concepts')
       .select('id, feed_order, planned_publish_at')
       .eq('customer_profile_id', customerId)
+      .in('row_kind', ['assignment', 'collaboration'])
       .not('concept_id', 'is', null)
       .neq('status', 'archived');
 
@@ -1774,18 +1776,28 @@ router.post('/reconciliation-candidates/:candidateId/accept', requireAuth, CM_ON
     if (linkError) { res.status(500).json({ error: linkError }); return; }
 
     // Mark this candidate accepted
-    await supabase
+    const { error: acceptErr } = await supabase
       .from('feed_reconciliation_candidates')
       .update({ status: 'accepted', decided_at: now, decided_by: actorId })
       .eq('id', candidateId);
+    if (acceptErr) {
+      logger.error({ err: acceptErr }, 'reconciliation-candidates: failed to mark accepted');
+      res.status(500).json({ error: acceptErr.message });
+      return;
+    }
 
     // Reject all other suggested candidates competing for the same history row
-    await supabase
+    const { error: rejectOthersErr } = await supabase
       .from('feed_reconciliation_candidates')
       .update({ status: 'rejected', decided_at: now, decided_by: actorId })
       .eq('history_concept_id', c['history_concept_id'] as string)
       .eq('status', 'suggested')
       .neq('id', candidateId);
+    if (rejectOthersErr) {
+      logger.warn({ err: rejectOthersErr }, 'reconciliation-candidates: failed to reject competing candidates');
+      res.status(500).json({ error: rejectOthersErr.message });
+      return;
+    }
 
     logger.info({ candidateId, actorId }, 'reconciliation-candidates: accepted');
     res.json({ success: true });
@@ -1838,7 +1850,6 @@ router.post('/reconciliation-candidates/:candidateId/reject', requireAuth, CM_ON
     logger.error(err, 'reconciliation-candidates reject error');
     res.status(500).json({ error: 'Internt serverfel' });
   }
-});
 });
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
