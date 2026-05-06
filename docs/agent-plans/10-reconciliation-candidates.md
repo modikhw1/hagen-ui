@@ -588,36 +588,42 @@ Finns kandidater för detta TikTok-klipp?
 │
 ├─ JA: target.feed_order = 0 (nu-slot)
 │      └─ Semantik: "detta klipp är output för vår nuvarande planerade post"
-│         ✓ Bekräfta → applyReconciliationLink + markCandidateAcceptedForLink
-│         Framtida steg: rekonciliering BÖR triggra performMarkProduced + advance
-│         (idag hanteras det manuellt via "Markera som LeTrend" + producera-flödet)
+│         ✓ Bekräfta → confirm-dialog → applyReconciliationLink + performMarkProduced + advance
+│         Confirm-dialogen visar: konceptets titel, klippets publiceringsdatum, valfritt länkfält
+│         (länk kan lämnas tom om CM redan har sett och godkänt klippet)
+│         Efter advance: nu-slotten skiftar till historik; nästa slot kliver upp till feed_order=0
 │
-├─ JA: target.feed_order > 0 (kommande slot)
-│      └─ Semantik: "klippet publicerades OUT-OF-ORDER — före planerat datum"
-│         Kräver CM-beslut:
-│           a) Bekräfta + flytta fram tidslinjen (ej implementerat)
-│           b) Bekräfta + hoppa över slotten (manuell åtgärd)
-│           c) Bekräfta utan timelineshift (nuvarande beteende — riskerar glidning)
+├─ JA: target.feed_order > 0 (kommande slot / scoring-signal)
+│      └─ Semantik: scoring-motorn tror att klippet kan kopplas till ett framtida koncept,
+│         men i det normala flödet är det alltid nu-slotten (feed_order=0) som är relevant target.
+│         Feed_order > 0 blockerar INTE accept — det är en svagare signal, inte ett out-of-order-fel.
+│         ✓ Bekräfta → samma flöde; advance triggas INTE (target är ej nu-slot)
+│         CM kan sedan manuellt markera producerat om önskat
 │
 ├─ JA: target.feed_order < 0 (historisk slot)
-│      └─ Semantik: "klippet matchar en redan producerad post"
-│         Scoring ger normalt låg poäng (already_reconciled-guard)
-│         Bör ses som osäker matchning — kräver CM-verifiering
+│      └─ Scoring ger normalt låg poäng (already_reconciled-guard exkluderar dessa)
+│         Visas bara om manuell koppling gjorts fel — kräver CM-verifiering
 │
-└─ NEJ / inga passande targets
-       └─ Alternativ:
-            a) Klicka "Hitta LeT-bekräftelse" i kontextmenyn → scoring-motorn söker igen
-            b) Välj manuellt via "Välj LeTrend-koncept..." → manuell koppling
-            c) Lämna oklippt (TikTok-only) → inga åtgärder
+└─ NEJ / alla avvisade / kunden gick sin egna väg
+       └─ CM-alternativ:
+            a) "Hitta LeT-bekräftelse" i kontextmenyn → scoring-motorn söker igen
+            b) "Välj LeTrend-koncept..." → manuell koppling
+            c) Logga som TikTok-only → kunden valde att producera något annat
+               → Originalrekommendationen (LeT-konceptet) bör kunna läggas i idle
+                  eller återladdas i feed planner vid ett senare tillfälle
 ```
 
-**Batch-scenario: flera nya klipp utan candidates**
+**Stegvis matchning vid N > 1 nya klipp (det normala flödet)**
 
-Om en kund har publicerat N > 1 klipp sedan senaste synk och alla är orekonsilierade:
-- Auto-reconcile i tiktok-sync skippas (kräver exakt 1 klipp).
-- Scoring-motorn körs post-sync och genererar candidates per history-rad.
-- CM bör granska i tur och ordning (högst score-kandidat för varje klipp).
-- Blind auto-accept-körning utan CM-review är INTE rekommenderat vid N > 1.
+Kunden laddar ibland upp flera klipp sedan senaste synk. Det avsedda flödet:
+
+1. Varje klipp får en scored candidate-lista mot nu-slotten (och övriga targets).
+2. CM (eller cron) bekräftar det senaste klippet mot nu-slotten → advance → nästa slot kliver upp.
+3. Nästa "markera som gjord" tar nästa oklippta klipp och matchar mot den nya nu-slotten.
+4. Detta upprepas tills alla klipp är kopplade eller markerade TikTok-only.
+
+Om ett klipp matchades fel: CM ångrar (DELETE /history/reconciliation → resetCandidateAfterUndo)
+och kan därefter bekräfta rätt koncept. Ångra-stöd är ett krav — se Designbeslut 4 nedan.
 
 ---
 
@@ -651,35 +657,52 @@ Detta är **medvetet** för Phase 6 — funktionaliteten är säker men ofullst�
 |---|---|---|
 | accept-endpoint kallar `performMarkProduced` när target är nu-slot | `artifacts/api-server/src/routes/studio-v2.ts` | ❌ Ej implementerat |
 | accept-endpoint skickar `{ advanced: true/false }` i response | `studio-v2.ts` | ❌ Ej implementerat |
+| Confirm-dialog i FeedSlot vid accept av nu-slot-kandidat | `FeedSlot.tsx` | ❌ Ej implementerat |
 | FeedSlot visar "Tidslinjen uppdaterad" vid advance=true | `FeedSlot.tsx` | ❌ Ej implementerat |
-| Out-of-order accept (feed_order > 0): CM-dialog för timeline-beslut | Nytt komponent | ❌ Ej implementerat |
-| Manual CM-bekräftelse av nu-slot bör trigga samma advance som cron | `performMarkProduced` | ✅ Finns; behöver kopplas |
+| TikTok-only-markering: idle-flagga på LeT-konceptet | `studio-v2.ts` / DB | ❌ Ej implementerat |
+| Ångra-stöd för advance (återställ feed_order efter felaktig advance) | Nytt endpoint | ❌ Ej implementerat |
+| Manual CM-bekräftelse av nu-slot triggar samma advance som cron | `performMarkProduced` | ✅ Finns; behöver kopplas |
 
 ---
 
-### Öppna frågor inför reconcile + advance-motor
+### Designbeslut (bekräftade 2026-05-06)
 
-1. **Vem driver advance efter CM-accept av nu-slot?**
-   — Ska accept-endpointen alltid kalla `performMarkProduced` vid `feed_order=0`?
-   — Eller ska CM explicit klicka "Markera som producerat" separat?
-   — **Rekommendation**: accept av nu-slot → implicit advance. Kräver confirm-dialog i UI.
+**1. Nu-slot accept → implicit advance med confirm-dialog**
 
-2. **Vad händer vid out-of-order accept (feed_order > 0)?**
-   — Ska accept blockeras tills CM väljer timeline-strategi?
-   — Eller accepteras och tidslinjen lämnas oförändrad (nuvarande beteende)?
-   — **Rekommendation**: blockera med modal — "Detta klipp publicerades före planerat datum.
-     Vill du flytta fram tidslinjen?" (Ja / Bekräfta utan timelineshift)
+Accept av en kandidat där `target.feed_order = 0` ska trigga `performMarkProduced`
+(advance_customer_feed_plan RPC) direkt i accept-endpointen, **efter** en confirm-dialog i UI.
+Dialogen visar konceptets titel och klippets publiceringsdatum. Ett valfritt länkfält kan inkluderas
+men är inte obligatoriskt — CM förväntas ha sett och godkänt klippet innan de bekräftar.
 
-3. **Ska batch-reject (avvisa alla förslag för ett klipp) markera klippet som TikTok-only?**
-   — Idag: alla kandidater avvisas → klippet förblir `unreconciled` men `suggested`-listan är tom.
-   — Framtida alternativ: sista reject triggar en explicit "TikTok-only"-flagga på history-raden.
+**2. feed_order > 0 blockerar inte — stegvis matchning är det avsedda flödet**
 
-4. **Hur hanteras CM-ångra efter advance?**
-   — `DELETE /history/reconciliation` återställer länken → `resetCandidateAfterUndo`.
-   — Men `advance_customer_feed_plan` är en DB-transaktion som inte är reversibel.
-   — Behöver vi en "ångra advance"-endpoint, eller är manuell feed_order-redigering tillräckligt?
+Kandidater med `feed_order > 0` är scoring-signaler, inte out-of-order-varningar.
+Det normala flödet vid N > 1 nya klipp:
+- Varje "markera som gjord" (manuellt eller cron) tar det senaste oklippta klippet mot nu-slotten.
+- Steg för steg kliver tidslinjen framåt.
+- Ingen modal blockerar CM för `feed_order > 0` — accept sker direkt men triggar ej advance
+  (eftersom target inte är nu-slot).
+Om ett klipp matchades fel hanteras det via ångra-flödet (punkt 4).
 
-5. **Ska motor-signalen rensas vid accept även utan advance?**
-   — Idag: `feed_motor_signals.auto_resolved_at` sätts bara i `performMarkProduced`.
-   — Om accept sker utan advance kvarstår nudgen i UI — kan vara förvirrande för CM.
+**3. TikTok-only: kunden producerade något eget — originalkonceptet till idle**
+
+När CM väljer att logga ett klipp som TikTok-only (kunden gick sin egna väg):
+- Klippet markeras som ej LeT-output (candidates avvisas, tiktok_only-flagga sätts om implementerat).
+- Det ursprungliga LeT-konceptet (assignment-raden) bör kunna läggas i `idle`-status
+  eller återladdas i feed planner vid ett senare tillfälle.
+- Detta möjliggör: plan-kontinuitet utan att konceptet försvinner ur biblioteket.
+
+**4. Ångra-stöd för advance är ett krav — CM ska känna att det "bara fungerar"**
+
+`DELETE /history/reconciliation` återställer länken och kör `resetCandidateAfterUndo`.
+Men `advance_customer_feed_plan` är idag inte reversibel. Behov:
+- En "ångra advance"-endpoint (eller RPC) som återställer feed_order till föregående tillstånd.
+- CM-upplevelsen ska inte kräva manuell feed_order-redigering — backend hanterar allt.
+- Vanlig CM i dagligt flöde ska aldrig behöva förstå feed_order-siffror.
+
+**5. Motor-signal vid accept utan advance — ännu inte beslutat**
+
+Om accept sker utan advance (target är ej nu-slot) kvarstår eventuella aktiva
+`feed_motor_signals`. Huruvida dessa ska rensas vid accept utan advance är ännu inte beslutat.
+Behöver utvärderas när motor-signal-UX är klarare.
 
