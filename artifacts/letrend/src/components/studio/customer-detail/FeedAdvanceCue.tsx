@@ -19,7 +19,6 @@ type FeedAdvanceCueProps = {
   freshImportedConcepts: CustomerConcept[];
   freshImportedIds: ReadonlySet<string>;
   focusedEvidenceCount: number;
-  markingProducedFromCue: boolean;
   onReviewHistory: () => void;
   onDefer: () => void;
   onMarkProducedFromCue: () => void;
@@ -36,7 +35,6 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
   freshImportedConcepts,
   freshImportedIds,
   focusedEvidenceCount,
-  markingProducedFromCue,
   onReviewHistory,
   onDefer,
   onMarkProducedFromCue,
@@ -205,7 +203,6 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
           <button
             onClick={onMarkProducedFromCue}
-            disabled={markingProducedFromCue}
             style={{
               padding: '5px 12px',
               background: '#16a34a',
@@ -214,11 +211,11 @@ export const FeedAdvanceCue = React.memo(function FeedAdvanceCue({
               fontSize: 12,
               fontWeight: 600,
               color: '#fff',
-              cursor: markingProducedFromCue ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
               whiteSpace: 'nowrap',
             }}
           >
-            {markingProducedFromCue ? 'Markerar...' : 'Markera som gjord'}
+            Bekräfta som gjord
           </button>
           <div style={{ fontSize: 10, color: '#166534', opacity: 0.6, textAlign: 'right', maxWidth: 220 }}>
             Bekräfta nu-kortet när historiken stämmer.
