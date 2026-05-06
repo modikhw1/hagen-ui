@@ -1,0 +1,647 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import {
+  ArrowRight,
+  CalendarCheck,
+  Check,
+  Copy,
+  ExternalLink,
+  FileText,
+  Inbox,
+  LayoutList,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  RotateCcw,
+  Send,
+  Trash2,
+  UserCheck,
+  X,
+} from 'lucide-react';
+import CreateDemoDialog, { type CreateDemoResult } from '@/components/admin/demos/CreateDemoDialog';
+import ConvertDemoDialog from '@/components/admin/demos/ConvertDemoDialog';
+import EditDemoDialog from '@/components/admin/demos/EditDemoDialog';
+import GamePlanDrawer from '@/components/admin/demos/GamePlanDrawer';
+import { DemoBoardSkeleton } from '@/components/admin/demos/DemoBoardSkeleton';
+import { DemosFunnelBar } from '@/components/admin/demos/DemosFunnelBar';
+import { useDemosBoard, useUpdateDemoStatus, useDeleteDemo } from '@/hooks/admin/useDemos';
+import { useUrlState } from '@/hooks/useUrlState';
+import { demosCopy } from '@/lib/admin/copy/demos';
+import { demoStatusLabel, type DemoStatus } from '@/lib/admin-derive/demos';
+import { formatSek } from '@/lib/admin/money';
+import type { DemoCardDto } from '@/lib/admin/schemas/demos';
+import { shortDateSv } from '@/lib/admin/time';
+import { apiClient } from '@/lib/admin/api-client';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import KpiCard from '@/components/admin/ui/KpiCard';
+import EmptyState from '@/components/admin/ui/EmptyState';
+import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
+import { cn } from '@/lib/utils';
+
+const STAGE_FILTERS = [
+  { key: 'all', label: 'Alla' },
+  { key: 'active', label: 'Aktiva' },
+  { key: 'won', label: 'Win' },
+  { key: 'lost', label: 'Lost' },
+] as const;
+
+type StageFilter = (typeof STAGE_FILTERS)[number]['key'];
+
+const STALE_DAYS = 21;
+const STALE_STATUSES: DemoStatus[] = ['sent', 'opened', 'responded', 'quoted'];
+const DEMO_SHARE_BASE = 'https://letrend.se';
+
+function isStale(card: DemoCardDto): boolean {
+  if (!STALE_STATUSES.includes(card.status)) return false;
+  return Date.now() - new Date(card.statusChangedAt).getTime() > STALE_DAYS * 86_400_000;
+}
+
+function statusTone(status: DemoStatus): string {
+  switch (status) {
+    case 'won':
+      return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20';
+    case 'lost':
+    case 'expired':
+      return 'bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20';
+    case 'quoted':
+      return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20';
+    case 'opened':
+    case 'responded':
+      return 'bg-primary/10 text-primary border-primary/20';
+    case 'sent':
+      return 'bg-secondary text-foreground border-border';
+    default:
+      return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+function buildShareUrl(token: string | null): string | null {
+  return token ? `${DEMO_SHARE_BASE}/d/${token}` : null;
+}
+
+function ReadinessDots({
+  studioConceptCount,
+  hasFeedplan,
+  hasGamePlan,
+}: {
+  studioConceptCount: number;
+  hasFeedplan: boolean;
+  hasGamePlan: boolean;
+}) {
+  const items = [
+    { on: studioConceptCount > 0, Icon: LayoutList, label: `${studioConceptCount} koncept` },
+    { on: hasFeedplan, Icon: CalendarCheck, label: 'Feedplan' },
+    { on: hasGamePlan, Icon: FileText, label: 'Game plan' },
+  ];
+  return (
+    <div className="mt-1 flex items-center gap-1.5">
+      {items.map(({ on, Icon, label }) => (
+        <span
+          key={label}
+          title={label}
+          className={cn(
+            'inline-flex h-5 w-5 items-center justify-center rounded',
+            on ? 'text-primary' : 'text-muted-foreground/40',
+          )}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+type GamePlanDrawerState = {
+  open: boolean;
+  demoId: string | null;
+  initialValues: Record<string, unknown>;
+};
+
+const EMPTY_GAME_PLAN_DRAWER: GamePlanDrawerState = {
+  open: false,
+  demoId: null,
+  initialValues: {},
+};
+
+export function DemosBoard({ days = 30 }: { days?: number }) {
+  const { get, set } = useUrlState();
+  const { data, isLoading, error } = useDemosBoard(days);
+  const updateStatus = useUpdateDemoStatus();
+  const deleteDemo = useDeleteDemo();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [stageFilter, setStageFilter] = useState<StageFilter>('all');
+  const [studioPendingId, setStudioPendingId] = useState<string | null>(null);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [gamePlanDrawer, setGamePlanDrawer] = useState<GamePlanDrawerState>(EMPTY_GAME_PLAN_DRAWER);
+  const [convertTarget, setConvertTarget] = useState<{
+    id: string;
+    company_name: string;
+    contact_email: string | null;
+    proposed_price_ore: number | null;
+  } | null>(null);
+
+  const createOpen = createDialogOpen || get('action') === 'create';
+
+  const allCards = useMemo<DemoCardDto[]>(
+    () =>
+      data
+        ? [
+            ...data.columns.draft,
+            ...data.columns.sent,
+            ...data.columns.opened,
+            ...data.columns.responded,
+            ...data.columns.closed,
+          ]
+        : [],
+    [data],
+  );
+
+  const editTarget = useMemo(
+    () => allCards.find((item) => item.id === editId) ?? null,
+    [allCards, editId],
+  );
+
+  const filteredCards = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return allCards
+      .filter((card) => {
+        if (q) {
+          const hay = [
+            card.companyName,
+            card.contactName ?? '',
+            card.contactEmail ?? '',
+            card.tiktokHandle ?? '',
+            card.ownerName ?? '',
+          ]
+            .join(' ')
+            .toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (stageFilter === 'active') return !['won', 'lost', 'expired'].includes(card.status);
+        if (stageFilter === 'won') return card.status === 'won';
+        if (stageFilter === 'lost') return card.status === 'lost' || card.status === 'expired';
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.statusChangedAt).getTime() - new Date(a.statusChangedAt).getTime(),
+      );
+  }, [allCards, searchQuery, stageFilter]);
+
+  if (isLoading) return <DemoBoardSkeleton />;
+
+  if (error || !data) {
+    return (
+      <Card className="border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+        {error instanceof Error ? error.message : demosCopy.loadBoardError}
+      </Card>
+    );
+  }
+
+  const handleAdvance = async (demo: DemoCardDto) => {
+    if (!demo.nextStatus) return;
+    await updateStatus.mutateAsync({ id: demo.id, status: demo.nextStatus, lost_reason: null });
+    toast.success(
+      demosCopy.statusMoved(demo.companyName, demoStatusLabel(demo.nextStatus).toLowerCase()),
+    );
+  };
+
+  const handleLose = async (demo: DemoCardDto) => {
+    await updateStatus.mutateAsync({ id: demo.id, status: 'lost', lost_reason: null });
+    toast.warning(demosCopy.statusLost(demo.companyName));
+  };
+
+  const handleReopen = async (demo: DemoCardDto) => {
+    await updateStatus.mutateAsync({ id: demo.id, status: 'draft', lost_reason: null });
+    toast.success(`${demo.companyName} återöppnad som förberedd.`);
+  };
+
+  const handleWin = (demo: DemoCardDto) => {
+    setConvertTarget({
+      id: demo.id,
+      company_name: demo.companyName,
+      contact_email: demo.contactEmail,
+      proposed_price_ore: demo.proposedPriceOre,
+    });
+  };
+
+  const handleCopyLink = async (demo: DemoCardDto) => {
+    const url = buildShareUrl(demo.shareToken);
+    if (!url) return toast.error(demosCopy.copyLinkMissing);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(demosCopy.copyLinkSuccess);
+      if (demo.status === 'draft') {
+        await updateStatus.mutateAsync({ id: demo.id, status: 'sent', lost_reason: null });
+      }
+    } catch {
+      toast.error('Kunde inte kopiera till urklipp.');
+    }
+  };
+
+  const handleOpenPreview = (demo: DemoCardDto) => {
+    const url = buildShareUrl(demo.shareToken);
+    if (!url) return toast.error(demosCopy.copyLinkMissing);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleOpenStudio = async (demo: DemoCardDto) => {
+    if (studioPendingId) return;
+    setStudioPendingId(demo.id);
+    try {
+      const result = (await apiClient.post(`/api/admin/demos/${demo.id}/prepare-studio`, {
+        sync_tiktok_history: true,
+      })) as {
+        success: boolean;
+        customerId?: string;
+        error?: string;
+        sync?: { status?: string; imported?: number; error?: string };
+      };
+      if (result.success && result.customerId) {
+        if (result.sync?.status === 'error') {
+          toast.warning(`Studio öppnas, men TikTok-ingest misslyckades: ${result.sync.error}`);
+        } else if (result.sync?.status === 'ok') {
+          toast.success(`TikTok-historik hämtad: ${result.sync.imported ?? 0} nya klipp.`);
+        }
+        window.open(`/studio/customers/${result.customerId}?section=feed`, '_blank');
+      } else {
+        toast.error(result.error || 'Kunde inte förbereda Studio.');
+      }
+    } catch {
+      toast.error('Ett oväntat fel uppstod.');
+    } finally {
+      setStudioPendingId(null);
+    }
+  };
+
+  const handleDelete = async (demo: DemoCardDto) => {
+    if (!confirm(`Ta bort demo för "${demo.companyName}"?`)) return;
+    await deleteDemo.mutateAsync(demo.id);
+    toast.success(`Demo för ${demo.companyName} borttagen.`);
+  };
+
+  const handleOpenGamePlanDrawer = (demo: DemoCardDto) => {
+    setGamePlanDrawer({
+      open: true,
+      demoId: demo.id,
+      initialValues: {
+        company_name: demo.companyName,
+        contact_name: demo.contactName ?? null,
+        tiktok_handle: demo.tiktokHandle ?? null,
+        proposed_concepts_per_week: demo.proposedConceptsPerWeek ?? null,
+        game_plan: demo.gamePlan ?? null,
+        game_plan_html: demo.gamePlanHtml ?? null,
+        preview_notes: demo.previewNotes ?? null,
+      },
+    });
+  };
+
+  const handleCreated = async (result?: CreateDemoResult) => {
+    const sync = result?.sync;
+    if (sync?.status === 'error') {
+      toast.warning(`Demo skapades, men TikTok-ingest misslyckades: ${sync.error}`);
+    } else if (sync?.status === 'ok') {
+      toast.success(`Ny demo skapades. ${sync.imported ?? 0} historikklipp importerade.`);
+    } else {
+      toast.success(demosCopy.createSuccess);
+    }
+    const demoId = result?.demo?.id;
+    if (typeof demoId === 'string' && demoId) {
+      const demo = result?.demo as Record<string, unknown> | undefined;
+      setGamePlanDrawer({
+        open: true,
+        demoId,
+        initialValues: {
+          company_name: demo?.companyName ?? null,
+          contact_name: demo?.contactName ?? null,
+          tiktok_handle: demo?.tiktokHandle ?? null,
+          proposed_concepts_per_week: demo?.proposedConceptsPerWeek ?? null,
+        },
+      });
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
+      <PageHeader
+        title={demosCopy.pageTitle}
+        subtitle={demosCopy.pageSubtitle}
+        actions={
+          <Button
+            onClick={() => {
+              setCreateDialogOpen(true);
+              set({ action: 'create' });
+            }}
+          >
+            {demosCopy.createButton}
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <KpiCard
+          icon={<Send className="h-4 w-4" />}
+          label="Skickade"
+          value={String(data.sentLast30)}
+          delta={{
+            value: `${data.sentLast30 - data.sentPrev30 >= 0 ? '+' : ''}${data.sentLast30 - data.sentPrev30}`,
+            label: '30d',
+            tone: data.sentLast30 >= data.sentPrev30 ? 'success' : 'danger',
+          }}
+        />
+        <KpiCard
+          icon={<Inbox className="h-4 w-4" />}
+          label="I dialog"
+          value={String(data.openedLast30)}
+          delta={{
+            value: `${data.openedLast30 - data.openedPrev30 >= 0 ? '+' : ''}${data.openedLast30 - data.openedPrev30}`,
+            label: '30d',
+            tone: data.openedLast30 >= data.openedPrev30 ? 'success' : 'danger',
+          }}
+        />
+        <KpiCard
+          icon={<UserCheck className="h-4 w-4" />}
+          label="Konverterade"
+          value={String(data.convertedLast30)}
+          delta={{
+            value: `${data.convertedLast30 - data.convertedPrev30 >= 0 ? '+' : ''}${data.convertedLast30 - data.convertedPrev30}`,
+            label: '30d',
+            tone: data.convertedLast30 >= data.convertedPrev30 ? 'success' : 'danger',
+          }}
+        />
+      </div>
+
+      <DemosFunnelBar cards={allCards} />
+
+      <Card className="p-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Sök bolag, e-post eller TikTok-handle"
+            className="max-w-md"
+          />
+          <div className="flex flex-wrap gap-1">
+            {STAGE_FILTERS.map((f) => (
+              <Button
+                key={f.key}
+                size="sm"
+                variant={stageFilter === f.key ? 'default' : 'secondary'}
+                onClick={() => setStageFilter(f.key)}
+              >
+                {f.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {filteredCards.length === 0 ? (
+          <EmptyState
+            icon={<Inbox className="h-8 w-8 opacity-40" />}
+            title={demosCopy.emptyColumn}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Bolag</TableHead>
+                <TableHead>CM / Studio</TableHead>
+                <TableHead>Pris</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Uppdaterad</TableHead>
+                <TableHead className="text-right">Åtgärder</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredCards.map((demo) => {
+                const stale = isStale(demo);
+                const busy = updateStatus.isPending && updateStatus.variables?.id === demo.id;
+                const isClosed = ['won', 'lost', 'expired'].includes(demo.status);
+                const isLostOrExpired = demo.status === 'lost' || demo.status === 'expired';
+
+                return (
+                  <TableRow key={demo.id}>
+                    <TableCell>
+                      <div className="font-medium">{demo.companyName}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {demo.tiktokHandle ? `@${demo.tiktokHandle}` : 'Ingen TikTok-handle'}
+                        {demo.contactEmail ? ` · ${demo.contactEmail}` : ''}
+                      </div>
+                      {stale && (
+                        <div className="mt-1 text-xs font-medium text-amber-600">
+                          ⚠ {demosCopy.staleWarning}
+                        </div>
+                      )}
+                      {demo.convertedCustomerId && (
+                        <a
+                          href={`/studio/customers/${demo.convertedCustomerId}`}
+                          className="mt-1 inline-block text-xs text-primary hover:underline"
+                        >
+                          Kund →
+                        </a>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-muted-foreground">
+                        {demo.ownerName ?? demosCopy.ownerMissing}
+                      </div>
+                      <ReadinessDots
+                        studioConceptCount={demo.studioConceptCount ?? 0}
+                        hasFeedplan={Boolean(demo.hasFeedplan)}
+                        hasGamePlan={Boolean(demo.hasGamePlan)}
+                      />
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {formatSek(demo.proposedPriceOre, { fallback: demosCopy.noPrice })}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={cn('font-medium', statusTone(demo.status))}>
+                        {demoStatusLabel(demo.status)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {shortDateSv(demo.statusChangedAt)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setEditId(demo.id)}
+                          title={demosCopy.editDialogTitle}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleOpenGamePlanDrawer(demo)}
+                          title={demosCopy.gamePlanDrawerTitle}
+                          className={cn(
+                            !demo.hasGamePlan && 'text-blue-600 dark:text-blue-400',
+                          )}
+                        >
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void handleCopyLink(demo)}
+                          disabled={!demo.shareToken}
+                          title={demosCopy.copyLink}
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleOpenPreview(demo)}
+                          disabled={!demo.shareToken}
+                          title="Öppna preview"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+
+                        {!isClosed && demo.nextStatus && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void handleAdvance(demo)}
+                            disabled={busy}
+                            title={`Flytta till ${demoStatusLabel(demo.nextStatus)}`}
+                          >
+                            {busy ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <ArrowRight className="h-4 w-4" />
+                            )}
+                          </Button>
+                        )}
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="ghost">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => void handleOpenStudio(demo)}
+                              disabled={studioPendingId === demo.id}
+                            >
+                              {studioPendingId === demo.id ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <ExternalLink className="mr-2 h-4 w-4" />
+                              )}
+                              Öppna Studio
+                            </DropdownMenuItem>
+
+                            {!isClosed && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleWin(demo)}>
+                                  <Check className="mr-2 h-4 w-4" />
+                                  Win — konvertera
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => void handleLose(demo)}
+                                  disabled={busy}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <X className="mr-2 h-4 w-4" />
+                                  Markera förlorad
+                                </DropdownMenuItem>
+                              </>
+                            )}
+
+                            {isLostOrExpired && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => void handleReopen(demo)}
+                                  disabled={busy}
+                                >
+                                  <RotateCcw className="mr-2 h-4 w-4" />
+                                  Återöppna
+                                </DropdownMenuItem>
+                              </>
+                            )}
+
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => void handleDelete(demo)}
+                              disabled={deleteDemo.isPending}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Ta bort
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </Card>
+
+      <CreateDemoDialog
+        open={createOpen}
+        onClose={() => {
+          setCreateDialogOpen(false);
+          set({ action: null });
+        }}
+        onCreated={(result) => void handleCreated(result)}
+      />
+      <EditDemoDialog
+        demo={editTarget}
+        onClose={() => setEditId(null)}
+        onSaved={() => toast.success(demosCopy.editSuccess)}
+      />
+      <ConvertDemoDialog
+        demo={convertTarget}
+        onClose={() => setConvertTarget(null)}
+        onSaved={(result) => {
+          if (result.warning) return toast.warning(result.warning);
+          toast.success(
+            result.invite_sent ? demosCopy.convertedInvite : demosCopy.convertedCustomer,
+          );
+        }}
+      />
+      <GamePlanDrawer
+        open={gamePlanDrawer.open}
+        demoId={gamePlanDrawer.demoId}
+        initialValues={gamePlanDrawer.initialValues}
+        onClose={() => setGamePlanDrawer(EMPTY_GAME_PLAN_DRAWER)}
+        onSaved={() => toast.success(demosCopy.editSuccess)}
+      />
+    </div>
+  );
+}

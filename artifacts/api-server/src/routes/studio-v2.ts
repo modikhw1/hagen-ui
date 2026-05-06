@@ -50,12 +50,14 @@ function sanitizePrice(input: unknown): number | null {
 
 function isPlannedUpcomingFeedRow(row: Record<string, unknown>): boolean {
   const status = typeof row.status === 'string' ? row.status : null;
+  const rowKind = typeof row.row_kind === 'string' ? row.row_kind : null;
   return (
     typeof row.feed_order === 'number'
     && row.feed_order > 0
     && status !== 'produced'
     && status !== 'archived'
     && status !== 'history_import'
+    && rowKind !== 'history_import'
   );
 }
 
@@ -370,6 +372,8 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
       content_overrides: typeof body.content_overrides === 'object' && body.content_overrides ? body.content_overrides : {},
       added_at: new Date().toISOString(),
     };
+
+    insert.row_kind = isCollaboration ? 'collaboration' : 'assignment';
 
     if (isCollaboration) {
       insert.visual_variant = 'collaboration';

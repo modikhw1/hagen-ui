@@ -7,6 +7,7 @@ import { resolveCustomerConceptContentOverrides } from '@/lib/customer-concept-o
 import type { Json } from '@/types/database';
 import type {
   AssignedCustomerConcept,
+  CollaborationCustomerConcept,
   CustomerConcept,
   CustomerConceptHistorySource,
   CustomerConceptRowKind,
@@ -53,6 +54,7 @@ export const STUDIO_CUSTOMER_CONCEPT_SELECT = `
   profile_name,
   profile_image_url,
   visual_variant,
+  row_kind,
   collaborator_reach,
   collaborator_avatar_url,
   scope,
@@ -86,6 +88,42 @@ function readNullableRecord(value: unknown): { [key: string]: Json | undefined }
   return value as { [key: string]: Json | undefined };
 }
 
+/**
+ * Resolve `row_kind` for a raw DB row using a layered fallback chain:
+ * 1. Explicit DB column (`row_kind`): `assignment` | `collaboration` | `history_import`
+ * 2. Collaboration heuristic: `visual_variant === 'collaboration'`
+ * 3. History heuristic: `status === 'history_import'` OR `history_source` present
+ * 4. Assignment heuristic: `concept_id` present
+ * 5. Legacy fallback: `'imported_history'`
+ *
+ * DB column values use `history_import`; the frontend type uses `imported_history`.
+ */
+function resolveRowKind(source: {
+  row_kind?: unknown;
+  visual_variant?: unknown;
+  status?: unknown;
+  history_source?: unknown;
+  concept_id?: unknown;
+}): CustomerConceptRowKind {
+  const dbRowKind = readString(source.row_kind);
+  if (dbRowKind === 'assignment') return 'assignment';
+  if (dbRowKind === 'collaboration') return 'collaboration';
+  if (dbRowKind === 'history_import') return 'imported_history';
+
+  if ((readString(source.visual_variant) ?? '').toLowerCase() === 'collaboration') {
+    return 'collaboration';
+  }
+
+  const status = readString(source.status);
+  const historySource = readString(source.history_source);
+  if (status === 'history_import' || historySource) return 'imported_history';
+
+  if (readString(source.concept_id)) return 'assignment';
+
+  return 'imported_history';
+}
+
+/** @deprecated Use `resolveRowKind` internally; kept for external callers. */
 export function getStudioCustomerConceptRowKind(source: {
   concept_id?: unknown;
 }): CustomerConceptRowKind {
@@ -119,9 +157,9 @@ export function isStudioAssignedCustomerConcept(
 }
 
 export function isCollaborationCustomerConcept(
-  concept: Pick<CustomerConcept, 'visual_variant'>
+  concept: Pick<CustomerConcept, 'visual_variant' | 'row_kind'>
 ): boolean {
-  return (concept.visual_variant ?? '').toLowerCase() === 'collaboration';
+  return concept.row_kind === 'collaboration' || (concept.visual_variant ?? '').toLowerCase() === 'collaboration';
 }
 
 export function isConceptPlaced(concept: Pick<CustomerConcept, 'placement'>): boolean {
@@ -170,7 +208,13 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
   const id = readString(row.id) ?? '';
   const customerId = readString(row.customer_id) ?? readString(row.customer_profile_id) ?? '';
   const sourceConceptId = readString(row.concept_id);
-  const rowKind = getStudioCustomerConceptRowKind({ concept_id: sourceConceptId });
+  const rowKind = resolveRowKind({
+    row_kind: row.row_kind,
+    visual_variant: row.visual_variant,
+    status: row.status,
+    history_source: row.history_source,
+    concept_id: sourceConceptId,
+  });
   const contentOverrides = resolveCustomerConceptContentOverrides({
     content_overrides: readNullableRecord(row.content_overrides),
   });
@@ -342,7 +386,20 @@ export function normalizeStudioCustomerConcept(row: Record<string, unknown>): Cu
         source_concept_id: sourceConceptId,
         has_source_concept: true,
       },
-    };
+    } satisfies AssignedCustomerConcept;
+  }
+
+  if (rowKind === 'collaboration') {
+    return {
+      ...normalizedConcept,
+      row_kind: 'collaboration',
+      concept_id: null,
+      assignment: {
+        ...normalizedConcept.assignment,
+        source_concept_id: null,
+        has_source_concept: false,
+      },
+    } satisfies CollaborationCustomerConcept;
   }
 
   return {

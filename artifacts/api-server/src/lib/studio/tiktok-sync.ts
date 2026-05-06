@@ -519,6 +519,7 @@ export async function syncCustomerHistory(
             customer_id: customerId,
             concept_id: null,
             status: 'history_import',
+            row_kind: 'history_import' as const,
             tiktok_url: c.tiktok_url,
             tiktok_thumbnail_url: c.tiktok_thumbnail_url,
             tiktok_views: c.tiktok_views,

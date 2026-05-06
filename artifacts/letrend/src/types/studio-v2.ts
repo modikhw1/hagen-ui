@@ -34,7 +34,7 @@ export interface ConceptContentOverrides {
 // Database Tables
 // =====================================================
 
-export type CustomerConceptRowKind = 'assignment' | 'imported_history';
+export type CustomerConceptRowKind = 'assignment' | 'collaboration' | 'imported_history';
 
 export interface CustomerConceptAssignmentBoundary {
   customer_concept_id: string;
@@ -201,6 +201,15 @@ export interface AssignedCustomerConcept extends CustomerConceptBase {
   };
 }
 
+export interface CollaborationCustomerConcept extends CustomerConceptBase {
+  row_kind: 'collaboration';
+  concept_id: null;
+  assignment: CustomerConceptAssignmentBoundary & {
+    source_concept_id: null;
+    has_source_concept: false;
+  };
+}
+
 export interface ImportedHistoryCustomerConcept extends CustomerConceptBase {
   row_kind: 'imported_history';
   concept_id: null;
@@ -210,7 +219,7 @@ export interface ImportedHistoryCustomerConcept extends CustomerConceptBase {
   };
 }
 
-export type CustomerConcept = AssignedCustomerConcept | ImportedHistoryCustomerConcept;
+export type CustomerConcept = AssignedCustomerConcept | CollaborationCustomerConcept | ImportedHistoryCustomerConcept;
 
 /**
  * customer_notes table

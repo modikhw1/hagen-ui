@@ -11,7 +11,9 @@ function readFeedOrder(concept: CustomerConcept): number | null {
 
 function isFutureQueueConcept(concept: CustomerConcept): boolean {
   const feedOrder = readFeedOrder(concept);
-  return concept.row_kind === 'assignment' && typeof feedOrder === 'number' && feedOrder >= 0;
+  return (concept.row_kind === 'assignment' || concept.row_kind === 'collaboration')
+    && typeof feedOrder === 'number'
+    && feedOrder >= 0;
 }
 
 function sortFutureQueue(a: CustomerConcept, b: CustomerConcept): number {
@@ -38,7 +40,7 @@ export function buildDenseFeedOrderInsertionUpdates(
   targetFeedOrder: number
 ): PlannerQueueFeedOrderUpdate[] {
   const concept = concepts.find((item) => item.id === conceptId);
-  if (!concept || concept.row_kind !== 'assignment') return [];
+  if (!concept || (concept.row_kind !== 'assignment' && concept.row_kind !== 'collaboration')) return [];
 
   const queueWithoutConcept = concepts
     .filter((item) => isFutureQueueConcept(item) && item.id !== conceptId)

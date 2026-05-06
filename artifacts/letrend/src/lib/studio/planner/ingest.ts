@@ -31,6 +31,9 @@ function readAnchor(concept: CustomerConcept): PlannerAnchorConstraint | null {
 
 function isVerifiedHistory(concept: CustomerConcept): boolean {
   if (concept.row_kind === 'imported_history') return true;
+  // Collaboration cards with negative feed_order are past-positioned but are
+  // never imported history — keep them in the planned/future zone.
+  if (concept.row_kind === 'collaboration') return false;
   return typeof concept.placement.feed_order === 'number' && concept.placement.feed_order < 0;
 }
 
@@ -99,8 +102,10 @@ export function normalizePlannerInput(input: PlannerInput): PlannerNormalizedEnt
       continue;
     }
 
-    if (concept.row_kind !== 'assignment') continue;
-    if (concept.placement.feed_order === null) continue;
+    // Both assignment and collaboration rows are plannable; only imported_history is excluded.
+    // Negative feed_order means the card is positioned in the past zone — skip it regardless of kind.
+    if (concept.row_kind === 'imported_history') continue;
+    if (concept.placement.feed_order === null || concept.placement.feed_order < 0) continue;
 
     plannedEntries.push({
       ...base,

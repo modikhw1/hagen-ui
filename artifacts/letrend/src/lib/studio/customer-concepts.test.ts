@@ -56,4 +56,65 @@ describe('normalizeStudioCustomerConcept', () => {
     expect(concept.placement).toBeDefined();
     expect(concept.placement.feed_order).toBeNull();
   });
+
+  it('prefers DB row_kind=assignment over heuristic fallback', () => {
+    const concept = normalizeStudioCustomerConcept(
+      rawRow({ row_kind: 'assignment', concept_id: 'concept-1' })
+    );
+    expect(concept.row_kind).toBe('assignment');
+    expect(concept.assignment.has_source_concept).toBe(true);
+  });
+
+  it('maps DB row_kind=history_import to frontend imported_history', () => {
+    const concept = normalizeStudioCustomerConcept(
+      rawRow({ row_kind: 'history_import', concept_id: null, status: 'history_import' })
+    );
+    expect(concept.row_kind).toBe('imported_history');
+    expect(concept.concept_id).toBeNull();
+    expect(concept.assignment.has_source_concept).toBe(false);
+  });
+
+  it('maps DB row_kind=collaboration to frontend collaboration', () => {
+    const concept = normalizeStudioCustomerConcept(
+      rawRow({ row_kind: 'collaboration', concept_id: null, visual_variant: 'collaboration' })
+    );
+    expect(concept.row_kind).toBe('collaboration');
+    expect(concept.concept_id).toBeNull();
+    expect(concept.assignment.has_source_concept).toBe(false);
+  });
+
+  it('resolves collaboration via visual_variant heuristic when row_kind is absent', () => {
+    const concept = normalizeStudioCustomerConcept(
+      rawRow({ concept_id: null, visual_variant: 'collaboration', status: 'draft' })
+    );
+    expect(concept.row_kind).toBe('collaboration');
+    expect(concept.assignment.has_source_concept).toBe(false);
+  });
+
+  it('never classifies a collaboration row as imported_history', () => {
+    const concept = normalizeStudioCustomerConcept(
+      rawRow({
+        row_kind: 'collaboration',
+        concept_id: null,
+        visual_variant: 'collaboration',
+        history_source: null,
+        status: 'draft',
+      })
+    );
+    expect(concept.row_kind).toBe('collaboration');
+    expect(concept.row_kind).not.toBe('imported_history');
+  });
+
+  it('DB row_kind=collaboration wins over history_source heuristic that would otherwise classify as history', () => {
+    const concept = normalizeStudioCustomerConcept(
+      rawRow({
+        row_kind: 'collaboration',
+        concept_id: null,
+        visual_variant: 'collaboration',
+        history_source: 'tiktok_profile',
+        status: 'history_import',
+      })
+    );
+    expect(concept.row_kind).toBe('collaboration');
+  });
 });

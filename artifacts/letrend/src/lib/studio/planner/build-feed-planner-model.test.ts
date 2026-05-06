@@ -79,6 +79,29 @@ describe('buildFeedPlannerModel', () => {
     expect(model.currentCard?.state).toBe('now');
   });
 
+  it('does not classify a collaboration card with negative feed_order as imported history', () => {
+    const concepts = [
+      normalizeStudioCustomerConcept(
+        rawRow('collab-past', {
+          feed_order: -1,
+          visual_variant: 'collaboration',
+          concept_id: null,
+          planned_publish_at: '2026-04-01T00:00:00Z',
+        })
+      ),
+      normalizeStudioCustomerConcept(rawRow('now', { feed_order: 0 })),
+    ];
+
+    const model = buildFeedPlannerModel({
+      concepts,
+      now: new Date('2026-05-05T09:00:00Z'),
+      tempoWeekdays: [1, 4],
+    });
+
+    expect(model.pastCards.map((c) => c.id)).not.toContain('collab-past');
+    expect(model.currentCard?.id).toBe('now');
+  });
+
   it('marks collaboration cards as anchored future cards without letting the anchor drive ordering', () => {
     const concepts = [
       normalizeStudioCustomerConcept(
