@@ -465,3 +465,82 @@ Kör backfill-endpoint igen för att återskapa suggested-kandidater.
 - `candidate.target.concepts` är null: `getConceptDetails` anropas inte; `slotLabel` eller "Koncept" visas som titel.
 - Dubbel-klick på Accept/Reject: andra klicket ignoreras (knapparna inaktiverade under loading).
 
+
+---
+
+## Phase 5 QA-rapport (2026-05-06)
+
+### Statisk kod-QA utförd på
+
+- `FeedSlot.tsx` — komplett genomgång av kandidatpanel, badge, generate-meny
+- `CustomerWorkspaceContent.tsx` — accept/reject/generate handlers
+- `feedTypes.ts` — propgränssnittet
+- `FeedPlannerSection.tsx` — pass-through av props
+
+### Buggar hittade och åtgärdade
+
+#### Bug 1 — Kandidatpanelens maxHeight för hög (KRITISK layout-bugg)
+
+**Problem**: Panelen hade `maxHeight: 200px`. 9:16-kort har `maxHeight: 280px` och
+är typiskt 210–230px höga vid normala kolumnbredder (~130px). Med tags + titel +
+datum + stats = ca 50–70px icke-kandidat-innehåll kvarstår ungefär 100–110px för
+kandidatpanelen. En panel på 200px riskerade att trycka ut innehåll utanför kortets
+bounding box eller överlappa toppraden (TikTok-ikonen).
+
+**Fix**: `maxHeight: 200` → `maxHeight: 100`. Vid 1 kandidat (~76px) ryms den utan
+scroll; vid 2+ visas scrollbar automatiskt via `overflowY: 'auto'`.
+
+#### Bug 2 — Onödig overflowY-condition
+
+**Problem**: `overflowY: candidates.length > 2 ? 'auto' : undefined`. Redundant
+eftersom `overflowY: 'auto'` ändå bara visar scrollbar när innehållet överstiger
+maxHeight. Skapar ingen synlig skillnad men lägger logik som förvirrar.
+
+**Fix**: `overflowY: 'auto'` alltid.
+
+### Samtliga 10 testfall — statisk verifiering
+
+| # | Testfall | Status | Notering |
+|---|---|---|---|
+| 1 | "Förslag"-badge på history-kort med candidates | ✅ | Amberchip, absolute top-right, döljs om isFreshEvidence=true |
+| 2 | Panel visar flera kandidater sorterade score desc | ✅ | Sortering sker server-side; alla visas i scroll-container |
+| 3 | Titel/fallback, score, reason, planned date | ✅ | getConceptDetails → headline_sv/headline → slotLabel → 'Koncept' |
+| 4 | Långa titlar/reasons spräcker inte kortet | ✅ | `textOverflow:'ellipsis', whiteSpace:'nowrap'`; reasons: `flexWrap:'wrap'` |
+| 5 | Missing target/concepts/tom reasons — ingen krasch | ✅ | Null-safe optional chaining; `reasons[0] ?? ''`; empty string ej renderat |
+| 6 | Generate visar loading, hanterar error, refreshar | ✅ | generateFeedback.loading → "Genererar..."; .catch → "Fel: ..."; .then → fetchCandidates |
+| 7 | Accept refreshar concepts + candidates direkt | ✅ | clearClientCache + fetchConcepts(true) + fetchCandidates() parallellt |
+| 8 | Reject refreshar candidates | ✅ | fetchCandidates() anropas efter success |
+| 9 | Accept/reject error inline, state korrekt | ✅ | candidateErrors[id] visas under knappar; ingen alert(); candidates behålls i state |
+| 10 | Manuella reconciliation-flöden orörda | ✅ | handleMarkHistoryAsLeTrend, handleUndoLinkedHistory, reconciliationPicker, clipPicker ej berörda |
+
+### Kvarvarande risker
+
+1. **HTTP-cache efter mutation** — Fetch API (default cache mode) skickar
+   If-None-Match med senaste etag. Om Express inte räknar om etag korrekt efter
+   accept/reject kan `fetchCandidates()` returnera cachad 304 med gammal data.
+   Express `etag: true` (default) beräknar etag från response body — bör fungera,
+   men testades inte end-to-end mot live-kandidater (se instruktionen: accept/reject
+   ej utförda mot riktiga kandidater).
+
+2. **Scroll-UX på mobilvy** — Scroll-container inuti touch-ytan (kort-onClick) kan
+   ge problem på mobil om touch-event tolkas som kortklick istället för scroll.
+   `onClick: e.stopPropagation()` på panelens wrapper förhindrar detta på desktop;
+   mobil touch kan kräva ytterligare `onTouchStart: e.stopPropagation()` om problem
+   uppstår i produktion.
+
+3. **Kandidatpanel + thumbnailkort** — Glasstyle-panelen (`backdrop-filter: blur`)
+   kräver att kortet inte har `overflow: hidden` (vilket det inte har). Fungerar i
+   moderna browsers; Safari <14 stödjer inte `backdrop-filter` utan prefix.
+
+4. **Produce-integration** — Om en CM "markerar som producerat" en history-rad som
+   har candidates, uppdateras inte kandidatstatus automatiskt utöver vad
+   `POST /history/reconciliation` redan hanterar. Inga nya risker jämfört med
+   föregående fas.
+
+### Testade kunder (statisk/kod-QA; ingen accept/reject mot live-data)
+
+- Kund med candidates: customer_id=0480dae5-7010-478c-87c6-b0bfaad29f85 (API-loggar
+  visar aktiva GET /reconciliation-candidates?status=suggested-anrop för denna kund)
+- Kund utan candidates: verifierat kodväg — badge och panel döljs, kontextmeny
+  visar "Generera förslag" för orekonsilierade history-kort
+

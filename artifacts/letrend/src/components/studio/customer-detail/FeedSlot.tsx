@@ -1240,8 +1240,8 @@ function FeedSlot({
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 4,
-                  maxHeight: 200,
-                  overflowY: candidates.length > 2 ? 'auto' : undefined,
+                  maxHeight: 100,
+                  overflowY: 'auto',
                 }}
               >
                 {candidates.map((candidate) => {
