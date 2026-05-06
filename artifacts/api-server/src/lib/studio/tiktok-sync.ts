@@ -794,6 +794,48 @@ export interface BatchResult {
   budgetExceeded: boolean;
   staleLocksCleared: number;
   thumbnailsRefreshed?: number;
+  /** True when the cron_run_log row was successfully written for this invocation. */
+  cronLogWritten?: boolean;
+}
+
+// ── cron_run_log typed payload ────────────────────────────────────────────────
+
+/** Typed shape for a cron_run_log insert row. All fields are required so that
+ *  TypeScript catches any column added to the table that is not yet populated. */
+export interface CronRunLogInsert {
+  started_at: string;
+  finished_at: string;
+  processed: number;
+  imported: number;
+  stats_updated: number;
+  thumbnails_refreshed: number;
+  calls_used: number;
+  budget_remaining: number;
+  budget_exceeded: boolean;
+  stale_locks_cleared: number;
+  errors: Array<{ customerId: string; error: string }> | null;
+}
+
+/** Build the cron_run_log insert payload from a BatchResult.
+ *  Exported so unit tests can validate field mapping without a live DB. */
+export function buildCronLogPayload(
+  result: BatchResult,
+  aggregateStart: string,
+  finishedAt: string,
+): CronRunLogInsert {
+  return {
+    started_at: aggregateStart,
+    finished_at: finishedAt,
+    processed: result.processed,
+    imported: result.imported,
+    stats_updated: result.statsUpdated,
+    thumbnails_refreshed: result.thumbnailsRefreshed ?? 0,
+    calls_used: result.callsUsed,
+    budget_remaining: result.budgetRemaining,
+    budget_exceeded: result.budgetExceeded,
+    stale_locks_cleared: result.staleLocksCleared,
+    errors: result.errors.length > 0 ? result.errors : null,
+  };
 }
 
 interface EligibleCustomer {
@@ -915,24 +957,29 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
 
   // Write a single aggregate cron-invocation row to cron_run_log so the
   // /api/admin/cron-runs admin view can show one row per cron invocation.
-  // The api-server uses an untyped Supabase client, so a small `as any` cast
-  // matches the established pattern in this file's siblings.
-  const { error: cronLogError } = await (supabase as any).from('cron_run_log').insert({
-    started_at: aggregateStart,
-    finished_at: new Date().toISOString(),
-    processed,
-    imported,
-    stats_updated: statsUpdated,
-    calls_used: callsUsed,
-    budget_remaining: result.budgetRemaining,
-    budget_exceeded: budgetExceeded,
-    stale_locks_cleared: staleLocksCleared,
-    errors: errors.length > 0 ? errors : null,
-    thumbnails_refreshed: thumbnailsRefreshed ?? 0,
-  });
+  const finishedAt = new Date().toISOString();
+  const cronPayload = buildCronLogPayload(result, aggregateStart, finishedAt);
+  const { error: cronLogError } = await (supabase as any)
+    .from('cron_run_log')
+    .insert(cronPayload);
+
   if (cronLogError) {
-    logger.warn({ err: cronLogError.message }, 'cron_run_log insert failed (non-fatal)');
+    // Log the full PostgrestError so the root cause is visible in server logs.
+    const pgErr = cronLogError as Record<string, unknown>;
+    logger.warn(
+      {
+        err: {
+          message: pgErr['message'],
+          details: pgErr['details'],
+          code: pgErr['code'],
+          hint: pgErr['hint'],
+        },
+        payload_fields: Object.keys(cronPayload),
+      },
+      'cron_run_log insert failed (non-fatal)',
+    );
   }
+  result.cronLogWritten = !cronLogError;
 
   return result;
 }

@@ -42,11 +42,24 @@ interface Payload {
   recent_cron_invocations: CronInvocation[];
   recent_customer_runs: CustomerRun[];
   failed_customers: FailedCustomer[];
+  has_never_logged: boolean;
+  fallback_cron_sync_runs: CustomerRun[];
 }
 
 function fmtTs(value: string | null): string {
   if (!value) return '–';
   try { return new Date(value).toLocaleString('sv-SE'); } catch { return value; }
+}
+
+function InvocationNote({ row }: { row: CronInvocation }): ReactElement {
+  const parts: string[] = [];
+  if (row.budget_exceeded) parts.push('Budget nådd');
+  if (row.stale_locks_cleared > 0) parts.push(`Rensade lås: ${row.stale_locks_cleared}`);
+  if ((row.thumbnails_refreshed ?? 0) > 0) parts.push(`Miniatyrer: ${row.thumbnails_refreshed}`);
+  if (row.processed === 0) parts.push('0 kunder matchade');
+  if (row.errors && row.errors.length > 0) parts.push(`${row.errors.length} fel`);
+  if (parts.length === 0) parts.push('OK');
+  return <span>{parts.join(' · ')}</span>;
 }
 
 export default function CronHealthPage(): ReactElement {
@@ -70,6 +83,11 @@ export default function CronHealthPage(): ReactElement {
   if (error) return <div className="p-6 text-sm text-destructive">{error}</div>;
   if (!data) return <div className="p-6 text-sm text-muted-foreground">Ingen data.</div>;
 
+  const hasNeverLogged = data.has_never_logged;
+  const lastInvocation = data.recent_cron_invocations[0] ?? null;
+  const lastHadZeroCustomers =
+    !hasNeverLogged && lastInvocation !== null && lastInvocation.processed === 0;
+
   return (
     <div className="space-y-8 p-2">
       <header>
@@ -79,8 +97,33 @@ export default function CronHealthPage(): ReactElement {
         </p>
       </header>
 
+      {/* Status banner */}
+      {hasNeverLogged && data.fallback_cron_sync_runs.length > 0 && (
+        <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+          <strong>Cron har aldrig loggats i cron_run_log.</strong>{' '}
+          Per-kund sync_runs med mode=cron körs (se fallback nedan), men ingen aggregerad cron-körning har skrivits ännu.
+          Det beror troligen på ett insert-fel — kontrollera server-loggar för{' '}
+          <code className="font-mono">cron_run_log insert failed</code>.
+        </div>
+      )}
+      {hasNeverLogged && data.fallback_cron_sync_runs.length === 0 && (
+        <div className="rounded-md border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+          <strong>Ingen cron-aktivitet registrerad.</strong>{' '}
+          Varken cron_run_log eller cron-mode sync_runs finns. Kontrollera att cron-jobbet är aktivt.
+        </div>
+      )}
+      {lastHadZeroCustomers && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Senaste cron-körning matchade <strong>0 kunder</strong> — alla kunder kan ha synkats nyligen eller sakna TikTok-handle.
+        </div>
+      )}
+
+      {/* Aggregated cron invocations */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold">Senaste cron-körningar</h2>
+        <h2 className="mb-3 text-sm font-semibold">
+          Senaste cron-körningar
+          {hasNeverLogged && <span className="ml-2 font-normal text-muted-foreground">(inga ännu)</span>}
+        </h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="min-w-full divide-y divide-border text-sm">
             <thead className="bg-accent/30 text-xs uppercase text-muted-foreground">
@@ -96,7 +139,11 @@ export default function CronHealthPage(): ReactElement {
             </thead>
             <tbody className="divide-y divide-border">
               {data.recent_cron_invocations.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">Inga körningar registrerade ännu.</td></tr>
+                <tr>
+                  <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">
+                    Inga körningar registrerade ännu.
+                  </td>
+                </tr>
               ) : data.recent_cron_invocations.map((row) => (
                 <tr key={row.id}>
                   <td className="px-3 py-2">{fmtTs(row.started_at)}</td>
@@ -106,10 +153,7 @@ export default function CronHealthPage(): ReactElement {
                   <td className="px-3 py-2 text-right">{row.calls_used}</td>
                   <td className="px-3 py-2 text-right">{row.budget_remaining}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">
-                    {row.budget_exceeded ? 'Budget nådd · ' : ''}
-                    {row.stale_locks_cleared > 0 ? `Rensade lås: ${row.stale_locks_cleared} · ` : ''}
-                    {(row.thumbnails_refreshed ?? 0) > 0 ? `Miniatyrer: ${row.thumbnails_refreshed} · ` : ''}
-                    {row.errors && row.errors.length > 0 ? `${row.errors.length} fel` : 'OK'}
+                    <InvocationNote row={row} />
                   </td>
                 </tr>
               ))}
@@ -118,6 +162,43 @@ export default function CronHealthPage(): ReactElement {
         </div>
       </section>
 
+      {/* Fallback: per-customer cron sync_runs when cron_run_log is empty */}
+      {hasNeverLogged && data.fallback_cron_sync_runs.length > 0 && (
+        <section>
+          <h2 className="mb-1 text-sm font-semibold">Fallback: senaste cron-synker per kund</h2>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Visar sync_runs med mode=cron eftersom cron_run_log saknar rader. Varje rad är ett per-kund-jobb, inte en aggregerad invokation.
+          </p>
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="min-w-full divide-y divide-border text-sm">
+              <thead className="bg-accent/30 text-xs uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left">Start</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-right">Hämtade</th>
+                  <th className="px-3 py-2 text-right">Importerade</th>
+                  <th className="px-3 py-2 text-right">Anrop</th>
+                  <th className="px-3 py-2 text-left">Fel</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {data.fallback_cron_sync_runs.map((row) => (
+                  <tr key={row.id}>
+                    <td className="px-3 py-2">{fmtTs(row.started_at)}</td>
+                    <td className="px-3 py-2">{row.status}</td>
+                    <td className="px-3 py-2 text-right">{row.fetched_count ?? 0}</td>
+                    <td className="px-3 py-2 text-right">{row.imported_count ?? 0}</td>
+                    <td className="px-3 py-2 text-right">{row.calls_used ?? 0}</td>
+                    <td className="px-3 py-2 text-xs text-destructive">{row.error ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Failed customers */}
       <section>
         <h2 className="mb-3 text-sm font-semibold">Kunder med synkfel</h2>
         <div className="overflow-x-auto rounded-md border border-border">
@@ -132,7 +213,11 @@ export default function CronHealthPage(): ReactElement {
             </thead>
             <tbody className="divide-y divide-border">
               {data.failed_customers.length === 0 ? (
-                <tr><td colSpan={4} className="px-3 py-4 text-center text-muted-foreground">Inga kunder med fel.</td></tr>
+                <tr>
+                  <td colSpan={4} className="px-3 py-4 text-center text-muted-foreground">
+                    Inga kunder med fel.
+                  </td>
+                </tr>
               ) : data.failed_customers.map((c) => (
                 <tr key={c.id}>
                   <td className="px-3 py-2">{c.business_name ?? c.id.slice(0, 8)}</td>
@@ -146,8 +231,9 @@ export default function CronHealthPage(): ReactElement {
         </div>
       </section>
 
+      {/* All recent customer runs */}
       <section>
-        <h2 className="mb-3 text-sm font-semibold">Senaste kund-synker</h2>
+        <h2 className="mb-3 text-sm font-semibold">Senaste kund-synker (alla lägen)</h2>
         <div className="overflow-x-auto rounded-md border border-border">
           <table className="min-w-full divide-y divide-border text-sm">
             <thead className="bg-accent/30 text-xs uppercase text-muted-foreground">
@@ -163,7 +249,11 @@ export default function CronHealthPage(): ReactElement {
             </thead>
             <tbody className="divide-y divide-border">
               {data.recent_customer_runs.length === 0 ? (
-                <tr><td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">Inga körningar.</td></tr>
+                <tr>
+                  <td colSpan={7} className="px-3 py-4 text-center text-muted-foreground">
+                    Inga körningar.
+                  </td>
+                </tr>
               ) : data.recent_customer_runs.map((row) => (
                 <tr key={row.id}>
                   <td className="px-3 py-2">{fmtTs(row.started_at)}</td>

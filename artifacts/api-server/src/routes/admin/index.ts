@@ -44,15 +44,17 @@ router.use('/account-managers', teamRouter);
 // Concepts library (admin/CM)
 router.use('/concepts', conceptsRouter);
 
-// GET /api/admin/cron-runs — TikTok sync health: last 10 sync_runs + customers
-// whose latest sync errored. Read-only.
+// GET /api/admin/cron-runs — TikTok sync health: last 10 cron_run_log rows,
+// last 20 per-customer sync_runs, and customers whose latest sync errored.
+// Read-only. When cron_run_log is empty, returns has_never_logged=true and
+// supplies recent cron-mode sync_runs as a fallback observability source.
 router.get('/cron-runs', requireAuth, ADMIN_ONLY, async (_req, res) => {
   try {
     const supabase = createSupabaseAdmin();
-    const [cronRunsResult, customerRunsResult, failedResult] = await Promise.all([
+    const [cronRunsResult, customerRunsResult, failedResult, cronModeRunsResult] = await Promise.all([
       (supabase as any)
         .from('cron_run_log')
-        .select('id, started_at, finished_at, processed, imported, stats_updated, calls_used, budget_remaining, budget_exceeded, stale_locks_cleared, errors')
+        .select('id, started_at, finished_at, processed, imported, stats_updated, calls_used, budget_remaining, budget_exceeded, stale_locks_cleared, errors, thumbnails_refreshed')
         .order('started_at', { ascending: false })
         .limit(10),
       (supabase as any)
@@ -66,17 +68,34 @@ router.get('/cron-runs', requireAuth, ADMIN_ONLY, async (_req, res) => {
         .not('last_sync_error', 'is', null)
         .order('last_history_sync_at', { ascending: false })
         .limit(50),
+      // Cron-mode per-customer runs — used as fallback when cron_run_log is empty.
+      (supabase as any)
+        .from('sync_runs')
+        .select('id, customer_id, mode, started_at, finished_at, status, fetched_count, imported_count, stats_updated_count, calls_used, error')
+        .eq('mode', 'cron')
+        .order('started_at', { ascending: false })
+        .limit(20),
     ]);
     if (cronRunsResult.error || customerRunsResult.error || failedResult.error) {
       res.status(500).json({
-        error: cronRunsResult.error?.message || customerRunsResult.error?.message || failedResult.error?.message || 'cron_runs_query_failed',
+        error:
+          cronRunsResult.error?.message ||
+          customerRunsResult.error?.message ||
+          failedResult.error?.message ||
+          'cron_runs_query_failed',
       });
       return;
     }
+    const hasNeverLogged =
+      !cronRunsResult.data || (cronRunsResult.data as unknown[]).length === 0;
     res.json({
       recent_cron_invocations: cronRunsResult.data ?? [],
       recent_customer_runs: customerRunsResult.data ?? [],
       failed_customers: failedResult.data ?? [],
+      // Metadata for the UI to distinguish "never logged" vs "logged but 0 customers".
+      has_never_logged: hasNeverLogged,
+      // Fallback: per-customer cron sync_runs shown when cron_run_log is empty.
+      fallback_cron_sync_runs: hasNeverLogged ? (cronModeRunsResult.data ?? []) : [],
     });
   } catch (err) {
     logger.error(err, 'admin cron-runs error');
