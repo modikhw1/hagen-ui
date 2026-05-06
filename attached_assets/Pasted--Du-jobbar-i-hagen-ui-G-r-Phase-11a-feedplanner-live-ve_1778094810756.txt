@@ -1,0 +1,63 @@
+ Du jobbar i hagen-ui. Gör Phase 11a: feedplanner live-verifieringsplan efter confirmation-flödet.
+
+  Läs först:
+  - docs/agent-plans/18-mark-produced-dialog-preferred-evidence.md
+  - docs/agent-plans/19-candidate-now-slot-confirmation-flow.md
+  - docs/agent-plans/20-feedplanner-copy-and-dead-code-cleanup.md
+  - artifacts/letrend/src/components/studio/customer-detail/MarkProducedDialog.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedAdvanceCue.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedSlot.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+  - artifacts/api-server/src/routes/studio-v2.ts
+  - artifacts/api-server/src/lib/studio/confirm-published-concept.ts
+  - artifacts/api-server/src/lib/studio/tiktok-sync.ts
+
+  Mål:
+  Skapa en praktisk live-QA-plan för hela feedplanner-flödet. Gör helst inga kodändringar om du inte hittar ett
+  uppenbart blockerande fel.
+
+  Verifiera och dokumentera dessa scenarion:
+  1. Ett nytt TikTok-klipp importeras:
+     - cue visas
+     - cue öppnar MarkProducedDialog
+     - rätt preferred clip är förvalt
+     - confirm kör reconcile → mark-produced
+     - nu-kort går till historik
+     - +1 blir ny nu
+     - motor-signal blir resolved
+  2. Now-slot candidate:
+     - kandidatens check-knapp öppnar MarkProducedDialog
+     - candidate history clip blir preferred evidence
+     - confirm länkar och flyttar planen
+  3. Future candidate:
+     - direct accept fungerar
+     - ingen planflytt sker
+  4. Multiple new clips:
+     - ingen blind auto-advance
+     - CM kan välja rätt klipp manuellt
+     - flödet kan köras stegvis
+  5. Skip/no clip:
+     - mark-produced utan länk fungerar
+     - ingen imported_history kopplas
+  6. Undo link:
+     - undo tar bort reconciliation/stats overlay
+     - timeline backas inte, och detta är dokumenterat korrekt
+  7. Error paths:
+     - reconcile-fel stoppar dialogen
+     - mark-produced-fel efter lyckad länk visar “kopplingen är sparad”-fel
+     - modalen stängs inte vid fel
+
+  Output:
+  Skapa `docs/agent-plans/21-feedplanner-live-qa-checklist.md` med:
+  - testmatris
+  - förväntade API-anrop per scenario
+  - förväntade DB-effekter i ord
+  - kvarvarande risker/blockers
+  - om något bör fixas före livekörning
+
+  Guardrails:
+  - Rör inte `/admin/demos`.
+  - Rör inte Supabase migrations.
+  - Rör inte API-server om du inte hittar ett konkret blockerande fel.
+  - Kör `pnpm --filter @workspace/letrend exec tsc --noEmit`.
+  - Om du gör kodändring, kör relevant API-server typecheck också.
