@@ -1925,6 +1925,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_customer_feed_plan: {
+        Args: {
+          p_concept_id: string
+          p_customer_id: string
+          p_now?: string
+          p_published_at?: string | null
+          p_tiktok_url?: string | null
+        }
+        Returns: Json
+      }
       change_user_role: {
         Args: {
           new_role: Database["public"]["Enums"]["user_role"]

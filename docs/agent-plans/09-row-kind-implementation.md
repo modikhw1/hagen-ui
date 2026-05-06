@@ -6,16 +6,25 @@
 
 ---
 
-## DB-migration
+## DB-migrationer
 
-**Migration:** `20260506131441_add_customer_concepts_row_kind.sql`
-**Status:** ✅ Applicerad live mot Supabase (dev + prod)
+| Migration | Beskrivning | Status |
+|---|---|---|
+| `20260506131441_add_customer_concepts_row_kind` | Lägger till `row_kind TEXT CHECK IN (...)` på `customer_concepts` | ✅ Live |
+| `20260506132453_advance_customer_feed_plan_row_kind` | RPC `public.advance_customer_feed_plan(...)` — row_kind-aware feed-advance | ✅ Live |
 
+### RPC-signatur
 ```sql
-ALTER TABLE customer_concepts
-  ADD COLUMN IF NOT EXISTS row_kind TEXT
-  CHECK (row_kind IN ('assignment', 'collaboration', 'history_import'));
+public.advance_customer_feed_plan(
+  p_customer_id   uuid,
+  p_concept_id    uuid,
+  p_tiktok_url    text     default null,
+  p_published_at  timestamptz default null,
+  p_now           timestamptz default now()
+) returns jsonb
 ```
+
+Returnerar `{"error_code": "...", "message": "..."}` vid valideringsfel, annars framgång-JSONB utan `error_code`.
 
 ---
 
@@ -42,18 +51,23 @@ Förberedde hela kodbasen (letrend + api-server) för den explicita DB-kolumnen
 
 ---
 
-## Mark-produced — row_kind-kopplingen (komplett)
+## Mark-produced — RPC-baserat flöde (komplett)
 
-Target-select hämtar nu `row_kind`. Guardordning i `/feed/mark-produced`:
+`POST /api/studio-v2/feed/mark-produced` delegerar nu all affärslogik (validering,
+update + feed-reorder) till `public.advance_customer_feed_plan` via `supabase.rpc(...)`.
 
-1. `status === 'produced'` → 409 (redan producerat)
-2. `row_kind === 'history_import'` → 409 (explicit block, prioritet över status-heuristik)
-3. `row_kind !== null && row_kind ∉ {'assignment','collaboration'}` → 409 (okänd planningsbar kind)
-4. `status === 'archived' || status === 'history_import'` → 409 (legacy-skydd för rader utan `row_kind`)
-5. `feed_order !== 0` → 409 (ej i nu-slot)
-
-Upcoming-select hämtar också `row_kind` och filtreras via `isPlannedUpcomingFeedRow`
-som blockar `row_kind === 'history_import'`.
+### Flöde i routen
+1. Input-validering (concept_id, customer_id)
+2. `ensureCustomerAccess`-check
+3. **Optimistisk lock** — `UPDATE customer_profiles SET pending_history_advance_at = now WHERE pending_history_advance_at IS NULL`
+4. `supabase.rpc('advance_customer_feed_plan', { p_customer_id, p_concept_id, p_tiktok_url, p_published_at, p_now })`
+5. Mappning av RPC `error_code` → HTTP-statuskod + svensk feltext:
+   - `customer_not_found`, `concept_not_found` → **404**
+   - `already_produced`, `not_current_slot`, `history_import_not_plannable`, `unsupported_row_kind`, `invalid_status` → **409**
+   - Okänd code → **500**
+6. Vid success: `SELECT STUDIO_CONCEPT_SELECT` på det producerade konceptet
+7. Auto-resolve `feed_motor_signals`
+8. **`finally`**: Frigör locken (`pending_history_advance_at = null`)
 
 ---
 

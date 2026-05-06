@@ -972,50 +972,7 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
     let advanceLockAcquired = false;
 
     try {
-      const { data: targetRow, error: targetError } = await supabase
-        .from('customer_concepts')
-        .select('id, status, feed_order, concept_id, visual_variant, row_kind')
-        .eq('id', conceptId)
-        .eq('customer_profile_id', customerId)
-        .maybeSingle();
-
-      if (targetError) {
-        res.status(500).json({ error: targetError.message });
-        return;
-      }
-      if (!targetRow) {
-        res.status(404).json({ error: 'Konceptet hittades inte' });
-        return;
-      }
-
-      const target = targetRow as Record<string, unknown>;
-      const targetStatus = typeof target.status === 'string' ? target.status : null;
-      const targetRowKind = typeof target.row_kind === 'string' ? target.row_kind : null;
-
-      if (targetStatus === 'produced') {
-        res.status(409).json({ error: 'Konceptet är redan markerat som producerat' });
-        return;
-      }
-      // Explicit row_kind block takes priority over status heuristic.
-      if (targetRowKind === 'history_import') {
-        res.status(409).json({ error: 'Importerad historik kan inte markeras som producerad' });
-        return;
-      }
-      // Only assignment and collaboration are plannable kinds.
-      if (targetRowKind !== null && targetRowKind !== 'assignment' && targetRowKind !== 'collaboration') {
-        res.status(409).json({ error: 'Endast planerade koncept kan markeras som producerade' });
-        return;
-      }
-      // Legacy status guards — kept for backward compat with rows that predate row_kind column.
-      if (targetStatus === 'archived' || targetStatus === 'history_import') {
-        res.status(409).json({ error: 'Endast planerade koncept kan markeras som producerade' });
-        return;
-      }
-      if (target.feed_order !== 0) {
-        res.status(409).json({ error: 'Endast nu-slotten kan markeras som producerad' });
-        return;
-      }
-
+      // Acquire optimistic lock before calling RPC to prevent concurrent advances.
       const { data: lockRow, error: lockError } = await supabase
         .from('customer_profiles')
         .update({ pending_history_advance_at: now })
@@ -1034,60 +991,72 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
       }
       advanceLockAcquired = true;
 
-      const { data: producedConcept, error: updateError } = await supabase
+      // Delegate all business logic (validation + update + feed reorder) to the DB RPC.
+      const { data: rpcResult, error: rpcError } = await supabase.rpc(
+        'advance_customer_feed_plan',
+        {
+          p_customer_id: customerId,
+          p_concept_id: conceptId,
+          p_tiktok_url: tiktokUrl,
+          p_published_at: publishedAt,
+          p_now: now,
+        },
+      );
+
+      if (rpcError) {
+        res.status(500).json({ error: rpcError.message });
+        return;
+      }
+
+      // Check for soft error encoded in returned JSONB.
+      const rpcData = rpcResult as Record<string, unknown> | null;
+      const errorCode =
+        rpcData && typeof rpcData['error_code'] === 'string' ? rpcData['error_code'] : null;
+
+      if (errorCode) {
+        const statusMap: Record<string, number> = {
+          customer_not_found: 404,
+          concept_not_found: 404,
+          already_produced: 409,
+          not_current_slot: 409,
+          history_import_not_plannable: 409,
+          unsupported_row_kind: 409,
+          invalid_status: 409,
+        };
+        const messageMap: Record<string, string> = {
+          customer_not_found: 'Kunden hittades inte',
+          concept_not_found: 'Konceptet hittades inte',
+          already_produced: 'Konceptet är redan markerat som producerat',
+          not_current_slot: 'Endast nu-slotten kan markeras som producerad',
+          history_import_not_plannable: 'Importerad historik kan inte markeras som producerad',
+          unsupported_row_kind: 'Endast planerade koncept kan markeras som producerade',
+          invalid_status: 'Endast planerade koncept kan markeras som producerade',
+        };
+        const httpStatus = statusMap[errorCode] ?? 500;
+        const rpcMessage =
+          typeof rpcData?.['message'] === 'string' ? rpcData['message'] : 'Internt serverfel';
+        res.status(httpStatus).json({ error: messageMap[errorCode] ?? rpcMessage });
+        return;
+      }
+
+      // RPC succeeded — fetch fresh produced concept for the response.
+      const { data: producedConcept, error: fetchError } = await supabase
         .from('customer_concepts')
-        .update({
-          status: 'produced',
-          produced_at: now,
-          published_at: publishedAt,
-          tiktok_url: tiktokUrl,
-          feed_order: -1,
-        })
+        .select(STUDIO_CONCEPT_SELECT)
         .eq('id', conceptId)
         .eq('customer_profile_id', customerId)
-        .eq('feed_order', 0)
-        .neq('status', 'produced')
-        .select(STUDIO_CONCEPT_SELECT)
         .maybeSingle();
 
-      if (updateError) {
-        res.status(500).json({ error: updateError.message });
+      if (fetchError) {
+        res.status(500).json({ error: fetchError.message });
         return;
       }
       if (!producedConcept) {
-        res.status(409).json({ error: 'Konceptet kunde inte flyttas. Ladda om och försök igen.' });
+        res.status(409).json({ error: 'Konceptet kunde inte hämtas efter produktion.' });
         return;
       }
 
-      const { data: upcoming, error: upcomingError } = await supabase
-        .from('customer_concepts')
-        .select('id, feed_order, status, concept_id, visual_variant, row_kind')
-        .eq('customer_profile_id', customerId)
-        .gt('feed_order', 0)
-        .order('feed_order', { ascending: true });
-
-      if (upcomingError) {
-        res.status(500).json({ error: upcomingError.message });
-        return;
-      }
-
-      const plannedUpcoming = ((upcoming ?? []) as Record<string, unknown>[])
-        .filter(isPlannedUpcomingFeedRow);
-
-      for (const [index, row] of plannedUpcoming.entries()) {
-        const nextFeedOrder = index;
-        const { error: shiftError } = await supabase
-          .from('customer_concepts')
-          .update({ feed_order: nextFeedOrder })
-          .eq('id', row.id as string)
-          .eq('customer_profile_id', customerId);
-
-        if (shiftError) {
-          res.status(500).json({ error: shiftError.message });
-          return;
-        }
-      }
-
+      // Auto-resolve any open feed motor signals for this customer.
       const { error: signalError } = await supabase
         .from('feed_motor_signals')
         .update({ auto_resolved_at: now })
