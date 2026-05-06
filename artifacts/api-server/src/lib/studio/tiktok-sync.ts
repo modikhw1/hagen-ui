@@ -21,6 +21,10 @@
 import { createSupabaseAdmin } from '../supabase.js';
 import { logger } from '../logger.js';
 import { getPriceOre, recordServiceUsage } from '../service-usage.js';
+import {
+  generateReconciliationCandidates,
+  markCandidateAcceptedForLink,
+} from './reconciliation-candidates.js';
 
 // Records one billable RapidAPI tiktok-scraper7 call. Best-effort: any
 // failure is swallowed so it cannot affect the user-visible sync result.
@@ -711,6 +715,14 @@ export async function syncCustomerHistory(
                 logger.warn({ err: patchErr }, 'tiktok-sync: auto-reconcile failed to propagate stats to assignment row');
               }
             }
+
+            // Best-effort: record the auto-link in the reconciliation candidates table.
+            void markCandidateAcceptedForLink(supabase, historyRowId, nuSlotId, {
+              customerId,
+              actorId: null,
+              now: autoNow,
+              auto: true,
+            });
           } else {
             logger.warn({ err: autoLinkErr }, 'tiktok-sync: auto-reconcile link failed');
           }
@@ -728,6 +740,15 @@ export async function syncCustomerHistory(
         ...(autoReconciled && autoReconciledHistoryConceptId
           ? { auto_reconciled: true, auto_reconciled_history_id: autoReconciledHistoryConceptId }
           : {}),
+      });
+
+      // Best-effort: refresh reconciliation candidates so the audit table stays
+      // current after new clips are imported. Runs after the nudge so it does
+      // not delay the sync result. Errors are swallowed — candidates are advisory.
+      generateReconciliationCandidates(supabase, customerId).then((r) => {
+        logger.info({ customerId, ...r }, 'tiktok-sync: reconciliation candidates refreshed');
+      }).catch((err) => {
+        logger.warn({ err, customerId }, 'tiktok-sync: reconciliation candidate generation failed (non-fatal)');
       });
     }
 

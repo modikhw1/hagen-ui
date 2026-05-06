@@ -6,6 +6,11 @@ import { logger } from '../lib/logger.js';
 import { buildGamePlanInput, generateGamePlanDraft } from '../lib/game-plan-generate.js';
 import { refreshReconciledThumbnails, runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
 import { rankCandidates } from '../lib/studio/reconciliation-scoring.js';
+import {
+  generateReconciliationCandidates,
+  markCandidateAcceptedForLink,
+  resetCandidateAfterUndo,
+} from '../lib/studio/reconciliation-candidates.js';
 import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
 const router = Router();
@@ -1400,6 +1405,12 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
       }
     }
 
+    // Best-effort: sync candidate status so the audit trail reflects the CM action.
+    void markCandidateAcceptedForLink(
+      supabase, historyConceptId, resolvedLinkedConceptId,
+      { customerId: historyCustomerId, actorId: req.user!.id, now, auto: false },
+    );
+
     res.json({ success: true });
   } catch (err) {
     logger.error(err, 'studio-v2 history reconciliation error');
@@ -1481,6 +1492,11 @@ router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) 
       }
     }
 
+    // Best-effort: reset candidate so CM can re-decide after undo.
+    if (assignmentId) {
+      void resetCandidateAfterUndo(supabase, historyConceptId, assignmentId);
+    }
+
     res.json({ success: true });
   } catch (err) {
     logger.error(err, 'studio-v2 history reconciliation DELETE error');
@@ -1556,118 +1572,11 @@ router.post('/customers/:customerId/reconciliation-candidates/generate', require
     const { customerId } = req.params as { customerId: string };
     if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
-
-    // 1. Unreconciled history rows (row_kind='history_import', no existing link)
-    const { data: historyRows, error: histErr } = await supabase
-      .from('customer_concepts')
-      .select('id, published_at, tiktok_url, feed_order')
-      .eq('customer_profile_id', customerId)
-      .eq('row_kind', 'history_import')
-      .is('reconciled_customer_concept_id', null)
-      .not('tiktok_url', 'is', null);
-
-    if (histErr) { res.status(500).json({ error: histErr.message }); return; }
-
-    const history = (historyRows ?? []) as Array<{
-      id: string; published_at: string | null; tiktok_url: string | null; feed_order: number | null;
-    }>;
-
-    if (history.length === 0) {
-      res.json({ generated: 0, skipped_locked: 0, history_count: 0 });
-      return;
-    }
-
-    // 2. Target rows: assignment or collaboration rows, not archived
-    const { data: targetRows, error: tgtErr } = await supabase
-      .from('customer_concepts')
-      .select('id, feed_order, planned_publish_at')
-      .eq('customer_profile_id', customerId)
-      .in('row_kind', ['assignment', 'collaboration'])
-      .not('concept_id', 'is', null)
-      .neq('status', 'archived');
-
-    if (tgtErr) { res.status(500).json({ error: tgtErr.message }); return; }
-
-    // 3. Which targets are already linked by another history row?
-    const { data: existingLinks } = await supabase
-      .from('customer_concepts')
-      .select('reconciled_customer_concept_id')
-      .eq('customer_profile_id', customerId)
-      .not('reconciled_customer_concept_id', 'is', null);
-
-    const reconciledTargetIds = new Set(
-      ((existingLinks ?? []) as Array<{ reconciled_customer_concept_id: string }>)
-        .map((r) => r.reconciled_customer_concept_id),
-    );
-
-    const targets = ((targetRows ?? []) as Array<{
-      id: string; feed_order: number | null; planned_publish_at: string | null;
-    }>).map((t) => ({
-      ...t,
-      is_already_reconciled: reconciledTargetIds.has(t.id),
-    }));
-
-    // 4. Which (history, target) pairs are already decided? Don't overwrite them.
-    const { data: lockedRows } = await supabase
-      .from('feed_reconciliation_candidates')
-      .select('history_concept_id, target_customer_concept_id')
-      .eq('customer_id', customerId)
-      .in('status', ['accepted', 'rejected', 'auto_accepted']);
-
-    const lockedPairs = new Set(
-      ((lockedRows ?? []) as Array<{ history_concept_id: string; target_customer_concept_id: string }>)
-        .map((r) => `${r.history_concept_id}:${r.target_customer_concept_id}`),
-    );
-
-    // 5. Score all pairs and collect upsert rows (skipping locked pairs)
-    const toUpsert: Array<{
-      customer_id: string;
-      history_concept_id: string;
-      target_customer_concept_id: string;
-      score: number;
-      reasons: string[];
-      status: string;
-    }> = [];
-
-    for (const hist of history) {
-      const ranked = rankCandidates(hist, targets);
-      for (const { target, result } of ranked) {
-        if (lockedPairs.has(`${hist.id}:${target.id}`)) continue;
-        toUpsert.push({
-          customer_id: customerId,
-          history_concept_id: hist.id,
-          target_customer_concept_id: target.id,
-          score: result.score,
-          reasons: result.reasons,
-          status: 'suggested',
-        });
-      }
-    }
-
-    if (toUpsert.length === 0) {
-      res.json({ generated: 0, skipped_locked: lockedPairs.size, history_count: history.length });
-      return;
-    }
-
-    // 6. Upsert — on conflict (history_concept_id, target_customer_concept_id) refresh score/reasons
-    const { error: upsertErr } = await supabase
-      .from('feed_reconciliation_candidates')
-      .upsert(toUpsert, {
-        onConflict: 'history_concept_id,target_customer_concept_id',
-        ignoreDuplicates: false,
-      });
-
-    if (upsertErr) { res.status(500).json({ error: upsertErr.message }); return; }
-
-    logger.info(
-      { customerId, generated: toUpsert.length, skipped_locked: lockedPairs.size, history_count: history.length },
-      'reconciliation-candidates: generate complete',
-    );
-
-    res.json({ generated: toUpsert.length, skipped_locked: lockedPairs.size, history_count: history.length });
+    const result = await generateReconciliationCandidates(supabase, customerId);
+    res.json(result);
   } catch (err) {
     logger.error(err, 'reconciliation-candidates generate error');
-    res.status(500).json({ error: 'Internt serverfel' });
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
   }
 });
 
@@ -1775,29 +1684,13 @@ router.post('/reconciliation-candidates/:candidateId/accept', requireAuth, CM_ON
     );
     if (linkError) { res.status(500).json({ error: linkError }); return; }
 
-    // Mark this candidate accepted
-    const { error: acceptErr } = await supabase
-      .from('feed_reconciliation_candidates')
-      .update({ status: 'accepted', decided_at: now, decided_by: actorId })
-      .eq('id', candidateId);
-    if (acceptErr) {
-      logger.error({ err: acceptErr }, 'reconciliation-candidates: failed to mark accepted');
-      res.status(500).json({ error: acceptErr.message });
-      return;
-    }
-
-    // Reject all other suggested candidates competing for the same history row
-    const { error: rejectOthersErr } = await supabase
-      .from('feed_reconciliation_candidates')
-      .update({ status: 'rejected', decided_at: now, decided_by: actorId })
-      .eq('history_concept_id', c['history_concept_id'] as string)
-      .eq('status', 'suggested')
-      .neq('id', candidateId);
-    if (rejectOthersErr) {
-      logger.warn({ err: rejectOthersErr }, 'reconciliation-candidates: failed to reject competing candidates');
-      res.status(500).json({ error: rejectOthersErr.message });
-      return;
-    }
+    // Update candidate status + reject competitors via shared helper
+    await markCandidateAcceptedForLink(supabase, c['history_concept_id'] as string, c['target_customer_concept_id'] as string, {
+      customerId: c['customer_id'] as string,
+      actorId,
+      now,
+      auto: false,
+    });
 
     logger.info({ candidateId, actorId }, 'reconciliation-candidates: accepted');
     res.json({ success: true });

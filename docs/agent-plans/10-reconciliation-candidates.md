@@ -154,8 +154,7 @@ POST /api/studio-v2/reconciliation-candidates/:candidateId/accept
 - Anropar intern `applyReconciliationLink(supabase, historyId, targetId, actorId, now)` som:
   - Sätter `reconciled_customer_concept_id / reconciled_by_cm_id / reconciled_at` på history-raden.
   - Propagerar TikTok-stats (thumbnail, url, views, likes, comments, published_at) till assignment-raden.
-- Uppdaterar kandidaten: `status='accepted', decided_at, decided_by` — returnerar 500 om DB-operation misslyckas.
-- Avvisar automatiskt alla andra `suggested`-kandidater för samma `history_concept_id` — returnerar 500 om bulk-reject misslyckas.
+- Anropar `markCandidateAcceptedForLink` (service): UPDATE → INSERT om saknas, avvisar `suggested`-konkurrenter. Best-effort.
 
 ### 4. Avvisa kandidat ✅
 
@@ -168,10 +167,11 @@ POST /api/studio-v2/reconciliation-candidates/:candidateId/reject
 - Sätter `status='rejected', decided_at, decided_by`.
 - History-raden förblir unreconciled — CM kan acceptera en annan kandidat.
 
-### 5. Auto-accept (system — ej implementerat än)
+### 5. Auto-accept (system ✅)
 
-- Ska anropas av `runHistorySyncBatch` / `autoReconcileAndAdvance` när exakt 1 klipp + hög konfidens.
-- Sätter `status='auto_accepted'`, `decided_by=null`.
+- Anropas av `syncCustomerHistory` (tiktok-sync) när exakt 1 klipp auto-länkas till nu-slot.
+- Anropar `markCandidateAcceptedForLink(..., { auto: true })` → `status='auto_accepted'`, `decided_by=null`.
+- Best-effort: synkfel avbryter ej synken.
 
 ---
 
@@ -195,20 +195,26 @@ kan i framtiden användas av auto-accept-logiken i tiktok-sync.
 
 | Event | Status | Åtgärd |
 |---|---|---|
-| `runHistorySyncBatch` — ny klipp importerad | ⏳ Ej implementerat | Anropa generate per kund post-sync |
-| `autoReconcileAndAdvance` — auto-accepted | ⏳ Ej implementerat | Sätt kandidat till `auto_accepted`; avvisa övriga |
-| CM manuell reconcile (POST /history/reconciliation) | ⏳ Ej implementerat | Sätt kandidat till `accepted` om den finns |
-| CM ångrar reconcile (DELETE /history/reconciliation) | ⏳ Ej implementerat | Återställ kandidat till `suggested` |
-| **accept-endpoint** | ✅ Implementerat | Skriver `reconciled_*` + avvisar competitors |
+| `runHistorySyncBatch` — ny klipp importerad | ✅ Implementerat | `generateReconciliationCandidates` anropas post-sync (non-fatal) |
+| tiktok-sync auto-reconcile | ✅ Implementerat | `markCandidateAcceptedForLink(..., auto: true)` → `auto_accepted` |
+| CM manuell reconcile (POST /history/reconciliation) | ✅ Implementerat | `markCandidateAcceptedForLink(..., auto: false)` → `accepted` |
+| CM ångrar reconcile (DELETE /history/reconciliation) | ✅ Implementerat | `resetCandidateAfterUndo` → `suggested`, rensar `decided_at/by` |
+| **accept-endpoint** | ✅ Implementerat | Använder `markCandidateAcceptedForLink` + avvisar competitors |
 | **reject-endpoint** | ✅ Implementerat | Sätter `rejected` |
 
-### Beroenden att uppdatera
+### Service-lager (implementerat ✅)
 
-- `tiktok-sync.ts` — efter import, anropa generate-endpoint per kund
-- `auto-reconcile.ts` — efter auto-link, skapa/uppdatera kandidat med `auto_accepted`
-- `studio-v2.ts POST /history/reconciliation` — upserta kandidat som `accepted` om den finns
-- `studio-v2.ts DELETE /history/reconciliation` — återställ kandidat till `suggested`
-- FeedPlanner UI — visa kandidatlista per kund med "Godkänn" / "Avvisa"-knappar
+Fil: `artifacts/api-server/src/lib/studio/reconciliation-candidates.ts`
+
+Exporterar tre funktioner:
+
+| Funktion | Beskrivning |
+|---|---|
+| `generateReconciliationCandidates(supabase, customerId)` | Poängsätter alla (history, target)-par och upsert:ar `suggested`-rader; skippar låsta. Kastar vid DB-fel. |
+| `markCandidateAcceptedForLink(supabase, histId, tgtId, opts)` | UPDATE befintlig rad (bevarar score) → INSERT om saknas; avvisar `suggested`-konkurrenter. Best-effort. |
+| `resetCandidateAfterUndo(supabase, histId, tgtId)` | Återställer `accepted/auto_accepted` → `suggested`, rensar `decided_at/by`. Best-effort. |
+
+### Beroenden — status
 
 ---
 
@@ -252,10 +258,14 @@ täcks bättre med tester mot staging-DB. Dokumenterat som teknisk skuld.
 4. ✅ ~~`accept`/`reject` endpoints~~ — implementerat med full felhantering.
 5. ✅ ~~Route-nästlingsbugg~~ — DELETE-handler stängs korrekt; nya routes på modulnivå.
 6. ✅ ~~Route-registreringstester~~ — 5 smoke-tester verifierar modulnivå-registrering.
+7. ✅ ~~Service-lager~~ — `reconciliation-candidates.ts` med `generateReconciliationCandidates`, `markCandidateAcceptedForLink`, `resetCandidateAfterUndo`.
+8. ✅ ~~Post-sync generate hook~~ — tiktok-sync anropar generate efter import (non-fatal).
+9. ✅ ~~Auto-reconcile kandidatstatus~~ — tiktok-sync anropar markCandidateAcceptedForLink vid auto-link.
+10. ✅ ~~Manual reconciliation status sync~~ — POST/DELETE /history/reconciliation synkar kandidatstatus.
 
 **Nästa steg:**
 
-- **Post-sync generate hook** — anropa `POST /reconciliation-candidates/generate` från `tiktok-sync.ts` efter varje kund-import.
-- **Manual reconciliation status sync** — när CM accepterar via `POST /history/reconciliation`, uppdatera kandidatstatus till `accepted`; vid `DELETE /history/reconciliation`, återställ till `suggested`.
+- ✅ ~~Post-sync generate hook~~ — `generateReconciliationCandidates` anropas från `tiktok-sync.ts` post-import.
+- ✅ ~~Manual reconciliation status sync~~ — POST/DELETE /history/reconciliation synkar kandidatstatus.
 - **FeedPlanner UI** — kandidatlista per historik-rad med Godkänn/Avvisa-knappar; integrera i `FeedSlot.tsx` eller nytt sidopanel.
 - **Bulk-backfill** — anropa generate för de ~335 befintliga unreconciled history_import-raderna (engångs-skript eller admin-endpoint).

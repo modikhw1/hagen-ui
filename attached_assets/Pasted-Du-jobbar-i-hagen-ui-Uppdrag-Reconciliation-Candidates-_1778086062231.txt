@@ -1,0 +1,50 @@
+Du jobbar i hagen-ui.
+
+  Uppdrag: Reconciliation Candidates Phase 2 — backend lifecycle integration.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Skapa inga Supabase-migrationer.
+  - Du har inte Supabase MCP.
+  - Fokus: api-server, särskilt tiktok-sync och manual reconciliation status sync.
+
+  Läs först:
+  - docs/agent-plans/10-reconciliation-candidates.md
+  - artifacts/api-server/src/routes/studio-v2.ts
+  - artifacts/api-server/src/lib/studio/tiktok-sync.ts
+  - artifacts/api-server/src/lib/studio/reconciliation-scoring.ts
+
+  Gör:
+
+  1. Extrahera candidate-generation från route till en återanvändbar service:
+     - Skapa t.ex. artifacts/api-server/src/lib/studio/reconciliation-candidates.ts
+     - Exportera generateReconciliationCandidates(supabase, customerId)
+     - Låt POST /customers/:customerId/reconciliation-candidates/generate anropa servicen.
+     - Behåll samma output: generated, skipped_locked, history_count.
+
+  2. Lägg helpers för kandidatstatus:
+     - markCandidateAcceptedForLink(...)
+       - upsert:a pairen som accepted eller auto_accepted
+       - sätt decided_at och decided_by där relevant
+       - rejecta andra suggested candidates för samma history_concept_id
+     - resetCandidateAfterUndo(...)
+       - när en reconcile undo görs, sätt relevant accepted/auto_accepted candidate tillbaka till suggested och clear:a
+  decided_at/decided_by.
+
+  3. Koppla in helpers i befintliga flows:
+     - POST /history/reconciliation: efter lyckad länkning, markera kandidat som accepted.
+     - DELETE /history/reconciliation: efter undo, återställ relevant kandidat.
+     - POST /reconciliation-candidates/:candidateId/accept: återanvänd samma helper så statuslogiken inte dupliceras.
+     - tiktok-sync auto-reconcile: när exakt ett klipp auto-länkas, skapa/uppdatera kandidat som auto_accepted.
+     - tiktok-sync efter totalImported > 0: kör generateReconciliationCandidates för kunden som non-fatal hook och logga
+  resultat/fel.
+
+  4. Uppdatera docs/agent-plans/10-reconciliation-candidates.md:
+     - Markera post-sync hook och manual status sync som implementerade.
+     - Lämna kvar UI och bulk-backfill som nästa steg.
+
+  Kör:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend exec tsc --noEmit
+  - pnpm --filter @workspace/api-server run test -- src/lib/studio/reconciliation-candidates-routes.test.ts src/lib/
+  studio/reconciliation-scoring.test.ts om Vitest fungerar lokalt.
