@@ -1,0 +1,50 @@
+Du jobbar i hagen-ui på senaste main. Gör Phase 11c: live UI-verifiering av hela feedplanner confirmation chain.
+
+  Läs först:
+  - docs/agent-plans/21-feedplanner-live-qa-checklist.md
+  - docs/agent-plans/22-feedplanner-live-qa-results.md
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör inga breda kodändringar.
+  - Målet är att verifiera fullflödet i UI, inte bygga nytt.
+  - Om du hittar ett blockerande fel: dokumentera rotorsak och minsta möjliga patchförslag. Implementera bara patch om
+  den är liten och direkt kopplad till blockeraren.
+
+  Primärt test:
+  Kör live UI-test av Scenario 1 med kund `bcbbdb19` / Pot. kund 28 / TikTok `@blubnan.liljeholm`, enligt QA-
+  resultatfilens rekommendation.
+
+  Verifiera:
+  1. Studio/feedplanner öppnas för kunden.
+  2. FeedAdvanceCue visas med ungefär “10 nya klipp”.
+  3. Cue visar rimlig thumbnail/datum från färsk TikTok-history.
+  4. Klick på “Bekräfta som gjord” öppnar MarkProducedDialog.
+  5. Auto-läge väljer rätt preferred imported clip.
+  6. Klick på “Bekräfta” kör först `/history/reconciliation`.
+  7. Därefter körs `/feed/mark-produced`.
+  8. Nu-kortet får TikTok-thumbnail/stats/published_at.
+  9. Timeline flyttas fram: +1 blir nu.
+  10. History-raden blir reconciled och försvinner från orekonsilierad historik.
+  11. Motor-signalen får `auto_resolved_at` och cue-bannern försvinner eller flyttas till hanterad status.
+  12. Reloada sidan och verifiera att UI-state fortfarande är korrekt.
+
+  Sekundärt:
+  - Om Elviras fortfarande har kandidater men ingen motor-signal, dokumentera det men lös det inte i denna fas.
+  - Testa inte undo i produktion om det riskerar riktig data.
+  - Testa skip endast om det finns en säker testkund.
+
+  Skapa:
+  docs/agent-plans/23-feedplanner-live-ui-confirmation-results.md
+
+  Filen ska innehålla:
+  - kund/testkund
+  - exakt vilka steg som kördes
+  - pass/fail per punkt
+  - observerade API-anrop
+  - före/efter-state i UI
+  - om möjligt relevant DB-state via app/loggar
+  - blockers om några finns
+  - rekommendation: “feedplanner redo att frysas” eller “kräver patch”
+
+  Committa och pusha resultatfilen till main.
