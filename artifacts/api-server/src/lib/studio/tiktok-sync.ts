@@ -796,6 +796,14 @@ export interface BatchResult {
   thumbnailsRefreshed?: number;
   /** True when the cron_run_log row was successfully written for this invocation. */
   cronLogWritten?: boolean;
+  /** True when the batch ran in dryRun mode — no RapidAPI calls, no DB writes. */
+  dryRun?: boolean;
+  /** Customers that would have been synced. Only populated on dryRun. */
+  eligibleCustomers?: EligibleCustomer[];
+  /** Customers that were skipped and why. Only populated on dryRun. */
+  skippedCustomers?: SkippedCustomer[];
+  /** How many customers would have been processed. Only populated on dryRun. */
+  wouldProcessCount?: number;
 }
 
 // ── cron_run_log typed payload ────────────────────────────────────────────────
@@ -846,24 +854,83 @@ export interface EligibleCustomer {
   last_upload_at: string | null;
 }
 
-/** Pure filter — exported so unit tests can validate eligibility logic without a live DB. */
+// ── Eligibility classification ────────────────────────────────────────────────
+
+/** Why a customer was not eligible for this sync batch. */
+export type SkipReason =
+  | 'missing_handle'         // no tiktok_handle configured
+  | 'recently_synced'        // active customer synced within the staleness window
+  | 'quiet_recently_synced'; // quiet customer (no recent upload) synced within the daily window
+// Note: 'invalid_status' does not appear here because the DB query filters by status
+// (['active','agreed','invited','prospect']) before classification runs.
+
+export interface SkippedCustomer {
+  id: string;
+  tiktok_handle: string | null;
+  reason: SkipReason;
+  last_history_sync_at: string | null;
+}
+
+export interface EligibilityResult {
+  eligible: EligibleCustomer[];
+  skipped: SkippedCustomer[];
+}
+
+/** Classifies customers into eligible and skipped (with per-customer skip reasons).
+ *  Pure function — exported so unit tests can validate eligibility logic without a live DB. */
+export function classifyCustomers(
+  customers: EligibleCustomer[],
+  opts: { cutoff: string; quietCutoff: string; dailyCutoff: string },
+): EligibilityResult {
+  const eligible: EligibleCustomer[] = [];
+  const skipped: SkippedCustomer[] = [];
+
+  for (const c of customers) {
+    if (!c.tiktok_handle?.trim()) {
+      skipped.push({ id: c.id, tiktok_handle: c.tiktok_handle, reason: 'missing_handle', last_history_sync_at: c.last_history_sync_at });
+      continue;
+    }
+    // Never synced → always eligible (initial backfill)
+    if (!c.last_history_sync_at) {
+      eligible.push(c);
+      continue;
+    }
+    const isQuiet = !c.last_upload_at || c.last_upload_at < opts.quietCutoff;
+    if (isQuiet) {
+      // Quiet customers sync at most once per day
+      if (c.last_history_sync_at < opts.dailyCutoff) {
+        eligible.push(c);
+      } else {
+        skipped.push({ id: c.id, tiktok_handle: c.tiktok_handle, reason: 'quiet_recently_synced', last_history_sync_at: c.last_history_sync_at });
+      }
+    } else {
+      if (c.last_history_sync_at < opts.cutoff) {
+        eligible.push(c);
+      } else {
+        skipped.push({ id: c.id, tiktok_handle: c.tiktok_handle, reason: 'recently_synced', last_history_sync_at: c.last_history_sync_at });
+      }
+    }
+  }
+
+  return { eligible, skipped };
+}
+
+/** Returns only the eligible list.
+ *  Delegates to `classifyCustomers` — prefer that function when skip reasons are needed. */
 export function filterEligibleCustomers(
   customers: EligibleCustomer[],
   opts: { cutoff: string; quietCutoff: string; dailyCutoff: string },
 ): EligibleCustomer[] {
-  return customers.filter((c) => {
-    if (!c.tiktok_handle?.trim()) return false;
-    if (!c.last_history_sync_at) return true;
-    const isQuiet = !c.last_upload_at || c.last_upload_at < opts.quietCutoff;
-    if (isQuiet) return c.last_history_sync_at < opts.dailyCutoff;
-    return c.last_history_sync_at < opts.cutoff;
-  });
+  return classifyCustomers(customers, opts).eligible;
 }
 
 export interface BatchOptions {
   /** Limit the number of eligible customers processed in this batch.
    *  Useful for manual "run now" invocations that should not consume the full daily budget. */
   maxCustomers?: number;
+  /** When true: classify eligible/skipped customers and return early without calling RapidAPI,
+   *  writing sync_runs, or writing cron_run_log. Safe to call at any time for observability. */
+  dryRun?: boolean;
 }
 
 export async function runHistorySyncBatch(rapidApiKey: string, opts: BatchOptions = {}): Promise<BatchResult> {
@@ -897,14 +964,14 @@ export async function runHistorySyncBatch(rapidApiKey: string, opts: BatchOption
   const quietCutoff = new Date(Date.now() - quietDays * 24 * 60 * 60 * 1000).toISOString();
   const dailyCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const allEligible = filterEligibleCustomers(
+  const classification = classifyCustomers(
     (customers ?? []) as EligibleCustomer[],
     { cutoff, quietCutoff, dailyCutoff },
   );
   // opts.maxCustomers allows manual "run now" calls to limit budget consumption.
   const eligible = opts.maxCustomers != null
-    ? allEligible.slice(0, opts.maxCustomers)
-    : allEligible;
+    ? classification.eligible.slice(0, opts.maxCustomers)
+    : classification.eligible;
 
   // Persisted per-day budget: sum calls_used across sync_runs in last 24h
   // so the budget holds across the four daily cron invocations.
@@ -915,6 +982,30 @@ export async function runHistorySyncBatch(rapidApiKey: string, opts: BatchOption
     .gte('started_at', dayAgo);
   const priorCallsToday = ((recentRuns ?? []) as Array<{ calls_used: number | null }>)
     .reduce((sum, r) => sum + (Number(r.calls_used) || 0), 0);
+
+  // ── dryRun: return eligibility preview without calling RapidAPI or writing to DB ──
+  if (opts.dryRun) {
+    logger.info(
+      { eligible: eligible.length, skipped: classification.skipped.length, maxCustomers: opts.maxCustomers ?? 'all' },
+      'tiktok-sync: dryRun — returning eligibility preview, no sync performed',
+    );
+    return {
+      processed: 0,
+      imported: 0,
+      statsUpdated: 0,
+      errors: [],
+      callsUsed: 0,
+      budgetRemaining: Math.max(0, dailyBudget - priorCallsToday),
+      budgetExceeded: false,
+      staleLocksCleared,
+      thumbnailsRefreshed: 0,
+      cronLogWritten: false,
+      dryRun: true,
+      eligibleCustomers: eligible,
+      skippedCustomers: classification.skipped,
+      wouldProcessCount: eligible.length,
+    };
+  }
 
   // Open an aggregate row for this entire cron invocation. customer_id NULL
   // would violate FK, so we use the synthetic batch UUID convention: write

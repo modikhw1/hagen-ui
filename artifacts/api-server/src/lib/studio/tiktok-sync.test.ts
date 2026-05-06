@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildCronLogPayload,
+  classifyCustomers,
   filterEligibleCustomers,
   type BatchResult,
   type CronRunLogInsert,
@@ -89,8 +90,10 @@ describe('buildCronLogPayload', () => {
 const NOW = '2026-05-06T12:00:00.000Z';
 const TWO_H_AGO = '2026-05-06T10:00:00.000Z';    // very recent sync (inside staleness)
 const SIX_H_AGO = '2026-05-06T06:00:00.000Z';    // old enough sync (outside staleness)
-const TWO_DAYS_AGO = '2026-05-04T12:00:00.000Z'; // outside quiet 1×/day
-const FIFTEEN_DAYS_AGO = '2026-04-21T12:00:00.000Z';
+const THREE_DAYS_AGO = '2026-05-03T12:00:00.000Z'; // strictly before daily cutoff
+const TWO_DAYS_AGO = '2026-05-04T12:00:00.000Z'; // used as DAILY_CUTOFF boundary
+const FIFTEEN_DAYS_AGO = '2026-04-21T12:00:00.000Z'; // used as QUIET_CUTOFF boundary
+const TWENTY_DAYS_AGO = '2026-04-16T12:00:00.000Z';  // strictly before quiet cutoff → truly quiet
 
 // CUTOFF = 4h ago boundary; SIX_H_AGO (06:00) < CUTOFF (08:00) → eligible
 // TWO_H_AGO (10:00) > CUTOFF (08:00) → NOT eligible
@@ -110,6 +113,95 @@ function makeCustomer(overrides: Partial<EligibleCustomer>): EligibleCustomer {
     ...overrides,
   };
 }
+
+// ── classifyCustomers ─────────────────────────────────────────────────────────
+
+describe('classifyCustomers', () => {
+  it('puts customer with missing handle into skipped with reason missing_handle', () => {
+    const c = makeCustomer({ tiktok_handle: null });
+    const { eligible, skipped } = classifyCustomers([c], OPTS);
+    expect(eligible).toHaveLength(0);
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0]!.reason).toBe('missing_handle');
+    expect(skipped[0]!.id).toBe('cust-1');
+  });
+
+  it('puts customer with blank handle into skipped with reason missing_handle', () => {
+    const c = makeCustomer({ tiktok_handle: '   ' });
+    const { eligible, skipped } = classifyCustomers([c], OPTS);
+    expect(eligible).toHaveLength(0);
+    expect(skipped[0]!.reason).toBe('missing_handle');
+  });
+
+  it('puts never-synced customer into eligible', () => {
+    const c = makeCustomer({ last_history_sync_at: null });
+    const { eligible, skipped } = classifyCustomers([c], OPTS);
+    expect(eligible).toHaveLength(1);
+    expect(skipped).toHaveLength(0);
+  });
+
+  it('puts active customer synced within staleness window into skipped with reason recently_synced', () => {
+    const c = makeCustomer({ last_history_sync_at: TWO_H_AGO, last_upload_at: NOW });
+    const { eligible, skipped } = classifyCustomers([c], OPTS);
+    expect(eligible).toHaveLength(0);
+    expect(skipped[0]!.reason).toBe('recently_synced');
+  });
+
+  it('puts active customer synced outside staleness window into eligible', () => {
+    const c = makeCustomer({ last_history_sync_at: SIX_H_AGO, last_upload_at: NOW });
+    const { eligible, skipped } = classifyCustomers([c], OPTS);
+    expect(eligible).toHaveLength(1);
+    expect(skipped).toHaveLength(0);
+  });
+
+  it('puts quiet customer synced within daily cutoff into skipped with reason quiet_recently_synced', () => {
+    // TWENTY_DAYS_AGO is strictly before QUIET_CUTOFF (FIFTEEN_DAYS_AGO) → truly quiet
+    const c = makeCustomer({ last_history_sync_at: TWO_H_AGO, last_upload_at: TWENTY_DAYS_AGO });
+    const { eligible, skipped } = classifyCustomers([c], OPTS);
+    expect(eligible).toHaveLength(0);
+    expect(skipped[0]!.reason).toBe('quiet_recently_synced');
+  });
+
+  it('puts quiet customer synced outside daily cutoff into eligible', () => {
+    // TWENTY_DAYS_AGO strictly before quiet cutoff → quiet; THREE_DAYS_AGO strictly before daily cutoff → eligible
+    const c = makeCustomer({ last_history_sync_at: THREE_DAYS_AGO, last_upload_at: TWENTY_DAYS_AGO });
+    const { eligible, skipped } = classifyCustomers([c], OPTS);
+    expect(eligible).toHaveLength(1);
+    expect(skipped).toHaveLength(0);
+  });
+
+  it('classifies a mixed list correctly', () => {
+    const customers = [
+      makeCustomer({ id: 'c1', tiktok_handle: null }),                                       // missing_handle
+      makeCustomer({ id: 'c2', last_history_sync_at: null }),                                 // eligible (never synced)
+      makeCustomer({ id: 'c3', last_history_sync_at: TWO_H_AGO, last_upload_at: NOW }),       // recently_synced
+      makeCustomer({ id: 'c4', last_history_sync_at: SIX_H_AGO, last_upload_at: NOW }),       // eligible
+      makeCustomer({ id: 'c5', last_history_sync_at: TWO_H_AGO, last_upload_at: TWENTY_DAYS_AGO }),  // quiet_recently_synced
+    ];
+    const { eligible, skipped } = classifyCustomers(customers, OPTS);
+    expect(eligible.map((e) => e.id)).toEqual(['c2', 'c4']);
+    expect(skipped.map((s) => s.reason)).toEqual(['missing_handle', 'recently_synced', 'quiet_recently_synced']);
+  });
+
+  it('skipped entries carry last_history_sync_at for debugging', () => {
+    const c = makeCustomer({ last_history_sync_at: TWO_H_AGO, last_upload_at: NOW });
+    const { skipped } = classifyCustomers([c], OPTS);
+    expect(skipped[0]!.last_history_sync_at).toBe(TWO_H_AGO);
+    expect(skipped[0]!.tiktok_handle).toBe('@testhandle');
+  });
+
+  it('respects maxCustomers slicing on the eligible list', () => {
+    const customers = [
+      makeCustomer({ id: 'c1', last_history_sync_at: null }),
+      makeCustomer({ id: 'c2', last_history_sync_at: null }),
+      makeCustomer({ id: 'c3', last_history_sync_at: null }),
+    ];
+    const { eligible } = classifyCustomers(customers, OPTS);
+    expect(eligible.slice(0, 2).map((e) => e.id)).toEqual(['c1', 'c2']);
+  });
+});
+
+// ── filterEligibleCustomers (delegates to classifyCustomers) ──────────────────
 
 describe('filterEligibleCustomers', () => {
   it('excludes customers without a tiktok_handle', () => {

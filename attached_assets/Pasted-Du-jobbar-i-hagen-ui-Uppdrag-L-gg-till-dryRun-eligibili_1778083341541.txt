@@ -1,0 +1,74 @@
+Du jobbar i hagen-ui.
+
+  Uppdrag: Lägg till dryRun/eligibility preview för TikTok sync batch
+
+  Scope:
+  - Rör inte /admin/demos.
+  - Gör ingen Supabase live-interaktion.
+  - Pusha till main när klart.
+
+  Bakgrund:
+  Run-control finns nu:
+  - `POST /api/admin/cron-runs/run-now`
+  - `runHistorySyncBatch(rapidApiKey, { maxCustomers })`
+  - Cron-health UI har “Kör sync nu”.
+
+  Men `dryRun` saknas. Admin behöver kunna se vilka kunder som skulle syncas och varför andra skippar, utan att kalla
+  RapidAPI eller skriva `sync_runs`.
+
+  Mål:
+  1. Extrahera eligibility-logiken i `artifacts/api-server/src/lib/studio/tiktok-sync.ts` till testbar helper:
+     - input: customers, stalenessHours, quietDays, now
+     - output: både eligible och skipped
+     - skipped ska ha reason, t.ex:
+       - `missing_handle`
+       - `recently_synced`
+       - `quiet_recently_synced`
+       - `invalid_status`
+
+  2. Lägg till `dryRun?: boolean` i `BatchOptions`.
+
+  3. När `runHistorySyncBatch(..., { dryRun: true })` körs:
+     - kalla inte RapidAPI
+     - skriv inte `sync_runs`
+     - skriv inte `cron_run_log`
+     - returnera BatchResult med:
+       - `processed: 0`
+       - `cronLogWritten: false`
+       - `dryRun: true`
+       - `eligibleCustomers`
+       - `skippedCustomers`
+       - gärna `wouldProcessCount`
+
+  4. Uppdatera `POST /api/admin/cron-runs/run-now`:
+     - acceptera `{ maxCustomers?: number, dryRun?: boolean }`
+     - returnera dryRun-resultatet
+
+  5. Uppdatera cron-health UI:
+     - lägg till “Förhandsgranska” eller checkbox “Dry run”
+     - visa eligible/skipped-lista efter dryRun
+     - visa tydligt att ingen sync kördes och ingen budget användes
+
+  6. Uppdatera docs:
+     - `docs/agent-plans/04-tiktok-sync-cron-observability.md`
+     - markera dryRun som implementerat
+     - dokumentera kvarvarande nästa steg: scheduler/job table, retry/backoff, reconciliation candidates, alerts
+
+  7. Tester:
+     - lägg unit-tests för eligibility helpern:
+       - saknar handle
+       - nyligen syncad
+       - quiet customer
+       - aldrig syncad
+       - maxCustomers slicing
+       - invalid status
+
+  Verifiering:
+  - `pnpm --filter @workspace/api-server run typecheck`
+  - `pnpm --filter @workspace/letrend exec tsc --noEmit`
+  - relevant test om möjligt
+
+  Output:
+  - Lista ändrade filer.
+  - Lista verifiering.
+  - Notera commit-hash pushad till main.

@@ -26,7 +26,7 @@ Routes:
 - `POST /api/studio-v2/history/reconciliation`
 - `DELETE /api/studio-v2/history/reconciliation`
 - `GET /api/admin/cron-runs` — admin health: cron_run_log + sync_runs + failed customers
-- `POST /api/admin/cron-runs/run-now` — **manual batch trigger** (admin-auth, optional `maxCustomers`)
+- `POST /api/admin/cron-runs/run-now` — **manual batch trigger** (admin-auth, optional `maxCustomers`, optional `dryRun`)
 
 Admin-vy:
 
@@ -73,9 +73,25 @@ Cron-synken (`runHistorySyncBatch`) avslutades med att skriva en aggregerad rad 
 - `.github/workflows/sync-history-all.yml` — kommentar uppdaterad med alla BatchResult-fält
   inkl. `cronLogWritten`; workflow varnar i loggen om cronLogWritten=false.
 
+**Fas 3 — dryRun / eligibility preview:**
+- `SkipReason` typ: `'missing_handle' | 'recently_synced' | 'quiet_recently_synced'`.
+- `SkippedCustomer` interface: `{ id, tiktok_handle, reason, last_history_sync_at }`.
+- `EligibilityResult` interface: `{ eligible: EligibleCustomer[], skipped: SkippedCustomer[] }`.
+- `classifyCustomers(customers, opts)` — ny exporterad ren funktion; returnerar både eligible
+  och skipped med orsak. `filterEligibleCustomers` delegerar till denna.
+- `BatchOptions.dryRun?: boolean` — när true: ingen RapidAPI, ingen sync_runs, ingen cron_run_log.
+- `BatchResult` — utökat med `dryRun?`, `eligibleCustomers?`, `skippedCustomers?`, `wouldProcessCount?`.
+- `runHistorySyncBatch` — när `dryRun=true`: returnerar eligibility-preview direkt efter
+  budget-beräkning; ingenting skrivs.
+- `POST /api/admin/cron-runs/run-now` — accepterar nu `{ maxCustomers?, dryRun? }`;
+  kräver **inte** `RAPIDAPI_KEY` vid dryRun.
+- Cron-health UI — "Förhandsgranska (dry run)"-checkbox; visar blå banner, eligible-lista
+  (grön) och skipped-lista (grå) med orsakstexter på svenska.
+
 **Tester:**
 - `tiktok-sync.test.ts`: 6 testfall för `buildCronLogPayload` + 8 testfall för
-  `filterEligibleCustomers` inkl. maxCustomers-slicing.
+  `filterEligibleCustomers` + 9 testfall för `classifyCustomers` inkl. mixed-list och
+  skipped-metadata.
 
 ## Nuvarande syncflöde
 
@@ -108,8 +124,9 @@ Cron-synken (`runHistorySyncBatch`) avslutades med att skriva en aggregerad rad 
 
 1. Rensar stale locks.
 2. Väljer kunder med aktiv/inbjuden/agreed status och TikTok-handle.
-3. Filtrerar via `filterEligibleCustomers` (staleness/quiet hours).
+3. Klassificerar via `classifyCustomers` → `{ eligible, skipped }`.
 4. Begränsar till `opts.maxCustomers` om angivet.
+5. **Om `opts.dryRun=true`**: returnerar eligibility-preview utan vidare DB-writes.
 5. Respekterar daglig budget.
 6. Kör `syncCustomerHistory` per kund.
 7. Uppdaterar reconciled thumbnails.
@@ -128,11 +145,10 @@ Appen har ingen `sync_jobs`-tabell. GitHub Actions är enda scheduler. Appen sak
 - retry/backoff per kund,
 - budget ledger per provider (nu approximerat via sync_runs-summa).
 
-### 2. dryRun ej implementerat
+### 2. ✅ dryRun implementerat (Fas 3)
 
-`BatchOptions.dryRun?: boolean` dokumenterat men inte implementerat. Nästa steg: när
-`dryRun=true`, beräkna och returnera eligible-listan utan att kalla RapidAPI eller skriva
-sync_runs/cron_run_log. Ger admin en "preview" av vad nästa batch skulle göra.
+`BatchOptions.dryRun=true` returnerar `{ eligibleCustomers, skippedCustomers, wouldProcessCount }`
+utan att kalla RapidAPI eller skriva sync_runs/cron_run_log. Admin-UI visar eligible/skipped-listor.
 
 ### 3. Matchningslogiken är för smal
 

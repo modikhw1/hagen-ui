@@ -46,6 +46,13 @@ interface Payload {
   fallback_cron_sync_runs: CustomerRun[];
 }
 
+interface DryRunCustomer {
+  id: string;
+  tiktok_handle: string | null;
+  last_history_sync_at: string | null;
+  reason?: string; // only on skipped
+}
+
 interface RunNowResult {
   processed: number;
   imported: number;
@@ -57,6 +64,10 @@ interface RunNowResult {
   thumbnailsRefreshed?: number;
   errors: Array<{ customerId: string; error: string }>;
   cronLogWritten?: boolean;
+  dryRun?: boolean;
+  eligibleCustomers?: DryRunCustomer[];
+  skippedCustomers?: DryRunCustomer[];
+  wouldProcessCount?: number;
 }
 
 function fmtTs(value: string | null): string {
@@ -75,11 +86,18 @@ function InvocationNote({ row }: { row: CronInvocation }): ReactElement {
   return <span>{parts.join(' · ')}</span>;
 }
 
+const SKIP_REASON_LABEL: Record<string, string> = {
+  missing_handle: 'Saknar TikTok-handle',
+  recently_synced: 'Nyligen synkad',
+  quiet_recently_synced: 'Tyst kund — synkad idag',
+};
+
 function RunNowPanel(): ReactElement {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<RunNowResult | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [maxCustomers, setMaxCustomers] = useState<string>('3');
+  const [dryRun, setDryRun] = useState(false);
 
   async function handleRunNow() {
     setRunning(true);
@@ -87,7 +105,9 @@ function RunNowPanel(): ReactElement {
     setRunError(null);
     try {
       const max = parseInt(maxCustomers, 10);
-      const body = !isNaN(max) && max > 0 ? { maxCustomers: max } : {};
+      const body: Record<string, unknown> = {};
+      if (!isNaN(max) && max > 0) body['maxCustomers'] = max;
+      if (dryRun) body['dryRun'] = true;
       const res = await apiClient.post<RunNowResult>('/api/admin/cron-runs/run-now', body);
       setResult(res);
     } catch (err: unknown) {
@@ -100,7 +120,7 @@ function RunNowPanel(): ReactElement {
   return (
     <section className="rounded-md border border-border p-4">
       <h2 className="mb-3 text-sm font-semibold">Manuell batch-körning</h2>
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm text-muted-foreground" htmlFor="max-customers">
           Max kunder:
         </label>
@@ -108,20 +128,32 @@ function RunNowPanel(): ReactElement {
           id="max-customers"
           type="number"
           min={1}
-          max={30}
+          max={200}
           value={maxCustomers}
           onChange={(e) => setMaxCustomers(e.target.value)}
           className="w-20 rounded border border-border px-2 py-1 text-sm"
           disabled={running}
         />
+        <label className="flex cursor-pointer items-center gap-1.5 text-sm select-none">
+          <input
+            type="checkbox"
+            checked={dryRun}
+            onChange={(e) => setDryRun(e.target.checked)}
+            disabled={running}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span>Förhandsgranska (dry run)</span>
+        </label>
         <button
           onClick={handleRunNow}
           disabled={running}
           className="rounded bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
         >
-          {running ? 'Kör…' : 'Kör sync nu'}
+          {running
+            ? dryRun ? 'Förhandsgranskar…' : 'Kör…'
+            : dryRun ? 'Förhandsgranska' : 'Kör sync nu'}
         </button>
-        {running && (
+        {running && !dryRun && (
           <span className="text-sm text-muted-foreground">Synkar TikTok-historik — kan ta upp till 1 minut…</span>
         )}
       </div>
@@ -132,7 +164,58 @@ function RunNowPanel(): ReactElement {
         </div>
       )}
 
-      {result && (
+      {result?.dryRun && (
+        <div className="mt-4 space-y-3">
+          <div className="rounded-md border border-blue-300 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            <strong>Dry run — ingen sync kördes, inget budget användes.</strong>{' '}
+            {result.wouldProcessCount} kund(er) skulle ha synkats. Budget kvar: {result.budgetRemaining} anrop.
+          </div>
+
+          {(result.eligibleCustomers?.length ?? 0) > 0 && (
+            <div>
+              <div className="mb-1 text-xs font-semibold text-green-700">
+                Skulle synkas ({result.eligibleCustomers!.length})
+              </div>
+              <div className="space-y-1">
+                {result.eligibleCustomers!.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between rounded border border-green-200 bg-green-50 px-3 py-1.5 text-xs"
+                  >
+                    <span className="font-mono">{c.tiktok_handle ?? c.id.slice(0, 8)}</span>
+                    <span className="text-muted-foreground">
+                      Senast: {fmtTs(c.last_history_sync_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(result.skippedCustomers?.length ?? 0) > 0 && (
+            <div>
+              <div className="mb-1 text-xs font-semibold text-muted-foreground">
+                Hoppas över ({result.skippedCustomers!.length})
+              </div>
+              <div className="space-y-1">
+                {result.skippedCustomers!.map((c) => (
+                  <div
+                    key={c.id + (c.reason ?? '')}
+                    className="flex items-center justify-between rounded border border-border bg-muted/30 px-3 py-1.5 text-xs"
+                  >
+                    <span className="font-mono">{c.tiktok_handle ?? c.id.slice(0, 8)}</span>
+                    <span className="text-muted-foreground">
+                      {SKIP_REASON_LABEL[c.reason ?? ''] ?? c.reason ?? '–'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {result && !result.dryRun && (
         <div className="mt-4 space-y-2">
           <div className="grid grid-cols-3 gap-2 text-sm sm:grid-cols-6">
             {[

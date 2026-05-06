@@ -110,24 +110,38 @@ router.get('/cron-runs', requireAuth, ADMIN_ONLY, async (_req, res) => {
 // whether the cron_run_log row was successfully persisted.
 router.post('/cron-runs/run-now', requireAuth, ADMIN_ONLY, async (req, res) => {
   try {
-    const rapidApiKey = process.env['RAPIDAPI_KEY'];
-    if (!rapidApiKey) {
-      res.status(500).json({
-        error: 'RAPIDAPI_KEY saknas i servermiljön — sync kan inte köras. Sätt miljövariabeln och starta om servern.',
-      });
-      return;
-    }
     const body = (req.body ?? {}) as Record<string, unknown>;
+    const dryRun = body['dryRun'] === true;
     const maxCustomers =
       typeof body['maxCustomers'] === 'number' && body['maxCustomers'] > 0
         ? Math.floor(body['maxCustomers'])
         : undefined;
 
-    logger.info({ maxCustomers: maxCustomers ?? 'all' }, 'admin run-now: starting manual TikTok sync batch');
-    const result = await runHistorySyncBatch(rapidApiKey, { maxCustomers });
+    // dryRun does not call RapidAPI — key is not required
+    if (!dryRun) {
+      const rapidApiKey = process.env['RAPIDAPI_KEY'];
+      if (!rapidApiKey) {
+        res.status(500).json({
+          error: 'RAPIDAPI_KEY saknas i servermiljön — sync kan inte köras. Sätt miljövariabeln och starta om servern.',
+        });
+        return;
+      }
+      logger.info({ maxCustomers: maxCustomers ?? 'all' }, 'admin run-now: starting manual TikTok sync batch');
+      const result = await runHistorySyncBatch(rapidApiKey, { maxCustomers });
+      logger.info(
+        { processed: result.processed, imported: result.imported, cronLogWritten: result.cronLogWritten },
+        'admin run-now: batch complete',
+      );
+      res.json(result);
+      return;
+    }
+
+    // dryRun path — pass any non-empty string; the key is never used
+    logger.info({ maxCustomers: maxCustomers ?? 'all' }, 'admin run-now: dryRun — eligibility preview');
+    const result = await runHistorySyncBatch('__dryrun__', { maxCustomers, dryRun: true });
     logger.info(
-      { processed: result.processed, imported: result.imported, cronLogWritten: result.cronLogWritten },
-      'admin run-now: batch complete',
+      { wouldProcessCount: result.wouldProcessCount, skipped: result.skippedCustomers?.length ?? 0 },
+      'admin run-now: dryRun complete',
     );
     res.json(result);
   } catch (err) {
