@@ -1,0 +1,63 @@
+ Du jobbar i hagen-ui.
+
+  Uppdrag: Lägg till admin run-control för TikTok sync batch
+
+  Scope:
+  - Rör inte /admin/demos.
+  - Gör ingen Supabase live-interaktion.
+  - Bygg vidare på senaste main där cron observability redan är förbättrad.
+
+  Bakgrund:
+  Orchestrator har verifierat:
+  - `cron_run_log` insert-shape fungerar live i Supabase.
+  - `cron_run_log` är fortfarande tom tills en batch faktiskt körs med deployad kod.
+  - `sync_runs` visar att per-customer cron-sync finns.
+  - Nästa mål är att admin ska kunna trigga och felsöka batchen från appen, inte bara via GitHub Actions.
+
+  Mål:
+  1. Lägg till admin-only endpoint:
+     `POST /api/admin/cron-runs/run-now`
+
+     Den ska:
+     - kräva admin auth
+     - använda `RAPIDAPI_KEY`
+     - kalla `runHistorySyncBatch`
+     - returnera hela BatchResult inklusive `cronLogWritten`
+     - ge tydliga fel om `RAPIDAPI_KEY` saknas
+
+  2. Utöka `runHistorySyncBatch` med options:
+     - `maxCustomers?: number`
+     - `dryRun?: boolean`
+
+     Beteende:
+     - `maxCustomers` begränsar antal eligible kunder som faktiskt processas.
+     - `dryRun=true` ska inte kalla RapidAPI och inte skriva `sync_runs`, men ska returnera hur många kunder som hade
+  varit eligible och gärna skriva/returnera tydlig debugstatus. Om du bedömer att dryRun gör koden för stor,
+  implementera bara `maxCustomers` och dokumentera dryRun som nästa steg.
+
+  3. Uppdatera admin cron-health UI:
+     - Lägg till knapp “Kör sync nu”.
+     - Visa loading state.
+     - Visa senaste resultat: processed/imported/statsUpdated/callsUsed/budgetRemaining/cronLogWritten.
+     - Om `cronLogWritten=false`, visa tydlig varning att serverloggar ska kontrolleras.
+
+  4. Uppdatera `.github/workflows/sync-history-all.yml` kommentaren så responsen inkluderar `cronLogWritten`.
+
+  5. Lägg test där det är rimligt:
+     - unit-test för `maxCustomers`/eligible slicing om du kan isolera utan live DB
+     - annars åtminstone behåll/utöka `buildCronLogPayload`-testerna
+
+  6. Uppdatera `docs/agent-plans/04-tiktok-sync-cron-observability.md` med:
+     - run-now endpoint
+     - vad som fortfarande saknas: scheduler/job table, retry/backoff, reconciliation candidates
+
+  Verifiering:
+  - `pnpm --filter @workspace/api-server run typecheck`
+  - `pnpm --filter @workspace/letrend exec tsc --noEmit`
+  - relevant test om möjligt
+
+  Output:
+  - Lista ändrade filer.
+  - Lista verifiering.
+  - Notera om dryRun implementerades eller lämnades som nästa steg.
+  - Pusha till main.

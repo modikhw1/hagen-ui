@@ -838,7 +838,7 @@ export function buildCronLogPayload(
   };
 }
 
-interface EligibleCustomer {
+export interface EligibleCustomer {
   id: string;
   tiktok_handle: string | null;
   status: string | null;
@@ -846,7 +846,27 @@ interface EligibleCustomer {
   last_upload_at: string | null;
 }
 
-export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchResult> {
+/** Pure filter — exported so unit tests can validate eligibility logic without a live DB. */
+export function filterEligibleCustomers(
+  customers: EligibleCustomer[],
+  opts: { cutoff: string; quietCutoff: string; dailyCutoff: string },
+): EligibleCustomer[] {
+  return customers.filter((c) => {
+    if (!c.tiktok_handle?.trim()) return false;
+    if (!c.last_history_sync_at) return true;
+    const isQuiet = !c.last_upload_at || c.last_upload_at < opts.quietCutoff;
+    if (isQuiet) return c.last_history_sync_at < opts.dailyCutoff;
+    return c.last_history_sync_at < opts.cutoff;
+  });
+}
+
+export interface BatchOptions {
+  /** Limit the number of eligible customers processed in this batch.
+   *  Useful for manual "run now" invocations that should not consume the full daily budget. */
+  maxCustomers?: number;
+}
+
+export async function runHistorySyncBatch(rapidApiKey: string, opts: BatchOptions = {}): Promise<BatchResult> {
   const supabase = createSupabaseAdmin();
   const stalenessHours = STALENESS_HOURS();
   const quietDays = QUIET_DAYS();
@@ -877,15 +897,14 @@ export async function runHistorySyncBatch(rapidApiKey: string): Promise<BatchRes
   const quietCutoff = new Date(Date.now() - quietDays * 24 * 60 * 60 * 1000).toISOString();
   const dailyCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-  const eligible = ((customers ?? []) as EligibleCustomer[]).filter((c) => {
-    if (!c.tiktok_handle?.trim()) return false;
-    // Initial backfill: never synced → always eligible
-    if (!c.last_history_sync_at) return true;
-    // Adaptive: quiet customers (>quietDays since last upload) sync max 1×/day
-    const isQuiet = !c.last_upload_at || c.last_upload_at < quietCutoff;
-    if (isQuiet) return c.last_history_sync_at < dailyCutoff;
-    return c.last_history_sync_at < cutoff;
-  });
+  const allEligible = filterEligibleCustomers(
+    (customers ?? []) as EligibleCustomer[],
+    { cutoff, quietCutoff, dailyCutoff },
+  );
+  // opts.maxCustomers allows manual "run now" calls to limit budget consumption.
+  const eligible = opts.maxCustomers != null
+    ? allEligible.slice(0, opts.maxCustomers)
+    : allEligible;
 
   // Persisted per-day budget: sum calls_used across sync_runs in last 24h
   // so the budget holds across the four daily cron invocations.

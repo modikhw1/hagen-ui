@@ -9,9 +9,23 @@ name: Sync customer TikTok history
 #   Repository secret:   CRON_SECRET   — must match the deployed CRON_SECRET env var
 #   Repository variable: APP_URL       — deployed API base URL, e.g. https://api.letrend.se
 #
-# The route returns:
-#   { processed, imported, statsUpdated, errors, callsUsed, budgetRemaining,
-#     budgetExceeded, staleLocksCleared }
+# The route returns a BatchResult JSON object:
+#   {
+#     processed,           — number of customers synced this invocation
+#     imported,            — new clips imported
+#     statsUpdated,        — existing clips with updated stats
+#     errors,              — per-customer error array (empty = all OK)
+#     callsUsed,           — RapidAPI calls consumed this invocation
+#     budgetRemaining,     — calls left in today's budget
+#     budgetExceeded,      — true if daily budget was hit mid-batch
+#     staleLocksCleared,   — number of stuck locks cleared before batch
+#     thumbnailsRefreshed, — assignment thumbnails re-synced
+#     cronLogWritten       — true if the cron_run_log row was persisted successfully;
+#                            false means the DB insert failed (check server logs for
+#                            "cron_run_log insert failed" with full PostgrestError)
+#   }
+#
+# Manual trigger via admin UI: POST /api/admin/cron-runs/run-now (admin-auth, optional maxCustomers body)
 on:
   schedule:
     - cron: '0 6,9,12,15 * * 1-5'  # 06/09/12/15 UTC, Mon-Fri
@@ -33,6 +47,11 @@ jobs:
             -H "Content-Type: application/json")
           echo "HTTP status: $http_status"
           jq '.' /tmp/sync_response.json 2>/dev/null || cat /tmp/sync_response.json
+          # Warn if cronLogWritten is false (batch ran but DB row was not persisted)
+          cron_log_written=$(jq -r '.cronLogWritten // "null"' /tmp/sync_response.json 2>/dev/null || echo "null")
+          if [ "$cron_log_written" = "false" ]; then
+            echo "WARNING: cronLogWritten=false — check server logs for cron_run_log insert failure"
+          fi
           if [ "$http_status" != "200" ]; then
             echo "Sync failed — expected 200, got $http_status"
             exit 1

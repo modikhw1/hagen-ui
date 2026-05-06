@@ -16,6 +16,7 @@ import conceptsRouter from './concepts.js';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
+import { runHistorySyncBatch } from '../../lib/studio/tiktok-sync.js';
 import { deriveAttention, computeUnreadCount } from '../../lib/admin-derive/attention.js';
 import { getLastSeenAt, markSeen, type SeenSurface } from '../../lib/admin-derive/last-seen.js';
 
@@ -100,6 +101,38 @@ router.get('/cron-runs', requireAuth, ADMIN_ONLY, async (_req, res) => {
   } catch (err) {
     logger.error(err, 'admin cron-runs error');
     res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/cron-runs/run-now — manually trigger a TikTok sync batch.
+// Admin-only. Accepts optional { maxCustomers: number } body to limit scope.
+// Returns the full BatchResult including cronLogWritten so the caller knows
+// whether the cron_run_log row was successfully persisted.
+router.post('/cron-runs/run-now', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const rapidApiKey = process.env['RAPIDAPI_KEY'];
+    if (!rapidApiKey) {
+      res.status(500).json({
+        error: 'RAPIDAPI_KEY saknas i servermiljön — sync kan inte köras. Sätt miljövariabeln och starta om servern.',
+      });
+      return;
+    }
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const maxCustomers =
+      typeof body['maxCustomers'] === 'number' && body['maxCustomers'] > 0
+        ? Math.floor(body['maxCustomers'])
+        : undefined;
+
+    logger.info({ maxCustomers: maxCustomers ?? 'all' }, 'admin run-now: starting manual TikTok sync batch');
+    const result = await runHistorySyncBatch(rapidApiKey, { maxCustomers });
+    logger.info(
+      { processed: result.processed, imported: result.imported, cronLogWritten: result.cronLogWritten },
+      'admin run-now: batch complete',
+    );
+    res.json(result);
+  } catch (err) {
+    logger.error(err, 'admin cron-runs run-now error');
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
   }
 });
 

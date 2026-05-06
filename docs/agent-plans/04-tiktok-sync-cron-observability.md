@@ -21,10 +21,12 @@ Huvudfil:
 Routes:
 
 - `POST /api/studio-v2/customers/:customerId/fetch-profile-history`
-- `POST /api/studio-v2/internal/sync-history-all`
+- `POST /api/studio-v2/internal/sync-history-all` — cron-trigger (Bearer CRON_SECRET)
 - `GET /api/studio-v2/customers/:customerId/import-history`
 - `POST /api/studio-v2/history/reconciliation`
 - `DELETE /api/studio-v2/history/reconciliation`
+- `GET /api/admin/cron-runs` — admin health: cron_run_log + sync_runs + failed customers
+- `POST /api/admin/cron-runs/run-now` — **manual batch trigger** (admin-auth, optional `maxCustomers`)
 
 Admin-vy:
 
@@ -37,30 +39,43 @@ Verifierat av orchestrator:
 | Tabell | Antal rader | Kommentar |
 |---|---|---|
 | `sync_runs` | 507 | Cron-mode sync körs normalt |
-| `cron_run_log` | 0 | Raden skrivs aldrig — se rotorsak nedan |
-| `tiktok_videos` | — | Synk av TikTok-videos |
-| `customer_concepts` | — | 30 kunder med TikTok-handle |
-| `feed_motor_signals` (öppna) | 13 | Aktiva nudges |
+| `cron_run_log` | 0 → fylls vid nästa batch | Insert-shape bekräftad OK live |
+| 30 kunder | har TikTok-handle | Eligible kandidater |
+| 13 `feed_motor_signals` | öppna | Väntande nudges |
 
-## Rotorsak: cron_run_log är alltid tom
+## Rotorsak: cron_run_log var alltid tom
 
-Cron-synken (`runHistorySyncBatch`) avslutas med att skriva en aggregerad rad till `cron_run_log`. Insert:en kan misslyckas non-fatalt och flödet fortsätter utan att logga den faktiska felorsaken.
+Cron-synken (`runHistorySyncBatch`) avslutades med att skriva en aggregerad rad till
+`cron_run_log`. Insert:en misslyckades non-fatalt men loggade bara `cronLogError.message`
+— ett tomt eller innehållslöst fält. Supabase `PostgrestError` har även `details`, `code`,
+`hint` som innehåller den faktiska felbeskrivningen.
 
-### Vad som saknades (före fix):
+### Åtgärdat (2026-05-06, fas 1 + 2):
 
-1. **Felloggen loggade bara `cronLogError.message`** — ett tomt eller innehållslöst fält. Supabase `PostgrestError` har även `details`, `code`, `hint` som innehåller den faktiska felbeskrivningen.
-2. **`thumbnails_refreshed`-kolumnen** saknades i insert när migrationen `20260505120000_cron_run_log_thumbnails_refreshed` ej var applicerad. Nu bekräftad live.
-3. **Ingen schemaguard** — det var lätt att glömma en kolumn eller fejlstava ett fältnamn.
-4. **Adminvyn** — visade "Inga körningar registrerade ännu" utan att skilja på "aldrig loggat" och "cron kördes men 0 kunder matchade".
+**Fas 1 — Observability:**
+- `buildCronLogPayload(result, start, finish)` — exporterad typesafe hjälpfunktion med
+  `CronRunLogInsert`-interface. Alla kolumner krävs vid kompilering.
+- `logger.warn` vid insert-fel loggar nu `{ message, details, code, hint, payload_fields }`.
+- `BatchResult.cronLogWritten?: boolean` — svarets `POST /internal/sync-history-all`
+  rapporterar om loggraden skrevs.
+- `GET /api/admin/cron-runs` — lägger till `thumbnails_refreshed` i SELECT, `has_never_logged`,
+  `fallback_cron_sync_runs` (cron-mode sync_runs) när cron_run_log är tom.
+- Cron-health UI — distinkt banner för "aldrig loggat" vs "0 kunder matchade".
 
-### Vad som fixats (2026-05-06):
+**Fas 2 — Run control:**
+- `runHistorySyncBatch(key, opts)` — accepterar nu `BatchOptions { maxCustomers?: number }`.
+  Eligible-filtreringen är extraherad till `filterEligibleCustomers(customers, opts)` (ren funktion).
+- `POST /api/admin/cron-runs/run-now` — admin-only endpoint, kräver `RAPIDAPI_KEY`,
+  accepterar `{ maxCustomers?: number }` i request body, returnerar hela `BatchResult`
+  inkl. `cronLogWritten`.
+- Cron-health UI — "Kör sync nu"-knapp med loading state, resultatpanel, varning om
+  `cronLogWritten=false`.
+- `.github/workflows/sync-history-all.yml` — kommentar uppdaterad med alla BatchResult-fält
+  inkl. `cronLogWritten`; workflow varnar i loggen om cronLogWritten=false.
 
-- `buildCronLogPayload(result, start, finish)` — exporterad typesafe hjälpfunktion med `CronRunLogInsert`-interface. Alla kolumner krävs vid kompilering.
-- `logger.warn` vid insert-fel loggar nu `{ message, details, code, hint }` (full PostgrestError).
-- `BatchResult.cronLogWritten: boolean` — svarets `POST /internal/sync-history-all` rapporterar om loggraden skrevs.
-- `GET /api/admin/cron-runs` — lägger till `thumbnails_refreshed` i select, `has_never_logged`-flagga, och `fallback_cron_sync_runs` (cron-mode sync_runs) när cron_run_log är tom.
-- Cron-health UI — visar distinkt banner för "aldrig loggat" vs "0 kunder", samt fallback-tabell med sync_runs per kund.
-- Test: `artifacts/api-server/src/lib/studio/tiktok-sync.test.ts` — 6 testfall för `buildCronLogPayload`.
+**Tester:**
+- `tiktok-sync.test.ts`: 6 testfall för `buildCronLogPayload` + 8 testfall för
+  `filterEligibleCustomers` inkl. maxCustomers-slicing.
 
 ## Nuvarande syncflöde
 
@@ -89,52 +104,64 @@ Cron-synken (`runHistorySyncBatch`) avslutas med att skriva en aggregerad rad ti
 
 ### Batch/cron
 
-`runHistorySyncBatch`:
+`runHistorySyncBatch(rapidApiKey, opts?)`:
 
 1. Rensar stale locks.
 2. Väljer kunder med aktiv/inbjuden/agreed status och TikTok-handle.
-3. Respekterar staleness/quiet hours/budget.
-4. Kör `syncCustomerHistory` per kund.
-5. Uppdaterar reconciled thumbnails.
-6. Bygger `CronRunLogInsert`-payload via `buildCronLogPayload`.
-7. Skriver aggregerad rad till `cron_run_log` (full fellogning om insert misslyckas).
+3. Filtrerar via `filterEligibleCustomers` (staleness/quiet hours).
+4. Begränsar till `opts.maxCustomers` om angivet.
+5. Respekterar daglig budget.
+6. Kör `syncCustomerHistory` per kund.
+7. Uppdaterar reconciled thumbnails.
+8. Bygger `CronRunLogInsert`-payload via `buildCronLogPayload`.
+9. Skriver aggregerad rad till `cron_run_log` (full fellogning om insert misslyckas).
+10. Sätter `result.cronLogWritten` i BatchResult.
 
-## Kvarvarande luckor (att åtgärda)
+## Kvarvarande luckor
 
-### 1. Rotorsaken till att cron_run_log är tom är ännu inte bekräftad
+### 1. Scheduler/job table saknas
 
-Nu när felloggen är förbättrad: nästa gång cron körs och insert misslyckas, syns den faktiska felorsaken (`details`, `code`, `hint`) i server-loggar. Kontrollera server-loggar efter nästa batch-körning.
+Appen har ingen `sync_jobs`-tabell. GitHub Actions är enda scheduler. Appen saknar:
 
-### 2. Matchningslogiken är för smal
+- explicit enabled/disabled per kund,
+- explicit next_run_at per kund,
+- retry/backoff per kund,
+- budget ledger per provider (nu approximerat via sync_runs-summa).
 
-Auto-reconcile kräver exakt ett nytt klipp. Det finns ingen robust scoring för:
+### 2. dryRun ej implementerat
+
+`BatchOptions.dryRun?: boolean` dokumenterat men inte implementerat. Nästa steg: när
+`dryRun=true`, beräkna och returnera eligible-listan utan att kalla RapidAPI eller skriva
+sync_runs/cron_run_log. Ger admin en "preview" av vad nästa batch skulle göra.
+
+### 3. Matchningslogiken är för smal
+
+Auto-reconcile kräver exakt ett nytt klipp. Ingen scoring för:
 
 - flera nya klipp,
 - publiceringsdatum nära planerat datum,
 - konceptets hook/topic/format mot klippets metadata,
 - manuellt avvisad matchning.
 
-### 3. Cron-kontroll ligger utanför appen
+Planerat: `feed_reconciliation_candidates`-tabell med score + CM-godkännande.
 
-GitHub Actions kan vara okej som scheduler, men appen saknar:
+### 4. Alerts saknas
 
-- explicit enabled/disabled per kund,
-- run status i admin per invokation (utöver cron_run_log),
-- retry/backoff per kund,
-- budget ledger per provider,
-- operator-action för "run now".
+Inga automatiska larm för:
 
-### 4. Data bör separeras från display
-
-TikTok-providerdata, raw stats, sync events och feed planner evidence bör inte bara vara displayfält på `customer_concepts`. Planerat: `feed_reconciliation_candidates`.
+- inga cron runs senaste X timmar,
+- hög error rate,
+- provider rate limit,
+- kunder med aktiv TikTok-handle men ingen lyckad sync senaste X dagar.
 
 ## Testkrav
 
-- ✅ Unit-test för `buildCronLogPayload` payload-shape (6 testfall, `tiktok-sync.test.ts`)
+- ✅ `buildCronLogPayload` — 6 testfall (payload-shape, mappning, null-errors, timestamps)
+- ✅ `filterEligibleCustomers` — 8 testfall (handle-filter, staleness, quiet, maxCustomers-slicing)
 - Saknas: URL-normalisering och duplicate detection
 - Saknas: auto-reconcile 0/1/multiple imported clips
 - Saknas: API-test för manual customer sync
-- Saknas: UI-test för cron-health empty/error/success states
+- Saknas: UI-test för cron-health empty/error/success/run-now states
 
 ## Öppna affärsfrågor
 

@@ -46,6 +46,19 @@ interface Payload {
   fallback_cron_sync_runs: CustomerRun[];
 }
 
+interface RunNowResult {
+  processed: number;
+  imported: number;
+  statsUpdated: number;
+  callsUsed: number;
+  budgetRemaining: number;
+  budgetExceeded: boolean;
+  staleLocksCleared: number;
+  thumbnailsRefreshed?: number;
+  errors: Array<{ customerId: string; error: string }>;
+  cronLogWritten?: boolean;
+}
+
 function fmtTs(value: string | null): string {
   if (!value) return '–';
   try { return new Date(value).toLocaleString('sv-SE'); } catch { return value; }
@@ -60,6 +73,106 @@ function InvocationNote({ row }: { row: CronInvocation }): ReactElement {
   if (row.errors && row.errors.length > 0) parts.push(`${row.errors.length} fel`);
   if (parts.length === 0) parts.push('OK');
   return <span>{parts.join(' · ')}</span>;
+}
+
+function RunNowPanel(): ReactElement {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<RunNowResult | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [maxCustomers, setMaxCustomers] = useState<string>('3');
+
+  async function handleRunNow() {
+    setRunning(true);
+    setResult(null);
+    setRunError(null);
+    try {
+      const max = parseInt(maxCustomers, 10);
+      const body = !isNaN(max) && max > 0 ? { maxCustomers: max } : {};
+      const res = await apiClient.post<RunNowResult>('/api/admin/cron-runs/run-now', body);
+      setResult(res);
+    } catch (err: unknown) {
+      setRunError(err instanceof Error ? err.message : 'Körning misslyckades');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <section className="rounded-md border border-border p-4">
+      <h2 className="mb-3 text-sm font-semibold">Manuell batch-körning</h2>
+      <div className="flex items-center gap-3">
+        <label className="text-sm text-muted-foreground" htmlFor="max-customers">
+          Max kunder:
+        </label>
+        <input
+          id="max-customers"
+          type="number"
+          min={1}
+          max={30}
+          value={maxCustomers}
+          onChange={(e) => setMaxCustomers(e.target.value)}
+          className="w-20 rounded border border-border px-2 py-1 text-sm"
+          disabled={running}
+        />
+        <button
+          onClick={handleRunNow}
+          disabled={running}
+          className="rounded bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {running ? 'Kör…' : 'Kör sync nu'}
+        </button>
+        {running && (
+          <span className="text-sm text-muted-foreground">Synkar TikTok-historik — kan ta upp till 1 minut…</span>
+        )}
+      </div>
+
+      {runError && (
+        <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {runError}
+        </div>
+      )}
+
+      {result && (
+        <div className="mt-4 space-y-2">
+          <div className="grid grid-cols-3 gap-2 text-sm sm:grid-cols-6">
+            {[
+              ['Kunder', result.processed],
+              ['Importerade', result.imported],
+              ['Stats-uppd.', result.statsUpdated],
+              ['API-anrop', result.callsUsed],
+              ['Budget kvar', result.budgetRemaining],
+              ['Miniatyrer', result.thumbnailsRefreshed ?? 0],
+            ].map(([label, value]) => (
+              <div key={label as string} className="rounded-md border border-border p-2 text-center">
+                <div className="text-xs text-muted-foreground">{label as string}</div>
+                <div className="text-base font-semibold">{value as number}</div>
+              </div>
+            ))}
+          </div>
+
+          {result.cronLogWritten === false && (
+            <div className="rounded-md border border-orange-300 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+              <strong>Varning:</strong> Batch-körningen lyckades men cron_run_log-raden skrevs inte. Kontrollera
+              server-loggar för <code className="font-mono">cron_run_log insert failed</code> med fullständig
+              PostgrestError (message, details, code, hint).
+            </div>
+          )}
+          {result.cronLogWritten === true && (
+            <div className="rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-800">
+              Batch-körning klar — cron_run_log uppdaterad.
+              {result.budgetExceeded && ' Budget nåddes.'}
+              {result.errors.length > 0 && ` ${result.errors.length} kund(er) misslyckades.`}
+            </div>
+          )}
+          {result.errors.length > 0 && (
+            <div className="rounded-md border border-border px-3 py-2 text-xs text-destructive">
+              Fel: {result.errors.map((e) => `${e.customerId.slice(0, 8)}: ${e.error}`).join(' | ')}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function CronHealthPage(): ReactElement {
@@ -97,7 +210,10 @@ export default function CronHealthPage(): ReactElement {
         </p>
       </header>
 
-      {/* Status banner */}
+      {/* Manual run-now panel */}
+      <RunNowPanel />
+
+      {/* Status banners */}
       {hasNeverLogged && data.fallback_cron_sync_runs.length > 0 && (
         <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
           <strong>Cron har aldrig loggats i cron_run_log.</strong>{' '}
@@ -109,7 +225,8 @@ export default function CronHealthPage(): ReactElement {
       {hasNeverLogged && data.fallback_cron_sync_runs.length === 0 && (
         <div className="rounded-md border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-800">
           <strong>Ingen cron-aktivitet registrerad.</strong>{' '}
-          Varken cron_run_log eller cron-mode sync_runs finns. Kontrollera att cron-jobbet är aktivt.
+          Varken cron_run_log eller cron-mode sync_runs finns. Kontrollera att cron-jobbet är aktivt
+          eller använd "Kör sync nu" ovan för att trigga en manuell körning.
         </div>
       )}
       {lastHadZeroCustomers && (
