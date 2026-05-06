@@ -141,6 +141,11 @@ Mounted at `/api/*` in `artifacts/api-server/src/routes/`:
 | `RESEND_API_KEY` | Optional | Email sending via Resend |
 | `JWT_SECRET` | Optional | JWT signing (falls back to Supabase verification) |
 
+## Audits & Docs
+
+- `docs/audits/hagen-letrend-ingestion-audit.md` — full pipeline audit (Task #74 + Task #116)
+- `docs/agent-plans/` — architecture briefs and open questions
+
 ## Cleaned-Up Next.js Residue
 
 The following dead code has been removed:
