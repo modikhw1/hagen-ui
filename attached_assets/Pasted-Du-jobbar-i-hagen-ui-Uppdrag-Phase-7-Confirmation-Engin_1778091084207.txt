@@ -1,0 +1,91 @@
+Du jobbar i hagen-ui.
+
+  Uppdrag: Phase 7 — Confirmation Engine audit och implementation plan.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Skapa inga Supabase-migrationer.
+  - Implementera inte irreversible timeline-advance ännu.
+  - Målet är att kartlägga entrypoints och skriva en konkret, implementerbar plan för en gemensam confirmation engine.
+
+  Bakgrund:
+  TikTok-klipp är raw evidence. LeT-kort är planerade rekommendationer.
+  Reconciliation betyder: “det här TikTok-klippet bekräftar att detta LeT-koncept publicerades”.
+  Om target är nu-slot (`feed_order=0`) ska framtida motor kunna länka + markera producerat + avancera timeline.
+  Om target är `feed_order>0` är det bara en svagare scoring-signal; normalt ska flödet stegvis bekräfta mot nu-slot
+  efter varje advance.
+  Om inget LeT-koncept passar ska klippet kunna hanteras som TikTok-only/kundägt.
+
+  Läs:
+  - docs/agent-plans/10-reconciliation-candidates.md
+  - artifacts/api-server/src/routes/studio-v2.ts
+  - artifacts/api-server/src/lib/studio/reconciliation-candidates.ts
+  - artifacts/api-server/src/lib/studio/tiktok-sync.ts
+  - artifacts/letrend/src/lib/studio/auto-reconcile.ts
+  - artifacts/letrend/src/lib/studio/perform-mark-produced.ts
+  - artifacts/letrend/src/lib/studio/sync-customer-history.ts
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedSlot.tsx
+
+  Kartlägg:
+
+  1. Alla entrypoints som idag kan länka TikTok-klipp till LeT-kort:
+     - candidate accept
+     - POST /history/reconciliation
+     - autoReconcileAndAdvance
+     - mark-produced
+     - manual “Länka till nu”
+     - manual “Välj LeTrend-koncept”
+     - cron/tiktok sync paths
+
+  2. För varje entrypoint:
+     - länkar den bara?
+     - propagerar den TikTok-stats?
+     - avancerar den timeline?
+     - uppdaterar den candidate status?
+     - rensar den motor-signals?
+     - går det att ångra?
+
+  3. Föreslå ett gemensamt service-kontrakt, t.ex.:
+     confirmPublishedConcept({
+       customerId,
+       historyConceptId,
+       targetCustomerConceptId,
+       actorId,
+       source: 'candidate_accept' | 'manual_reconcile' | 'cron_auto',
+       advanceMode: 'auto_if_now_slot' | 'link_only' | 'force_advance',
+       now
+     })
+
+  4. Definiera beteende:
+     - target feed_order=0:
+       - link + candidate status + performMarkProduced + advance
+       - response ska innehålla `{ linked: true, advanced: true }`
+     - target feed_order>0:
+       - link only by default
+       - no automatic advance
+       - response `{ linked: true, advanced: false, reason: 'target_not_now_slot' }`
+     - flera nya clips:
+       - behandlas stegvis efter varje advance, inte som blind +1/+2-matchning
+     - TikTok-only:
+       - dokumentera minimal DB-behov/flagga, men skapa ingen migration
+
+  5. Ångra:
+     - kartlägg exakt vad DELETE /history/reconciliation kan återställa idag
+     - dokumentera vad som saknas för att ångra en faktisk advance
+     - föreslå säkraste första implementationen utan att riskera feed_order-korruption
+
+  Output:
+  - Uppdatera docs/agent-plans/10-reconciliation-candidates.md med Phase 7-plan.
+  - Skapa gärna en separat docs/agent-plans/11-confirmation-engine.md om det blir tydligare.
+  - Inga stora kodändringar ännu, men små kommentarer/docs är okej.
+
+  Kör:
+  - pnpm --filter @workspace/letrend exec tsc --noEmit
+  - pnpm --filter @workspace/api-server run typecheck
+
+  Avsluta med:
+  - lista över entrypoints
+  - rekommenderat service-kontrakt
+  - första säkra implementation slice
+  - risker innan vi kopplar candidate accept till advance
