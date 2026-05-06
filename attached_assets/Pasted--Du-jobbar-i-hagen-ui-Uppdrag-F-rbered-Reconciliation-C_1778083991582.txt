@@ -1,0 +1,62 @@
+  Du jobbar i hagen-ui.
+
+  Uppdrag: Förbered Reconciliation Candidates för TikTok history ↔ LeTrend concepts
+
+  Scope:
+  - Rör inte /admin/demos.
+  - Gör ingen Supabase live-interaktion.
+  - Pusha till main när klart.
+
+  Live-fakta från orchestrator:
+  - `feed_reconciliation_candidates` finns inte än.
+  - `customer_concepts` har 335 unreconciled `row_kind='history_import'`.
+  - Det finns current/future LeTrend-rader att matcha mot.
+  - Orchestrator kommer hantera Supabase-migrationen för kandidat-tabellen.
+
+  Planerat DB-kontrakt:
+  `feed_reconciliation_candidates`
+  - `id uuid`
+  - `customer_id uuid`
+  - `history_concept_id uuid` → imported history row
+  - `target_customer_concept_id uuid` → assignment/collaboration row
+  - `score numeric`
+  - `reasons jsonb`
+  - `status text`: `suggested | accepted | rejected | auto_accepted`
+  - `created_at timestamptz`
+  - `decided_at timestamptz`
+  - `decided_by uuid`
+
+  Gör:
+  1. Auditera befintlig reconciliation-logik:
+     - `artifacts/api-server/src/lib/studio/tiktok-sync.ts`
+     - `artifacts/api-server/src/routes/studio-v2.ts`
+     - FeedSlot/FeedPlanner UI där manuell reconcile sker
+
+  2. Skapa kodstruktur för kandidatgenerering utan att kräva live DB ännu:
+     - ren scoring-helper som tar imported history row + target row
+     - score på publiceringsdatum, feed_order proximity, current slot, redan länkad/inte länkad
+     - returnera `{ score, reasons }`
+
+  3. Lägg unit-tests för scoring-helpern:
+     - current slot får högre score
+     - nära published_at/planned_publish_at får högre score
+     - redan reconciled target ska inte föreslås
+     - history_import utan published_at får låg/ingen kandidat
+
+  4. Dokumentera exakt vilka API-endpoints som behövs efter migration:
+     - list candidates per customer
+     - accept candidate
+     - reject candidate
+     - generate candidates after sync/import
+
+  5. Uppdatera `docs/agent-plans/04-tiktok-sync-cron-observability.md` eller skapa `10-reconciliation-candidates.md`.
+
+  Verifiering:
+  - `pnpm --filter @workspace/api-server run typecheck`
+  - `pnpm --filter @workspace/letrend exec tsc --noEmit`
+  - relevanta unit-tests om möjliga
+
+  Output:
+  - Lista ändrade filer.
+  - Lista verifiering.
+  - Pusha till main.
