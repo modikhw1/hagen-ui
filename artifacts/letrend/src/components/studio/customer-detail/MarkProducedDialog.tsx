@@ -240,7 +240,7 @@ export function MarkProducedDialog({
             </div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#4A2F18' }}>
-                Kunden filmade ratt koncept
+                Kunden filmade rätt koncept
               </div>
               <div style={{ fontSize: 11, color: LeTrendColors.textMuted, marginTop: 2 }}>
                 {freshestImportedConcept
@@ -286,7 +286,7 @@ export function MarkProducedDialog({
                 Kunden filmade ett annat koncept
               </div>
               <div style={{ fontSize: 11, color: LeTrendColors.textMuted, marginTop: 2 }}>
-                Valj vilket importerat klipp som ska kopplas.
+                Välj vilket importerat klipp som ska kopplas.
               </div>
               {mode === 'manual' ? (
                 <select
@@ -304,7 +304,7 @@ export function MarkProducedDialog({
                     color: '#4A2F18',
                   }}
                 >
-                  <option value="">Valj klipp...</option>
+                  <option value="">Välj klipp...</option>
                   {importedConcepts.map((concept) => {
                     const date = concept.result.published_at
                       ? new Date(concept.result.published_at).toLocaleDateString('sv-SE', {
@@ -437,7 +437,7 @@ export function MarkProducedDialog({
               fontFamily: 'inherit',
             }}
           >
-            {submitting ? 'Markerar...' : 'Bekrafta'}
+            {submitting ? 'Markerar...' : 'Bekräfta'}
           </button>
         </div>
       </div>

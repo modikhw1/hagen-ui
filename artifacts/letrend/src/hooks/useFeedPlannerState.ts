@@ -18,16 +18,19 @@ export function useFeedPlannerState() {
   const [showTagManager, setShowTagManager] = useState(false);
   const [markProducedDialogOpen, setMarkProducedDialogOpen] = useState(false);
   const [markProducedDialogConceptId, setMarkProducedDialogConceptId] = useState<string | null>(null);
+  const [preferredImportedConceptId, setPreferredImportedConceptId] = useState<string | null>(null);
   const [motorSignals, setMotorSignals] = useState<MotorSignalRow[]>([]);
 
-  const handleOpenMarkProducedDialog = (conceptId: string) => {
+  const handleOpenMarkProducedDialog = (conceptId: string, preferredClipId?: string) => {
     setMarkProducedDialogConceptId(conceptId);
+    setPreferredImportedConceptId(preferredClipId ?? null);
     setMarkProducedDialogOpen(true);
   };
 
   const handleCloseMarkProducedDialog = () => {
     setMarkProducedDialogOpen(false);
     setMarkProducedDialogConceptId(null);
+    setPreferredImportedConceptId(null);
   };
 
   return {
@@ -43,6 +46,8 @@ export function useFeedPlannerState() {
     setMarkProducedDialogOpen,
     markProducedDialogConceptId,
     setMarkProducedDialogConceptId,
+    preferredImportedConceptId,
+    setPreferredImportedConceptId,
     motorSignals,
     setMotorSignals,
     handleOpenMarkProducedDialog,

@@ -509,6 +509,7 @@ function CustomerWorkspacePageContent() {
     setShowTagManager,
     markProducedDialogOpen,
     markProducedDialogConceptId,
+    preferredImportedConceptId,
     motorSignals,
     setMotorSignals,
     handleOpenMarkProducedDialog,
@@ -4235,11 +4236,20 @@ function CustomerWorkspacePageContent() {
           onClose={handleCloseMarkProducedDialog}
           nuConceptId={markProducedDialogConceptId}
           importedConcepts={concepts.filter((c) => c.row_kind === 'imported_history' && !c.reconciliation.is_reconciled)}
-          freshestImportedConcept={
-            concepts
-              .filter((c) => c.row_kind === 'imported_history' && !c.reconciliation.is_reconciled && c.result.published_at)
-              .sort((a, b) => new Date(b.result.published_at!).getTime() - new Date(a.result.published_at!).getTime())[0] ?? null
-          }
+          freshestImportedConcept={(() => {
+            const unreconciled = concepts.filter(
+              (c) => c.row_kind === 'imported_history' && !c.reconciliation.is_reconciled
+            );
+            // If the dialog was opened from FeedAdvanceCue, prefer the clip the cue highlighted.
+            if (preferredImportedConceptId) {
+              const preferred = unreconciled.find((c) => c.id === preferredImportedConceptId);
+              if (preferred) return preferred;
+            }
+            // Fallback: globally freshest unreconciled clip sorted by published_at.
+            return unreconciled
+              .filter((c) => c.result.published_at)
+              .sort((a, b) => new Date(b.result.published_at!).getTime() - new Date(a.result.published_at!).getTime())[0] ?? null;
+          })()}
           onMarkProduced={markProducedRequest}
           onReconcileHistory={reconcileHistoryRequest}
         />

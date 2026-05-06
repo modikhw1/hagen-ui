@@ -265,17 +265,6 @@ export function FeedPlannerSection({
       setDeferredAdvanceCue(false);
     }
   }, [effectiveCue]);
-  // Disabled legacy cue branch kept as an inert fallback until the large inline block
-  // is removed in a dedicated cleanup pass. It is never rendered because the branch
-  // remains gated behind `false && ...`.
-  const advancingPlan = false;
-  const onAdvancePlan = React.useCallback(() => {}, []);
-  const showCueOverflowMenu = false;
-  const setShowCueOverflowMenu = (
-    _value?: boolean | ((current: boolean) => boolean)
-  ) => {
-    void _value;
-  };
   const maxExtraHistorySlots = React.useMemo(
     () => getMaxHistoryOffset(concepts, gridConfig),
     [concepts, gridConfig]
@@ -1111,13 +1100,16 @@ export function FeedPlannerSection({
             setDeferredAdvanceCue(true);
           }}
           onMarkProducedFromCue={() => {
-            // Set focused evidence so CM can see the fresh clips highlighted in historik
-            // while the dialog is open. The motor signal is only dismissed after the dialog
-            // completes (mark-produced success) or CM explicitly clicks ×.
+            // Highlight the fresh clips in historik while the dialog is open.
             if (freshImportedIds.size > 0) {
               setFocusedEvidenceIds(freshImportedIds);
             }
-            handleOpenMarkProducedDialog(nuConcept!.id);
+            // Pass the cue's first fresh clip as the preferred evidence so the
+            // dialog pre-selects the same clip the cue is showing.
+            handleOpenMarkProducedDialog(
+              nuConcept!.id,
+              freshImportedConcepts[0]?.id,
+            );
           }}
           onDismissCue={onDismissAdvanceCue}
           formatCompactViews={formatCompactViews}

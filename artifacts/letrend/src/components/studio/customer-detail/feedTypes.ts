@@ -109,7 +109,7 @@ export interface FeedPlannerSectionProps {
   handleRemoveFromSlot: (conceptId: string) => Promise<void>;
   handleAssignToSlot: (conceptId: string, feedOrder: number) => Promise<void>;
   handleSwapFeedOrder: (conceptIdA: string, conceptIdB: string) => Promise<void>;
-  handleOpenMarkProducedDialog: (conceptId: string) => void;
+  handleOpenMarkProducedDialog: (conceptId: string, preferredImportedConceptId?: string) => void;
   onOpenConcept: (conceptId: string, sections?: ConceptSectionKey[]) => void;
   onSlotClick: (slot: FeedSlotData, concept: CustomerConcept | null, details: TranslatedConcept | null) => void;
   showTagManager: boolean;

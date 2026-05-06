@@ -1,0 +1,54 @@
+
+• Du jobbar i hagen-ui. Implementera Phase 9d: MarkProducedDialog ska få rätt föreslaget TikTok-klipp från cue-
+  kontexten.
+
+  Läs först:
+  - docs/agent-plans/17-feed-advance-cue-confirmation-flow.md
+  - artifacts/letrend/src/components/studio/customer-detail/FeedPlannerSection.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/MarkProducedDialog.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/feedTypes.ts
+
+  Problem:
+  FeedAdvanceCue markerar `freshImportedConcepts`, men `handleOpenMarkProducedDialog(nuConcept.id)` skickar bara nu-
+  konceptet.
+  CustomerWorkspaceContent väljer sedan `freshestImportedConcept` globalt bland alla orekonsilierade importerade klipp.
+  Vid flera orekonsilierade klipp kan dialogens auto-läge länka fel TikTok-klipp.
+
+  Mål:
+  När dialogen öppnas från FeedAdvanceCue ska den föreslå exakt det färska klipp som cue:n visar först.
+
+  Scope:
+  1. Utöka dialog-open state/signature så den kan bära optional `preferredImportedConceptId`.
+     - hitta befintlig `handleOpenMarkProducedDialog`/state
+     - uppdatera typer i `feedTypes.ts`
+  2. I `FeedPlannerSection.tsx`, när `onMarkProducedFromCue` öppnar dialogen:
+     - använd `freshImportedConcepts[0]?.id` som preferred id
+     - behåll `setFocusedEvidenceIds(freshImportedIds)`
+  3. I `CustomerWorkspaceContent.tsx`, beräkna dialogens default clip så här:
+     - om `preferredImportedConceptId` finns och matchar orekonsilierat imported_history: använd den
+     - annars fallback till nuvarande globalt senaste orekonsilierade klipp
+  4. Skicka detta till `MarkProducedDialog` som `freshestImportedConcept` eller byt namn till `defaultImportedConcept`
+  om det blir tydligare, men håll ändringen liten.
+  5. När dialogen stängs ska preferred id nollställas.
+  6. Ta bort kvarvarande döda cue-stubbar i `FeedPlannerSection.tsx` om de nu är oanvända:
+     - `advancingPlan`
+     - `onAdvancePlan`
+     - `showCueOverflowMenu`
+     - `setShowCueOverflowMenu`
+  7. Om du ändå rör dialogtexten, rätta mojibake/svenska i synliga labels:
+     - `ratt` → `rätt`
+     - `Valj` → `Välj`
+     - `Bekrafta` → `Bekräfta`
+     Håll detta begränsat till `MarkProducedDialog.tsx`.
+  8. Rör inte API-server.
+  9. Rör inte `/admin/demos`.
+  10. Kör:
+     - `pnpm --filter @workspace/letrend exec tsc --noEmit`
+     - `git diff --check HEAD~1..HEAD`
+  11. Skapa `docs/agent-plans/18-mark-produced-dialog-preferred-evidence.md` med:
+     - vad som ändrades
+     - hur preferred clip väljs
+     - fallback-beteende
+     - vilka döda cue-stubbar som togs bort
+     - teststatus
