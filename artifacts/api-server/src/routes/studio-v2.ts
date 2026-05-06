@@ -8,10 +8,12 @@ import { refreshReconciledThumbnails, runHistorySyncBatch, syncCustomerHistory, 
 import { rankCandidates } from '../lib/studio/reconciliation-scoring.js';
 import {
   generateReconciliationCandidates,
-  markCandidateAcceptedForLink,
-  resetCandidateAfterUndo,
   backfillReconciliationCandidates,
 } from '../lib/studio/reconciliation-candidates.js';
+import {
+  confirmPublishedConcept,
+  undoConfirmedConcept,
+} from '../lib/studio/confirm-published-concept.js';
 import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
 const router = Router();
@@ -1333,7 +1335,7 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
 
     const { data: historyRow, error: histErr } = await supabase
       .from('customer_concepts')
-      .select('id, customer_profile_id, concept_id, tiktok_url, tiktok_thumbnail_url, tiktok_views, tiktok_likes, tiktok_comments, published_at')
+      .select('id, customer_profile_id, concept_id')
       .eq('id', historyConceptId)
       .maybeSingle();
 
@@ -1345,7 +1347,8 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
       res.status(404).json({ error: 'Imported history row not found' });
       return;
     }
-    if (!(await ensureCustomerAccess(req, res, (historyRow as { customer_profile_id: string }).customer_profile_id))) return;
+    const historyCustomerId = (historyRow as { customer_profile_id: string }).customer_profile_id;
+    if (!(await ensureCustomerAccess(req, res, historyCustomerId))) return;
     if ((historyRow as Record<string, unknown>).concept_id) {
       res.status(409).json({ error: 'Only imported TikTok history can be reconciled' });
       return;
@@ -1356,16 +1359,15 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
     // mode=manual: use the explicitly provided linked_customer_concept_id.
     let resolvedLinkedConceptId = linkedConceptId;
     if (mode === 'use_now_slot') {
-      const customerId = (historyRow as { customer_profile_id: string }).customer_profile_id;
       const { data: nowSlot } = await supabase
         .from('customer_concepts')
         .select('id')
-        .eq('customer_profile_id', customerId)
+        .eq('customer_profile_id', historyCustomerId)
         .eq('feed_order', 0)
         .not('concept_id', 'is', null)
         .maybeSingle();
       if (!nowSlot) {
-        res.status(422).json({ error: 'Inget koncept i nu-slotten hittades. VÃ¤lj manuellt.' });
+        res.status(422).json({ error: 'Inget koncept i nu-slotten hittades. Välj manuellt.' });
         return;
       }
       resolvedLinkedConceptId = (nowSlot as { id: string }).id;
@@ -1379,7 +1381,6 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
     // Validate that the target assignment row belongs to the same customer and
     // is an actual assignment (has concept_id). This prevents a CM with access
     // to customer A from writing to an assignment row belonging to customer B.
-    const historyCustomerId = (historyRow as { customer_profile_id: string }).customer_profile_id;
     const { data: assignmentRow, error: assignmentErr } = await supabase
       .from('customer_concepts')
       .select('id, customer_profile_id, concept_id')
@@ -1404,47 +1405,27 @@ router.post('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) =>
     }
 
     const now = new Date().toISOString();
-    const { error: reconcileError } = await supabase
-      .from('customer_concepts')
-      .update({
-        reconciled_customer_concept_id: resolvedLinkedConceptId,
-        reconciled_by_cm_id: req.user!.id,
-        reconciled_at: now,
-      })
-      .eq('id', historyConceptId);
+    const source = mode === 'use_now_slot' ? 'history_use_now_slot' : 'history_manual';
 
-    if (reconcileError) {
-      res.status(500).json({ error: reconcileError.message });
+    // Delegate link + stats propagation + best-effort candidate status to service.
+    const result = await confirmPublishedConcept({
+      supabase,
+      customerId: historyCustomerId,
+      historyConceptId,
+      targetCustomerConceptId: resolvedLinkedConceptId,
+      actorId: req.user!.id,
+      source,
+      now,
+    });
+
+    if (result.error) {
+      res.status(500).json({ error: result.error });
       return;
     }
 
-    // Propagate thumbnail and TikTok stats from the imported_history row to the
-    // assignment row in the DB so the LeT history card shows the thumbnail
-    // without depending solely on the read-time overlay.
-    const typedHistoryRow = historyRow as Record<string, unknown>;
-    const assignmentPatch: Record<string, unknown> = {};
-    if (typedHistoryRow.tiktok_thumbnail_url) assignmentPatch.tiktok_thumbnail_url = typedHistoryRow.tiktok_thumbnail_url;
-    if (typedHistoryRow.tiktok_url) assignmentPatch.tiktok_url = typedHistoryRow.tiktok_url;
-    if (typedHistoryRow.tiktok_views != null) assignmentPatch.tiktok_views = typedHistoryRow.tiktok_views;
-    if (typedHistoryRow.tiktok_likes != null) assignmentPatch.tiktok_likes = typedHistoryRow.tiktok_likes;
-    if (typedHistoryRow.tiktok_comments != null) assignmentPatch.tiktok_comments = typedHistoryRow.tiktok_comments;
-    if (typedHistoryRow.published_at) assignmentPatch.published_at = typedHistoryRow.published_at;
-
-    if (Object.keys(assignmentPatch).length > 0) {
-      const { error: patchErr } = await supabase
-        .from('customer_concepts')
-        .update(assignmentPatch)
-        .eq('id', resolvedLinkedConceptId);
-      if (patchErr) {
-        logger.warn({ err: patchErr }, 'studio-v2 reconciliation: failed to propagate stats to assignment row');
-      }
+    if (result.warnings.length > 0) {
+      logger.warn({ warnings: result.warnings, historyConceptId }, 'studio-v2 history reconciliation: non-fatal warnings');
     }
-
-    // Best-effort: sync candidate status so the audit trail reflects the CM action.
-    void markCandidateAcceptedForLink(
-      supabase, historyConceptId, resolvedLinkedConceptId,
-      { customerId: historyCustomerId, actorId: req.user!.id, now, auto: false },
-    );
 
     res.json({ success: true });
   } catch (err) {
@@ -1467,9 +1448,11 @@ router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) 
       return;
     }
 
+    // Lightweight pre-flight: verify the row exists, belongs to an accessible
+    // customer, and is an imported_history row (not an assignment).
     const { data: historyRow, error: histErr } = await supabase
       .from('customer_concepts')
-      .select('id, customer_profile_id, concept_id, reconciled_customer_concept_id')
+      .select('id, customer_profile_id, concept_id')
       .eq('id', historyConceptId)
       .maybeSingle();
 
@@ -1481,55 +1464,28 @@ router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) 
       res.status(404).json({ error: 'Imported history row not found' });
       return;
     }
-    if (!(await ensureCustomerAccess(req, res, (historyRow as { customer_profile_id: string }).customer_profile_id))) return;
+    const undoCustomerId = (historyRow as { customer_profile_id: string }).customer_profile_id;
+    if (!(await ensureCustomerAccess(req, res, undoCustomerId))) return;
     if ((historyRow as Record<string, unknown>).concept_id) {
       res.status(409).json({ error: 'Only imported TikTok history rows can have reconciliation cleared' });
       return;
     }
 
-    const { error: clearError } = await supabase
-      .from('customer_concepts')
-      .update({
-        reconciled_customer_concept_id: null,
-        reconciled_by_cm_id: null,
-        reconciled_at: null,
-      })
-      .eq('id', historyConceptId);
+    // Delegate link-clear + stats-clear + candidate-reset to service.
+    const result = await undoConfirmedConcept({
+      supabase,
+      historyConceptId,
+      customerId: undoCustomerId,
+      now: new Date().toISOString(),
+    });
 
-    if (clearError) {
-      res.status(500).json({ error: clearError.message });
+    if (result.error) {
+      res.status(500).json({ error: result.error });
       return;
     }
 
-    // Clear the thumbnail and stats that were propagated to the assignment row
-    // when reconciliation was established, so the LeT card reverts to its
-    // un-reconciled state (no TikTok thumbnail).
-    // Guard with both id AND customer_profile_id so this update can never
-    // accidentally touch a row belonging to a different customer.
-    const typedUndo = historyRow as Record<string, unknown>;
-    const assignmentId = typedUndo.reconciled_customer_concept_id as string | null;
-    const undoCustomerId = (historyRow as { customer_profile_id: string }).customer_profile_id;
-    if (assignmentId) {
-      const { error: undoPatchErr } = await supabase
-        .from('customer_concepts')
-        .update({
-          tiktok_thumbnail_url: null,
-          tiktok_url: null,
-          tiktok_views: null,
-          tiktok_likes: null,
-          tiktok_comments: null,
-          published_at: null,
-        })
-        .eq('id', assignmentId)
-        .eq('customer_profile_id', undoCustomerId);
-      if (undoPatchErr) {
-        logger.warn({ err: undoPatchErr }, 'studio-v2 reconciliation undo: failed to clear stats from assignment row');
-      }
-    }
-
-    // Best-effort: reset candidate so CM can re-decide after undo.
-    if (assignmentId) {
-      void resetCandidateAfterUndo(supabase, historyConceptId, assignmentId);
+    if (result.warnings.length > 0) {
+      logger.warn({ warnings: result.warnings, historyConceptId }, 'studio-v2 history reconciliation DELETE: non-fatal warnings');
     }
 
     res.json({ success: true });
@@ -1545,58 +1501,6 @@ router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) 
 // Flow: generate → list → accept | reject
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Internal helper: writes a reconciliation link from a history row to a target
- * assignment row and propagates the TikTok stats to the assignment card.
- * Mirrors the core logic of POST /history/reconciliation.
- */
-async function applyReconciliationLink(
-  supabase: ReturnType<typeof createSupabaseAdmin>,
-  historyConceptId: string,
-  targetConceptId: string,
-  actorId: string,
-  now: string,
-): Promise<{ error: string | null }> {
-  const { error: linkErr } = await supabase
-    .from('customer_concepts')
-    .update({
-      reconciled_customer_concept_id: targetConceptId,
-      reconciled_by_cm_id: actorId,
-      reconciled_at: now,
-    })
-    .eq('id', historyConceptId);
-
-  if (linkErr) return { error: linkErr.message };
-
-  // Propagate TikTok stats from history row → assignment card
-  const { data: histRow } = await supabase
-    .from('customer_concepts')
-    .select('tiktok_thumbnail_url, tiktok_url, tiktok_views, tiktok_likes, tiktok_comments, published_at')
-    .eq('id', historyConceptId)
-    .maybeSingle();
-
-  if (histRow) {
-    const hr = histRow as Record<string, unknown>;
-    const statsPatch: Record<string, unknown> = {};
-    if (hr['tiktok_thumbnail_url']) statsPatch['tiktok_thumbnail_url'] = hr['tiktok_thumbnail_url'];
-    if (hr['tiktok_url']) statsPatch['tiktok_url'] = hr['tiktok_url'];
-    if (hr['tiktok_views'] != null) statsPatch['tiktok_views'] = hr['tiktok_views'];
-    if (hr['tiktok_likes'] != null) statsPatch['tiktok_likes'] = hr['tiktok_likes'];
-    if (hr['tiktok_comments'] != null) statsPatch['tiktok_comments'] = hr['tiktok_comments'];
-    if (hr['published_at']) statsPatch['published_at'] = hr['published_at'];
-    if (Object.keys(statsPatch).length > 0) {
-      const { error: patchErr } = await supabase
-        .from('customer_concepts')
-        .update(statsPatch)
-        .eq('id', targetConceptId);
-      if (patchErr) {
-        logger.warn({ err: patchErr }, 'reconciliation-candidates: failed to propagate stats to target row');
-      }
-    }
-  }
-
-  return { error: null };
-}
 
 // POST /api/studio-v2/customers/:customerId/reconciliation-candidates/generate
 // Scores all unreconciled history rows against eligible target rows and upserts
@@ -1709,33 +1613,44 @@ router.post('/reconciliation-candidates/:candidateId/accept', requireAuth, CM_ON
     const now = new Date().toISOString();
     const actorId = req.user!.id;
 
-    // Apply the reconciliation link (mirrors POST /history/reconciliation core logic)
-    const { error: linkError } = await applyReconciliationLink(
+    // Delegate link + stats propagation + candidate status to service.
+    // The accept endpoint treats candidate-status failure as FATAL (unlike manual
+    // reconciliation which treats it as best-effort). Check candidateUpdated and
+    // surface a 500 if it was not updated so the UI never shows a false success.
+    const result = await confirmPublishedConcept({
       supabase,
-      c['history_concept_id'] as string,
-      c['target_customer_concept_id'] as string,
+      customerId: c['customer_id'] as string,
+      historyConceptId: c['history_concept_id'] as string,
+      targetCustomerConceptId: c['target_customer_concept_id'] as string,
       actorId,
+      source: 'candidate_accept',
       now,
-    );
-    if (linkError) { res.status(500).json({ error: linkError }); return; }
+    });
 
-    // Update candidate status + reject competitors via shared helper.
-    // The accept route treats failure as fatal — UI must not show success if
-    // the candidate table was not updated.
-    const markResult = await markCandidateAcceptedForLink(
-      supabase, c['history_concept_id'] as string, c['target_customer_concept_id'] as string,
-      { customerId: c['customer_id'] as string, actorId, now, auto: false },
-    );
-    if (!markResult.ok) {
-      logger.error({ candidateId, err: markResult.error }, 'reconciliation-candidates: candidate status sync failed after link');
+    if (result.error) {
+      res.status(500).json({ error: result.error });
+      return;
+    }
+
+    if (!result.candidateUpdated) {
+      // The link was written but candidate status could not be updated.
+      // Per guardrail: candidate_accept must not silently succeed in this case.
+      logger.error(
+        { candidateId, actorId, warnings: result.warnings },
+        'reconciliation-candidates: candidate status sync failed after link',
+      );
       res.status(500).json({
         error: 'Länken skapades men kandidatstatus kunde inte uppdateras',
-        candidate_sync_error: markResult.error,
+        candidate_sync_error: result.warnings.find((w) => w.startsWith('candidate-status:')) ?? 'unknown',
       });
       return;
     }
 
-    logger.info({ candidateId, actorId, ...markResult }, 'reconciliation-candidates: accepted');
+    if (result.warnings.length > 0) {
+      logger.warn({ candidateId, warnings: result.warnings }, 'reconciliation-candidates: non-fatal warnings after accept');
+    }
+
+    logger.info({ candidateId, actorId }, 'reconciliation-candidates: accepted');
     res.json({ success: true });
   } catch (err) {
     logger.error(err, 'reconciliation-candidates accept error');
