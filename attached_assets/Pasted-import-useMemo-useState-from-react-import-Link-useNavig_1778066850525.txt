@@ -1,0 +1,398 @@
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import {
+  ArrowRight,
+  Copy,
+  ExternalLink,
+  Inbox,
+  Loader2,
+  MoreHorizontal,
+  Send,
+  Trash2,
+  UserCheck,
+  X,
+} from "lucide-react";
+import {
+  useDeleteDemo,
+  useDemosBoard,
+  useUpdateDemo,
+} from "@/hooks/admin/useDemos";
+import { demosApi } from "@/lib/admin/demosApi";
+import { demosCopy, formatSek } from "@/lib/admin/demosCopy";
+import type { DemoCardDto, DemoStatus } from "@/lib/admin/demosSchemas";
+import { CreateDemoDialog } from "@/components/admin/demos/CreateDemoDialog";
+import { ConvertDemoDialog } from "@/components/admin/demos/ConvertDemoDialog";
+import { DemosFunnelBar } from "@/components/admin/demos/DemosFunnelBar";
+import { KpiCard } from "@/components/admin/demos/KpiCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+
+const STAGE_FILTERS = [
+  { key: "all", label: "Alla" },
+  { key: "active", label: "Aktiva" },
+  { key: "won", label: "Won" },
+  { key: "lost", label: "Lost" },
+] as const;
+
+type StageFilter = (typeof STAGE_FILTERS)[number]["key"];
+
+const STALE_DAYS = 21;
+const STALE_STATUSES: DemoStatus[] = ["sent", "opened", "responded", "quoted"];
+
+function isStale(card: DemoCardDto): boolean {
+  if (!STALE_STATUSES.includes(card.status)) return false;
+  return Date.now() - new Date(card.statusChangedAt).getTime() > STALE_DAYS * 86_400_000;
+}
+
+function statusTone(status: DemoStatus): string {
+  switch (status) {
+    case "won":
+      return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20";
+    case "lost":
+    case "expired":
+      return "bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20";
+    case "quoted":
+      return "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20";
+    case "opened":
+    case "responded":
+      return "bg-primary/10 text-primary border-primary/20";
+    case "sent":
+      return "bg-secondary text-foreground border-border";
+    default:
+      return "bg-muted text-muted-foreground border-border";
+  }
+}
+
+export default function AdminDemosPage() {
+  const navigate = useNavigate();
+  const { data, isLoading, error } = useDemosBoard(30);
+  const update = useUpdateDemo();
+  const remove = useDeleteDemo();
+
+  const [search, setSearch] = useState("");
+  const [stage, setStage] = useState<StageFilter>("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [convertTarget, setConvertTarget] = useState<DemoCardDto | null>(null);
+  const [studioPending, setStudioPending] = useState<string | null>(null);
+
+  const allCards = useMemo<DemoCardDto[]>(
+    () =>
+      data
+        ? [
+            ...data.columns.draft,
+            ...data.columns.sent,
+            ...data.columns.opened,
+            ...data.columns.responded,
+            ...data.columns.closed,
+          ]
+        : [],
+    [data],
+  );
+
+  const filteredCards = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return allCards
+      .filter((c) => {
+        if (q) {
+          const hay = [c.companyName, c.contactEmail ?? "", c.tiktokHandle ?? ""]
+            .join(" ")
+            .toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (stage === "active")
+          return !["won", "lost", "expired"].includes(c.status);
+        if (stage === "won") return c.status === "won";
+        if (stage === "lost") return c.status === "lost" || c.status === "expired";
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.statusChangedAt).getTime() - new Date(a.statusChangedAt).getTime(),
+      );
+  }, [allCards, search, stage]);
+
+  const handleAdvance = async (demo: DemoCardDto) => {
+    if (!demo.nextStatus) return;
+    await update.mutateAsync({
+      id: demo.id,
+      input: { status: demo.nextStatus, lost_reason: null },
+    });
+    toast.success(
+      `${demo.companyName} flyttades till ${demosCopy.statusLabels[demo.nextStatus]}.`,
+    );
+  };
+
+  const handleLose = async (demo: DemoCardDto) => {
+    await update.mutateAsync({ id: demo.id, input: { status: "lost", lost_reason: null } });
+    toast.warning(`${demo.companyName} markerades som förlorad.`);
+  };
+
+  const handleCopyLink = async (demo: DemoCardDto) => {
+    if (!demo.shareToken) {
+      toast.error(demosCopy.copyLinkMissing);
+      return;
+    }
+    const url = `${window.location.origin}/d/${demo.shareToken}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(demosCopy.copyLinkSuccess);
+      if (demo.status === "draft") {
+        await update.mutateAsync({ id: demo.id, input: { status: "sent" } });
+      }
+    } catch {
+      toast.error("Kunde inte kopiera till urklipp.");
+    }
+  };
+
+  const handleOpenStudio = async (demo: DemoCardDto) => {
+    if (studioPending) return;
+    setStudioPending(demo.id);
+    try {
+      const result = await demosApi.prepareStudio(demo.id);
+      if (result.success && result.customerId) {
+        navigate(`/customers/${result.customerId}`);
+      } else {
+        toast.error(result.error || "Kunde inte förbereda kundvy.");
+      }
+    } finally {
+      setStudioPending(null);
+    }
+  };
+
+  const handleDelete = async (demo: DemoCardDto) => {
+    if (!confirm(`Ta bort demo "${demo.companyName}"?`)) return;
+    await remove.mutateAsync(demo.id);
+    toast.success("Demo borttagen.");
+  };
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">{demosCopy.pageTitle}</h1>
+          <p className="text-sm text-muted-foreground">{demosCopy.pageSubtitle}</p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>{demosCopy.createButton}</Button>
+      </header>
+
+      {isLoading && (
+        <Card className="flex items-center justify-center p-12 text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Laddar demos…
+        </Card>
+      )}
+
+      {error && (
+        <Card className="border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+          {error instanceof Error ? error.message : demosCopy.loadBoardError}
+        </Card>
+      )}
+
+      {data && (
+        <>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <KpiCard
+              icon={Send}
+              label="Skickade"
+              value={data.sentLast30}
+              current={data.sentLast30}
+              previous={data.sentPrev30}
+            />
+            <KpiCard
+              icon={Inbox}
+              label="I dialog"
+              value={data.openedLast30}
+              current={data.openedLast30}
+              previous={data.openedPrev30}
+            />
+            <KpiCard
+              icon={UserCheck}
+              label="Konverterade"
+              value={data.convertedLast30}
+              current={data.convertedLast30}
+              previous={data.convertedPrev30}
+            />
+          </div>
+
+          <DemosFunnelBar cards={allCards} />
+
+          <Card className="p-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Sök bolag, e-post eller TikTok-handle"
+                className="max-w-md"
+              />
+              <div className="flex flex-wrap gap-1">
+                {STAGE_FILTERS.map((f) => (
+                  <Button
+                    key={f.key}
+                    size="sm"
+                    variant={stage === f.key ? "default" : "secondary"}
+                    onClick={() => setStage(f.key)}
+                  >
+                    {f.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {filteredCards.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-16 text-center text-sm text-muted-foreground">
+                <Inbox className="h-8 w-8 opacity-40" />
+                {demosCopy.emptyColumn}
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bolag</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Pris/mån</TableHead>
+                    <TableHead>Ansvarig</TableHead>
+                    <TableHead>Uppdaterad</TableHead>
+                    <TableHead className="text-right">Åtgärder</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCards.map((demo) => (
+                    <TableRow key={demo.id}>
+                      <TableCell>
+                        <div className="font-medium">{demo.companyName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {demo.contactEmail || "—"}
+                          {demo.tiktokHandle && (
+                            <span className="ml-2">@{demo.tiktokHandle}</span>
+                          )}
+                        </div>
+                        {isStale(demo) && (
+                          <div className="mt-1 text-xs font-medium text-amber-600">
+                            ⚠ {demosCopy.staleWarning}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn("font-medium", statusTone(demo.status))}>
+                          {demosCopy.statusLabels[demo.status]}
+                        </Badge>
+                        {demo.convertedCustomerId && (
+                          <Link
+                            to={`/customers/${demo.convertedCustomerId}`}
+                            className="ml-2 text-xs text-primary hover:underline"
+                          >
+                            Kund →
+                          </Link>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {formatSek(demo.proposedPriceOre)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {demo.ownerName ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {new Date(demo.statusChangedAt).toLocaleDateString("sv-SE")}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {demo.nextStatus && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleAdvance(demo)}
+                              disabled={update.isPending}
+                              title={`Flytta till ${demosCopy.statusLabels[demo.nextStatus]}`}
+                            >
+                              <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleCopyLink(demo)}
+                            title="Kopiera demo-länk"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="sm" variant="ghost">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => handleOpenStudio(demo)}
+                                disabled={studioPending === demo.id}
+                              >
+                                <ExternalLink className="mr-2 h-4 w-4" /> Öppna kundvy
+                              </DropdownMenuItem>
+                              {demo.status !== "won" && (
+                                <DropdownMenuItem
+                                  onClick={() => setConvertTarget(demo)}
+                                >
+                                  <UserCheck className="mr-2 h-4 w-4" /> Konvertera till kund
+                                </DropdownMenuItem>
+                              )}
+                              {!["won", "lost", "expired"].includes(demo.status) && (
+                                <DropdownMenuItem onClick={() => handleLose(demo)}>
+                                  <X className="mr-2 h-4 w-4" /> Markera förlorad
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(demo)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" /> Ta bort
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Card>
+        </>
+      )}
+
+      <CreateDemoDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <ConvertDemoDialog
+        open={!!convertTarget}
+        demo={
+          convertTarget
+            ? {
+                id: convertTarget.id,
+                company_name: convertTarget.companyName,
+                contact_email: convertTarget.contactEmail,
+                proposed_price_ore: convertTarget.proposedPriceOre,
+              }
+            : null
+        }
+        onClose={() => setConvertTarget(null)}
+      />
+    </div>
+  );
+}

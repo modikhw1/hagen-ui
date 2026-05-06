@@ -30,6 +30,7 @@ export const INVALIDATION_MAP = {
     ...overviewMetricKeys,
     ...overviewAttentionKeys,
   ] as QueryKeyFactory[],
+  'demos.delete': [qk.demos.root, ...overviewMetricKeys] as QueryKeyFactory[],
   'settings.update': [
     qk.settings.root,
     qk.payroll.root,

@@ -110,3 +110,14 @@ export function useUpdateDemo() {
     },
   });
 }
+
+export function useDeleteDemo() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => apiClient.delete(`/api/admin/demos/${id}`),
+    onSuccess: async () => {
+      await invalidateFor(queryClient, 'demos.delete');
+    },
+  });
+}

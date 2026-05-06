@@ -12,8 +12,11 @@ import {
   Inbox,
   LayoutList,
   Loader2,
+  MoreHorizontal,
   Pencil,
+  RotateCcw,
   Send,
+  Trash2,
   UserCheck,
   X,
 } from 'lucide-react';
@@ -22,7 +25,7 @@ import ConvertDemoDialog from '@/components/admin/demos/ConvertDemoDialog';
 import EditDemoDialog from '@/components/admin/demos/EditDemoDialog';
 import { DemoBoardSkeleton } from '@/components/admin/demos/DemoBoardSkeleton';
 import { DemosFunnelBar } from '@/components/admin/demos/DemosFunnelBar';
-import { useDemosBoard, useUpdateDemoStatus } from '@/hooks/admin/useDemos';
+import { useDemosBoard, useUpdateDemoStatus, useDeleteDemo } from '@/hooks/admin/useDemos';
 import { useUrlState } from '@/hooks/useUrlState';
 import { demosCopy } from '@/lib/admin/copy/demos';
 import { demoStatusLabel, type DemoStatus } from '@/lib/admin-derive/demos';
@@ -33,6 +36,13 @@ import { PageHeader } from '@/components/admin/ui/layout/PageHeader';
 import KpiCard from '@/components/admin/ui/KpiCard';
 import EmptyState from '@/components/admin/ui/EmptyState';
 import { apiClient } from '@/lib/admin/api-client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const STAGE_FILTERS = [
   { key: 'all', label: 'Alla' },
@@ -86,9 +96,7 @@ function DemoReadinessIcons({
       <span
         title={`${studioConceptCount} studio-koncept`}
         className={`inline-flex items-center justify-center rounded-full p-0.5 ${
-          studioConceptCount > 0
-            ? 'text-primary'
-            : 'text-muted-foreground/40'
+          studioConceptCount > 0 ? 'text-primary' : 'text-muted-foreground/40'
         }`}
       >
         <LayoutList className="h-3.5 w-3.5" />
@@ -96,9 +104,7 @@ function DemoReadinessIcons({
       <span
         title={hasFeedplan ? 'Feedplan klar' : 'Feedplan saknas'}
         className={`inline-flex items-center justify-center rounded-full p-0.5 ${
-          hasFeedplan
-            ? 'text-success'
-            : 'text-muted-foreground/40'
+          hasFeedplan ? 'text-success' : 'text-muted-foreground/40'
         }`}
       >
         <CalendarCheck className="h-3.5 w-3.5" />
@@ -106,9 +112,7 @@ function DemoReadinessIcons({
       <span
         title={hasGamePlan ? 'Game Plan klart' : 'Game Plan saknas'}
         className={`inline-flex items-center justify-center rounded-full p-0.5 ${
-          hasGamePlan
-            ? 'text-info'
-            : 'text-muted-foreground/40'
+          hasGamePlan ? 'text-info' : 'text-muted-foreground/40'
         }`}
       >
         <FileText className="h-3.5 w-3.5" />
@@ -128,6 +132,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
   const { get, set } = useUrlState();
   const { data, isLoading, error } = useDemosBoard(days);
   const updateStatus = useUpdateDemoStatus();
+  const deleteDemo = useDeleteDemo();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [stageFilter, setStageFilter] = useState<StageFilter>('all');
@@ -219,6 +224,20 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     toast.warning(demosCopy.statusLost(demo.companyName));
   };
 
+  const handleReopen = async (demo: DemoCardDto) => {
+    await updateStatus.mutateAsync({ id: demo.id, status: 'draft', lost_reason: null });
+    toast.success(`${demo.companyName} återöppnad som förberedd.`);
+  };
+
+  const handleWin = (demo: DemoCardDto) => {
+    setConvertTarget({
+      id: demo.id,
+      company_name: demo.companyName,
+      contact_email: demo.contactEmail,
+      proposed_price_ore: demo.proposedPriceOre,
+    });
+  };
+
   const handleCopyLink = async (demo: DemoCardDto) => {
     const url = buildShareUrl(demo.shareToken);
     if (!url) {
@@ -228,7 +247,6 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     try {
       await navigator.clipboard.writeText(url);
       toast.success(demosCopy.copyLinkSuccess);
-      // Auto-bump till "sent" om det fortfarande är förberett.
       if (demo.status === 'draft') {
         await updateStatus.mutateAsync({ id: demo.id, status: 'sent', lost_reason: null });
       }
@@ -273,6 +291,12 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     } finally {
       setStudioPendingId(null);
     }
+  };
+
+  const handleDelete = async (demo: DemoCardDto) => {
+    if (!confirm(`Ta bort demo för "${demo.companyName}"? Åtgärden går inte att ångra.`)) return;
+    await deleteDemo.mutateAsync(demo.id);
+    toast.success(`Demo för ${demo.companyName} borttagen.`);
   };
 
   return (
@@ -379,6 +403,8 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                     demo.status === 'won' ||
                     demo.status === 'lost' ||
                     demo.status === 'expired';
+                  const isLostOrExpired =
+                    demo.status === 'lost' || demo.status === 'expired';
                   return (
                     <tr
                       key={demo.id}
@@ -399,6 +425,16 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                                 {demosCopy.staleWarning}
                               </span>
                             </div>
+                          ) : null}
+                          {demo.convertedCustomerId ? (
+                            <a
+                              href={`/studio/customers/${demo.convertedCustomerId}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 text-xs text-primary hover:underline"
+                            >
+                              Kund →
+                            </a>
                           ) : null}
                         </div>
                       </td>
@@ -429,8 +465,12 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                       <td className="px-3 py-3 align-top text-xs text-muted-foreground">
                         {shortDateSv(demo.statusChangedAt)}
                       </td>
+
+                      {/* ─── ACTIONS ─── max 3 inline + 1 advance + overflow menu */}
                       <td className="px-3 py-3 align-top">
-                        <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1">
+
+                          {/* Static icon buttons */}
                           <button
                             type="button"
                             onClick={() => setEditId(demo.id)}
@@ -445,7 +485,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                             onClick={() => void handleCopyLink(demo)}
                             disabled={!demo.shareToken}
                             title={demosCopy.copyLink}
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-40"
                           >
                             <Copy className="h-3 w-3" />
                             Länk
@@ -455,64 +495,98 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                             onClick={() => handleOpenPreview(demo)}
                             disabled={!demo.shareToken}
                             title="Öppna preview"
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-40"
                           >
                             <ExternalLink className="h-3 w-3" />
                             Preview
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleOpenStudio(demo)}
-                            disabled={studioPendingId === demo.id}
-                            title={demosCopy.openStudio}
-                            className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium hover:bg-accent disabled:opacity-50"
-                          >
-                            {studioPendingId === demo.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <ExternalLink className="h-3 w-3" />
-                            )}
-                            Studio
-                          </button>
+
+                          {/* Advance — only for active demos with a next step */}
                           {!isClosed && demo.nextStatus ? (
                             <button
                               type="button"
                               onClick={() => void handleAdvance(demo)}
                               disabled={busy}
-                              className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/15 disabled:opacity-50"
+                              className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/20 disabled:opacity-50"
                             >
-                              <ArrowRight className="h-3 w-3" />
-                              Till {demoStatusLabel(demo.nextStatus)}
+                              {busy ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <ArrowRight className="h-3 w-3" />
+                              )}
+                              {demoStatusLabel(demo.nextStatus)}
                             </button>
                           ) : null}
-                          {!isClosed ? (
-                            <>
+
+                          {/* Overflow dropdown */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setConvertTarget({
-                                    id: demo.id,
-                                    company_name: demo.companyName,
-                                    contact_email: demo.contactEmail,
-                                    proposed_price_ore: demo.proposedPriceOre,
-                                  })
-                                }
-                                className="inline-flex items-center gap-1 rounded-md bg-success/10 px-2 py-1 text-xs font-semibold text-success hover:bg-success/15"
+                                className="inline-flex items-center justify-center rounded-md border border-border bg-background p-1.5 text-xs hover:bg-accent"
+                                title="Fler åtgärder"
                               >
-                                <Check className="h-3 w-3" />
-                                Win
+                                <MoreHorizontal className="h-3.5 w-3.5" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => void handleLose(demo)}
-                                disabled={busy}
-                                className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem
+                                onClick={() => void handleOpenStudio(demo)}
+                                disabled={studioPendingId === demo.id}
                               >
-                                <X className="h-3 w-3" />
-                                Lost
-                              </button>
-                            </>
-                          ) : null}
+                                {studioPendingId === demo.id ? (
+                                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                                )}
+                                Studio
+                              </DropdownMenuItem>
+
+                              {!isClosed ? (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => handleWin(demo)}
+                                  >
+                                    <Check className="mr-2 h-3.5 w-3.5 text-success" />
+                                    Win — konvertera
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => void handleLose(demo)}
+                                    disabled={busy}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    <X className="mr-2 h-3.5 w-3.5" />
+                                    Markera förlorad
+                                  </DropdownMenuItem>
+                                </>
+                              ) : null}
+
+                              {isLostOrExpired ? (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => void handleReopen(demo)}
+                                    disabled={busy}
+                                  >
+                                    <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                                    Återöppna
+                                  </DropdownMenuItem>
+                                </>
+                              ) : null}
+
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => void handleDelete(demo)}
+                                disabled={deleteDemo.isPending}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                Ta bort
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
                         </div>
                       </td>
                     </tr>
