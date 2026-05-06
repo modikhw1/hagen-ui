@@ -1351,9 +1351,21 @@ function FeedSlot({
                       {/* Action buttons */}
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button
-                          disabled={isLoading || !onAcceptCandidate}
+                          disabled={isLoading || (feedOrder === 0 ? !onOpenMarkProducedDialog : !onAcceptCandidate)}
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (feedOrder === 0) {
+                              // Nu-slot candidate: open MarkProducedDialog so the CM goes through
+                              // the full reconcile → mark-produced flow (advance plan, sync motor signal).
+                              if (onOpenMarkProducedDialog) {
+                                onOpenMarkProducedDialog(
+                                  candidate.target_customer_concept_id,
+                                  candidate.history_concept_id,
+                                );
+                              }
+                              return;
+                            }
+                            // Non-now candidates: direct accept as before.
                             if (!onAcceptCandidate) return;
                             setCandidateLoadingId(candidate.id);
                             setCandidateErrors((prev) => { const n = { ...prev }; delete n[candidate.id]; return n; });
@@ -1379,9 +1391,13 @@ function FeedSlot({
                             fontFamily: 'inherit',
                             opacity: isLoading ? 0.6 : 1,
                           }}
-                          title="Bekräfta: TikTok-klippet är publicerad output för detta LeT-koncept"
+                          title={
+                            feedOrder === 0
+                              ? 'Bekräfta och flytta: öppnar bekräftelsedialog för att markera nu-slotten som producerad'
+                              : 'Bekräfta: TikTok-klippet är publicerad output för detta LeT-koncept'
+                          }
                         >
-                          {isLoading ? '...' : '✓'}
+                          {isLoading ? '...' : feedOrder === 0 ? '✓ Nu' : '✓'}
                         </button>
                         <button
                           disabled={isLoading || !onRejectCandidate}

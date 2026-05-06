@@ -1,0 +1,41 @@
+Du jobbar i hagen-ui. Implementera Phase 10a: nu-slot-kandidater ska bekräftas via MarkProducedDialog.
+
+  Läs först:
+  - docs/agent-plans/18-mark-produced-dialog-preferred-evidence.md
+  - docs/agent-plans/16-mark-produced-error-propagation.md
+  - artifacts/letrend/src/components/studio/customer-detail/FeedSlot.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedPlannerSection.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/feedTypes.ts
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+
+  Problem:
+  Kandidatpanelen på imported_history-kort kör `onAcceptCandidate(candidate.id)`.
+  För en kandidat där `candidate.target.feed_order === 0` länkas klippet, men planen flyttas inte.
+  Det bypassar nu vårt korrekta reconcile → mark-produced-flöde.
+
+  Mål:
+  Om kandidaten pekar på nu-slotten ska accept-knappen öppna MarkProducedDialog med:
+  - target current concept som `nuConceptId`
+  - kandidatens `history_concept_id` som preferred imported clip
+
+  Scope:
+  1. Uppdatera `FeedSlotProps.onOpenMarkProducedDialog` så den accepterar optional `preferredImportedConceptId`.
+  2. I `FeedSlot.tsx`, i candidate accept-knappen:
+     - om `candidate.target?.feed_order === 0`:
+       - anropa `onOpenMarkProducedDialog(candidate.target_customer_concept_id, candidate.history_concept_id)`
+       - kör INTE `onAcceptCandidate`
+       - sätt inte loading-state som om en API-accept körs
+     - annars: behåll befintligt `onAcceptCandidate(candidate.id)`-beteende
+  3. Uppdatera knappens title/label för now-slot-kandidat, t.ex. “Bekräfta och flytta”.
+     Håll UI kompakt och i befintligt designspråk.
+  4. Säkerställ att befintliga callers med endast conceptId fortsätter fungera.
+  5. Rör inte API-server.
+  6. Rör inte `/admin/demos`.
+  7. Kör:
+     - `pnpm --filter @workspace/letrend exec tsc --noEmit`
+     - `git diff --check HEAD~1..HEAD`
+  8. Skapa `docs/agent-plans/19-candidate-now-slot-confirmation-flow.md` med:
+     - vad som ändrades
+     - varför now-slot-kandidater öppnar dialog i stället för direkt accept
+     - hur non-now-kandidater fortsatt fungerar
+     - teststatus

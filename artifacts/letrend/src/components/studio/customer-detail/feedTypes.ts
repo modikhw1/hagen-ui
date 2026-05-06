@@ -156,7 +156,7 @@ export interface FeedSlotProps {
   // or 'no_clip' if nothing new was found on the profile.
   onCheckAndMarkProduced: (conceptId: string) => Promise<'advanced' | 'no_clip'>;
   onMarkProduced: (conceptId: string, tiktokUrl?: string, publishedAt?: string) => Promise<void>;
-  onOpenMarkProducedDialog: (conceptId: string) => void;
+  onOpenMarkProducedDialog: (conceptId: string, preferredImportedConceptId?: string) => void;
   onReconcileHistory: (
     historyConceptId: string,
     options?: { mode?: 'use_now_slot'; linkedCustomerConceptId?: string }
