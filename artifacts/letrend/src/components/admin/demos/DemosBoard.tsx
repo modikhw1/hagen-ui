@@ -4,10 +4,13 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   ArrowRight,
+  CalendarCheck,
   Check,
   Copy,
   ExternalLink,
+  FileText,
   Inbox,
+  LayoutList,
   Loader2,
   Pencil,
   Send,
@@ -67,6 +70,51 @@ function statusTone(status: DemoStatus): string {
     default:
       return 'bg-muted text-muted-foreground border-border';
   }
+}
+
+function DemoReadinessIcons({
+  studioConceptCount,
+  hasFeedplan,
+  hasGamePlan,
+}: {
+  studioConceptCount: number;
+  hasFeedplan: boolean;
+  hasGamePlan: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        title={`${studioConceptCount} studio-koncept`}
+        className={`inline-flex items-center justify-center rounded-full p-0.5 ${
+          studioConceptCount > 0
+            ? 'text-primary'
+            : 'text-muted-foreground/40'
+        }`}
+      >
+        <LayoutList className="h-3.5 w-3.5" />
+      </span>
+      <span
+        title={hasFeedplan ? 'Feedplan klar' : 'Feedplan saknas'}
+        className={`inline-flex items-center justify-center rounded-full p-0.5 ${
+          hasFeedplan
+            ? 'text-success'
+            : 'text-muted-foreground/40'
+        }`}
+      >
+        <CalendarCheck className="h-3.5 w-3.5" />
+      </span>
+      <span
+        title={hasGamePlan ? 'Game Plan klart' : 'Game Plan saknas'}
+        className={`inline-flex items-center justify-center rounded-full p-0.5 ${
+          hasGamePlan
+            ? 'text-info'
+            : 'text-muted-foreground/40'
+        }`}
+      >
+        <FileText className="h-3.5 w-3.5" />
+      </span>
+    </div>
+  );
 }
 
 const DEMO_SHARE_BASE = 'https://letrend.se';
@@ -345,33 +393,25 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                             {demo.tiktokHandle ? `@${demo.tiktokHandle}` : 'Ingen TikTok-handle'}
                             {demo.contactEmail ? ` · ${demo.contactEmail}` : ''}
                           </span>
-                          <div className="mt-1 flex flex-wrap gap-1.5">
-                            {!demo.hasFeedplan && demo.status === 'draft' ? (
-                              <span className="inline-flex items-center rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
-                                {demosCopy.feedplanMissing}
-                              </span>
-                            ) : null}
-                            {stale ? (
+                          {stale ? (
+                            <div className="mt-1">
                               <span className="inline-flex items-center rounded border border-destructive/30 bg-destructive/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-destructive">
                                 {demosCopy.staleWarning}
                               </span>
-                            ) : null}
-                          </div>
+                            </div>
+                          ) : null}
                         </div>
                       </td>
                       <td className="px-3 py-3 align-top text-xs">
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col gap-1.5">
                           <span className="font-medium text-foreground">
                             {demo.ownerName ?? demosCopy.ownerMissing}
                           </span>
-                          <span className="text-muted-foreground">
-                            {demosCopy.studioConceptCountLabel(demo.studioConceptCount ?? 0)}
-                          </span>
-                          {demo.hasGamePlan ? (
-                            <span className="inline-flex w-fit rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
-                              Game Plan
-                            </span>
-                          ) : null}
+                          <DemoReadinessIcons
+                            studioConceptCount={demo.studioConceptCount ?? 0}
+                            hasFeedplan={demo.hasFeedplan}
+                            hasGamePlan={demo.hasGamePlan ?? false}
+                          />
                         </div>
                       </td>
                       <td className="px-3 py-3 align-top text-xs text-muted-foreground">

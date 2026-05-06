@@ -203,16 +203,6 @@ async function updateDemoReturning(
   return Array.isArray(data) ? (data[0] as Record<string, any> | undefined) ?? null : null;
 }
 
-function hasPreliminaryFeedplan(row: Record<string, any>) {
-  const plan = row['preliminary_feedplan'];
-  if (!plan) return false;
-  if (Array.isArray(plan)) return plan.length > 0;
-  if (typeof plan === 'object' && Array.isArray((plan as { items?: unknown }).items)) {
-    return ((plan as { items: unknown[] }).items).length > 0;
-  }
-  return true;
-}
-
 function mapRow(
   row: Record<string, any>,
   ownerById: Map<string, OwnerLite>,
@@ -242,7 +232,7 @@ function mapRow(
     nextStatus: NEXT_STATUS[row['status'] ?? 'draft'] ?? null,
     convertedCustomerId,
     shareToken: row['share_token'] ?? null,
-    hasFeedplan: studioConceptCount > 0 || hasPreliminaryFeedplan(row),
+    hasFeedplan: studioConceptCount > 0,
     studioConceptCount,
     hasGamePlan: Boolean(readString(row['game_plan']) || readString(row['game_plan_html'])),
     createdAt: row['created_at'] ?? new Date().toISOString(),
@@ -320,7 +310,7 @@ router.get('/', requireAuth, ADMIN_OR_CM, async (req, res) => {
     const { data: rows, error } = await supabase
       .from('demos')
       .select(
-        'id, company_name, contact_name, contact_email, tiktok_handle, proposed_concepts_per_week, proposed_price_ore, status, status_changed_at, owner_admin_id, lost_reason, converted_customer_id, share_token, preliminary_feedplan, game_plan, game_plan_html, created_at',
+        'id, company_name, contact_name, contact_email, tiktok_handle, proposed_concepts_per_week, proposed_price_ore, status, status_changed_at, owner_admin_id, lost_reason, converted_customer_id, share_token, game_plan, game_plan_html, created_at',
       )
       .or(`status.not.in.(won,lost,expired),created_at.gte.${since}`)
       .order('created_at', { ascending: false })
