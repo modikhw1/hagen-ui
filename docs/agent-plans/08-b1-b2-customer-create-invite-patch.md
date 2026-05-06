@@ -36,6 +36,8 @@ Replace lines **1163–1213** (the stub handler) with the implementation below.
 **Do not touch** `create.server.ts` — dead code cleanup is tracked separately as C-2.  
 **Do not touch** feed planner or demos.
 
+> Orchestrator note: live Supabase does not allow `customer_profiles.status='draft'`. Use `status='pending'` for a draft customer and `lifecycle_state='draft'` for the semantic lifecycle state.
+
 ---
 
 ## Patch
@@ -68,7 +70,8 @@ router.post('/create', requireAuth, requireRole(['admin']), async (req, res) => 
       account_manager: typeof body.account_manager === 'string' ? body.account_manager.trim() : null,
       account_manager_profile_id: typeof body.account_manager_profile_id === 'string' ? body.account_manager_profile_id : null,
       monthly_price: typeof body.monthly_price === 'number' ? body.monthly_price : null,
-      status: sendInviteNow ? 'invited' : 'draft',
+      status: sendInviteNow ? 'invited' : 'pending',
+      lifecycle_state: sendInviteNow ? 'invited' : 'draft',
       concepts_per_week: typeof body.concepts_per_week === 'number' ? body.concepts_per_week : 1,
       subscription_interval: typeof body.subscription_interval === 'string' ? body.subscription_interval : 'month',
       tiktok_profile_url: tiktokProfileUrl,
@@ -227,7 +230,7 @@ No frontend changes required.
 
 After applying the patch, verify:
 
-1. **Draft create** (`send_invite_now: false`): row inserted with `status='draft'`, no email, `inviteSent: false`, no warnings.
+1. **Draft create** (`send_invite_now: false`): row inserted with `status='pending'` and `lifecycle_state='draft'`, no email, `inviteSent: false`, no warnings.
 2. **Invite create, no TikTok** (`send_invite_now: true`, no URL): row with `status='invited'`, `invited_at` set, email sent to address, `inviteSent: true`.
 3. **Invite create + TikTok** (`send_invite_now: true`, valid TikTok URL): as above + `tiktok_handle` written to DB + background sync triggered (check server log for "initial tiktok backfill done").
 4. **Invite create, RESEND_API_KEY missing**: `inviteSent: false`, warning `'RESEND_API_KEY saknas'` shown in modal.
