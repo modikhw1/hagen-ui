@@ -1,0 +1,64 @@
+Du jobbar i hagen-ui.
+
+  Uppdrag: implementera API för Reconciliation Candidates.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Skapa inga Supabase-migrationer. Tabellen finns redan live.
+  - Du har inte Supabase MCP, så bygg mot kontraktet nedan och befintliga repo-mönster.
+  - Använd api-serverns admin/service-role Supabase client där routes redan gör server-side DB-operationer.
+
+  Live DB:
+  public.feed_reconciliation_candidates
+  - id uuid
+  - customer_id uuid
+  - history_concept_id uuid
+  - target_customer_concept_id uuid
+  - score numeric 0..100
+  - reasons jsonb array
+  - status: suggested | accepted | rejected | auto_accepted
+  - created_at timestamptz
+  - decided_at timestamptz nullable
+  - decided_by uuid nullable
+
+  Läs först:
+  - docs/agent-plans/10-reconciliation-candidates.md
+  - artifacts/api-server/src/lib/studio/reconciliation-scoring.ts
+  - artifacts/api-server/src/routes/studio-v2.ts
+  - befintlig POST/DELETE /history/reconciliation-logik
+
+  Implementera:
+  1. POST /api/studio-v2/customers/:customerId/reconciliation-candidates/generate
+     - verifiera CM/admin-access enligt befintligt route-mönster
+     - hämta unreconciled history rows: row_kind='history_import', reconciled_customer_concept_id is null
+     - hämta target rows: row_kind in ('assignment','collaboration'), aktiva, med relevant feed_order/planned_publish_at
+     - markera targets som already_reconciled
+     - använd rankCandidates()
+     - upsert:a suggested candidates
+     - skriv inte över accepted/rejected/auto_accepted
+
+  2. GET /api/studio-v2/customers/:customerId/reconciliation-candidates?status=suggested
+     - returnera candidate + history metadata + target metadata
+     - sortera score desc, created_at desc
+
+  3. POST /api/studio-v2/reconciliation-candidates/:candidateId/accept
+     - verifiera access via candidate.customer_id
+     - återanvänd eller extrahera befintlig /history/reconciliation-logik
+     - sätt candidate accepted, decided_at, decided_by
+     - rejecta andra suggested candidates för samma history_concept_id
+
+  4. POST /api/studio-v2/reconciliation-candidates/:candidateId/reject
+     - verifiera access
+     - sätt rejected, decided_at, decided_by
+
+  5. Lägg fokuserade tester för generate/list/accept/reject om testmiljön redan har route-testmönster.
+     Om route-tester är för tunga, lägg unit/integration-nära helpertester och dokumentera testgapet.
+
+  Kör:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend exec tsc --noEmit
+  - pnpm --filter @workspace/api-server run test -- src/lib/studio/reconciliation-scoring.test.ts om Vitest fungerar
+  lokalt
+
+  Avsluta med en kort docs-uppdatering i docs/agent-plans/10-reconciliation-candidates.md: vad som nu är implementerat
+  och vad som återstår för UI.

@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
 import { buildGamePlanInput, generateGamePlanDraft } from '../lib/game-plan-generate.js';
 import { refreshReconciledThumbnails, runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
+import { rankCandidates } from '../lib/studio/reconciliation-scoring.js';
 import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
 const router = Router();
@@ -1485,6 +1486,359 @@ router.delete('/history/reconciliation', requireAuth, CM_ONLY, async (req, res) 
     logger.error(err, 'studio-v2 history reconciliation DELETE error');
     res.status(500).json({ error: 'Internt serverfel' });
   }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reconciliation Candidates
+// Endpoints for the feed_reconciliation_candidates audit-trail table.
+// Flow: generate → list → accept | reject
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Internal helper: writes a reconciliation link from a history row to a target
+ * assignment row and propagates the TikTok stats to the assignment card.
+ * Mirrors the core logic of POST /history/reconciliation.
+ */
+async function applyReconciliationLink(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  historyConceptId: string,
+  targetConceptId: string,
+  actorId: string,
+  now: string,
+): Promise<{ error: string | null }> {
+  const { error: linkErr } = await supabase
+    .from('customer_concepts')
+    .update({
+      reconciled_customer_concept_id: targetConceptId,
+      reconciled_by_cm_id: actorId,
+      reconciled_at: now,
+    })
+    .eq('id', historyConceptId);
+
+  if (linkErr) return { error: linkErr.message };
+
+  // Propagate TikTok stats from history row → assignment card
+  const { data: histRow } = await supabase
+    .from('customer_concepts')
+    .select('tiktok_thumbnail_url, tiktok_url, tiktok_views, tiktok_likes, tiktok_comments, published_at')
+    .eq('id', historyConceptId)
+    .maybeSingle();
+
+  if (histRow) {
+    const hr = histRow as Record<string, unknown>;
+    const statsPatch: Record<string, unknown> = {};
+    if (hr['tiktok_thumbnail_url']) statsPatch['tiktok_thumbnail_url'] = hr['tiktok_thumbnail_url'];
+    if (hr['tiktok_url']) statsPatch['tiktok_url'] = hr['tiktok_url'];
+    if (hr['tiktok_views'] != null) statsPatch['tiktok_views'] = hr['tiktok_views'];
+    if (hr['tiktok_likes'] != null) statsPatch['tiktok_likes'] = hr['tiktok_likes'];
+    if (hr['tiktok_comments'] != null) statsPatch['tiktok_comments'] = hr['tiktok_comments'];
+    if (hr['published_at']) statsPatch['published_at'] = hr['published_at'];
+    if (Object.keys(statsPatch).length > 0) {
+      const { error: patchErr } = await supabase
+        .from('customer_concepts')
+        .update(statsPatch)
+        .eq('id', targetConceptId);
+      if (patchErr) {
+        logger.warn({ err: patchErr }, 'reconciliation-candidates: failed to propagate stats to target row');
+      }
+    }
+  }
+
+  return { error: null };
+}
+
+// POST /api/studio-v2/customers/:customerId/reconciliation-candidates/generate
+// Scores all unreconciled history rows against eligible target rows and upserts
+// suggested candidates into feed_reconciliation_candidates. Skips any pair
+// already decided (accepted / rejected / auto_accepted).
+router.post('/customers/:customerId/reconciliation-candidates/generate', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const { customerId } = req.params as { customerId: string };
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
+    const supabase = createSupabaseAdmin();
+
+    // 1. Unreconciled history rows (TikTok imports not yet linked to a concept)
+    const { data: historyRows, error: histErr } = await supabase
+      .from('customer_concepts')
+      .select('id, published_at, tiktok_url, feed_order')
+      .eq('customer_profile_id', customerId)
+      .is('concept_id', null)
+      .is('reconciled_customer_concept_id', null)
+      .not('tiktok_url', 'is', null);
+
+    if (histErr) { res.status(500).json({ error: histErr.message }); return; }
+
+    const history = (historyRows ?? []) as Array<{
+      id: string; published_at: string | null; tiktok_url: string | null; feed_order: number | null;
+    }>;
+
+    if (history.length === 0) {
+      res.json({ generated: 0, skipped_locked: 0, history_count: 0 });
+      return;
+    }
+
+    // 2. Target rows: assignment / collaboration, not archived
+    const { data: targetRows, error: tgtErr } = await supabase
+      .from('customer_concepts')
+      .select('id, feed_order, planned_publish_at')
+      .eq('customer_profile_id', customerId)
+      .not('concept_id', 'is', null)
+      .neq('status', 'archived');
+
+    if (tgtErr) { res.status(500).json({ error: tgtErr.message }); return; }
+
+    // 3. Which targets are already linked by another history row?
+    const { data: existingLinks } = await supabase
+      .from('customer_concepts')
+      .select('reconciled_customer_concept_id')
+      .eq('customer_profile_id', customerId)
+      .not('reconciled_customer_concept_id', 'is', null);
+
+    const reconciledTargetIds = new Set(
+      ((existingLinks ?? []) as Array<{ reconciled_customer_concept_id: string }>)
+        .map((r) => r.reconciled_customer_concept_id),
+    );
+
+    const targets = ((targetRows ?? []) as Array<{
+      id: string; feed_order: number | null; planned_publish_at: string | null;
+    }>).map((t) => ({
+      ...t,
+      is_already_reconciled: reconciledTargetIds.has(t.id),
+    }));
+
+    // 4. Which (history, target) pairs are already decided? Don't overwrite them.
+    const { data: lockedRows } = await supabase
+      .from('feed_reconciliation_candidates')
+      .select('history_concept_id, target_customer_concept_id')
+      .eq('customer_id', customerId)
+      .in('status', ['accepted', 'rejected', 'auto_accepted']);
+
+    const lockedPairs = new Set(
+      ((lockedRows ?? []) as Array<{ history_concept_id: string; target_customer_concept_id: string }>)
+        .map((r) => `${r.history_concept_id}:${r.target_customer_concept_id}`),
+    );
+
+    // 5. Score all pairs and collect upsert rows (skipping locked pairs)
+    const toUpsert: Array<{
+      customer_id: string;
+      history_concept_id: string;
+      target_customer_concept_id: string;
+      score: number;
+      reasons: string[];
+      status: string;
+    }> = [];
+
+    for (const hist of history) {
+      const ranked = rankCandidates(hist, targets);
+      for (const { target, result } of ranked) {
+        if (lockedPairs.has(`${hist.id}:${target.id}`)) continue;
+        toUpsert.push({
+          customer_id: customerId,
+          history_concept_id: hist.id,
+          target_customer_concept_id: target.id,
+          score: result.score,
+          reasons: result.reasons,
+          status: 'suggested',
+        });
+      }
+    }
+
+    if (toUpsert.length === 0) {
+      res.json({ generated: 0, skipped_locked: lockedPairs.size, history_count: history.length });
+      return;
+    }
+
+    // 6. Upsert — on conflict (history_concept_id, target_customer_concept_id) refresh score/reasons
+    const { error: upsertErr } = await supabase
+      .from('feed_reconciliation_candidates')
+      .upsert(toUpsert, {
+        onConflict: 'history_concept_id,target_customer_concept_id',
+        ignoreDuplicates: false,
+      });
+
+    if (upsertErr) { res.status(500).json({ error: upsertErr.message }); return; }
+
+    logger.info(
+      { customerId, generated: toUpsert.length, skipped_locked: lockedPairs.size, history_count: history.length },
+      'reconciliation-candidates: generate complete',
+    );
+
+    res.json({ generated: toUpsert.length, skipped_locked: lockedPairs.size, history_count: history.length });
+  } catch (err) {
+    logger.error(err, 'reconciliation-candidates generate error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// GET /api/studio-v2/customers/:customerId/reconciliation-candidates
+// Lists candidates with enriched history + target metadata.
+// Optional query param: ?status=suggested|accepted|rejected|auto_accepted
+router.get('/customers/:customerId/reconciliation-candidates', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const { customerId } = req.params as { customerId: string };
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
+    const supabase = createSupabaseAdmin();
+
+    const VALID_STATUSES = new Set(['suggested', 'accepted', 'rejected', 'auto_accepted']);
+    const statusFilter = typeof req.query['status'] === 'string' && VALID_STATUSES.has(req.query['status'] as string)
+      ? (req.query['status'] as string)
+      : null;
+
+    let query = supabase
+      .from('feed_reconciliation_candidates')
+      .select('*')
+      .eq('customer_id', customerId)
+      .order('score', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (statusFilter) {
+      query = query.eq('status', statusFilter);
+    }
+
+    const { data: candidates, error: candErr } = await query;
+    if (candErr) { res.status(500).json({ error: candErr.message }); return; }
+
+    const rows = (candidates ?? []) as Array<Record<string, unknown>>;
+    if (rows.length === 0) { res.json({ candidates: [] }); return; }
+
+    // Enrich with history and target metadata in one round-trip each
+    const historyIds = [...new Set(rows.map((r) => r['history_concept_id'] as string))];
+    const targetIds = [...new Set(rows.map((r) => r['target_customer_concept_id'] as string))];
+
+    const [{ data: historyMeta }, { data: targetMeta }] = await Promise.all([
+      supabase
+        .from('customer_concepts')
+        .select('id, published_at, tiktok_url, tiktok_thumbnail_url, feed_order')
+        .in('id', historyIds),
+      supabase
+        .from('customer_concepts')
+        .select('id, feed_order, planned_publish_at, status, concepts ( id, backend_data, overrides )')
+        .in('id', targetIds),
+    ]);
+
+    const historyById = new Map(
+      ((historyMeta ?? []) as Array<Record<string, unknown>>).map((r) => [r['id'] as string, r]),
+    );
+    const targetById = new Map(
+      ((targetMeta ?? []) as Array<Record<string, unknown>>).map((r) => [r['id'] as string, r]),
+    );
+
+    const enriched = rows.map((c) => ({
+      ...c,
+      history: historyById.get(c['history_concept_id'] as string) ?? null,
+      target: targetById.get(c['target_customer_concept_id'] as string) ?? null,
+    }));
+
+    res.json({ candidates: enriched });
+  } catch (err) {
+    logger.error(err, 'reconciliation-candidates list error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/studio-v2/reconciliation-candidates/:candidateId/accept
+// Applies the reconciliation link, marks the candidate accepted, and rejects
+// all other suggested candidates competing for the same history row.
+router.post('/reconciliation-candidates/:candidateId/accept', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const { candidateId } = req.params as { candidateId: string };
+    const supabase = createSupabaseAdmin();
+
+    const { data: candidate, error: candErr } = await supabase
+      .from('feed_reconciliation_candidates')
+      .select('*')
+      .eq('id', candidateId)
+      .maybeSingle();
+
+    if (candErr) { res.status(500).json({ error: candErr.message }); return; }
+    if (!candidate) { res.status(404).json({ error: 'Candidate not found' }); return; }
+
+    const c = candidate as Record<string, unknown>;
+    if (!(await ensureCustomerAccess(req, res, c['customer_id'] as string))) return;
+
+    if (c['status'] === 'accepted' || c['status'] === 'auto_accepted') {
+      res.status(409).json({ error: 'Candidate is already accepted' });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const actorId = req.user!.id;
+
+    // Apply the reconciliation link (mirrors POST /history/reconciliation core logic)
+    const { error: linkError } = await applyReconciliationLink(
+      supabase,
+      c['history_concept_id'] as string,
+      c['target_customer_concept_id'] as string,
+      actorId,
+      now,
+    );
+    if (linkError) { res.status(500).json({ error: linkError }); return; }
+
+    // Mark this candidate accepted
+    await supabase
+      .from('feed_reconciliation_candidates')
+      .update({ status: 'accepted', decided_at: now, decided_by: actorId })
+      .eq('id', candidateId);
+
+    // Reject all other suggested candidates competing for the same history row
+    await supabase
+      .from('feed_reconciliation_candidates')
+      .update({ status: 'rejected', decided_at: now, decided_by: actorId })
+      .eq('history_concept_id', c['history_concept_id'] as string)
+      .eq('status', 'suggested')
+      .neq('id', candidateId);
+
+    logger.info({ candidateId, actorId }, 'reconciliation-candidates: accepted');
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'reconciliation-candidates accept error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/studio-v2/reconciliation-candidates/:candidateId/reject
+// Marks a suggested candidate as rejected. Accepted candidates cannot be rejected
+// through this endpoint — use DELETE /history/reconciliation to undo a link.
+router.post('/reconciliation-candidates/:candidateId/reject', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const { candidateId } = req.params as { candidateId: string };
+    const supabase = createSupabaseAdmin();
+
+    const { data: candidate, error: candErr } = await supabase
+      .from('feed_reconciliation_candidates')
+      .select('id, customer_id, status')
+      .eq('id', candidateId)
+      .maybeSingle();
+
+    if (candErr) { res.status(500).json({ error: candErr.message }); return; }
+    if (!candidate) { res.status(404).json({ error: 'Candidate not found' }); return; }
+
+    const c = candidate as Record<string, unknown>;
+    if (!(await ensureCustomerAccess(req, res, c['customer_id'] as string))) return;
+
+    if (c['status'] === 'rejected') {
+      res.status(409).json({ error: 'Candidate is already rejected' });
+      return;
+    }
+    if (c['status'] === 'accepted' || c['status'] === 'auto_accepted') {
+      res.status(409).json({ error: 'Cannot reject an accepted candidate — undo the link via DELETE /history/reconciliation instead' });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const { error: rejectErr } = await supabase
+      .from('feed_reconciliation_candidates')
+      .update({ status: 'rejected', decided_at: now, decided_by: req.user!.id })
+      .eq('id', candidateId);
+
+    if (rejectErr) { res.status(500).json({ error: rejectErr.message }); return; }
+
+    logger.info({ candidateId }, 'reconciliation-candidates: rejected');
+    res.json({ success: true });
+  } catch (err) {
+    logger.error(err, 'reconciliation-candidates reject error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
 });
 
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
