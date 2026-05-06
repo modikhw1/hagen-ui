@@ -1,0 +1,54 @@
+ Du jobbar i hagen-ui.
+
+  Uppdrag: Reconciliation Candidates Phase 4b — UI hardening och komplett kandidatflöde.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Skapa inga Supabase-migrationer.
+  - Backend och live backfill är redan klara.
+  - Behåll befintligt FeedPlanner-designspråk.
+
+  Läs först:
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedPlannerSection.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/FeedSlot.tsx
+  - artifacts/letrend/src/types/studio-v2.ts
+
+  Fixar/komplettera:
+
+  1. Ta bort riskabel optimistic state för accept/reject.
+     - Ta inte bort candidate från state innan endpointen lyckats.
+     - Visa pending state per candidate.
+     - Vid accept success: refresh concepts + candidates.
+     - Vid reject success: refresh candidates.
+     - Vid fel: visa tydligt fel och lämna state korrekt.
+     - Undvik `alert()` om projektet har befintlig inline/toast/error pattern; annars använd en diskret inline error i
+  FeedPlanner-ytan.
+
+  2. Visa fler än toppkandidaten.
+     - Behåll diskret badge på kortet.
+     - I menyn/panelen: lista kandidater sorterade score desc.
+     - Varje kandidat ska visa target title, feed_order/planned date, score och reasons.
+     - Godkänn/Avvisa per kandidat.
+     - Hantera missing `target` eller `history` utan crash.
+
+  3. Gör generate-action robust.
+     - Kontrollera `response.ok`.
+     - Visa spinner/loading medan generate kör.
+     - Visa kort resultat: antal genererade/skippade om endpointen returnerar det.
+     - Refresh candidates efter success.
+     - Visa fel om generate misslyckas.
+
+  4. Förbättra target title.
+     - Använd befintlig content/title-resolver om möjligt (`resolveConceptContent` eller lokal pattern).
+     - Fallback ska vara stabilt: `Nu-slot`, `+N`, eller `Koncept`.
+
+  5. Lägg minimal QA-dokumentation i docs/agent-plans/10-reconciliation-candidates.md:
+     - Kund med candidates: accept, reject, generate.
+     - Kund utan candidates: manuella reconcile-flöden ska fortfarande fungera.
+     - Accept ska uppdatera planner direkt.
+
+  Kör:
+  - pnpm --filter @workspace/letrend exec tsc --noEmit
+  - pnpm --filter @workspace/api-server run typecheck
+  - Kör relevanta tester om Vitest fungerar lokalt.

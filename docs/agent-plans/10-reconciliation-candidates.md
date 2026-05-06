@@ -403,3 +403,65 @@ WHERE customer_id = '<customer-uuid>';
 ```
 
 Kör backfill-endpoint igen för att återskapa suggested-kandidater.
+
+---
+
+## QA-manuell (Phase 4b)
+
+### Förutsättningar
+
+- Logga in som Admin eller CM.
+- Navigera till en kund med `imported_history`-rader i Feed-fliken.
+- Kund med candidates: minst en unreconciled history-rad som har `status='suggested'` i `feed_reconciliation_candidates`.
+
+### Scenario A — Accept
+
+1. Öppna en kund med ett eller flera "Förslag"-märkta historik-kort.
+2. Varje kort visar en lista med kandidater (en per `suggested`-rad), sorterade score desc.
+   - Varje rad visar: målkonceptets titel (eller Nu-slot/+N), score, anledningschip, plannerat datum.
+3. Klicka ✓ (Acceptera) på en kandidat.
+   - Knappen visar "..." medan requesten pågår.
+   - Vid success: historik-kortet uppdateras (kandidatlistan försvinner; kortet markeras som rekonsilierat i FeedPlanner).
+   - Inga alert()-dialoger visas.
+4. Om endpointen returnerar fel: ett inline-felmeddelande visas under den aktuella kandidatens knappar; övriga kandidater förblir opåverkade.
+
+### Scenario B — Reject
+
+1. Klicka ✕ (Avvisa) på en kandidat.
+   - Knappen visar "..." under requestens gång.
+   - Vid success: kandidaten försvinner ur listan; övriga kandidater kvarstår.
+   - Vid fel: inline-felmeddelande under den aktuella kandidatens knappar.
+2. Inga andra kandidater eller kortets rekonsileringsstatus påverkas.
+
+### Scenario C — Generera förslag
+
+1. Högerklicka (eller öppna kontextmenyn via ⋮) på ett unreconciled history-kort.
+2. Välj "Generera förslag".
+   - Menyknappen visar "Genererar..." och är inaktiverad under generering.
+   - Inga andra menyval ska gå att klicka under genereringen.
+3. Vid success: ett kort resultatmeddelande visas i menyn ("N förslag genererade" eller "Inga nya förslag"), menyn stängs automatiskt efter ~1,8 s och kandidatpanelen på kortet uppdateras.
+4. Vid fel: feltext visas i menyn; menyn stängs inte automatiskt — CM kan läsa felet och stänga manuellt.
+
+### Scenario D — Kund utan candidates (manuella flöden)
+
+1. Öppna en kund där inga `suggested`-kandidater finns.
+2. History-kort saknar "Förslag"-badge och kandidatpanel.
+3. Kontextmenyn för history-kort innehåller fortfarande:
+   - "Markera som LeTrend" / "Ångra koppling"
+   - "Välj LeTrend-koncept..."
+   - "Generera förslag" (om kunden har aktiva targets — triggar genereringen på nytt)
+4. Manuell rekonsiliering via "Välj LeTrend-koncept..." fungerar som vanligt och uppdaterar FeedPlanner direkt.
+
+### Scenario E — Accept uppdaterar planner direkt
+
+1. Acceptera en kandidat (Scenario A, steg 3 success).
+2. FeedPlanner refreshas omedelbart utan manuell sidomladdning.
+3. History-kortets rekonsileringsstatus ändras till `linked_history`; TikTok-statistik (thumbnail, views, likes) propageras till den länkade assignment-raden.
+
+### Negativa/robustfallen
+
+- `candidate.target` är null: kortet kraschar inte — slotLabel fallback visas ("Koncept").
+- `candidate.history` är null: inline-panel renderas utan TikTok-thumbnail-data.
+- `candidate.target.concepts` är null: `getConceptDetails` anropas inte; `slotLabel` eller "Koncept" visas som titel.
+- Dubbel-klick på Accept/Reject: andra klicket ignoreras (knapparna inaktiverade under loading).
+

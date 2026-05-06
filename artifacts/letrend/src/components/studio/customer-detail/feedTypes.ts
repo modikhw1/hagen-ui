@@ -133,7 +133,8 @@ export interface FeedPlannerSectionProps {
   reconciliationCandidates?: ReconciliationCandidate[];
   onAcceptCandidate?: (candidateId: string) => Promise<void>;
   onRejectCandidate?: (candidateId: string) => Promise<void>;
-  onGenerateCandidates?: () => Promise<void>;
+  onGenerateCandidates?: () => Promise<{ generated: number; skipped_locked: number } | null>;
+  generatingCandidates?: boolean;
 }
 
 export interface FeedSlotProps {
@@ -178,7 +179,8 @@ export interface FeedSlotProps {
   candidates?: ReconciliationCandidate[];
   onAcceptCandidate?: (candidateId: string) => Promise<void>;
   onRejectCandidate?: (candidateId: string) => Promise<void>;
-  onGenerateCandidates?: () => Promise<void>;
+  onGenerateCandidates?: () => Promise<{ generated: number; skipped_locked: number } | null>;
+  generatingCandidates?: boolean;
 }
 
 export interface KommunikationSectionProps {

@@ -64,6 +64,7 @@ function FeedSlot({
   onAcceptCandidate,
   onRejectCandidate,
   onGenerateCandidates,
+  generatingCandidates = false,
 }: FeedSlotProps) {
   const [isHovered, setIsHovered] = React.useState(false);
   const menuBtnRef = React.useRef<HTMLButtonElement>(null);
@@ -84,7 +85,9 @@ function FeedSlot({
   const [localTikTokUrl, setLocalTikTokUrl] = React.useState('');
   const [localPlannedDate, setLocalPlannedDate] = React.useState('');
   const [refThumbnailUrl, setRefThumbnailUrl] = React.useState<string | null>(null);
-  const [candidateActionId, setCandidateActionId] = React.useState<string | null>(null);
+  const [candidateLoadingId, setCandidateLoadingId] = React.useState<string | null>(null);
+  const [candidateErrors, setCandidateErrors] = React.useState<Record<string, string>>({});
+  const [generateFeedback, setGenerateFeedback] = React.useState<{ loading: boolean; result: string | null }>({ loading: false, result: null });
 
   const { concept, type } = slot;
   const plannerCard = plannerCell?.card ?? null;
@@ -1229,120 +1232,198 @@ function FeedSlot({
                 </span>
               </div>
             )}
-            {/* Reconciliation candidate inline suggestion panel */}
-            {concept.row_kind === 'imported_history' && !concept.reconciliation.is_reconciled && candidates.length > 0 && (() => {
-              const topCandidate = candidates[0];
-              const reasonKey = topCandidate.reasons[0] ?? '';
-              const reasonLabel = CANDIDATE_REASON_LABELS[reasonKey] ?? reasonKey;
-              const targetFeedOrder = topCandidate.target?.feed_order;
-              const targetLabel = typeof targetFeedOrder === 'number'
-                ? targetFeedOrder === 0
-                  ? 'Nu-slot'
-                  : targetFeedOrder > 0
-                    ? `+${targetFeedOrder}`
-                    : `${targetFeedOrder}`
-                : null;
-              const isLoading = candidateActionId === topCandidate.id;
-              return (
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    border: hasHistoryThumbnail
-                      ? '1px solid rgba(255,255,255,0.15)'
-                      : '1px solid rgba(217,119,6,0.22)',
-                    borderRadius: 6,
-                    padding: '5px 6px',
-                    background: hasHistoryThumbnail
-                      ? 'rgba(0,0,0,0.42)'
-                      : 'rgba(251,191,36,0.09)',
-                    backdropFilter: hasHistoryThumbnail ? 'blur(6px)' : undefined,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 4,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                    {reasonLabel && (
-                      <span style={{
-                        fontSize: 8.5,
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: hasHistoryThumbnail ? 'rgba(255,255,255,0.7)' : '#92400e',
-                        background: hasHistoryThumbnail ? 'rgba(255,255,255,0.12)' : 'rgba(217,119,6,0.12)',
-                        borderRadius: 3,
-                        padding: '1px 4px',
-                      }}>
-                        {reasonLabel}
-                      </span>
-                    )}
-                    {targetLabel && (
-                      <span style={{
-                        fontSize: 8.5,
-                        fontWeight: 600,
-                        color: hasHistoryThumbnail ? 'rgba(255,255,255,0.55)' : LeTrendColors.textMuted,
-                      }}>
-                        → {targetLabel}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <button
-                      disabled={isLoading}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!onAcceptCandidate) return;
-                        setCandidateActionId(topCandidate.id);
-                        onAcceptCandidate(topCandidate.id).finally(() => setCandidateActionId(null));
-                      }}
+            {/* Reconciliation candidate inline suggestion panel — all candidates, sorted score desc */}
+            {concept.row_kind === 'imported_history' && !concept.reconciliation.is_reconciled && candidates.length > 0 && (
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                  maxHeight: 200,
+                  overflowY: candidates.length > 2 ? 'auto' : undefined,
+                }}
+              >
+                {candidates.map((candidate) => {
+                  const targetConceptLibId =
+                    candidate.target?.concepts != null &&
+                    typeof (candidate.target.concepts as Record<string, unknown>).id === 'string'
+                      ? (candidate.target.concepts as Record<string, unknown>).id as string
+                      : null;
+                  const targetDetails = targetConceptLibId ? (getConceptDetails(targetConceptLibId) ?? null) : null;
+                  const titleFromDetails = targetDetails?.headline_sv ?? targetDetails?.headline ?? null;
+                  const feedOrder = candidate.target?.feed_order ?? null;
+                  const slotLabel =
+                    typeof feedOrder === 'number'
+                      ? feedOrder === 0
+                        ? 'Nu-slot'
+                        : feedOrder > 0
+                          ? `+${feedOrder}`
+                          : `${feedOrder}`
+                      : null;
+                  const targetTitle = titleFromDetails ?? slotLabel ?? 'Koncept';
+                  const plannedDate = candidate.target?.planned_publish_at
+                    ? new Date(candidate.target.planned_publish_at).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })
+                    : null;
+                  const reasonKey = candidate.reasons[0] ?? '';
+                  const reasonLabel = CANDIDATE_REASON_LABELS[reasonKey] ?? '';
+                  const score = Math.round(candidate.score);
+                  const isLoading = candidateLoadingId === candidate.id;
+                  const errorMsg = candidateErrors[candidate.id] ?? null;
+
+                  const panelBorder = hasHistoryThumbnail ? '1px solid rgba(255,255,255,0.13)' : '1px solid rgba(217,119,6,0.22)';
+                  const panelBg = hasHistoryThumbnail ? 'rgba(0,0,0,0.42)' : 'rgba(251,191,36,0.09)';
+
+                  return (
+                    <div
+                      key={candidate.id}
                       style={{
-                        flex: 1,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: '3px 0',
-                        border: 'none',
-                        borderRadius: 4,
-                        cursor: isLoading ? 'default' : 'pointer',
-                        background: hasHistoryThumbnail ? 'rgba(22,163,74,0.82)' : '#166534',
-                        color: '#fff',
-                        fontFamily: 'inherit',
-                        opacity: isLoading ? 0.6 : 1,
+                        border: panelBorder,
+                        borderRadius: 6,
+                        padding: '5px 6px',
+                        background: panelBg,
+                        backdropFilter: hasHistoryThumbnail ? 'blur(6px)' : undefined,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 3,
                       }}
-                      title="Acceptera förslag"
                     >
-                      {isLoading ? '...' : '✓'}
-                    </button>
-                    <button
-                      disabled={isLoading}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (!onRejectCandidate) return;
-                        setCandidateActionId(topCandidate.id);
-                        onRejectCandidate(topCandidate.id).finally(() => setCandidateActionId(null));
-                      }}
-                      style={{
-                        flex: 1,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: '3px 0',
-                        border: hasHistoryThumbnail
-                          ? '1px solid rgba(255,255,255,0.22)'
-                          : '1px solid rgba(74,47,24,0.2)',
-                        borderRadius: 4,
-                        cursor: isLoading ? 'default' : 'pointer',
-                        background: 'transparent',
-                        color: hasHistoryThumbnail ? 'rgba(255,255,255,0.8)' : '#4A2F18',
-                        fontFamily: 'inherit',
-                        opacity: isLoading ? 0.6 : 1,
-                      }}
-                      title="Avvisa förslag"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
+                      {/* Title + score row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: 0 }}>
+                        <span style={{
+                          flex: 1,
+                          fontSize: 9.5,
+                          fontWeight: 600,
+                          color: hasHistoryThumbnail ? 'rgba(255,255,255,0.9)' : '#2A170A',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {targetTitle}
+                        </span>
+                        <span style={{
+                          fontSize: 8,
+                          fontWeight: 700,
+                          color: hasHistoryThumbnail ? 'rgba(255,255,255,0.5)' : LeTrendColors.textMuted,
+                          flexShrink: 0,
+                        }}>
+                          {score}p
+                        </span>
+                      </div>
+
+                      {/* Reason + date chips */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                        {reasonLabel && (
+                          <span style={{
+                            fontSize: 8,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.04em',
+                            color: hasHistoryThumbnail ? 'rgba(255,255,255,0.7)' : '#92400e',
+                            background: hasHistoryThumbnail ? 'rgba(255,255,255,0.12)' : 'rgba(217,119,6,0.12)',
+                            borderRadius: 3,
+                            padding: '1px 4px',
+                          }}>
+                            {reasonLabel}
+                          </span>
+                        )}
+                        {plannedDate && (
+                          <span style={{
+                            fontSize: 8,
+                            color: hasHistoryThumbnail ? 'rgba(255,255,255,0.5)' : LeTrendColors.textMuted,
+                          }}>
+                            {plannedDate}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Inline error */}
+                      {errorMsg && (
+                        <span style={{
+                          fontSize: 8.5,
+                          color: hasHistoryThumbnail ? '#fca5a5' : '#991b1b',
+                          fontWeight: 500,
+                        }}>
+                          {errorMsg}
+                        </span>
+                      )}
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button
+                          disabled={isLoading || !onAcceptCandidate}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!onAcceptCandidate) return;
+                            setCandidateLoadingId(candidate.id);
+                            setCandidateErrors((prev) => { const n = { ...prev }; delete n[candidate.id]; return n; });
+                            onAcceptCandidate(candidate.id)
+                              .catch((err: unknown) => {
+                                setCandidateErrors((prev) => ({
+                                  ...prev,
+                                  [candidate.id]: err instanceof Error ? err.message : 'Kunde inte acceptera',
+                                }));
+                              })
+                              .finally(() => setCandidateLoadingId(null));
+                          }}
+                          style={{
+                            flex: 1,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '3px 0',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: isLoading ? 'default' : 'pointer',
+                            background: hasHistoryThumbnail ? 'rgba(22,163,74,0.82)' : '#166534',
+                            color: '#fff',
+                            fontFamily: 'inherit',
+                            opacity: isLoading ? 0.6 : 1,
+                          }}
+                          title="Acceptera förslag"
+                        >
+                          {isLoading ? '...' : '✓'}
+                        </button>
+                        <button
+                          disabled={isLoading || !onRejectCandidate}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!onRejectCandidate) return;
+                            setCandidateLoadingId(candidate.id);
+                            setCandidateErrors((prev) => { const n = { ...prev }; delete n[candidate.id]; return n; });
+                            onRejectCandidate(candidate.id)
+                              .catch((err: unknown) => {
+                                setCandidateErrors((prev) => ({
+                                  ...prev,
+                                  [candidate.id]: err instanceof Error ? err.message : 'Kunde inte avvisa',
+                                }));
+                              })
+                              .finally(() => setCandidateLoadingId(null));
+                          }}
+                          style={{
+                            flex: 1,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '3px 0',
+                            border: hasHistoryThumbnail
+                              ? '1px solid rgba(255,255,255,0.22)'
+                              : '1px solid rgba(74,47,24,0.2)',
+                            borderRadius: 4,
+                            cursor: isLoading ? 'default' : 'pointer',
+                            background: 'transparent',
+                            color: hasHistoryThumbnail ? 'rgba(255,255,255,0.8)' : '#4A2F18',
+                            fontFamily: 'inherit',
+                            opacity: isLoading ? 0.6 : 1,
+                          }}
+                          title="Avvisa förslag"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* StatRow: views | likes | comments — shown for both LeTrend and TikTok cards when stats are available */}
             {(() => {
@@ -1579,16 +1660,52 @@ function FeedSlot({
               </button>
             )}
             {concept.row_kind === 'imported_history' && !concept.reconciliation.is_reconciled && onGenerateCandidates && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void onGenerateCandidates();
-                  setOpenMenuConceptId(null);
-                }}
-                style={feedSlotMenuBtnStyle}
-              >
-                Generera förslag
-              </button>
+              <>
+                <button
+                  disabled={generateFeedback.loading || generatingCandidates}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setGenerateFeedback({ loading: true, result: null });
+                    onGenerateCandidates()
+                      .then((res) => {
+                        if (res !== null) {
+                          const msg = res.generated > 0
+                            ? `${res.generated} förslag genererade`
+                            : 'Inga nya förslag';
+                          setGenerateFeedback({ loading: false, result: msg });
+                        } else {
+                          setGenerateFeedback({ loading: false, result: null });
+                        }
+                        setTimeout(() => {
+                          setGenerateFeedback({ loading: false, result: null });
+                          setOpenMenuConceptId(null);
+                        }, 1800);
+                      })
+                      .catch((err: unknown) => {
+                        const msg = err instanceof Error ? err.message : 'Generering misslyckades';
+                        setGenerateFeedback({ loading: false, result: `Fel: ${msg}` });
+                      });
+                  }}
+                  style={{
+                    ...feedSlotMenuBtnStyle,
+                    opacity: generateFeedback.loading || generatingCandidates ? 0.6 : 1,
+                    cursor: generateFeedback.loading || generatingCandidates ? 'default' : 'pointer',
+                  }}
+                >
+                  {generateFeedback.loading || generatingCandidates ? 'Genererar...' : 'Generera förslag'}
+                </button>
+                {generateFeedback.result && (
+                  <span style={{
+                    display: 'block',
+                    padding: '3px 10px',
+                    fontSize: 10,
+                    color: generateFeedback.result.startsWith('Fel:') ? '#991b1b' : '#166534',
+                    fontWeight: 500,
+                  }}>
+                    {generateFeedback.result}
+                  </span>
+                )}
+              </>
             )}
             {concept.row_kind === 'imported_history' && (allowsPlannerAction('reconcile_to_now') || allowsPlannerAction('undo_reconciliation')) && (
               <button

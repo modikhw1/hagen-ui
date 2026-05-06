@@ -614,6 +614,7 @@ function CustomerWorkspacePageContent() {
   } | null>(null);
   const [syncPreviewError, setSyncPreviewError] = useState<string | null>(null);
   const [reconciliationCandidates, setReconciliationCandidates] = useState<ReconciliationCandidate[]>([]);
+  const [generatingCandidates, setGeneratingCandidates] = useState(false);
 
   const customerCacheKey = `studio-v2:workspace:${customerId}:customer`;
   const gamePlanCacheKey = `studio-v2:workspace:${customerId}:game-plan`;
@@ -1132,50 +1133,49 @@ function CustomerWorkspacePageContent() {
   };
 
   const handleAcceptCandidate = async (candidateId: string) => {
-    setReconciliationCandidates((prev) => prev.filter((c) => c.id !== candidateId));
-    try {
-      const response = await fetch(
-        `/api/studio-v2/reconciliation-candidates/${candidateId}/accept`,
-        { method: 'POST' }
-      );
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, string>).error || 'Accept misslyckades');
-      }
-      clearClientCache(conceptsCacheKey);
-      await Promise.all([fetchConcepts(true), fetchCandidates()]);
-    } catch (err) {
-      await fetchCandidates();
-      alert(err instanceof Error ? err.message : 'Kunde inte acceptera förslaget');
+    const response = await fetch(
+      `/api/studio-v2/reconciliation-candidates/${candidateId}/accept`,
+      { method: 'POST' }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as Record<string, string>).error || 'Accept misslyckades');
     }
+    clearClientCache(conceptsCacheKey);
+    await Promise.all([fetchConcepts(true), fetchCandidates()]);
   };
 
   const handleRejectCandidate = async (candidateId: string) => {
-    setReconciliationCandidates((prev) => prev.filter((c) => c.id !== candidateId));
+    const response = await fetch(
+      `/api/studio-v2/reconciliation-candidates/${candidateId}/reject`,
+      { method: 'POST' }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error((err as Record<string, string>).error || 'Reject misslyckades');
+    }
+    await fetchCandidates();
+  };
+
+  const handleGenerateCandidates = async (): Promise<{ generated: number; skipped_locked: number } | null> => {
+    setGeneratingCandidates(true);
     try {
       const response = await fetch(
-        `/api/studio-v2/reconciliation-candidates/${candidateId}/reject`,
+        `/api/studio-v2/customers/${customerId}/reconciliation-candidates/generate`,
         { method: 'POST' }
       );
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, string>).error || 'Reject misslyckades');
+        throw new Error((err as Record<string, string>).error || 'Generering misslyckades');
       }
-    } catch (err) {
+      const data = await response.json().catch(() => ({})) as { generated?: number; skipped_locked?: number };
       await fetchCandidates();
-      alert(err instanceof Error ? err.message : 'Kunde inte avvisa förslaget');
-    }
-  };
-
-  const handleGenerateCandidates = async () => {
-    try {
-      await fetch(
-        `/api/studio-v2/customers/${customerId}/reconciliation-candidates/generate`,
-        { method: 'POST' }
-      );
-      await fetchCandidates();
-    } catch {
-      // Non-fatal
+      return {
+        generated: typeof data.generated === 'number' ? data.generated : 0,
+        skipped_locked: typeof data.skipped_locked === 'number' ? data.skipped_locked : 0,
+      };
+    } finally {
+      setGeneratingCandidates(false);
     }
   };
 
@@ -3413,6 +3413,7 @@ function CustomerWorkspacePageContent() {
               onAcceptCandidate={handleAcceptCandidate}
               onRejectCandidate={handleRejectCandidate}
               onGenerateCandidates={handleGenerateCandidates}
+              generatingCandidates={generatingCandidates}
             />
             </>
           )}

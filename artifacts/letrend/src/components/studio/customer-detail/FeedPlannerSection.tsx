@@ -230,6 +230,7 @@ export function FeedPlannerSection({
   onAcceptCandidate,
   onRejectCandidate,
   onGenerateCandidates,
+  generatingCandidates = false,
 }: FeedPlannerSectionProps) {
   const gridRef = React.useRef<HTMLDivElement>(null);
   const gridWrapperRef = React.useRef<HTMLDivElement>(null);
@@ -1927,6 +1928,7 @@ export function FeedPlannerSection({
                     onAcceptCandidate={onAcceptCandidate}
                     onRejectCandidate={onRejectCandidate}
                     onGenerateCandidates={onGenerateCandidates}
+                    generatingCandidates={generatingCandidates}
                   />
                 );
               })}
