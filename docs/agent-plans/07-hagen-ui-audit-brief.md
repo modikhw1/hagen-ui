@@ -1,18 +1,17 @@
 # 07: Hagen UI audit brief
 
-Detta ar en avgransad brief for en agent som framst har tillgang till `hagen-ui`. Agenten ska inte behova lasa eller andra `hagen` direkt. Hagen-relaterade fynd ska formuleras fran `hagen-ui`-perspektivet: vilka routes, DTO:er, env-vars och failure states `hagen-ui` forvantar sig.
+Detta ar en avgransad brief for en agent som framst har tillgang till `hagen-ui` och inte har Supabase MCP. Agenten ska inte behova lasa eller andra `hagen` direkt, och ska inte forutsatta live-DB-access. Hagen-relaterade fynd ska formuleras fran `hagen-ui`-perspektivet: vilka routes, DTO:er, env-vars och failure states `hagen-ui` forvantar sig.
 
 ## Mal
 
-Gor en kod-audit av `hagen-ui` som producerar implementation-ready findings for:
+Gor en kod-audit av `hagen-ui` som producerar implementation-ready findings for de tre karnaflodena:
 
-- `/admin/demos`
-- customer invite/create och initial ingest
+- video-/concept-cascade fran ingest/upload till customer-facing vy
+- customer invite/create och initial TikTok/profile ingest
 - Studio v2 feed planner
 - TikTok history sync och reconciliation
 - Hagen proxy/contract fran `hagen-ui`
-- CM identity och CRM stage progression
-- Supabase migration/schema alignment i `hagen-ui`
+- statisk Supabase migration/schema alignment i `hagen-ui`
 
 Audit ska prioritera buggar, datakontraktsrisker, brutna floden och saknad UI-feedback.
 
@@ -20,47 +19,47 @@ Audit ska prioritera buggar, datakontraktsrisker, brutna floden och saknad UI-fe
 
 Agenten ska inte:
 
-- andra designsprak i `/admin/demos`,
+- lagga tid pa `/admin/demos`, annat an om demo-kod direkt ateranvander eller bypassar customer ingest/profile fetch,
 - bygga om stora floden direkt,
 - anta att `hagen` routes finns utan att verifiera `hagen-ui` proxy/forvantningar,
-- anvanda `hagen` som kallkodskrav.
+- anvanda `hagen` som kallkodskrav,
+- anvanda Supabase MCP eller forutsatta live-DB-verifiering.
 
 Agenten far:
 
 - lasa `hagen-ui` kod och migrations,
+- anvanda repoets Supabase migrations/types som statiskt schema-underlag,
 - kora lokala tests/lint om repo stoder det,
 - foresla patchar i `hagen-ui`,
 - skriva tickets/planer med file/line refs.
 
 ## Primara filer att granska
 
-### Admin demos
+### Video-/concept-cascade
 
 Sok runt:
 
 ```powershell
-rg -n "demos|demo|game-plan|preview|Gemini|generate" artifacts
+rg -n "UploadConceptModal|customer-feed|CustomerConcept|backend_data|content_overrides|concepts|customer_concepts|studio-v2" artifacts
 ```
 
 Granska sarskilt:
 
-- `/admin/demos` page/components
-- demo API-routes i `artifacts/api-server/src/routes`
-- public preview routes
-- save/update demo route
-- modal open/close state
-- loading state for generate draft
-- preview token/id validation
-- CM dropdown/source
+- `artifacts/letrend/src/components/studio/UploadConceptModal.tsx`
+- `artifacts/letrend/src/lib/studio/customer-concepts.ts`
+- `artifacts/letrend/src/types/studio-v2.ts`
+- `artifacts/letrend/src/lib/customer-feed.ts`
+- `artifacts/api-server/src/routes/admin/concepts.ts`
+- `artifacts/api-server/src/routes/studio-v2.ts`
+- concept/customer-concept mapping helpers
 
 Fragor att besvara:
 
-- Varfor kunde "Ny demo" ta ~30 sekunder att oppna modal?
-- Finns blocking fetch i modal open path?
-- Finns loading/error state for "generera utkast"?
-- Varfor postade UI mot `/api/admin/demos/game-plan/generate` om route saknades?
-- Varfor kunde save returnera "Cannot coerce the result to a single JSON object"?
-- Varfor kunde preview-lanken bli ogiltig direkt efter save?
+- Var blandas UI-display, app-copy, backend metadata och ingest-resultat?
+- Finns ett canonical read model for `CustomerConcept`, eller tolkar varje vy DB-falt sjalv?
+- Kan `content_overrides` fungera som central kundspecifik copy-layer?
+- Finns statiska API/schema-mismatches kring `concepts.id`, `concepts.backend_data`, `customer_concepts.status` eller `row_kind`?
+- Vilka komponenter/vyer skulle paverkas av en central contract/read-model?
 
 ### Customer invite/create och initial ingest
 
@@ -77,14 +76,14 @@ Granska:
 - customer creation route
 - `triggerInitialTikTokSyncBackground`
 - `/api/studio-v2/customers/:customerId/fetch-profile-history`
-- reuse mellan demo-create och ordinarie invite
+- eventuell annan kod som skapar customer profile och borde starta samma ingest
 
 Fragor:
 
 - Finns ett centraliserat serviceflode for att skapa kund + starta initial TikTok ingest?
-- Bypassar demo-create det ordinarie invite/ingest-flodet?
 - Kan UI visa progress tills initial history fetch ar klar?
 - Vad hander om TikTok handle saknas?
+- Finns samma ingest-trigger for upload/ingest, invite och manual fetch, eller ar logiken duplicerad?
 
 ### Feed planner och reconciliation
 
@@ -127,9 +126,9 @@ Fragor:
 - Har UI tydlig failure state om Hagen ar nere?
 - Finns version/capabilities check? Om inte, foresla `hagen-ui`-side check som kan byggas utan att andra `hagen`.
 
-### Supabase schema/migration alignment
+### Statisk Supabase schema/migration alignment
 
-Granska:
+Agenten har inte Supabase MCP. Granska endast repoets migrations, genererade typer och API-payloads:
 
 - `supabase/migrations/*`
 - `artifacts/letrend/src/types/database.ts`
@@ -142,22 +141,7 @@ Bekrafta:
 - `cron_run_log.thumbnails_refreshed` finns i migration men kanske inte i aktuell DB.
 - DB types matchar migrations for `shift_feed_order`.
 - `customer_concepts.status` API-kontrakt matchar DB constraint.
-
-### CM identity och CRM progression
-
-Sok:
-
-```powershell
-rg -n "team_members|content_manager|cm_id|assigned_cm|lead|dialog|offer|won|lost|stage|status" artifacts
-```
-
-Fragor:
-
-- Bygger demo-CM dropdown pa `team_members` i stallet for `profiles`/roles?
-- Kan admin med CM-behorighet valjas som demo-CM?
-- Var visas "ingen CM" och vilken join/lookup orsakar det?
-- Finns action som flyttar CRM fran skickad -> dialog -> offert?
-- Ar win/lost de enda stage actions?
+- Markera tydligt vilka slutsatser som ar statiskt verifierade och vilka som kraver live-DB-verifiering av orkestratorn.
 
 ## Forvantad leverans
 
@@ -175,8 +159,8 @@ Svara med:
 git status -sb
 rg -n "assigned|history_import|reconciled_customer_concept_id|shift_feed_order|performMarkProduced" artifacts supabase
 rg -n "HAGEN_BASE_URL|hagen-clips|letrend|humor-enrich|concepts/analyze|concepts/enrich" artifacts
-rg -n "demos|game-plan|preview|generate|team_members|cm_id" artifacts
 rg -n "cron_run_log|thumbnails_refreshed|fetch-profile-history|sync-history-all" artifacts supabase
+rg -n "UploadConceptModal|customer-feed|backend_data|content_overrides|triggerInitialTikTokSyncBackground" artifacts
 ```
 
 ## Minsta patchar agenten kan foresla i hagen-ui
@@ -187,7 +171,7 @@ Om agenten ska ga fran audit till patch, borja med:
 2. API/schema mismatch: generera `concepts.id` vid admin concept create.
 3. Hagen proxy: lagg eller hantera missing `/api/studio/concepts/humor-enrich`.
 4. Cron health: se till att `cron_run_log` insert matchar migration/DB.
-5. Demo flow: loading/error states och korrekt generate route.
-6. Demo CM: valjbara CMs fran profiles/roles eller synka team_members tydligt.
+5. Customer ingest: centralisera eller tydliggor trigger for initial TikTok/profile fetch.
+6. Feed planner: korrigera UI-antagandet att auto-reconcile automatiskt avancerar planen om backend inte gor det.
 
 Allt annat bor byggas efter affarsbesluten i [06-open-business-logic-questions.md](06-open-business-logic-questions.md).

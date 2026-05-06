@@ -40,7 +40,7 @@ Viktigt: Supabase MCP-projektet som ar kopplat har LeTrend-tabeller som `concept
   Affarslogik som behover beslutas innan vissa tekniska val lases.
 
 - [07-hagen-ui-audit-brief.md](07-hagen-ui-audit-brief.md)  
-  Avgransad audit-brief for en agent som framst har tillgang till `hagen-ui`.
+  Avgransad audit-brief for en agent som framst har tillgang till `hagen-ui` och inte har Supabase MCP.
 
 ## Snabba verifierade risker
 
@@ -63,4 +63,4 @@ Viktigt: Supabase MCP-projektet som ar kopplat har LeTrend-tabeller som `concept
 
 ## Om en standby-agent bara har hagen-ui
 
-Anvand [07-hagen-ui-audit-brief.md](07-hagen-ui-audit-brief.md). Den filen begransar arbetet till det som kan verifieras och forberedas i `hagen-ui`: API-proxies, Supabase-migrationer/types, planner-kod, demo/customer-floden, CM-identity, CRM-stage actions och UI-feedback.
+Anvand [07-hagen-ui-audit-brief.md](07-hagen-ui-audit-brief.md). Den filen begransar arbetet till det som kan verifieras och forberedas i `hagen-ui` utan Supabase MCP: API-proxies, Supabase-migrationer/types, planner-kod, video-/concept-cascade, customer ingest och TikTok sync/reconciliation. Demos, CM-identity och CRM-stage progression ar inte primart scope for de tre karnaflodena.
