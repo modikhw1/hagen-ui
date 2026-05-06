@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { randomUUID } from 'node:crypto';
 import { requireAuth, requireRole } from '../../middleware/auth.js';
 import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
@@ -68,7 +69,9 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const supabase = createSupabaseAdmin();
     const body = req.body as Record<string, unknown>;
+    const requestedId = typeof body.id === 'string' ? body.id.trim() : '';
     const insert = {
+      id: requestedId || `concept-${randomUUID()}`,
       source: typeof body.source === 'string' ? body.source : 'cm_created',
       created_by: req.user!.id,
       backend_data: typeof body.backend_data === 'object' && body.backend_data ? body.backend_data : {},

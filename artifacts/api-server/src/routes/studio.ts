@@ -93,6 +93,28 @@ router.post('/concepts/enrich', requireAuth, CM_ONLY, async (req, res) => {
   });
 });
 
+// POST /api/studio/concepts/humor-enrich
+router.post('/concepts/humor-enrich', requireAuth, CM_ONLY, async (req, res) => {
+  const body = req.body as Record<string, unknown>;
+  const videoUrl = typeof body.videoUrl === 'string' ? body.videoUrl.trim() : '';
+  const gcsUri = typeof body.gcsUri === 'string' ? body.gcsUri.trim() : '';
+  if (!videoUrl) {
+    res.status(400).json({ error: 'videoUrl is required' });
+    return;
+  }
+  if (!gcsUri) {
+    res.status(400).json({ error: 'gcsUri is required' });
+    return;
+  }
+  await proxyHagenJson(res, {
+    method: 'POST',
+    path: '/api/studio/concepts/humor-enrich',
+    body: { videoUrl, gcsUri },
+    timeoutMs: 90000,
+    routeTag: 'studio.concepts.humor-enrich',
+  });
+});
+
 // GET /api/studio/email/schedules
 router.get('/email/schedules', requireAuth, CM_ONLY, async (req, res) => {
   try {
