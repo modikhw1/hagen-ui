@@ -1,0 +1,63 @@
+Du jobbar i hagen-ui.
+
+  Uppdrag: Reconciliation Candidates Phase 6 — affärssemantik och UI-språk.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Skapa inga Supabase-migrationer.
+  - Implementera inte ny auto-advance-logik ännu.
+  - Fokus är att förtydliga domänmodellen, dokumentera flödet och göra små UI-textjusteringar så CM inte misstolkar
+  candidate-flödet.
+
+  Bakgrund:
+  TikTok-klipp är raw evidence / ground truth. LeT-kort är planerade rekommendationer i feed_order-tidslinjen.
+  Reconciliation betyder inte “matcha två historikkort”. Det betyder “bekräfta att detta TikTok-klipp är publicerad
+  output för detta LeT-koncept”.
+
+  Läs:
+  - docs/agent-plans/10-reconciliation-candidates.md
+  - artifacts/letrend/src/components/studio/customer-detail/FeedSlot.tsx
+  - artifacts/api-server/src/routes/studio-v2.ts
+  - artifacts/letrend/src/lib/studio/auto-reconcile.ts
+  - artifacts/letrend/src/lib/studio/perform-mark-produced.ts
+
+  Gör:
+
+  1. Uppdatera docs/agent-plans/10-reconciliation-candidates.md med en tydlig state model:
+     - TikTok history / raw evidence
+     - LeT planned concept
+     - Suggested confirmation
+     - Confirmed LeT history
+     - TikTok-only/customer-owned content
+
+  2. Dokumentera beslutsträdet:
+     - Om candidate target feed_order = 0:
+       - Det betyder “bekräfta nu-koncept som publicerat”.
+       - Nästa framtida steg bör vara reconcile + advance.
+     - Om target feed_order > 0:
+       - Det betyder out-of-order publish.
+       - Kräver CM-beslut: flytta fram, hoppa över, eller bara länka utan timeline shift.
+     - Om inget target passar:
+       - Markera som TikTok-only.
+     - Om flera nya clips finns:
+       - Batch-review, inte blind auto-match.
+
+  3. Justera UI-copy i FeedSlot för candidates:
+     - Byt “Förslag”/paneltext om det behövs till språk som signalerar “Bekräftelseförslag” eller “Möjlig LeT-
+  bekräftelse”.
+     - “Godkänn” bör helst läsas som “Bekräfta” om utrymmet tillåter.
+     - Tooltip/title ska förklara att TikTok-klippet bekräftar ett LeT-koncept, inte bara matchas visuellt.
+
+  4. Dokumentera kvarvarande engine-gap:
+     - Candidate accept länkar idag men är inte samma sak som full timeline advance i alla fall.
+     - Manual confirmation of nu-slot bör i framtiden kunna anropa samma advance-logik som cron.
+     - Future-slot confirmation behöver separat beslut innan automation.
+
+  Kör:
+  - pnpm --filter @workspace/letrend exec tsc --noEmit
+  - pnpm --filter @workspace/api-server run typecheck
+
+  Avsluta med:
+  - vilka texter som ändrades
+  - vilken affärslogik som nu är dokumenterad
+  - vilka frågor som återstår innan vi implementerar reconcile + advance-motorn

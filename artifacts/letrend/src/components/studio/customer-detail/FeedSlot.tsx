@@ -675,7 +675,7 @@ function FeedSlot({
           pointerEvents: 'none',
           zIndex: 3,
         }}>
-          Förslag
+          Bekräfta
         </div>
       )}
 
@@ -1379,7 +1379,7 @@ function FeedSlot({
                             fontFamily: 'inherit',
                             opacity: isLoading ? 0.6 : 1,
                           }}
-                          title="Acceptera förslag"
+                          title="Bekräfta: TikTok-klippet är publicerad output för detta LeT-koncept"
                         >
                           {isLoading ? '...' : '✓'}
                         </button>
@@ -1414,7 +1414,7 @@ function FeedSlot({
                             fontFamily: 'inherit',
                             opacity: isLoading ? 0.6 : 1,
                           }}
-                          title="Avvisa förslag"
+                          title="Avvisa: TikTok-klippet är INTE output för detta LeT-koncept"
                         >
                           ✕
                         </button>
@@ -1670,8 +1670,8 @@ function FeedSlot({
                       .then((res) => {
                         if (res !== null) {
                           const msg = res.generated > 0
-                            ? `${res.generated} förslag genererade`
-                            : 'Inga nya förslag';
+                            ? `${res.generated} bekräftelseförslag hittade`
+                            : 'Inga nya bekräftelseförslag';
                           setGenerateFeedback({ loading: false, result: msg });
                         } else {
                           setGenerateFeedback({ loading: false, result: null });
@@ -1692,7 +1692,7 @@ function FeedSlot({
                     cursor: generateFeedback.loading || generatingCandidates ? 'default' : 'pointer',
                   }}
                 >
-                  {generateFeedback.loading || generatingCandidates ? 'Genererar...' : 'Generera förslag'}
+                  {generateFeedback.loading || generatingCandidates ? 'Genererar...' : 'Hitta LeT-bekräftelse'}
                 </button>
                 {generateFeedback.result && (
                   <span style={{
