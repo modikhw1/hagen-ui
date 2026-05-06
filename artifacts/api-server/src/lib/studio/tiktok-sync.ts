@@ -653,7 +653,7 @@ export async function syncCustomerHistory(
     // If ambiguous (totalImported > 1 or no nu-slot), no auto-link is performed;
     // the regular nudge below still fires so CMs know to review.
     if (totalImported === 1 && singleInsertedRow !== null) {
-      const { id: historyRowId, clip: singleClip } = singleInsertedRow;
+      const { id: historyRowId } = singleInsertedRow;
 
       const { data: nuSlot, error: nuSlotErr } = await supabase
         .from('customer_concepts')

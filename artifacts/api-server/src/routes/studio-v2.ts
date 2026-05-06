@@ -14,6 +14,7 @@ import {
   confirmPublishedConcept,
   undoConfirmedConcept,
 } from '../lib/studio/confirm-published-concept.js';
+import { renumberImportedRows } from '../lib/studio/history-import.js';
 import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
 const router = Router();
@@ -1109,6 +1110,16 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
 
       if (signalError) {
         logger.warn({ err: signalError, customerId }, 'failed to auto-resolve feed motor signals');
+      }
+
+      // Renumber unreconciled imported-history rows so the TikTok grid stays
+      // consistent after advance shifts the LeTrend historik floor downward.
+      // Non-fatal: advance is already irreversible so a renumber failure must
+      // not surface as an error to the UI.
+      try {
+        await renumberImportedRows(supabase, customerId);
+      } catch (renumberErr) {
+        logger.warn({ err: renumberErr, customerId }, 'mark-produced: renumberImportedRows failed (non-fatal)');
       }
 
       res.json({ success: true, concept: producedConcept });
