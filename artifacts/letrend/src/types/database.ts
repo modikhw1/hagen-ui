@@ -921,6 +921,7 @@ export type Database = {
           confirmed: boolean
           collaboration_note: string | null
           collaboration_date_type: string | null
+          row_kind: string | null
         }
         Insert: {
           added_at?: string | null
@@ -982,6 +983,7 @@ export type Database = {
           confirmed?: boolean
           collaboration_note?: string | null
           collaboration_date_type?: string | null
+          row_kind?: string | null
         }
         Update: {
           added_at?: string | null
@@ -1043,6 +1045,7 @@ export type Database = {
           confirmed?: boolean
           collaboration_note?: string | null
           collaboration_date_type?: string | null
+          row_kind?: string | null
         }
         Relationships: [
           {

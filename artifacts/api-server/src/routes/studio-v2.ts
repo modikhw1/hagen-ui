@@ -974,7 +974,7 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
     try {
       const { data: targetRow, error: targetError } = await supabase
         .from('customer_concepts')
-        .select('id, status, feed_order, concept_id, visual_variant')
+        .select('id, status, feed_order, concept_id, visual_variant, row_kind')
         .eq('id', conceptId)
         .eq('customer_profile_id', customerId)
         .maybeSingle();
@@ -990,10 +990,23 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
 
       const target = targetRow as Record<string, unknown>;
       const targetStatus = typeof target.status === 'string' ? target.status : null;
+      const targetRowKind = typeof target.row_kind === 'string' ? target.row_kind : null;
+
       if (targetStatus === 'produced') {
         res.status(409).json({ error: 'Konceptet är redan markerat som producerat' });
         return;
       }
+      // Explicit row_kind block takes priority over status heuristic.
+      if (targetRowKind === 'history_import') {
+        res.status(409).json({ error: 'Importerad historik kan inte markeras som producerad' });
+        return;
+      }
+      // Only assignment and collaboration are plannable kinds.
+      if (targetRowKind !== null && targetRowKind !== 'assignment' && targetRowKind !== 'collaboration') {
+        res.status(409).json({ error: 'Endast planerade koncept kan markeras som producerade' });
+        return;
+      }
+      // Legacy status guards — kept for backward compat with rows that predate row_kind column.
       if (targetStatus === 'archived' || targetStatus === 'history_import') {
         res.status(409).json({ error: 'Endast planerade koncept kan markeras som producerade' });
         return;
@@ -1048,7 +1061,7 @@ router.post('/feed/mark-produced', requireAuth, CM_ONLY, async (req, res) => {
 
       const { data: upcoming, error: upcomingError } = await supabase
         .from('customer_concepts')
-        .select('id, feed_order, status, concept_id, visual_variant')
+        .select('id, feed_order, status, concept_id, visual_variant, row_kind')
         .eq('customer_profile_id', customerId)
         .gt('feed_order', 0)
         .order('feed_order', { ascending: true });

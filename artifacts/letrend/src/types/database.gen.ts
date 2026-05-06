@@ -489,6 +489,7 @@ export type Database = {
           updated_at: string | null
           why_it_fits: string | null
           last_observed_at: string | null
+          row_kind: string | null
         }
         Insert: {
           added_at?: string | null
@@ -536,6 +537,7 @@ export type Database = {
           updated_at?: string | null
           why_it_fits?: string | null
           last_observed_at?: string | null
+          row_kind?: string | null
         }
         Update: {
           added_at?: string | null
@@ -583,6 +585,7 @@ export type Database = {
           updated_at?: string | null
           why_it_fits?: string | null
           last_observed_at?: string | null
+          row_kind?: string | null
         }
         Relationships: [
           {
