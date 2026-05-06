@@ -23,8 +23,8 @@ import { logger } from '../logger.js';
 import { getPriceOre, recordServiceUsage } from '../service-usage.js';
 import {
   generateReconciliationCandidates,
-  markCandidateAcceptedForLink,
 } from './reconciliation-candidates.js';
+import { confirmPublishedConcept } from './confirm-published-concept.js';
 
 // Records one billable RapidAPI tiktok-scraper7 call. Best-effort: any
 // failure is swallowed so it cannot affect the user-visible sync result.
@@ -684,47 +684,32 @@ export async function syncCustomerHistory(
 
         if (!existingLink) {
           const autoNow = new Date().toISOString();
-          const { error: autoLinkErr } = await supabase
-            .from('customer_concepts')
-            .update({
-              reconciled_customer_concept_id: nuSlotId,
-              reconciled_at: autoNow,
-              // reconciled_by_cm_id intentionally null — system auto-link, not a CM action
-            })
-            .eq('id', historyRowId);
 
-          if (!autoLinkErr) {
+          // Delegate link + stats propagation + best-effort candidate status to
+          // the unified service. actorId=null marks this as a system auto-link.
+          // No advance is performed here — nudge fires below so CMs can verify.
+          const confirmResult = await confirmPublishedConcept({
+            supabase,
+            customerId,
+            historyConceptId: historyRowId,
+            targetCustomerConceptId: nuSlotId,
+            actorId: null,
+            source: 'auto_sync',
+            now: autoNow,
+          });
+
+          if (!confirmResult.error) {
             autoReconciled = true;
             autoReconciledHistoryConceptId = historyRowId;
 
-            // Propagate thumbnail + stats to the assignment row — mirrors the
-            // manual POST /history/reconciliation route behaviour.
-            const assignmentPatch: Record<string, unknown> = {};
-            if (singleClip.tiktok_thumbnail_url) assignmentPatch.tiktok_thumbnail_url = singleClip.tiktok_thumbnail_url;
-            if (singleClip.tiktok_url) assignmentPatch.tiktok_url = singleClip.tiktok_url;
-            if (singleClip.tiktok_views != null) assignmentPatch.tiktok_views = singleClip.tiktok_views;
-            if (singleClip.tiktok_likes != null) assignmentPatch.tiktok_likes = singleClip.tiktok_likes;
-            if (singleClip.tiktok_comments != null) assignmentPatch.tiktok_comments = singleClip.tiktok_comments;
-            if (singleClip.published_at) assignmentPatch.published_at = singleClip.published_at;
-            if (Object.keys(assignmentPatch).length > 0) {
-              const { error: patchErr } = await supabase
-                .from('customer_concepts')
-                .update(assignmentPatch)
-                .eq('id', nuSlotId);
-              if (patchErr) {
-                logger.warn({ err: patchErr }, 'tiktok-sync: auto-reconcile failed to propagate stats to assignment row');
-              }
+            if (confirmResult.warnings.length > 0) {
+              logger.warn(
+                { warnings: confirmResult.warnings, historyRowId, nuSlotId },
+                'tiktok-sync: auto-reconcile non-fatal warnings',
+              );
             }
-
-            // Best-effort: record the auto-link in the reconciliation candidates table.
-            void markCandidateAcceptedForLink(supabase, historyRowId, nuSlotId, {
-              customerId,
-              actorId: null,
-              now: autoNow,
-              auto: true,
-            });
           } else {
-            logger.warn({ err: autoLinkErr }, 'tiktok-sync: auto-reconcile link failed');
+            logger.warn({ err: confirmResult.error }, 'tiktok-sync: auto-reconcile link failed');
           }
         }
       }
