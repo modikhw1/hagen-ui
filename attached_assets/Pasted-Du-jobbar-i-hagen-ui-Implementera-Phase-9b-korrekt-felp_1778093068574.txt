@@ -1,0 +1,45 @@
+Du jobbar i hagen-ui. Implementera Phase 9b: korrekt felpropagering för MarkProducedDialog.
+
+  Läs först:
+  - docs/agent-plans/15-mark-produced-confirmation-flow.md
+  - artifacts/letrend/src/components/studio/customer-detail/MarkProducedDialog.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+
+  Problem:
+  Phase 9a ändrade MarkProducedDialog till reconcile → mark-produced, men callbackarna som skickas in från
+  CustomerWorkspaceContent sväljer fel:
+  - handleReconcileHistory fångar fel, alertar, men kastar inte vidare
+  - handleMarkProduced fångar fel, alertar, men kastar inte vidare
+
+  Det gör att dialogens tvåstegslogik kan visa falsk success.
+
+  Mål:
+  MarkProducedDialog ska få “strict” callbacks som kastar fel vid failure, utan att bryta befintliga FeedSlot/
+  FeedPlanner-callers som förväntar sig alert-beteende.
+
+  Scope:
+  1. I `CustomerWorkspaceContent.tsx`, extrahera lågnivåfunktioner:
+     - `markProducedRequest(conceptId, tiktokUrl?, publishedAt?)`
+     - `reconcileHistoryRequest(historyConceptId, options?)`
+  2. Dessa request-funktioner ska:
+     - kasta Error om response inte är ok
+     - läsa serverns `{ error }` om möjligt
+     - göra befintlig cache clear/refetch på success
+  3. Behåll befintliga handlers för övrig UI:
+     - `handleMarkProduced` wrapper: anropar request, catchar och alertar
+     - `handleReconcileHistory` wrapper: anropar request, catchar och alertar
+  4. Skicka request-funktionerna, inte alert-wrappers, till `MarkProducedDialog`:
+     - `onMarkProduced={markProducedRequest}`
+     - `onReconcileHistory={reconcileHistoryRequest}`
+  5. Säkerställ att MarkProducedDialog nu:
+     - stoppar efter misslyckad reconcile
+     - visar sin specifika feltext om mark-produced misslyckas efter lyckad länk
+     - inte stänger modalen vid failure
+  6. Rör inte API-server.
+  7. Rör inte `/admin/demos`.
+  8. Kör:
+     - `pnpm --filter @workspace/letrend exec tsc --noEmit`
+     - `git diff --check HEAD~1..HEAD`
+  9. Om `git diff --check` bara klagar på trailing whitespace i en genererad `attached_assets/...txt`, städa den filen
+  eller dokumentera det tydligt.
+  10. Skapa `docs/agent-plans/16-mark-produced-error-propagation.md` med ändringar och teststatus.

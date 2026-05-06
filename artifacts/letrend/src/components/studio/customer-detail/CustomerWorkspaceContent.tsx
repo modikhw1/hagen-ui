@@ -1728,27 +1728,37 @@ function CustomerWorkspacePageContent() {
     }
   };
 
+  // Low-level request — throws on failure, does cache work on success.
+  // Used directly by MarkProducedDialog so the dialog's two-step error handling works.
+  const markProducedRequest = async (conceptId: string, tiktokUrl?: string, publishedAt?: string) => {
+    const response = await fetch('/api/studio-v2/feed/mark-produced', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        concept_id: conceptId,
+        customer_id: customerId,
+        tiktok_url: tiktokUrl,
+        published_at: publishedAt,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(errorBody?.error ?? 'Kunde inte markera som producerat');
+    }
+
+    // Refetch concepts to get updated feed_order values.
+    await fetchConcepts(true);
+    setJustProducedConceptId(conceptId);
+  };
+
+  // Alert-wrapper for FeedSlot / FeedPlanner callers that expect fire-and-forget behaviour.
   const handleMarkProduced = async (conceptId: string, tiktokUrl?: string, publishedAt?: string) => {
     try {
-      const response = await fetch('/api/studio-v2/feed/mark-produced', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          concept_id: conceptId,
-          customer_id: customerId,
-          tiktok_url: tiktokUrl,
-          published_at: publishedAt,
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to mark as produced');
-
-      // Refetch concepts to get updated feed_order values
-      await fetchConcepts(true);
-      setJustProducedConceptId(conceptId);
+      await markProducedRequest(conceptId, tiktokUrl, publishedAt);
     } catch (err) {
       console.error('Error marking as produced:', err);
-      alert('Kunde inte markera som producerat');
+      alert(err instanceof Error ? err.message : 'Kunde inte markera som producerat');
     }
   };
 
@@ -1819,31 +1829,41 @@ function CustomerWorkspacePageContent() {
     }
   };
 
+  // Low-level request — throws on failure, does cache work on success.
+  // Used directly by MarkProducedDialog so the dialog's two-step error handling works.
+  const reconcileHistoryRequest = async (
+    historyConceptId: string,
+    options: { mode?: 'use_now_slot'; linkedCustomerConceptId?: string } = {}
+  ) => {
+    const response = await fetch('/api/studio-v2/history/reconciliation', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        history_concept_id: historyConceptId,
+        ...(options.mode === 'use_now_slot'
+          ? { mode: 'use_now_slot' }
+          : { linked_customer_concept_id: options.linkedCustomerConceptId }),
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(errorBody?.error ?? 'Kunde inte koppla historiken');
+    }
+
+    // Reconciliation affects two rows simultaneously: the imported clip (visibility)
+    // and the LeTrend assignment card (enrichment/stats). A full refetch is required.
+    clearClientCache(conceptsCacheKey);
+    await Promise.all([fetchConcepts(true), fetchCandidates()]);
+  };
+
+  // Alert-wrapper for FeedSlot / FeedPlanner callers that expect fire-and-forget behaviour.
   const handleReconcileHistory = async (
     historyConceptId: string,
     options: { mode?: 'use_now_slot'; linkedCustomerConceptId?: string } = {}
   ) => {
     try {
-      const response = await fetch('/api/studio-v2/history/reconciliation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          history_concept_id: historyConceptId,
-          ...(options.mode === 'use_now_slot'
-            ? { mode: 'use_now_slot' }
-            : { linked_customer_concept_id: options.linkedCustomerConceptId }),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.error || 'Failed to reconcile history');
-      }
-
-      // Reconciliation affects two rows simultaneously: the imported clip (visibility)
-      // and the LeTrend assignment card (enrichment/stats). A full refetch is required.
-      clearClientCache(conceptsCacheKey);
-      await Promise.all([fetchConcepts(true), fetchCandidates()]);
+      await reconcileHistoryRequest(historyConceptId, options);
     } catch (err) {
       console.error('Error reconciling history:', err);
       alert(err instanceof Error ? err.message : 'Kunde inte koppla historiken');
@@ -4220,8 +4240,8 @@ function CustomerWorkspacePageContent() {
               .filter((c) => c.row_kind === 'imported_history' && !c.reconciliation.is_reconciled && c.result.published_at)
               .sort((a, b) => new Date(b.result.published_at!).getTime() - new Date(a.result.published_at!).getTime())[0] ?? null
           }
-          onMarkProduced={handleMarkProduced}
-          onReconcileHistory={handleReconcileHistory}
+          onMarkProduced={markProducedRequest}
+          onReconcileHistory={reconcileHistoryRequest}
         />
       )}
 
