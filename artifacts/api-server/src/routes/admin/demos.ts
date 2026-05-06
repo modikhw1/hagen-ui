@@ -235,6 +235,9 @@ function mapRow(
     hasFeedplan: studioConceptCount > 0,
     studioConceptCount,
     hasGamePlan: Boolean(readString(row['game_plan']) || readString(row['game_plan_html'])),
+    gamePlan: readString(row['game_plan']) ?? null,
+    gamePlanHtml: readString(row['game_plan_html']) ?? null,
+    previewNotes: readString(row['preview_notes']) ?? null,
     createdAt: row['created_at'] ?? new Date().toISOString(),
   };
 }
@@ -310,7 +313,7 @@ router.get('/', requireAuth, ADMIN_OR_CM, async (req, res) => {
     const { data: rows, error } = await supabase
       .from('demos')
       .select(
-        'id, company_name, contact_name, contact_email, tiktok_handle, proposed_concepts_per_week, proposed_price_ore, status, status_changed_at, owner_admin_id, lost_reason, converted_customer_id, share_token, game_plan, game_plan_html, created_at',
+        'id, company_name, contact_name, contact_email, tiktok_handle, proposed_concepts_per_week, proposed_price_ore, status, status_changed_at, owner_admin_id, lost_reason, converted_customer_id, share_token, game_plan, game_plan_html, preview_notes, created_at',
       )
       .or(`status.not.in.(won,lost,expired),created_at.gte.${since}`)
       .order('created_at', { ascending: false })

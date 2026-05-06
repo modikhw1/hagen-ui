@@ -31,6 +31,9 @@ export const demoCardDtoSchema = z.object({
   hasFeedplan: z.boolean(),
   studioConceptCount: z.number().int().optional(),
   hasGamePlan: z.boolean().optional(),
+  gamePlan: z.string().nullable().optional(),
+  gamePlanHtml: z.string().nullable().optional(),
+  previewNotes: z.string().nullable().optional(),
   createdAt: z.string().datetime({ offset: true }),
 });
 

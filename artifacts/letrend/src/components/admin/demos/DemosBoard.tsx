@@ -20,9 +20,10 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
-import CreateDemoDialog from '@/components/admin/demos/CreateDemoDialog';
+import CreateDemoDialog, { type CreateDemoResult } from '@/components/admin/demos/CreateDemoDialog';
 import ConvertDemoDialog from '@/components/admin/demos/ConvertDemoDialog';
 import EditDemoDialog from '@/components/admin/demos/EditDemoDialog';
+import GamePlanDrawer from '@/components/admin/demos/GamePlanDrawer';
 import { DemoBoardSkeleton } from '@/components/admin/demos/DemoBoardSkeleton';
 import { DemosFunnelBar } from '@/components/admin/demos/DemosFunnelBar';
 import { useDemosBoard, useUpdateDemoStatus, useDeleteDemo } from '@/hooks/admin/useDemos';
@@ -128,6 +129,29 @@ function buildShareUrl(token: string | null): string | null {
   return `${DEMO_SHARE_BASE}/d/${token}`;
 }
 
+type GamePlanDrawerState = {
+  open: boolean;
+  demoId: string | null;
+  initialValues: {
+    game_plan?: string | null;
+    game_plan_html?: string | null;
+    preview_notes?: string | null;
+    strategy_view?: string | null;
+    opportunities?: string | null;
+    letrend_fit?: string | null;
+    company_name?: string | null;
+    contact_name?: string | null;
+    tiktok_handle?: string | null;
+    proposed_concepts_per_week?: number | null;
+  };
+};
+
+const EMPTY_GAME_PLAN_DRAWER: GamePlanDrawerState = {
+  open: false,
+  demoId: null,
+  initialValues: {},
+};
+
 export function DemosBoard({ days = 30 }: { days?: number }) {
   const { get, set } = useUrlState();
   const { data, isLoading, error } = useDemosBoard(days);
@@ -139,6 +163,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
   const [studioPendingId, setStudioPendingId] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [gamePlanDrawer, setGamePlanDrawer] = useState<GamePlanDrawerState>(EMPTY_GAME_PLAN_DRAWER);
   const [convertTarget, setConvertTarget] = useState<{
     id: string;
     company_name: string;
@@ -297,6 +322,51 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
     if (!confirm(`Ta bort demo för "${demo.companyName}"? Åtgärden går inte att ångra.`)) return;
     await deleteDemo.mutateAsync(demo.id);
     toast.success(`Demo för ${demo.companyName} borttagen.`);
+  };
+
+  const handleOpenGamePlanDrawer = (demo: DemoCardDto) => {
+    setGamePlanDrawer({
+      open: true,
+      demoId: demo.id,
+      initialValues: {
+        company_name: demo.companyName,
+        contact_name: demo.contactName ?? null,
+        tiktok_handle: demo.tiktokHandle ?? null,
+        proposed_concepts_per_week: demo.proposedConceptsPerWeek ?? null,
+        game_plan: demo.gamePlan ?? null,
+        game_plan_html: demo.gamePlanHtml ?? null,
+        preview_notes: demo.previewNotes ?? null,
+      },
+    });
+  };
+
+  const handleCreated = async (result?: CreateDemoResult) => {
+    const sync = result?.sync;
+    if (sync?.status === 'error') {
+      toast.warning(`Demo skapades, men TikTok-ingest misslyckades: ${sync.error}`);
+    } else if (sync?.status === 'ok') {
+      toast.success(`Ny demo skapades. ${sync.imported ?? 0} historikklipp importerade.`);
+    } else {
+      toast.success(demosCopy.createSuccess);
+    }
+
+    const demoId = result?.demo?.id;
+    if (typeof demoId === 'string' && demoId) {
+      const demo = result?.demo as Record<string, unknown> | undefined;
+      setGamePlanDrawer({
+        open: true,
+        demoId,
+        initialValues: {
+          company_name: typeof demo?.companyName === 'string' ? demo.companyName : null,
+          contact_name: typeof demo?.contactName === 'string' ? demo.contactName : null,
+          tiktok_handle: typeof demo?.tiktokHandle === 'string' ? demo.tiktokHandle : null,
+          proposed_concepts_per_week:
+            typeof demo?.proposedConceptsPerWeek === 'number'
+              ? demo.proposedConceptsPerWeek
+              : null,
+        },
+      });
+    }
   };
 
   return (
@@ -482,6 +552,19 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
                           </button>
                           <button
                             type="button"
+                            onClick={() => handleOpenGamePlanDrawer(demo)}
+                            title={demosCopy.gamePlanDrawerTitle}
+                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium hover:bg-accent ${
+                              demo.hasGamePlan
+                                ? 'border-border bg-background'
+                                : 'border-info/30 bg-info/5 text-info hover:bg-info/10'
+                            }`}
+                          >
+                            <FileText className="h-3 w-3" />
+                            {demosCopy.gamePlanDrawerActionLabel}
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => void handleCopyLink(demo)}
                             disabled={!demo.shareToken}
                             title={demosCopy.copyLink}
@@ -604,18 +687,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
           setCreateDialogOpen(false);
           set({ action: null });
         }}
-        onCreated={(result) => {
-          const sync = result?.sync;
-          if (sync?.status === 'error') {
-            toast.warning(`Demo skapades, men TikTok-ingest misslyckades: ${sync.error}`);
-            return;
-          }
-          if (sync?.status === 'ok') {
-            toast.success(`Ny demo skapades. ${sync.imported ?? 0} historikklipp importerade.`);
-            return;
-          }
-          toast.success(demosCopy.createSuccess);
-        }}
+        onCreated={(result) => void handleCreated(result)}
       />
 
       <EditDemoDialog
@@ -639,6 +711,16 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
           toast.success(
             result.invite_sent ? demosCopy.convertedInvite : demosCopy.convertedCustomer,
           );
+        }}
+      />
+
+      <GamePlanDrawer
+        open={gamePlanDrawer.open}
+        demoId={gamePlanDrawer.demoId}
+        initialValues={gamePlanDrawer.initialValues}
+        onClose={() => setGamePlanDrawer(EMPTY_GAME_PLAN_DRAWER)}
+        onSaved={() => {
+          toast.success(demosCopy.editSuccess);
         }}
       />
     </div>

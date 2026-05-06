@@ -28,7 +28,7 @@ export const demosCopy = {
   feedplanMissing: 'Feedplan ej f\u00f6rberedd',
   staleWarning: '\u00c4ldre \u00e4n 21 dagar \u2014 risk f\u00f6r d\u00f6d data',
   createDescription:
-    'Skapa ett nytt prospektkort och l\u00e4gg in den information som redan finns.',
+    'Fyll i grundinfo. Game Plan och AI-underlag l\u00e4gger du till i n\u00e4sta steg.',
   createCompanyPlaceholder: 'Caf\u00e9 Ros\u00e9',
   createPriceMonthlySek: 'Pris per m\u00e5nad (SEK)',
   ownerLabel: 'Content manager',
@@ -91,4 +91,12 @@ export const demosCopy = {
   tiktokLabel: 'TikTok-handle',
   conceptsPerWeekLabel: 'Koncept per vecka',
   markConverted: 'Konverterad',
+  gamePlanDrawerTitle: 'Game Plan',
+  gamePlanDrawerDescription:
+    'Skriv eller AI-generera ett Game Plan-utkast. Du kan hoppa \u00f6ver detta och \u00e5terkomma senare.',
+  gamePlanDrawerSave: 'Spara Game Plan',
+  gamePlanDrawerSkip: 'Hoppa \u00f6ver',
+  gamePlanDrawerActionLabel: 'Game Plan',
+  gamePlanNextStepHint:
+    'Game Plan och preview-noteringar fylls i i n\u00e4sta steg direkt efter att demot skapats.',
 } as const;
