@@ -95,14 +95,6 @@ export default function DemoView({
             </div>
           </div>
 
-          <div style={{
-            fontSize: 12,
-            fontWeight: 600,
-            color: LeTrendColors.brownLight,
-            letterSpacing: '0.08em',
-          }}>
-            LETREND
-          </div>
         </div>
       </header>
 

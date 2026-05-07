@@ -467,9 +467,6 @@ function FeedSlot({
       >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, opacity: 0.42 }}>
           <img src="/lt-logo.png" alt="LeTrend" style={{ width: 48, height: 48, objectFit: 'contain' }} />
-          <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: LeTrendColors.textMuted }}>
-            LeTrend
-          </span>
         </div>
       </div>
     );
