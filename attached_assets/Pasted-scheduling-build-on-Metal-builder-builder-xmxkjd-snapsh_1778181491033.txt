@@ -1,0 +1,178 @@
+scheduling build on Metal builder "builder-xmxkjd"
+[snapshot] received sha256:08f573456f2b016bde66ae90b61ef6664c21d350d00ca04c94ecb3e84485a434 md5:f7c41ec16107d9157ff25a75a8338f75
+receiving snapshot
+26.6 MB
+4.6s
+found 'nixpacks.toml' at 'nixpacks.toml'
+found 'railway.json' at 'railway.json'
+analyzing snapshot
+26.6 MB
+557ms
+uploading snapshot
+26.6 MB
+610ms
+unpacking archive
+164 MB
+675ms
+using build driver nixpacks-v1.41.0
+ 
+╔════════════════ Nixpacks v1.41.0 ═══════════════╗
+║ setup      │ nodejs_20, python3, yt-dlp, ffmpeg ║
+║─────────────────────────────────────────────────║
+║ install    │ npm ci                             ║
+║─────────────────────────────────────────────────║
+║ build      │ npm run build                      ║
+║─────────────────────────────────────────────────║
+║ start      │ npm run start                      ║
+╚═════════════════════════════════════════════════╝
+ 
+ 
+Saved output to:
+  snapshot-target-unpack
+
+internal
+load build definition from Dockerfile
+0ms
+
+internal
+load metadata for ghcr.io/railwayapp/nixpacks:ubuntu-1745885067
+440ms
+
+internal
+load .dockerignore
+0ms
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "GEMINI_API_KEY") (line 11)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "GOOGLE_APPLICATION_CREDENTIALS_BASE64") (line 11)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "OPENAI_API_KEY") (line 11)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "RAPIDAPI_KEY") (line 11)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "SUPABASE_SERVICE_ROLE_KEY") (line 11)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ARG "SUPADATA_API_KEY") (line 11)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "GEMINI_API_KEY") (line 12)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "GOOGLE_APPLICATION_CREDENTIALS_BASE64") (line 12)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "OPENAI_API_KEY") (line 12)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "RAPIDAPI_KEY") (line 12)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "SUPABASE_SERVICE_ROLE_KEY") (line 12)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+SecretsUsedInArgOrEnv: Do not use ARG or ENV instructions for sensitive data (ENV "SUPADATA_API_KEY") (line 12)(https://docs.docker.com/go/dockerfile/rule/secrets-used-in-arg-or-env/)
+ details: Sensitive data should not be used in the ARG or ENV commands
+UndefinedVar: Usage of undefined variable '$NIXPACKS_PATH' (line 18)(https://docs.docker.com/go/dockerfile/rule/undefined-var/)
+ details: Variables should be defined before their use
+
+internal
+load build context
+0ms
+
+stage-0
+FROM ghcr.io/railwayapp/nixpacks:ubuntu-1745885067@sha256:d45c89d80e13d7ad0fd555b5130f22a866d9dd10e861f589932303ef2314c7de
+14ms
+
+stage-0
+RUN nix-env -if .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix && nix-collect-garbage -d cached
+0ms
+
+stage-0
+COPY .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix .nixpacks/nixpkgs-ffeebf0acf3ae8b29f8c7049cd911b9636efd7e7.nix cached
+0ms
+
+stage-0
+WORKDIR /app/ cached
+0ms
+
+stage-0
+COPY . /app/.
+610ms
+
+stage-0
+RUN npm ci
+1s
+npm error code EUSAGE
+npm error
+npm error `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with `npm install` before continuing.
+
+npm error
+npm error Missing: tsx@4.21.0 from lock file
+
+npm error Missing: esbuild@0.27.7 from lock file
+
+npm error Missing: @esbuild/aix-ppc64@0.27.7 from lock file
+
+npm error Missing: @esbuild/android-arm@0.27.7 from lock file
+
+npm error Missing: @esbuild/android-arm64@0.27.7 from lock file
+
+npm error Missing: @esbuild/android-x64@0.27.7 from lock file
+
+npm error Missing: @esbuild/darwin-arm64@0.27.7 from lock file
+
+npm error Missing: @esbuild/darwin-x64@0.27.7 from lock file
+
+npm error Missing: @esbuild/freebsd-arm64@0.27.7 from lock file
+
+npm error Missing: @esbuild/freebsd-x64@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-arm@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-arm64@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-ia32@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-loong64@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-mips64el@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-ppc64@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-riscv64@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-s390x@0.27.7 from lock file
+
+npm error Missing: @esbuild/linux-x64@0.27.7 from lock file
+
+npm error Missing: @esbuild/netbsd-arm64@0.27.7 from lock file
+
+npm error Missing: @esbuild/netbsd-x64@0.27.7 from lock file
+
+npm error Missing: @esbuild/openbsd-arm64@0.27.7 from lock file
+
+npm error Missing: @esbuild/openbsd-x64@0.27.7 from lock file
+
+npm error Missing: @esbuild/openharmony-arm64@0.27.7 from lock file
+
+npm error Missing: @esbuild/sunos-x64@0.27.7 from lock file
+
+npm error Missing: @esbuild/win32-arm64@0.27.7 from lock file
+
+npm error Missing: @esbuild/win32-ia32@0.27.7 from lock file
+
+npm error Missing: @esbuild/win32-x64@0.27.7 from lock file
+
+npm error
+npm error Clean install a project
+npm error
+npm error Usage:
+npm error npm ci
+npm error
+npm error Options:
+npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
+npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
+npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
+npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]
+npm error [--no-bin-links] [--no-fund] [--dry-run]
+npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
+npm error [-ws|--workspaces] [--include-workspace-root] [--install-links]
+npm error
+npm error aliases: clean-install, ic, install-clean, isntall-clean
+npm error
+npm error Run "npm help ci" for more info
+npm error A complete log of this run can be found in: /root/.npm/_logs/2026-05-07T19_12_12_804Z-debug-0.log
+Build Failed: build daemon returned an error < failed to solve: process "/bin/bash -ol pipefail -c npm ci" did not complete successfully: exit code: 1 >

@@ -1,0 +1,59 @@
+Du arbetar i Hagen-repot:
+  C:\Users\praiseworthy\Desktop\hagen-main-latest
+
+  Målet är Phase 48: make Hagen version endpoint dynamic + verify live enrich contract after Phase 47.
+
+  VIKTIGT:
+  - Rör inte hagen-ui.
+  - Rör inte C:\Users\praiseworthy\Desktop\hagen om den är dirty.
+  - Arbeta endast i hagen-main-latest.
+  - Gör inga stora refactors.
+  - Fokusera på diagnostik och deploy-verifiering.
+
+  Bakgrund:
+  Phase 47 alignade `/api/studio/concepts/enrich` med LeTrend ingest metadata v1.
+  Live probe visar att enrich redan returnerar:
+  - `script_mode`
+  - `setup_complexity`
+  - `skill_required`
+  - `setting`
+  och inte returnerar:
+  - `trendLevel`
+  - `estimatedBudget`
+
+  Men `/api/letrend/version` verkar cache:as statiskt:
+  - `now` ändras inte mellan requests
+  - `git_sha` visar äldre deploy-commit (`048ca5a`) trots att `origin/main` är `12af104`
+  Det gör version/status-diagnostik opålitlig.
+
+  Uppgift:
+  1. Uppdatera `src/app/api/letrend/version/route.ts` så endpointen alltid är dynamisk:
+     - lägg till `export const dynamic = 'force-dynamic'`
+     - lägg till `export const revalidate = 0` om lämpligt
+     - returnera response med `Cache-Control: no-store`
+     - behåll samma JSON-shape
+
+  2. Lägg till/uppdatera dokumentation:
+     `docs/agent-plans/48-version-endpoint-dynamic-and-enrich-contract-smoke.md`
+
+     Dokumentera:
+     - varför version endpoint måste vara dynamisk
+     - vad som ändrades
+     - hur man verifierar att `now` ändras mellan requests
+     - live enrich-contract probe:
+       - nya fields finns
+       - `trendLevel` saknas
+       - `estimatedBudget` saknas
+
+  3. Verifiering:
+     - `npm run type-check`
+     - `npm test`
+     - `npm run build` om möjligt
+     - efter deploy:
+       - curl `/api/letrend/version` två gånger och bekräfta att `now` ändras
+       - curl `/api/studio/concepts/enrich` med minimal backend_data och verifiera response shape
+
+  4. Commit/pusha till `modikhw1/hagen` main.
+
+  Efter det: kör hagen-ui Phase 49 smoke där reanalyze på ett concept utan bekräftade objective fields ska visa de fyra
+  nya suggestions i review-panelen.
