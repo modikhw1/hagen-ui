@@ -1,0 +1,74 @@
+Du arbetar i hagen-ui. Börja med `git pull --ff-only`.
+
+  Målet är Phase 40: hardening av existing concept reanalyze/review-flödet som just lades till i commit `a1aaddf`.
+
+  VIKTIGT:
+  - Rör inte `/admin/demos`.
+  - Du har inte Supabase MCP. Gör inga live DB-writes och anta inte ny live-data.
+  - Bevara principen: reanalyze-route får inte skriva till DB. Den ska bara returnera draft/suggestions. CM sparar
+  explicit via review-sidan.
+  - Befintliga `overrides` är CM-confirmed och ska aldrig ersättas automatiskt.
+  - Subjective fields som headline, description, whyItWorks, humor analysis, production notes, script/manus får inte
+  auto-appliceras.
+  - AI/Gemini är förslagssystem, inte truth.
+
+  Kända nuläget:
+  - `POST /api/studio/concepts/:id/reanalyze` finns i `artifacts/api-server/src/routes/studio.ts`.
+  - Review-sidan har panel för AI-metadataanalys i `artifacts/letrend/src/app/studio/concepts/[id]/review/page.tsx`.
+  - Typecheck passerade efter senaste commit.
+  - Phase 39-dokument saknas trots tidigare instruktion.
+
+  Uppgift:
+  1. Skapa dokumentet:
+     `docs/agent-plans/39-existing-concept-reingest-review-workflow.md`
+
+     Det ska beskriva:
+     - Vad Phase 39 implementerade.
+     - Att reanalyze-route är read-only/no-write.
+     - Att pending `backend_data` bara sparas när CM klickar `Spara`.
+     - Vilka fält som visas som säkra objektiva suggestions.
+     - Vilka fält som aldrig auto-overwrite:as.
+     - Kvarvarande risker/luckor.
+
+  2. Skapa dokumentet:
+     `docs/agent-plans/40-reanalyze-hardening.md`
+
+     Det ska beskriva detta hardening-pass, teststatus, kvarvarande risker och nästa rekommenderade steg.
+
+  3. Härda API-routen:
+     - Lägg route-logiken i små hjälpfunktioner där det gör testning möjlig utan att behöva faktisk Hagen/Supabase.
+     - Säkerställ tydligt att `/api/studio/concepts/:id/reanalyze` inte gör `.update`, `.insert`, `.upsert` eller
+  liknande.
+     - Se över source URL extraction. Den ska stödja minst:
+       `backend_data.url`, `backend_data.source_url`, `backend_data.sourceUrl`, `backend_data.video_url`,
+  `backend_data.tiktok_url`.
+     - GCS extraction ska stödja minst:
+       `backend_data.gcs_uri`, `backend_data.gcsUri`, `backend_data.gcsUrl`, `backend_data.video_gcs_uri`.
+     - Om ingen source URL finns men backend_data finns, ska `enrich_only` fortfarande fungera.
+     - Fel från Hagen ska vara JSON och användbara i UI:t. Ingen HTML-snippet ska läcka som primärt felmeddelande.
+
+  4. Härda review-sidan:
+     - Behåll current confirmed values som default.
+     - Visa suggestions endast som suggestions.
+     - Lägg till suggestions även för säkra befintliga filterfält OM de redan finns i `suggested_overrides`:
+       `peopleNeeded`, `difficulty`, `filmTime`, `businessTypes`.
+     - Dessa ska också kräva “Tillämpa” eller “Tillämpa alla”, inte auto-appliceras.
+     - `businessTypes` ska kunna vara flera.
+     - Visa tydligt att ändringar sparas först vid `Spara`.
+     - Om enrich misslyckas efter analyze, visa att videoanalys finns pending men att AI-förslag saknas.
+
+  5. Tester:
+     - Lägg till unit/helper tests där det är rimligt:
+       - source URL extraction hittar alla stödda nycklar.
+       - GCS extraction hittar alla stödda nycklar.
+       - suggestion builder/merge-logik skriver inte över confirmed values automatiskt.
+       - reanalyze response contract innehåller draft data men gör ingen persist själv, om detta går att testa utan tung
+  integration.
+     - Om det är svårt att testa Express-routen direkt, testa exporterade pure helpers.
+
+  Verifiering:
+  - Kör `pnpm --filter @workspace/api-server run typecheck`
+  - Kör `pnpm --filter @workspace/letrend run typecheck`
+  - Kör relevanta tester om testmiljön fungerar.
+  - Om Vitest/Rollup optional dependency blockerar, dokumentera exakt.
+  - Commit/checkpointa ändringarna till main.
