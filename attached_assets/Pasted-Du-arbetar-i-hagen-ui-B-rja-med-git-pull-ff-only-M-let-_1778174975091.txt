@@ -1,0 +1,48 @@
+Du arbetar i hagen-ui. Börja med `git pull --ff-only`.
+
+  Målet är Phase 43: live smoke execution notes + bugfix-only follow-up för reanalyze/review-flödet.
+
+  VIKTIGT:
+  - Rör inte `/admin/demos`.
+  - Gör inga nya feature/refactor-pass.
+  - Gör bara ändringar om du hittar konkreta buggar när du följer smoke-proceduren.
+  - Du har inte Supabase MCP. Använd bara appens UI/API och browser DevTools.
+  - Reanalyze-route får fortsatt inte skriva till DB; endast review-sidans explicita `Spara` får PATCH:a.
+
+  Utgå från:
+  - `docs/agent-plans/42-reanalyze-live-smoke-readiness.md`
+  - `artifacts/letrend/src/app/studio/concepts/[id]/review/page.tsx`
+  - `artifacts/letrend/src/lib/reanalyze-suggestions.ts`
+
+  Uppgift:
+  1. Kör eller simulera live smoke så långt du kan i appmiljön:
+     - Scenario A: concept med confirmed legacy fields (`peopleNeeded`, `difficulty`, `filmTime`, `businessTypes`)
+     - Scenario B: concept där nya objective fields först sparas och sedan reanalyze körs
+     - Scenario C: save-only test där pending `backend_data` sparas utan att suggestions appliceras
+
+  2. Dokumentera resultatet i:
+     `docs/agent-plans/43-reanalyze-live-smoke-results.md`
+
+     Dokumentet ska innehålla:
+     - Vilka scenarios som kunde köras
+     - Vilka som inte kunde köras och varför
+     - Network-observationer: POST `/reanalyze` före `Spara`, PATCH först vid `Spara`
+     - Om confirmed fields visades eller inte visades som suggestions
+     - Om `Ny analys laddad · osparad` beter sig rätt
+     - Eventuella buggar hittade
+     - Exakt teststatus/typecheckstatus
+
+  3. Om du hittar buggar:
+     - Gör minsta möjliga fix.
+       - Bekräfta att `handleReanalyze` bara gör POST `/api/studio/concepts/:id/reanalyze`.
+       - Bekräfta att `handleSave` är enda platsen som skickar pending `backend_data`.
+       - Bekräfta att suggestions bara kommer från `buildSuggestionsFromOverrides`.
+       - Bekräfta att `Tillämpa alla` är null-guardad.
+     - Dokumentera detta tydligt som “code-level smoke, live UI not executed”.
+
+  5. Verifiering:
+     - Kör `pnpm --filter @workspace/api-server run typecheck`
+     - Kör `pnpm --filter @workspace/letrend run typecheck`
+     - Kör relevanta tester om miljön tillåter.
+     - Om Vitest/Rollup optional dependency blockerar, dokumentera exakt.
+     - Commit/checkpointa till main.
