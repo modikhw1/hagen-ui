@@ -14,6 +14,7 @@ import {
   type BackendClip,
   type ClipOverride,
   type TranslatedConcept,
+  type ScriptMode,
 } from '@/lib/translator';
 import {
   LeTrendColors,
@@ -79,6 +80,44 @@ const SOURCE_OPTIONS = [
   { key: 'cm_created', label: 'CM-skapat' },
 ];
 
+const SCRIPT_MODE_OPTIONS: { key: string; label: string }[] = [
+  { key: 'with_script', label: 'Med manus' },
+  { key: 'without_script', label: 'Utan manus' },
+  { key: 'text_overlay', label: 'Textoverlay' },
+  { key: 'short_dialogue', label: 'Kort dialog' },
+  { key: 'long_dialogue', label: 'Lång dialog' },
+  { key: 'visual_only', label: 'Visuellt' },
+  { key: 'none', label: 'Inget manus' },
+];
+
+const SCRIPT_MODE_CARD_LABELS: Record<string, string> = {
+  text_overlay: 'Textoverlay',
+  short_dialogue: 'Kort dialog',
+  long_dialogue: 'Lång dialog',
+  visual_only: 'Visuellt',
+  none: 'Inget manus',
+};
+
+const SETUP_COMPLEXITY_LABELS: Record<string, string> = {
+  point_and_shoot: 'Peka & filma',
+  basic_tripod: 'Stativ',
+  multi_location: 'Flera platser',
+  elaborate_staging: 'Stor setup',
+};
+
+const SKILL_REQUIRED_LABELS: Record<string, string> = {
+  anyone: 'Vem som helst',
+  comfortable_on_camera: 'Bekväm på film',
+  acting_required: 'Skådespeleri',
+  professional: 'Professionell',
+};
+
+const SETTING_LABELS: Record<string, string> = {
+  any_venue: 'Valfri plats',
+  similar_venue_type: 'Liknande miljö',
+  specific_setting_needed: 'Specifik miljö',
+};
+
 const SORT_OPTIONS = [
   { key: 'recent_upload', label: 'Senast uppladdade' },
   { key: 'recently_used', label: 'Senast anvanda' },
@@ -123,6 +162,20 @@ function matchPeopleRange(people: string | undefined, filter: string) {
 function matchBusinessType(types: string[] | undefined, filter: string) {
   if (filter === 'all') return true;
   return (types || []).includes(filter);
+}
+
+function matchScriptMode(hasScript: boolean, scriptMode: ScriptMode | undefined, filter: string): boolean {
+  if (filter === 'all') return true;
+  if (scriptMode) {
+    // Group-level filters: with_script = dialogue/overlay, without_script = visual/none
+    if (filter === 'with_script') return scriptMode === 'text_overlay' || scriptMode === 'short_dialogue' || scriptMode === 'long_dialogue';
+    if (filter === 'without_script') return scriptMode === 'visual_only' || scriptMode === 'none';
+    return scriptMode === filter;
+  }
+  // Legacy fallback via hasScript for old concepts without script_mode
+  if (filter === 'with_script') return hasScript;
+  if (filter === 'without_script') return !hasScript;
+  return false;
 }
 
 function matchReuseFilter(assignmentCount: number, filter: ReuseFilter) {
@@ -649,7 +702,7 @@ function ConceptCard({
             alignItems: 'center',
             gap: 6,
             flexWrap: 'wrap',
-            marginBottom: 8,
+            marginBottom: 6,
             fontSize: LeTrendTypography.fontSize.xs,
             color: LeTrendColors.textSecondary,
           }}
@@ -660,6 +713,64 @@ function ConceptCard({
           <span>·</span>
           <span>{difficulty.label}</span>
         </div>
+
+        {/* Script mode + objective field badges */}
+        {(concept.script_mode || concept.setup_complexity || concept.skill_required || concept.setting) ? (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+            {concept.script_mode ? (
+              <span style={{
+                padding: '2px 7px',
+                borderRadius: LeTrendRadius.full,
+                background: '#f0f4ff',
+                border: '1px solid #c7d2fe',
+                color: '#3730a3',
+                fontSize: 10,
+                fontWeight: 600,
+              }}>
+                {SCRIPT_MODE_CARD_LABELS[concept.script_mode] ?? concept.script_mode}
+              </span>
+            ) : null}
+            {concept.setup_complexity ? (
+              <span style={{
+                padding: '2px 7px',
+                borderRadius: LeTrendRadius.full,
+                background: '#fdf4ff',
+                border: '1px solid #e9d5ff',
+                color: '#6b21a8',
+                fontSize: 10,
+                fontWeight: 500,
+              }}>
+                {SETUP_COMPLEXITY_LABELS[concept.setup_complexity] ?? concept.setup_complexity}
+              </span>
+            ) : null}
+            {concept.skill_required ? (
+              <span style={{
+                padding: '2px 7px',
+                borderRadius: LeTrendRadius.full,
+                background: '#fff7ed',
+                border: '1px solid #fed7aa',
+                color: '#9a3412',
+                fontSize: 10,
+                fontWeight: 500,
+              }}>
+                {SKILL_REQUIRED_LABELS[concept.skill_required] ?? concept.skill_required}
+              </span>
+            ) : null}
+            {concept.setting ? (
+              <span style={{
+                padding: '2px 7px',
+                borderRadius: LeTrendRadius.full,
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                color: '#166534',
+                fontSize: 10,
+                fontWeight: 500,
+              }}>
+                {SETTING_LABELS[concept.setting] ?? concept.setting}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
 
         <div
           style={{
@@ -729,6 +840,7 @@ export default function StudioConceptsPage() {
   const [businessTypeFilter, setBusinessTypeFilter] = useState('all');
   const [reuseFilter, setReuseFilter] = useState<ReuseFilter>('all');
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [scriptModeFilter, setScriptModeFilter] = useState('all');
   const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number>>({});
   const [recentAssignmentByConcept, setRecentAssignmentByConcept] = useState<Record<string, string>>({});
   const [customerLastAssignedAt, setCustomerLastAssignedAt] = useState<Record<string, string>>({});
@@ -1003,7 +1115,8 @@ export default function StudioConceptsPage() {
           matchFilmTimeRange(concept.filmTime, filmTimeFilter) &&
           matchBusinessType(concept.businessTypes, businessTypeFilter) &&
           (sourceFilter === 'all' || concept.source === sourceFilter) &&
-          matchReuseFilter(assignmentCounts[concept.id] ?? 0, reuseFilter)
+          matchReuseFilter(assignmentCounts[concept.id] ?? 0, reuseFilter) &&
+          matchScriptMode(concept.hasScript, concept.script_mode, scriptModeFilter)
         );
       }),
     [
@@ -1014,6 +1127,7 @@ export default function StudioConceptsPage() {
       filmTimeFilter,
       peopleFilter,
       reuseFilter,
+      scriptModeFilter,
       search,
       sourceFilter,
     ],
@@ -1046,6 +1160,7 @@ export default function StudioConceptsPage() {
     businessTypeFilter !== 'all',
     reuseFilter !== 'all',
     sourceFilter !== 'all',
+    scriptModeFilter !== 'all',
   ].filter(Boolean).length;
 
   const clearAllFilters = () => {
@@ -1056,6 +1171,7 @@ export default function StudioConceptsPage() {
     setBusinessTypeFilter('all');
     setReuseFilter('all');
     setSourceFilter('all');
+    setScriptModeFilter('all');
   };
 
   const filteredCustomers = useMemo(() => {
@@ -1363,6 +1479,18 @@ export default function StudioConceptsPage() {
               onChange={(value) => setReuseFilter(value as ReuseFilter)}
             />
           </div>
+
+          <div style={{ minWidth: 180 }}>
+            <div style={{ fontSize: LeTrendTypography.fontSize.xs, fontWeight: LeTrendTypography.fontWeight.semibold, color: LeTrendColors.textMuted, marginBottom: 8 }}>
+              Manusläge
+            </div>
+            <FilterDropdown
+              label="Manusläge"
+              value={scriptModeFilter}
+              options={SCRIPT_MODE_OPTIONS}
+              onChange={setScriptModeFilter}
+            />
+          </div>
         </div>
       </div>
 
@@ -1408,6 +1536,12 @@ export default function StudioConceptsPage() {
             <FilterPill
               label={sourceFilter === 'hagen' ? 'LeTrend' : 'CM-skapat'}
               onClear={() => setSourceFilter('all')}
+            />
+          ) : null}
+          {scriptModeFilter !== 'all' ? (
+            <FilterPill
+              label={SCRIPT_MODE_OPTIONS.find((o) => o.key === scriptModeFilter)?.label ?? scriptModeFilter}
+              onClear={() => setScriptModeFilter('all')}
             />
           ) : null}
           <button

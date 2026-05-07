@@ -297,6 +297,9 @@ export interface TranslatedConcept {
   businessTypes: BusinessType[]
   hasScript: boolean
   script_mode?: ScriptMode
+  setup_complexity?: SigmaSetupComplexity | null
+  skill_required?: SigmaSkillLevel | null
+  setting?: SigmaBackdrop | null
   estimatedBudget: EstimatedBudget
   vibeAlignments: string[]
   whyItFits: string[]
@@ -935,6 +938,9 @@ export function translateClipToConcept(
   const businessTypes = (override?.businessTypes?.filter(Boolean) as BusinessType[] | undefined) ?? translateBusinessTypes(clip)
   const hasScript = override?.hasScript ?? translateHasScript(clip)
   const script_mode = readScriptMode(clip, override)
+  const setup_complexity = readSetupComplexity(clip, override)
+  const skill_required = readSkillRequired(clip, override)
+  const setting = readSetting(clip, override)
   const estimatedBudget = override?.estimatedBudget ?? translateBudget(clip, difficulty, filmTime)
   const autoScript = buildScript(clip)
   const whyItFits = override?.whyItFits_sv || defaults?.whyItFits_sv || translateWhyItFits(businessTypes, filmTime, peopleNeeded, estimatedBudget)
@@ -952,6 +958,9 @@ export function translateClipToConcept(
     businessTypes,
     hasScript,
     script_mode,
+    setup_complexity,
+    skill_required,
+    setting,
     estimatedBudget,
     vibeAlignments: translateVibes(clip),
     whyItFits,

@@ -1,0 +1,55 @@
+Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 34: Studio concept library script_mode consistency.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Behåll backward compatibility med gamla concepts.
+  - Ta inte bort legacy trend/budget/hasScript från translator i detta pass.
+
+  Mål:
+
+  1. Lägg till granular script_mode-filter i /studio/concepts
+     - Uppdatera artifacts/letrend/src/app/studio/concepts/page.tsx.
+     - Lägg till filteralternativ:
+       - all
+       - with_script
+       - without_script
+       - text_overlay
+       - short_dialogue
+       - long_dialogue
+       - visual_only
+       - none
+     - Använd concept.script_mode när det finns.
+     - Fallbacka till hasScript för gamla concepts utan script_mode.
+     - Lägg till filter state, activeFilterCount, clearAllFilters och FilterPill.
+
+  2. Visa script_mode tydligare i ConceptCard
+     - I /studio/concepts ConceptCard, visa en liten badge/label för script_mode.
+     - Behåll befintlig hasScript-logik om den behövs för legacy.
+     - Labels ska vara svenska:
+       - text_overlay = Textoverlay
+       - short_dialogue = Kort dialog
+       - long_dialogue = Lång dialog
+       - visual_only = Visuellt
+       - none = Inget manus
+
+  3. Visa objective fields diskret om de finns
+     - På ConceptCard, visa setup_complexity / skill_required / setting endast om de finns i concept/overrides.
+     - Håll det kompakt, inte ny stor layout.
+     - Om TranslatedConcept inte exponerar dessa ännu, lägg till dem via translator helpers.
+
+  4. Dokumentation
+     - Skapa docs/agent-plans/34-studio-library-script-mode-consistency.md.
+     - Beskriv ändrade filer, hur fallback för gamla concepts fungerar, och vad som återstår.
+
+  5. Verifiering
+     - Kör:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+
+  Output:
+  - Kodändringar enligt ovan.
+  - Ny docs/agent-plans/34-studio-library-script-mode-consistency.md.
+  - Kort sammanfattning av kvarstående nästa steg.
