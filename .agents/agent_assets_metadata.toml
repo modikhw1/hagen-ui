@@ -12,3 +12,9 @@ id = "auNrc0F4TmnGH3ZRbuIBD"
 uri = "file://docs/demo-feed-plan-data-objects.md"
 type = "text"
 title = "Demo Feed Plan — Data Objects & Visual Components"
+
+[[outputs]]
+id = "lGRMkJuO9pC-1W-DkW9gn"
+uri = "file://docs/demo-feedplan-context.zip"
+type = "unspecified"
+title = "Demo Feed Plan — Full Context Package"
