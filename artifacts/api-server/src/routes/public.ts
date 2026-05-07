@@ -213,18 +213,39 @@ function extractFeedplanFallback(plan: unknown): DemoPreviewConcept[] {
 }
 
 async function loadPreviewConcepts(supabase: ReturnType<typeof createSupabaseAdmin>, customerId: string) {
+  // Load ALL non-archived rows — both planned (feed_order set) and history imports (feed_order null).
+  // History rows get synthetic negative feed_orders below, based on published_at ordering.
   const { data, error } = await (supabase as any)
     .from('customer_concepts')
     .select('*, concepts ( id, backend_data, overrides, is_active, source, version )')
     .eq('customer_profile_id', customerId)
-    .not('feed_order', 'is', null)
     .neq('status', 'archived')
-    .order('feed_order', { ascending: false })
+    .order('feed_order', { ascending: false, nullsFirst: false })
     .limit(80);
 
   if (error) throw error;
 
   const rawRows = (data ?? []) as JsonRecord[];
+
+  // Assign synthetic feed_orders to history import rows that lack one.
+  // Sort by published_at descending so most recently published → -1, next → -2, etc.
+  // This mirrors the feed planner's history semantics (feed_order < 0 = past).
+  const historyPending = rawRows
+    .filter(
+      (row) =>
+        row['feed_order'] === null &&
+        (readString(row['history_source']) || readString(row['tiktok_url'])),
+    )
+    .sort((a, b) => {
+      const ta = readString(a['published_at']) ? new Date(readString(a['published_at'])!).getTime() : 0;
+      const tb = readString(b['published_at']) ? new Date(readString(b['published_at'])!).getTime() : 0;
+      return tb - ta;
+    });
+
+  historyPending.forEach((row, idx) => {
+    row['feed_order'] = -(idx + 1);
+  });
+
   const reconciledByTarget = new Map<string, JsonRecord>();
   for (const row of rawRows) {
     const targetId = readString(row['reconciled_customer_concept_id']);
@@ -234,6 +255,7 @@ async function loadPreviewConcepts(supabase: ReturnType<typeof createSupabaseAdm
   }
 
   return rawRows
+    .filter((row) => row['feed_order'] !== null)
     .filter((row) => readString(row['concept_id']) || !readString(row['reconciled_customer_concept_id']))
     .map((row) => {
       const importedStats = readString(row['concept_id']) ? reconciledByTarget.get(String(row['id'])) : null;
