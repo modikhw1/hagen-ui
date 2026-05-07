@@ -1,0 +1,85 @@
+ Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 37: Objective metadata backfill readiness.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Kör ingen live backfill mot Supabase.
+  - Anta att du inte har Supabase MCP. Orkestratorn kör live DB-frågor senare.
+  - Fokus är att förbereda en säker dry-run/backfill-plan och återanvändbar kod.
+
+  Bakgrund:
+  Phase 36 stängde provenance-luckan för script_mode-filter. Nu behöver vi veta hur gamla concepts kan få objective
+  metadata ifylld utan att skriva över CM-bekräftade overrides.
+
+  Mål:
+
+  1. Skapa en backfill-kandidat-helper
+     - Lägg till en liten helper i lämplig lib-fil, t.ex.
+       artifacts/letrend/src/lib/objective-metadata-backfill.ts
+     - Funktionen ska ta:
+       - backend_data / BackendClip
+       - overrides / ClipOverride
+     - Den ska returnera ett objekt med endast saknade fält:
+       - script_mode
+       - setup_complexity
+       - skill_required
+       - setting
+     - Den får aldrig föreslå ett fält som redan finns i overrides.
+     - Den ska använda befintliga helpers:
+       - readScriptMode
+       - readSetupComplexity
+       - readSkillRequired
+       - readSetting
+     - Den ska returnera provenance per föreslaget fält:
+       - sigma
+       - legacy_hasScript
+       - inferred
+       - unavailable
+     - Om ett värde inte kan härledas rimligt ska fältet utelämnas.
+
+  2. Lägg till tester
+     - Skapa fokuserade unit tests för helpern.
+     - Testa:
+       - befintliga overrides skrivs inte över
+       - sigma-värden föreslås när overrides saknas
+       - script_mode kan föreslås från legacy hasScript men markeras som legacy/inferred
+       - tomt clip ger inga nullable objective fields
+       - returned patch innehåller bara saknade fält
+
+  3. Skapa SQL-inventering för orkestratorn
+     - Skapa docs/agent-plans/37-objective-backfill-readiness.md.
+     - Inkludera read-only SQL som orkestratorn kan köra via Supabase MCP.
+     - SQL ska räkna:
+       - antal aktiva concepts totalt
+       - antal concepts med overrides.script_mode
+       - antal med overrides.setup_complexity
+       - antal med overrides.skill_required
+       - antal med overrides.setting
+       - antal som saknar respektive fält men har backend_data.sigma_taste
+       - antal som saknar script_mode men har legacy script/hasScript/transcript
+     - SQL ska vara read-only SELECT, ingen UPDATE.
+
+  4. Föreslå säker backfill-strategi
+     - Dokumentera en fasad plan:
+       - inventory
+       - dry-run sample
+       - generate patch candidates
+       - manual review sample
+       - apply only missing fields
+       - never overwrite existing overrides
+     - Föreslå att första live-backfill körs begränsat, t.ex. 20-50 concepts, efter orkestratorns Supabase-inventering.
+
+  5. Verifiering
+     - Kör:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+     - Kör relevanta nya tester om miljön tillåter.
+     - Om Vitest faller på Rollup optional dependency-problem, dokumentera exakt fel.
+
+  Output:
+  - Ny helper för objective metadata backfill candidates.
+  - Nya fokuserade tester.
+  - Ny docs/agent-plans/37-objective-backfill-readiness.md med SQL och plan.
+  - Kort sammanfattning av vad orkestratorn ska göra via Supabase efteråt.
