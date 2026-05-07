@@ -1,0 +1,93 @@
+Du arbetar i hagen-ui:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 56: live smoke av failed ingest path + ops-statuspanelen.
+
+  Bakgrund:
+  Phase 55 lade till:
+  - GET /api/studio/ingest-runs
+  - IngestStatusPanel i /studio/concepts
+  - failed/running/completed statusvisning
+
+  Nu behöver vi verifiera att ett misslyckat ingestjobb faktiskt:
+  - markeras failed i ingest_runs
+  - syns i API-listan
+  - syns i UI-panelen med felmeddelande
+  - inte skapar concept
+  - inte bryter panelens refresh/loading-state
+
+  Uppgift:
+  1. Synka hagen-ui main.
+  2. Rör inte Hagen-repot.
+  3. Skapa en tydligt markerad smoke-run via:
+     POST /api/studio/ingest-runs
+     body:
+     {
+       "source_url": "https://example.invalid/letrend-smoke-failed-ingest-<timestamp>",
+       "platform": "tiktok"
+     }
+
+  4. Kör analyze med samma ingest_run_id:
+     POST /api/studio/concepts/analyze
+     body:
+     {
+       "videoUrl": "https://example.invalid/letrend-smoke-failed-ingest-<timestamp>",
+       "platform": "tiktok",
+       "ingest_run_id": "<run id>"
+     }
+
+     Förväntat:
+     - analyze misslyckas kontrollerat
+     - response är JSON, inte HTML
+     - status är 4xx/5xx enligt befintlig proxylogik
+     - ingest_run uppdateras till failed
+
+  5. Verifiera:
+     GET /api/studio/ingest-runs/<run id>
+     - status = failed
+     - stage = analyzing
+     - error_code finns
+     - error_message finns
+     - concept_id är null
+
+  6. Verifiera list-endpoint:
+     GET /api/studio/ingest-runs?status=failed&limit=10
+     - runnen finns med
+     - error_message finns i list-row
+     - inga hemligheter/tokens returneras
+
+  7. Verifiera UI:
+     - Öppna /studio/concepts
+     - IngestStatusPanel visas
+     - panelen visar röd/fel-state
+     - den misslyckade runnen visas med kort felmeddelande
+     - source_url är truncerad visuellt
+     - ingen review-länk visas när concept_id är null
+     - refresh-knappen fungerar
+
+  8. Om UI/API inte visar failure begripligt, gör minsta möjliga fix.
+     Exempel på acceptabla småfixar:
+     - förbättra tom/error/loading-state
+     - visa warnings-count
+     - visa failed-rader även om listan annars är tom
+     - robustare truncering av source_url/error_message
+
+  9. Dokumentera:
+     docs/agent-plans/56-ingest-runs-failure-path-smoke.md
+
+  Dokumentet ska innehålla:
+  - ingest_run id
+  - vilken invalid URL som användes
+  - analyze-response sammanfattning
+  - GET by id-resultat
+  - list endpoint-resultat
+  - UI-verifiering
+  - om failed smoke-run lämnades kvar och varför
+  - eventuella fixar
+  - typecheck-status
+
+  Verifiera:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
+
+  Commit/pusha till main.
