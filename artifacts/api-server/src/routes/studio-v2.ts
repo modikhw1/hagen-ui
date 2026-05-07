@@ -1808,10 +1808,13 @@ router.patch('/library-concepts/:conceptId', requireAuth, CM_ONLY, async (req, r
       : {};
 
     // Merge allowed override fields
+    // NOTE: `trend_level` / `trendLevel` intentionally omitted — deprecated in Phase 52.
+    // Hagen removed trendLevel from the enrich contract (Phase 47). The legacy UI routes
+    // that sent trend_level (/studio/concepts/:id and /studio/concepts/:id/edit) now
+    // redirect to /studio/concepts/:id/review and never reach this handler.
     const patch: Record<string, unknown> = { ...existingOverrides };
     if (typeof body.headline_sv === 'string') patch.headline_sv = body.headline_sv;
     if (typeof body.difficulty === 'string') patch.difficulty = body.difficulty;
-    if (typeof body.trend_level === 'number') patch.trendLevel = body.trend_level;
     if (typeof body.film_time === 'string') patch.filmTime = body.film_time;
     if (typeof body.people_needed === 'string') patch.peopleNeeded = body.people_needed;
     if (typeof body.why_it_works === 'string') patch.whyItWorks_sv = body.why_it_works;

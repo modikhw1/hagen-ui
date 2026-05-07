@@ -1,0 +1,56 @@
+Du arbetar i hagen-ui:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 52: quarantina legacy concept edit/detail-flöden så de inte längre kan skriva deprecated `trendLevel`.
+
+  Bakgrund:
+  Phase 49-51 verifierade nya reanalyze/objective-field-flödet end-to-end.
+  Nuvarande aktiva review-flöde är:
+  /studio/concepts/:id/review
+
+  Legacy-sidor finns fortfarande:
+  - /studio/concepts/:id
+  - /studio/concepts/:id/edit
+
+  De innehåller gamla fält som `trend_level` / `trendLevel`.
+  Backend-routen:
+  PATCH /api/studio-v2/library-concepts/:conceptId
+  accepterar fortfarande `trend_level` och skriver `overrides.trendLevel`.
+
+  Uppgift:
+  1. Synka hagen-ui main.
+  2. Rör inte Hagen-repot.
+  3. Ersätt legacy-sidorna:
+     - artifacts/letrend/src/app/studio/concepts/[id]/page.tsx
+     - artifacts/letrend/src/app/studio/concepts/[id]/edit/page.tsx
+
+     med minimal redirect/quarantine till:
+     /studio/concepts/:id/review
+
+     Behåll gamla URLs fungerande, men låt dem inte visa eller spara legacy-formulär.
+     Använd etablerad navigation pattern i repo:t.
+
+  4. Harden backend:
+     - I `artifacts/api-server/src/routes/studio-v2.ts`
+     - Sluta skriva `patch.trendLevel` från `body.trend_level`
+     - Antingen ignorera fältet tyst eller dokumentera deprecation i kommentar.
+     - Rör inte TikTok-sync “budget”-fält; de är cron/API-budget och inte concept-budget.
+
+  5. Kör `rg` efter ändringen och verifiera:
+     - ingen aktiv UI-route skriver `trend_level`
+     - `/studio/concepts/:id` och `/studio/concepts/:id/edit` inte längre renderar gamla trend/budget-formulär
+     - legacy `trendLevel` i translator/mockdata kan lämnas för backward compatibility
+
+  6. Lägg till dokument:
+     docs/agent-plans/52-legacy-concept-route-quarantine.md
+
+  Dokumentet ska innehålla:
+  - vilka legacy routes som redirectas
+  - varför `trendLevel` write path stängdes
+  - vad som medvetet lämnades kvar som backward compatibility
+  - verifiering med `rg`
+  - typecheck-status
+
+  Verifiera:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
