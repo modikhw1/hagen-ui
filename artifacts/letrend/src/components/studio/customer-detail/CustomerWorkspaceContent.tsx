@@ -21,8 +21,9 @@ import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from '@/lib/navigation-compat';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { loadConcepts as loadConceptsFromDB } from '@/lib/conceptLoaderDB';
+import { loadConcepts as loadConceptsFromDB, type ConceptWithProvenance } from '@/lib/conceptLoaderDB';
 import type { TranslatedConcept } from '@/lib/translator';
+import { matchScriptMode } from '@/lib/script-mode-filter';
 import { display } from '@/lib/display';
 import { FeedTimeline } from '@/components/studio/FeedTimeline';
 import { useAdminPageHeader } from '@/admin-ui';
@@ -102,7 +103,7 @@ const MemoKonceptSection = React.memo(KonceptSection);
 const MemoFeedPlannerSection = React.memo(FeedPlannerSection);
 const MemoKommunikationSection = React.memo(KommunikationSection);
 
-type WorkspaceLibraryConcept = TranslatedConcept & {
+type WorkspaceLibraryConcept = ConceptWithProvenance & {
   source?: 'hagen' | 'cm_created' | null;
 };
 
@@ -175,17 +176,8 @@ function matchWorkspaceBusinessType(types: string[] | undefined, filter: string)
   return (types || []).includes(filter);
 }
 
-function matchWorkspaceScript(hasScript: boolean | undefined, scriptMode: string | undefined, filter: string) {
-  if (filter === 'all') return true;
-  if (filter === 'with_script') return Boolean(hasScript);
-  if (filter === 'without_script') return !hasScript;
-  // Script-mode-specific filter values
-  if (scriptMode) return scriptMode === filter;
-  // Fallback for old concepts without script_mode: infer from hasScript
-  if (filter === 'none' || filter === 'visual_only') return !hasScript;
-  if (filter === 'text_overlay' || filter === 'short_dialogue' || filter === 'long_dialogue') return Boolean(hasScript);
-  return true;
-}
+// matchWorkspaceScript delegated to shared matchScriptMode from @/lib/script-mode-filter.
+// Provenance rule: specific mode filters only match when raw_overrides['script_mode'] is set.
 
 function WorkspaceLibraryFilter({
   label,
@@ -2174,7 +2166,7 @@ function CustomerWorkspacePageContent() {
         matchWorkspacePeopleRange(concept.peopleNeeded, addConceptPeopleFilter) &&
         matchWorkspaceFilmTimeRange(concept.filmTime, addConceptFilmTimeFilter) &&
         matchWorkspaceBusinessType(concept.businessTypes, addConceptBusinessTypeFilter) &&
-        matchWorkspaceScript(concept.hasScript, concept.script_mode, addConceptScriptFilter) &&
+        matchScriptMode(concept.hasScript, concept.raw_overrides?.['script_mode'] as string | undefined, addConceptScriptFilter) &&
         (addConceptSourceFilter === 'all' || concept.source === addConceptSourceFilter)
       );
     });

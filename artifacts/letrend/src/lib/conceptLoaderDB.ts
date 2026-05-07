@@ -14,6 +14,15 @@ import { createClient } from '@supabase/supabase-js';
 import { createBrowserClient } from '@supabase/ssr';
 import { translateClipToConcept, type BackendClip, type TranslatedConcept, type ClipOverride } from './translator';
 
+/**
+ * TranslatedConcept extended with raw DB overrides for provenance tracking.
+ * `raw_overrides` contains only the fields a CM explicitly confirmed at ingest —
+ * use it to distinguish CM-confirmed values from sigma/AI-inferred fallbacks.
+ */
+export type ConceptWithProvenance = TranslatedConcept & {
+  raw_overrides: Record<string, unknown>;
+};
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
 
@@ -31,7 +40,7 @@ function getSupabaseClient() {
 /**
  * Load all active concepts from Supabase
  */
-export async function loadConcepts(): Promise<TranslatedConcept[]> {
+export async function loadConcepts(): Promise<ConceptWithProvenance[]> {
   try {
     const supabase = getSupabaseClient();
 
@@ -53,7 +62,11 @@ export async function loadConcepts(): Promise<TranslatedConcept[]> {
       const clip = row.backend_data as BackendClip;
       const override = row.overrides as ClipOverride;
       const translated = translateClipToConcept(clip, override);
-      return { ...translated, id: row.id as string };
+      return {
+        ...translated,
+        id: row.id as string,
+        raw_overrides: (row.overrides as Record<string, unknown>) ?? {},
+      };
     });
   } catch (error) {
     console.error('[conceptLoaderDB] Fatal error:', error);
@@ -64,7 +77,7 @@ export async function loadConcepts(): Promise<TranslatedConcept[]> {
 /**
  * Load active concepts created by a specific CM.
  */
-export async function loadMyConcepts(userId: string): Promise<TranslatedConcept[]> {
+export async function loadMyConcepts(userId: string): Promise<ConceptWithProvenance[]> {
   if (!userId) return [];
 
   try {
@@ -86,7 +99,11 @@ export async function loadMyConcepts(userId: string): Promise<TranslatedConcept[
       const clip = row.backend_data as BackendClip;
       const override = row.overrides as ClipOverride;
       const translated = translateClipToConcept(clip, override);
-      return { ...translated, id: row.id as string };
+      return {
+        ...translated,
+        id: row.id as string,
+        raw_overrides: (row.overrides as Record<string, unknown>) ?? {},
+      };
     });
   } catch (error) {
     console.error('[conceptLoaderDB] Fatal error in loadMyConcepts:', error);
@@ -160,13 +177,17 @@ export async function loadRecentlyAssigned(userId: string): Promise<TranslatedCo
         const clip = row.backend_data as BackendClip;
         const override = row.overrides as ClipOverride;
         const translated = translateClipToConcept(clip, override);
-        return [row.id as string, { ...translated, id: row.id as string }];
+        return [row.id as string, {
+          ...translated,
+          id: row.id as string,
+          raw_overrides: (row.overrides as Record<string, unknown>) ?? {},
+        }];
       })
     );
 
     return recentConceptIds
       .map(id => conceptMap.get(id))
-      .filter((concept): concept is TranslatedConcept => Boolean(concept));
+      .filter((concept): concept is ConceptWithProvenance => Boolean(concept));
   } catch (error) {
     console.error('[conceptLoaderDB] Fatal error in loadRecentlyAssigned:', error);
     return [];

@@ -1,0 +1,62 @@
+ Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 36: script_mode filter provenance fix.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Gör ingen bred refaktor.
+  - Behåll backward compatibility med gamla concepts.
+  - Fokus är att filterlogiken ska matcha provenance-regeln från Phase 35.
+
+  Problem:
+  Phase 35 gjorde ConceptCard-badges provenance-säkra genom att bara visa objective badges när fältet finns i
+  raw_overrides. Men script_mode-filtren använder fortfarande concept.script_mode. Eftersom translateClipToConcept
+  alltid fyller script_mode via readScriptMode, kan specifika filter som text_overlay/short_dialogue/long_dialogue/
+  visual_only/none matcha sigma/legacy-inferred värden, trots att dokumentationen säger att specifika filters bara ska
+  matcha explicit script_mode.
+
+  Mål:
+
+  1. Fixa /studio/concepts script_mode-filter
+     - Uppdatera artifacts/letrend/src/app/studio/concepts/page.tsx.
+     - matchScriptMode ska kunna veta om script_mode är explicit CM-confirmed.
+     - Använd raw_overrides['script_mode'] för detta.
+     - För filter:
+       - all: alltid true
+       - with_script: får använda explicit script_mode om den finns, annars fallback till hasScript
+       - without_script: får använda explicit script_mode om den finns, annars fallback till hasScript
+       - text_overlay/short_dialogue/long_dialogue/visual_only/none: ska bara matcha när raw_overrides.script_mode finns
+  och matchar exakt.
+     - Uppdatera dokumentation/kommentarer så beteendet är tydligt.
+
+  2. Fixa customer workspace script_mode-filter
+     - Undersök artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx.
+     - Om den ytan saknar raw_overrides/provenance, lägg till minsta säkra stöd för att veta om script_mode är explicit.
+     - Om det är för stort, ändra specifika script_mode-filter så de inte falskt matchar inferred värden, och
+  dokumentera begränsningen.
+     - with_script/without_script ska fortsatt fallbacka till hasScript för gamla concepts.
+
+  3. Lägg till tester om möjligt
+     - Extrahera matchScriptMode till en liten testbar helper om det är enkelt.
+     - Testa:
+       - explicit text_overlay matchar text_overlay
+       - inferred text_overlay utan explicit override matchar inte text_overlay
+       - old hasScript=true matchar with_script
+       - old hasScript=false matchar without_script
+       - explicit visual_only matchar without_script och visual_only
+
+  4. Dokumentation
+     - Skapa docs/agent-plans/36-script-mode-filter-provenance.md.
+     - Beskriv ändrade filer, exakt filterbeteende, hur gamla concepts fallbackar, och kvarvarande risker.
+
+  5. Verifiering
+     - Kör:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+     - Om tester läggs till, kör relevanta testkommandon.
+
+  Output:
+  - Kodändringar enligt ovan.
+  - Ny docs/agent-plans/36-script-mode-filter-provenance.md.
+  - Kort sammanfattning av vad som är fixat och vad som återstår.

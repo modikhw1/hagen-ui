@@ -14,8 +14,8 @@ import {
   type BackendClip,
   type ClipOverride,
   type TranslatedConcept,
-  type ScriptMode,
 } from '@/lib/translator';
+import { matchScriptMode } from '@/lib/script-mode-filter';
 import {
   LeTrendColors,
   LeTrendRadius,
@@ -166,19 +166,9 @@ function matchBusinessType(types: string[] | undefined, filter: string) {
   return (types || []).includes(filter);
 }
 
-function matchScriptMode(hasScript: boolean, scriptMode: ScriptMode | undefined, filter: string): boolean {
-  if (filter === 'all') return true;
-  if (scriptMode) {
-    // Group-level filters: with_script = dialogue/overlay, without_script = visual/none
-    if (filter === 'with_script') return scriptMode === 'text_overlay' || scriptMode === 'short_dialogue' || scriptMode === 'long_dialogue';
-    if (filter === 'without_script') return scriptMode === 'visual_only' || scriptMode === 'none';
-    return scriptMode === filter;
-  }
-  // Legacy fallback via hasScript for old concepts without script_mode
-  if (filter === 'with_script') return hasScript;
-  if (filter === 'without_script') return !hasScript;
-  return false;
-}
+// matchScriptMode is imported from @/lib/script-mode-filter (provenance-safe, unit-tested)
+// - with_script / without_script: use explicit CM-confirmed override first, hasScript fallback for old concepts
+// - specific modes (text_overlay etc.): only match when raw_overrides['script_mode'] is set
 
 function matchReuseFilter(assignmentCount: number, filter: ReuseFilter) {
   if (filter === 'all') return true;
@@ -1121,7 +1111,7 @@ export default function StudioConceptsPage() {
           matchBusinessType(concept.businessTypes, businessTypeFilter) &&
           (sourceFilter === 'all' || concept.source === sourceFilter) &&
           matchReuseFilter(assignmentCounts[concept.id] ?? 0, reuseFilter) &&
-          matchScriptMode(concept.hasScript, concept.script_mode, scriptModeFilter)
+          matchScriptMode(concept.hasScript, concept.raw_overrides['script_mode'] as string | undefined, scriptModeFilter)
         );
       }),
     [
