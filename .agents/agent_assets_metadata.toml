@@ -6,3 +6,9 @@ id = "fMrcY-xu-aI55pCz6n61B"
 uri = "file://.local/demo-components.zip"
 type = "unspecified"
 title = "demo-components.zip — 5 filer klara att klistra in"
+
+[[outputs]]
+id = "auNrc0F4TmnGH3ZRbuIBD"
+uri = "file://docs/demo-feed-plan-data-objects.md"
+type = "text"
+title = "Demo Feed Plan — Data Objects & Visual Components"
