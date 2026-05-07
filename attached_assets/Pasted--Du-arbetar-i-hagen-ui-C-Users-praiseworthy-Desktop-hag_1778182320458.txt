@@ -1,0 +1,62 @@
+ Du arbetar i hagen-ui:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 50: verifiera att reanalyze-förslag faktiskt kan sparas, laddas om och därefter suppressas.
+
+  Bakgrund:
+  Phase 49 verifierade live API mot Hagen commit d9c828b.
+  För concept `clip-contraband-coffee` returnerade reanalyze:
+  - script_mode: short_dialogue
+  - setup_complexity: point_and_shoot
+  - skill_required: comfortable_on_camera
+  - setting: similar_venue_type
+  - ingen trendLevel
+  - ingen estimatedBudget
+
+  Men Phase 49 verifierade inte faktiskt Save/reload/second reanalyze i liveflödet.
+
+  Uppgift:
+  1. Synka hagen-ui main.
+  2. Rör inte Hagen-repot.
+  3. Använd `clip-contraband-coffee` om det fortfarande saknar de fyra objective fields i overrides.
+  4. Ta först en snapshot via:
+     GET /api/admin/concepts/clip-contraband-coffee
+     Spara inte hela rådumpen i docs, men behåll den lokalt under testet så ändringen kan återställas vid behov.
+  5. Kör:
+     POST /api/studio/concepts/clip-contraband-coffee/reanalyze
+  6. Verifiera att response fortfarande innehåller minst ett av:
+     - script_mode
+     - setup_complexity
+     - skill_required
+     - setting
+     och inte innehåller:
+     - trendLevel
+     - estimatedBudget
+  7. Spara på samma sätt som review-sidan gör:
+     PATCH /api/admin/concepts/clip-contraband-coffee
+     med:
+     - overrides = befintliga overrides + valda objective suggestions
+     - backend_data = pending backend_data från reanalyze response
+  8. Hämta concept igen och verifiera att overrides faktiskt innehåller de sparade objective fields.
+  9. Kör reanalyze en andra gång.
+  10. Verifiera att redan sparade objective fields inte längre kommer tillbaka i `suggested_overrides`.
+  11. Om detta bara är QA, återställ conceptets ursprungliga snapshot efter verifiering. Om du låter ändringen ligga
+  kvar, dokumentera tydligt varför.
+  12. Lägg till:
+     docs/agent-plans/50-reanalyze-save-roundtrip-smoke.md
+
+  Dokumentet ska innehålla:
+  - Hagen git_sha
+  - concept-id
+  - vilka fields som föreslogs
+  - vad som sparades
+  - verifiering efter reload
+  - verifiering efter andra reanalyze
+  - om data återställdes eller behölls
+  - test/typecheck-status
+
+  Verifiera:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
+
+  Commit/pusha till main.
