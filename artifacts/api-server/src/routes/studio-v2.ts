@@ -4,7 +4,7 @@ import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
 import { buildGamePlanInput, generateGamePlanDraft } from '../lib/game-plan-generate.js';
-import { refreshReconciledThumbnails, runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
+import { normalizeTikTokUrl, refreshReconciledThumbnails, runHistorySyncBatch, syncCustomerHistory, triggerInitialTikTokSyncBackground } from '../lib/studio/tiktok-sync.js';
 import { rankCandidates } from '../lib/studio/reconciliation-scoring.js';
 import {
   generateReconciliationCandidates,
@@ -15,7 +15,7 @@ import {
   undoConfirmedConcept,
 } from '../lib/studio/confirm-published-concept.js';
 import { renumberImportedRows } from '../lib/studio/history-import.js';
-import { getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
+import { fetchHagenJson, getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -841,6 +841,180 @@ router.get('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (r
   } catch (err) {
     logger.error(err, 'studio-v2 sync-history error');
     res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/studio-v2/customers/:customerId/sync-history
+// Imports TikTok clips from the Hagen library into customer_concepts as history_import rows.
+// Source: Hagen's /api/studio-v2/customers/:customerId/hagen-clips endpoint.
+// If ?preview=true: compares but writes nothing — returns { handle, wouldImport, wouldSkip, totalMatched, samples, availableUsernames }.
+// If not preview: inserts new rows — returns { imported, skipped }.
+// Returns 502 when Hagen is unavailable (HAGEN_BASE_URL not set or upstream error).
+router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const customerId = String(req.params['customerId'] ?? '');
+    if (!customerId) {
+      res.status(400).json({ error: 'customerId krävs' });
+      return;
+    }
+    if (!(await ensureCustomerAccess(req, res, customerId))) return;
+
+    const isPreview = req.query['preview'] === 'true';
+
+    if (!getHagenBase()) {
+      res.status(502).json({
+        error: 'hagen-not-configured',
+        message: 'Hagen-källan är inte konfigurerad på API-servern. Kontakta admin.',
+      });
+      return;
+    }
+
+    // ── 1. Fetch customer tiktok_handle ───────────────────────────────────────
+    const supabase = createSupabaseAdmin();
+    const { data: customer, error: customerError } = await supabase
+      .from('customer_profiles')
+      .select('tiktok_handle')
+      .eq('id', customerId)
+      .maybeSingle();
+
+    if (customerError || !customer) {
+      res.status(404).json({ error: 'Kunden hittades inte' });
+      return;
+    }
+
+    const handleRaw = customer.tiktok_handle as unknown;
+    const handle = typeof handleRaw === 'string' ? handleRaw.trim().replace(/^@/, '') : '';
+    if (!handle) {
+      res.status(400).json({ error: 'Kunden saknar TikTok-handle' });
+      return;
+    }
+
+    // ── 2. Fetch clips from Hagen library ─────────────────────────────────────
+    const hagenResult = await fetchHagenJson({
+      method: 'GET',
+      path: `/api/studio-v2/customers/${customerId}/hagen-clips`,
+      timeoutMs: 10000,
+      routeTag: 'studio-v2.sync-history',
+    });
+
+    if (!hagenResult.ok) {
+      res.status(hagenResult.clientStatus).json(hagenResult.body);
+      return;
+    }
+
+    interface HagenClip {
+      tiktok_url?: string | null;
+      source_username?: string | null;
+      description?: string | null;
+      tiktok_thumbnail_url?: string | null;
+      tiktok_views?: number | null;
+      tiktok_likes?: number | null;
+      tiktok_comments?: number | null;
+      published_at?: string | null;
+    }
+
+    const rawClips = Array.isArray(hagenResult.data['clips'])
+      ? (hagenResult.data['clips'] as HagenClip[])
+      : [];
+
+    // Filter to clips that have a usable TikTok URL
+    const allClipsWithUrl = rawClips.filter(
+      (c): c is HagenClip & { tiktok_url: string } =>
+        typeof c.tiktok_url === 'string' && c.tiktok_url.trim() !== '',
+    );
+
+    // Available usernames across all clips — shown in preview when handle doesn't match
+    const availableUsernames = [
+      ...new Set(
+        rawClips
+          .map((c) => c.source_username)
+          .filter((u): u is string => typeof u === 'string' && u.trim() !== ''),
+      ),
+    ];
+
+    // Match clips by source_username == customer handle (case-insensitive)
+    const matchedClips = allClipsWithUrl.filter(
+      (c) =>
+        !c.source_username ||
+        c.source_username.replace(/^@/, '').toLowerCase() === handle.toLowerCase(),
+    );
+
+    // ── 3. Compare against existing customer_concepts ────────────────────────
+    const { data: existing } = await supabase
+      .from('customer_concepts')
+      .select('tiktok_url')
+      .eq('customer_profile_id', customerId)
+      .not('tiktok_url', 'is', null);
+
+    const existingNormalized = new Set(
+      ((existing ?? []) as Array<{ tiktok_url: string | null }>)
+        .filter((r) => typeof r.tiktok_url === 'string')
+        .map((r) => normalizeTikTokUrl(r.tiktok_url as string)),
+    );
+
+    const newClips = matchedClips.filter(
+      (c) => !existingNormalized.has(normalizeTikTokUrl(c.tiktok_url)),
+    );
+    const skippedCount = matchedClips.length - newClips.length;
+
+    // ── 4a. Preview mode — return without writing ─────────────────────────────
+    if (isPreview) {
+      const samples = newClips.slice(0, 5).map((c) => ({
+        tiktok_url: c.tiktok_url,
+        source_username: c.source_username ?? null,
+        description: c.description ?? null,
+      }));
+      res.json({
+        handle,
+        totalMatched: matchedClips.length,
+        wouldImport: newClips.length,
+        wouldSkip: skippedCount,
+        samples,
+        availableUsernames: matchedClips.length === 0 ? availableUsernames : [],
+      });
+      return;
+    }
+
+    // ── 4b. Import mode — insert new rows ─────────────────────────────────────
+    if (newClips.length === 0) {
+      res.json({ imported: 0, skipped: skippedCount });
+      return;
+    }
+
+    const observedAt = new Date().toISOString();
+    const inserts = newClips.map((c) => ({
+      customer_profile_id: customerId,
+      status: 'history_import',
+      row_kind: 'history_import',
+      history_source: 'hagen_library',
+      concept_id: null as string | null,
+      tiktok_url: c.tiktok_url,
+      tiktok_thumbnail_url: c.tiktok_thumbnail_url ?? null,
+      tiktok_views: typeof c.tiktok_views === 'number' ? c.tiktok_views : null,
+      tiktok_likes: typeof c.tiktok_likes === 'number' ? c.tiktok_likes : null,
+      tiktok_comments: typeof c.tiktok_comments === 'number' ? c.tiktok_comments : null,
+      published_at: typeof c.published_at === 'string' ? c.published_at : null,
+      description: typeof c.description === 'string' && c.description.trim() ? c.description.trim() : null,
+      tiktok_last_synced_at: observedAt,
+      last_observed_at: observedAt,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('customer_concepts')
+      .insert(inserts);
+
+    if (insertError) {
+      logger.error({ err: insertError, customerId }, 'sync-history POST: insert failed');
+      res.status(500).json({ error: `Import misslyckades: ${insertError.message}` });
+      return;
+    }
+
+    const imported = newClips.length;
+    logger.info({ customerId, handle, imported, skipped: skippedCount }, 'sync-history POST: done');
+    res.json({ imported, skipped: skippedCount });
+  } catch (err) {
+    logger.error(err, 'studio-v2 sync-history POST error');
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
   }
 });
 
