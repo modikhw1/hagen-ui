@@ -1,0 +1,96 @@
+Du arbetar i Hagen-repot, inte hagen-ui.
+
+  Använd den rena worktreen:
+  C:\Users\praiseworthy\Desktop\hagen-main-latest
+
+  Målet är Phase 47: align Hagen studio enrich contract with LeTrend ingest metadata v1.
+
+  VIKTIGT:
+  - Rör inte C:\Users\praiseworthy\Desktop\hagen om den är dirty.
+  - Arbeta i hagen-main-latest.
+  - Gör inga ändringar i hagen-ui i detta pass.
+  - Fokusera endast på Hagen `/api/studio/concepts/enrich`.
+  - Pusha/checkpointa till modikhw1/hagen main om verifiering passerar.
+
+  Bakgrund:
+  hagen-ui Phase 28-46 har etablerat ingest-kontraktet:
+  - AI är suggestion system, inte truth.
+  - Save/CM confirm är approval.
+  - Budget ska inte användas.
+  - AI trendLevel ska inte användas.
+  - `businessTypes` ska kunna vara flera, max 5.
+  - Nya objective fields:
+    - `script_mode`
+    - `setup_complexity`
+    - `skill_required`
+    - `setting`
+  - Subjective fields som headline/whyItWorks/productionNotes/script är draft och ska fortsatt kunna returneras, men de
+  får inte betraktas som truth.
+
+  Nuvarande Hagen-route:
+  `src/app/api/studio/concepts/enrich/route.ts`
+
+  Problem:
+  - Returnerar fortfarande `trendLevel`.
+  - Returnerar fortfarande `estimatedBudget`.
+  - Saknar `script_mode`, `setup_complexity`, `skill_required`, `setting`.
+  - `businessTypes` är max 3.
+  - Prompten säger fortfarande budget/trend.
+  - Tool schema kräver gamla fält.
+
+  Uppgift:
+  1. Uppdatera enrich-kontraktet:
+     - Ta bort `trendLevel`.
+     - Ta bort `estimatedBudget`.
+     - Lägg till `script_mode` enum:
+       `none | text_overlay | short_dialogue | long_dialogue | visual_only`
+     - Lägg till `setup_complexity` enum:
+       `point_and_shoot | basic_tripod | multi_location | elaborate_staging`
+     - Lägg till `skill_required` enum:
+       `anyone | comfortable_on_camera | acting_required | professional`
+     - Lägg till `setting` enum:
+       `any_venue | similar_venue_type | specific_setting_needed`
+     - Låt `businessTypes` vara 1-5.
+
+  2. Uppdatera system prompt:
+     - Ingen budget.
+     - Ingen AI trend score.
+     - Betona att objective fields är förslag som CM granskar.
+     - Betona hospitality/restaurang/bar/cafe som primär nisch.
+     - Förklara `script_mode` enligt:
+       - `none`: inget manus/text behövs
+       - `text_overlay`: primärt skärmtext/POV/textcard
+       - `short_dialogue`: korta repliker/transkript
+       - `long_dialogue`: längre dialog/manus
+       - `visual_only`: bärs primärt visuellt
+
+  3. Uppdatera fallback/merge:
+     - Fallback ska kunna härleda `script_mode` från transcript/text overlays/voiceover så konservativt som möjligt.
+     - Om signal saknas, välj konservativ default men dokumentera varför.
+     - Ta inte tillbaka budget/trend i fallback.
+     - Max 5 businessTypes.
+
+  4. Lägg till eller uppdatera tester om teststruktur finns.
+     Minst verifiera:
+     - Response overrides innehåller nya fyra objective fields.
+     - Response overrides innehåller inte `trendLevel`.
+     - Response overrides innehåller inte `estimatedBudget`.
+     - `businessTypes` kan ha upp till 5.
+     - Tom/minimal backend_data returnerar JSON fallback utan 500.
+
+  5. Dokumentera i Hagen:
+     `docs/agent-plans/47-studio-enrich-contract-alignment.md`
+
+  Dokumentet ska innehålla:
+  - Vad som ändrades.
+  - Varför trend/budget togs bort.
+  - Hur objective fields härleds.
+  - Teststatus.
+  - Railway deploy-verifiering som nästa steg.
+
+  Verifiering:
+  - Kör `npm run type-check`
+  - Kör `npm run build` om möjligt
+  - Om tester finns, kör relevanta tester
+  - Efter push/deploy ska `/api/letrend/version` visa ny git_sha
+  - Kör en direkt probe mot `/api/studio/concepts/enrich` med minimal backend_data och verifiera JSON-shape
