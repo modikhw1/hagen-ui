@@ -220,17 +220,51 @@ async function loadPreviewConcepts(supabase: ReturnType<typeof createSupabaseAdm
     .select('*, concepts ( id, backend_data, overrides, is_active, source, version )')
     .eq('customer_profile_id', customerId)
     .neq('status', 'archived')
-    .order('feed_order', { ascending: false, nullsFirst: false })
     .limit(80);
 
   if (error) throw error;
 
   const rawRows = (data ?? []) as JsonRecord[];
 
-  // Assign synthetic feed_orders to history import rows that lack one.
-  // Sort by published_at descending so most recently published → -1, next → -2, etc.
-  // This mirrors the feed planner's history semantics (feed_order < 0 = past).
-  const historyPending = rawRows
+  // ── Future queue (same dense-queue model as the studio feed planner) ─────────
+  // The studio sorts planned concepts by (feed_order ASC, added_at ASC, id ASC)
+  // and assigns sequential positions 0 (Nu), 1, 2, 3, ... regardless of the raw
+  // values stored in the DB (which can all be 1 when concepts are first added).
+  // We replicate that here so the demo grid matches what the CM sees in Studio.
+  const futurePlanned = rawRows.filter(
+    (row) =>
+      row['status'] !== 'history_import' &&
+      typeof row['feed_order'] === 'number' &&
+      (row['feed_order'] as number) >= 0,
+  );
+
+  futurePlanned.sort((a, b) => {
+    const fa = a['feed_order'] as number;
+    const fb = b['feed_order'] as number;
+    if (fa !== fb) return fa - fb;
+    const aa = readString(a['added_at']) ?? '';
+    const ab = readString(b['added_at']) ?? '';
+    if (aa !== ab) return aa.localeCompare(ab);
+    return String(a['id']).localeCompare(String(b['id']));
+  });
+
+  // Overwrite with dense sequential positions: 0 = Nu, 1 = next kommande, etc.
+  futurePlanned.forEach((row, idx) => {
+    row['feed_order'] = idx;
+  });
+
+  // ── Explicit past slots (produced concepts with negative feed_order) ──────────
+  // These have already been assigned real negative values by the advance-feed RPC.
+  const explicitPast = rawRows.filter(
+    (row) =>
+      row['status'] !== 'history_import' &&
+      typeof row['feed_order'] === 'number' &&
+      (row['feed_order'] as number) < 0,
+  );
+
+  // ── TikTok history imports (feed_order = null) ────────────────────────────────
+  // Sort by published_at descending so the most-recently published clip → -1, etc.
+  const importedHistory = rawRows
     .filter(
       (row) =>
         row['feed_order'] === null &&
@@ -242,20 +276,27 @@ async function loadPreviewConcepts(supabase: ReturnType<typeof createSupabaseAdm
       return tb - ta;
     });
 
-  historyPending.forEach((row, idx) => {
-    row['feed_order'] = -(idx + 1);
+  // Give them negative positions starting just below the explicit-past range.
+  const lowestExplicit = explicitPast.length > 0
+    ? Math.min(...explicitPast.map((r) => r['feed_order'] as number))
+    : 0;
+  const historyStart = Math.min(lowestExplicit, 0) - 1; // e.g. -1 when no explicit past rows
+
+  importedHistory.forEach((row, idx) => {
+    row['feed_order'] = historyStart - idx;
   });
 
+  const allRows = [...futurePlanned, ...explicitPast, ...importedHistory];
+
   const reconciledByTarget = new Map<string, JsonRecord>();
-  for (const row of rawRows) {
+  for (const row of allRows) {
     const targetId = readString(row['reconciled_customer_concept_id']);
     if (!readString(row['concept_id']) && targetId) {
       reconciledByTarget.set(targetId, row);
     }
   }
 
-  return rawRows
-    .filter((row) => row['feed_order'] !== null)
+  return allRows
     .filter((row) => readString(row['concept_id']) || !readString(row['reconciled_customer_concept_id']))
     .map((row) => {
       const importedStats = readString(row['concept_id']) ? reconciledByTarget.get(String(row['id'])) : null;
