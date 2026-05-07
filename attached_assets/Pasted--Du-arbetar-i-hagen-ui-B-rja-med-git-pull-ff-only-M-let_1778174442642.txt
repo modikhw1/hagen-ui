@@ -1,0 +1,61 @@
+ Du arbetar i hagen-ui. Börja med `git pull --ff-only`.
+
+  Målet är Phase 42: live-smoke readiness + minimal UI instrumentation för reanalyze/review-flödet.
+
+  VIKTIGT:
+  - Rör inte `/admin/demos`.
+  - Undvik demo/feedplan/refactor-sidospår.
+  - Du har inte Supabase MCP och ska inte göra live DB-writes.
+  - Bevara huvudprincipen: reanalyze-route skriver inte till DB; CM sparar explicit via review-sidan.
+  - Befintliga overrides är CM-confirmed och ska aldrig föreslås som overwrite.
+
+  Bakgrund:
+  Phase 41 fixade frontend fallback-risken. Review-sidan bygger nu applicerbara suggestions endast från
+  `suggested_overrides`.
+
+  Orchestratorns Supabase read-only-status:
+  - 26 aktiva concepts.
+  - 0 har `script_mode`, `setup_complexity`, `skill_required`, `setting`.
+  - 5 har confirmed äldre filterfält: `peopleNeeded`, `difficulty`, `filmTime`, `businessTypes`.
+  Det betyder att live smoke kan verifiera suppression för äldre filterfält direkt, men nya objective fields kräver att
+  en CM först sparar dem på ett concept.
+
+  Uppgift:
+  1. Lägg till minimal debug/readiness-information i review-sidans reanalyze-panel:
+     - Visa antal applicerbara suggestions när reanalysis är klar.
+     - Visa en liten “pending backend_data” indikator när ny analysdata finns men ännu inte är sparad.
+     - Visa tydligare när inga suggestions visas för att backend filtrerade bort confirmed overrides.
+     - Håll detta diskret; det ska hjälpa live smoke utan att göra UI:t tekniskt tungt.
+
+  2. Lägg till en liten pure helper om det passar:
+     - `countApplicableSuggestions(fields)`
+     - Eventuellt `getSuggestionState(fields, enrichFailed, hasPendingBackendData)`
+     - Testa den om möjligt.
+
+  3. Uppdatera docs:
+     - Skapa `docs/agent-plans/42-reanalyze-live-smoke-readiness.md`
+     - Dokumentera exakt live smoke-procedur:
+       A. Smoke mot concept med confirmed legacy fields:
+          - öppna review
+          - klicka “Reanalysera video med AI”
+          - bekräfta att network bara gör POST /reanalyze, ingen PATCH före Spara
+          - confirmed legacy fields ska inte visas som suggestions om backend filtrerar dem
+          - pending backend_data ska visas som osparad
+       B. Smoke mot concept efter att CM sparat nya objective fields:
+          - sätt `script_mode`, `setup_complexity`, `skill_required`, `setting`
+          - Spara
+          - kör reanalyze igen
+          - bekräfta att dessa confirmed fields inte visas som overwrite-suggestions
+       C. Save-test:
+          - utan att applicera suggestions, klicka Spara
+          - verifiera att pending backend_data sparas men confirmed overrides inte ändras
+
+  4. Fortsätt hålla docs uppdaterade:
+     - Lägg till Phase 42-notering i `docs/agent-plans/41-reanalyze-suggestion-fallback-fix.md`.
+
+  5. Verifiering:
+     - Kör `pnpm --filter @workspace/api-server run typecheck`
+     - Kör `pnpm --filter @workspace/letrend run typecheck`
+     - Kör relevanta tester om miljön tillåter.
+     - Om Vitest/Rollup optional dependency blockerar, dokumentera exakt.
+     - Commit/checkpointa till main.

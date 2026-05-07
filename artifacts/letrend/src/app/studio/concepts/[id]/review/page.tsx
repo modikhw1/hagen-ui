@@ -16,7 +16,7 @@ import { categoryOptions, display } from '@/lib/display';
 import { supabase } from '@/lib/supabase/client';
 import { getSigma, hasSigmaSignals, readScriptMode, readSetupComplexity, readSkillRequired, readSetting, translateClipToConcept } from '@/lib/translator';
 import type { BackendClip, ClipOverride } from '@/lib/translator';
-import { buildSuggestionsFromOverrides, hasApplicableSuggestions } from '@/lib/reanalyze-suggestions';
+import { buildSuggestionsFromOverrides, hasApplicableSuggestions, countApplicableSuggestions, getSuggestionState } from '@/lib/reanalyze-suggestions';
 import { conceptFieldConstraints } from '@/lib/concept-field-constraints';
 import { describeTranscriptLanguage, detectTranscriptLanguage } from '@/lib/transcript-language';
 import { RegenerateField } from '@/components/studio/RegenerateField';
@@ -568,7 +568,7 @@ export default function ConceptReviewPage() {
             <div style={{ ...cardStyle, padding: '12px 14px', border: '1px solid #e5e7eb' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>AI-metadataanalys</span>
-                {pendingReanalyzeBackendData ? <span style={{ fontSize: 10, color: '#059669', fontWeight: 600, background: '#ecfdf5', padding: '2px 6px', borderRadius: 999 }}>Ny analys laddad</span> : null}
+                {pendingReanalyzeBackendData ? <span style={{ fontSize: 10, color: '#059669', fontWeight: 600, background: '#ecfdf5', padding: '2px 6px', borderRadius: 999 }}>Ny analys laddad · osparad</span> : null}
               </div>
 
               {reanalyzeState === 'idle' || reanalyzeState === 'error' ? (
@@ -620,9 +620,12 @@ export default function ConceptReviewPage() {
                   { key: 'businessTypes', label: 'Branscher', current: currentBtLabel, proposed: sugBtLabel, apply: () => { if (reanalyzeSuggestions.businessTypes?.length) setBusinessTypes(reanalyzeSuggestions.businessTypes); } },
                 ];
                 const hasDiff = !reanalyzeSuggestions.enrich_failed && suggestions.some((s) => s.proposed && s.proposed !== s.current);
+                const _sugFields = reanalyzeSuggestions as Parameters<typeof hasApplicableSuggestions>[0];
                 // True when suggested_overrides had at least one non-null field (even if values match current).
                 // Distinguishes "suggestions suppressed (all confirmed)" from "suggestions present but already applied".
-                const anyApplicable = !reanalyzeSuggestions.enrich_failed && hasApplicableSuggestions(reanalyzeSuggestions as Parameters<typeof hasApplicableSuggestions>[0]);
+                const anyApplicable = !reanalyzeSuggestions.enrich_failed && hasApplicableSuggestions(_sugFields);
+                const suggCount = countApplicableSuggestions(_sugFields);
+                const suggState = getSuggestionState(_sugFields, reanalyzeSuggestions.enrich_failed);
                 return (
                   <div>
                     {reanalyzeSuggestions.enrich_failed ? (
@@ -630,8 +633,13 @@ export default function ConceptReviewPage() {
                         Video analyserad — AI-förädling misslyckades. Uppdaterade videodata är redo att sparas men AI-förslag på klassificering är inte tillgängliga.
                       </div>
                     ) : null}
-                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 8, fontWeight: 600 }}>
-                      {reanalyzeSuggestions.strategy === 'full_reanalyze' ? 'Fullanalys (video + AI)' : 'Förädling (AI)'}
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 8, fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>{reanalyzeSuggestions.strategy === 'full_reanalyze' ? 'Fullanalys (video + AI)' : 'Förädling (AI)'}</span>
+                      {suggState === 'has_suggestions' ? (
+                        <span style={{ color: '#4f46e5', fontWeight: 700 }}>{suggCount} {suggCount === 1 ? 'förslag' : 'förslag'}</span>
+                      ) : suggState === 'suppressed' ? (
+                        <span style={{ color: '#9ca3af' }}>Inga förslag</span>
+                      ) : null}
                     </div>
                     {hasDiff ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>

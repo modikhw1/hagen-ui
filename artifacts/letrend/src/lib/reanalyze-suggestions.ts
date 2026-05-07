@@ -60,3 +60,41 @@ export function hasApplicableSuggestions(fields: SuggestableFields): boolean {
     (fields.businessTypes !== null && fields.businessTypes.length > 0)
   );
 }
+
+/**
+ * Returns the number of fields that carry a non-null suggestion.
+ * Useful for displaying a badge like "3 förslag" in the UI.
+ * `businessTypes` counts as 1 when non-empty (regardless of how many types).
+ */
+export function countApplicableSuggestions(fields: SuggestableFields): number {
+  let n = 0;
+  if (fields.script_mode !== null) n++;
+  if (fields.setup_complexity !== null) n++;
+  if (fields.skill_required !== null) n++;
+  if (fields.setting !== null) n++;
+  if (fields.peopleNeeded !== null) n++;
+  if (fields.difficulty !== null) n++;
+  if (fields.filmTime !== null) n++;
+  if (fields.businessTypes !== null && fields.businessTypes.length > 0) n++;
+  return n;
+}
+
+/**
+ * High-level state of the suggestion panel after a reanalyze response.
+ *
+ * | State            | Meaning                                                              |
+ * |------------------|----------------------------------------------------------------------|
+ * | 'enrich_failed'  | AI enrichment failed; only video-level metadata may be updated       |
+ * | 'has_suggestions'| Backend returned ≥1 applicable suggestion (may or may not differ)   |
+ * | 'suppressed'     | Backend filtered all suggestions — every suggestable field was already confirmed by the CM |
+ */
+export type SuggestionState = 'enrich_failed' | 'has_suggestions' | 'suppressed';
+
+export function getSuggestionState(
+  fields: SuggestableFields,
+  enrichFailed: boolean | undefined,
+): SuggestionState {
+  if (enrichFailed) return 'enrich_failed';
+  if (hasApplicableSuggestions(fields)) return 'has_suggestions';
+  return 'suppressed';
+}

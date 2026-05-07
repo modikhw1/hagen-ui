@@ -106,12 +106,26 @@ Key test cases:
 Vitest is configured for `@workspace/letrend` (`pnpm test`). No Rollup optional dependency
 issues were observed when running the pure helper tests (no Vite/DOM imports in the helper).
 
+## Phase 42 — Live Smoke Readiness (follow-on)
+
+Phase 42 added two more pure helpers to `reanalyze-suggestions.ts`:
+
+- **`countApplicableSuggestions(fields)`** — returns the number of non-null applicable suggestion
+  fields. Used to show a discrete `"N förslag"` count badge next to the strategy label.
+- **`getSuggestionState(fields, enrichFailed)`** — returns `'enrich_failed' | 'has_suggestions' | 'suppressed'`.
+  Drives the count badge and the suppressed-state copy in the panel.
+
+The `"Ny analys laddad"` pill was extended to `"Ny analys laddad · osparad"` to make the
+unsaved state explicit.
+
+Full live smoke procedure: `docs/agent-plans/42-reanalyze-live-smoke-readiness.md`.
+
 ## Remaining Risks / Next Steps
 
 1. **Rate limit countdown** — 429 responses surface a Swedish message but no live timer.
 2. **Concept locking** — two CMs can still reanalyze simultaneously; last write wins.
 3. **`businessTypes` diff display** — currently comma-joined. Multi-chip rendering would be cleaner.
-4. **Live smoke test** — see procedure below.
+4. **Live smoke test** — see `docs/agent-plans/42-reanalyze-live-smoke-readiness.md` for full procedure.
 
 ## Recommended Live Smoke Procedure
 

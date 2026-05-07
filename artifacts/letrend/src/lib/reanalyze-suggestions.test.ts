@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildSuggestionsFromOverrides, hasApplicableSuggestions } from './reanalyze-suggestions';
+import { buildSuggestionsFromOverrides, hasApplicableSuggestions, countApplicableSuggestions, getSuggestionState } from './reanalyze-suggestions';
+import type { SuggestableFields } from './reanalyze-suggestions';
 
 // ---------------------------------------------------------------------------
 // buildSuggestionsFromOverrides
@@ -132,5 +133,119 @@ describe('hasApplicableSuggestions', () => {
     //  tillämpas utan att röra bekräftade värden." — NOT "Inga ändringar att tillämpa".
     const fields = buildSuggestionsFromOverrides({});
     expect(hasApplicableSuggestions(fields)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// countApplicableSuggestions
+// ---------------------------------------------------------------------------
+
+describe('countApplicableSuggestions', () => {
+  const nullFields: SuggestableFields = {
+    script_mode: null,
+    setup_complexity: null,
+    skill_required: null,
+    setting: null,
+    peopleNeeded: null,
+    difficulty: null,
+    filmTime: null,
+    businessTypes: null,
+  };
+
+  it('returns 0 when all fields are null', () => {
+    expect(countApplicableSuggestions(nullFields)).toBe(0);
+  });
+
+  it('returns 0 when businessTypes is an empty array', () => {
+    expect(countApplicableSuggestions({ ...nullFields, businessTypes: [] })).toBe(0);
+  });
+
+  it('counts each non-null scalar field as 1', () => {
+    expect(countApplicableSuggestions({ ...nullFields, script_mode: 'visual_only' })).toBe(1);
+    expect(countApplicableSuggestions({ ...nullFields, difficulty: 'easy', filmTime: 'under_15min' })).toBe(2);
+  });
+
+  it('counts businessTypes as 1 regardless of how many types are in the array', () => {
+    expect(countApplicableSuggestions({ ...nullFields, businessTypes: ['hospitality'] })).toBe(1);
+    expect(countApplicableSuggestions({ ...nullFields, businessTypes: ['hospitality', 'retail', 'food'] })).toBe(1);
+  });
+
+  it('returns 8 when all fields are non-null', () => {
+    const full: SuggestableFields = {
+      script_mode: 'visual_only',
+      setup_complexity: 'point_and_shoot',
+      skill_required: 'anyone',
+      setting: 'any_venue',
+      peopleNeeded: 'solo',
+      difficulty: 'easy',
+      filmTime: 'under_15min',
+      businessTypes: ['hospitality'],
+    };
+    expect(countApplicableSuggestions(full)).toBe(8);
+  });
+
+  it('reflects backend suppression: suppressed field → count decreases', () => {
+    // script_mode was confirmed by CM → backend filtered it → not in suggested_overrides
+    const fromBackend = buildSuggestionsFromOverrides({
+      difficulty: 'medium',
+      filmTime: 'under_30min',
+      // script_mode intentionally absent — backend filtered it
+    });
+    expect(countApplicableSuggestions(fromBackend)).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSuggestionState
+// ---------------------------------------------------------------------------
+
+describe('getSuggestionState', () => {
+  const nullFields: SuggestableFields = {
+    script_mode: null,
+    setup_complexity: null,
+    skill_required: null,
+    setting: null,
+    peopleNeeded: null,
+    difficulty: null,
+    filmTime: null,
+    businessTypes: null,
+  };
+
+  it('returns "enrich_failed" when enrichFailed is true, regardless of fields', () => {
+    expect(getSuggestionState(nullFields, true)).toBe('enrich_failed');
+    expect(getSuggestionState({ ...nullFields, script_mode: 'visual_only' }, true)).toBe('enrich_failed');
+  });
+
+  it('returns "suppressed" when enrichFailed is false and all fields are null', () => {
+    expect(getSuggestionState(nullFields, false)).toBe('suppressed');
+    expect(getSuggestionState(nullFields, undefined)).toBe('suppressed');
+  });
+
+  it('returns "has_suggestions" when at least one field is non-null', () => {
+    expect(getSuggestionState({ ...nullFields, difficulty: 'medium' }, false)).toBe('has_suggestions');
+    expect(getSuggestionState({ ...nullFields, businessTypes: ['retail'] }, false)).toBe('has_suggestions');
+  });
+
+  it('returns "suppressed" when businessTypes is empty array (no actual suggestions)', () => {
+    expect(getSuggestionState({ ...nullFields, businessTypes: [] }, false)).toBe('suppressed');
+  });
+
+  it('live smoke contract: all fields confirmed → state is suppressed', () => {
+    // Simulates: CM has confirmed all 8 suggestable fields → backend filters all → frontend gets {}
+    const fields = buildSuggestionsFromOverrides({});
+    expect(getSuggestionState(fields, false)).toBe('suppressed');
+    expect(countApplicableSuggestions(fields)).toBe(0);
+  });
+
+  it('live smoke contract: 2 of 5 legacy fields confirmed → state is has_suggestions', () => {
+    // Simulates: CM confirmed peopleNeeded + difficulty → backend filters those 2 →
+    // filmTime + businessTypes + script_mode still come through
+    const fields = buildSuggestionsFromOverrides({
+      filmTime: 'under_30min',
+      businessTypes: ['hospitality'],
+      script_mode: 'visual_only',
+    });
+    expect(getSuggestionState(fields, false)).toBe('has_suggestions');
+    expect(countApplicableSuggestions(fields)).toBe(3);
   });
 });
