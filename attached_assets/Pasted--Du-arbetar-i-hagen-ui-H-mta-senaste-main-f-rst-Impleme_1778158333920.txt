@@ -1,0 +1,49 @@
+ Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 33: Nullable objective cleanup and AI trend deprecation.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Behåll backward compatibility med gamla concepts.
+  - Fokusera på små cleanup-fixar, inte ny stor funktionalitet.
+
+  Mål:
+
+  1. Fixa clearing av nullable objective fields i concept review
+     - Uppdatera artifacts/letrend/src/app/studio/concepts/[id]/review/page.tsx.
+     - När setup_complexity, skill_required eller setting är null ska gamla värden tas bort från overrides innan PATCH.
+     - Nuvarande mönster med `...(raw.overrides ?? {})` gör troligen att gamla värden lever kvar.
+     - Implementera explicit delete/omit-logik för dessa tre fält.
+     - `script_mode` är fortsatt required och ska alltid sparas.
+
+  2. Ta bort AI-trend från aktiva CM/customer-facing ytor
+     - Undersök kvarvarande aktiva användningar av trendLevel/trend_level.
+     - Ta bort trend-badge från customer workspace cards:
+       artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+     - Undersök /studio/concepts/:id och /studio/concepts/:id/edit.
+     - Om dessa är legacy, dokumentera det och gör minsta säkra ändring.
+     - Nya flöden ska inte visa AI-trend som om den vore pålitlig.
+
+  3. Dokumentera legacy budget/trend
+     - Sök kvarvarande estimatedBudget/BUDGET_VALUES/trendLevel.
+     - Dokumentera vilka som är:
+       - legacy/backcompat
+       - mock/data
+       - orelaterad API-budget
+       - faktisk aktiv UI-yta
+     - Ta inte bort translator legacy om det riskerar att bryta gamla concepts.
+
+  4. Dokumentation
+     - Skapa docs/agent-plans/33-ingest-cleanup-ai-trend.md.
+     - Beskriv ändrade filer, bugfixen för nullable fields, kvarvarande legacyfält och nästa rekommenderade steg.
+
+  5. Verifiering
+     - Kör:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+
+  Output:
+  - Kodändringar enligt ovan.
+  - Ny docs/agent-plans/33-ingest-cleanup-ai-trend.md.
+  - Kort sammanfattning av kvarstående nästa steg.

@@ -303,12 +303,26 @@ export default function ConceptReviewPage() {
         market,
         peopleNeeded,
         script_mode: scriptMode,
-        ...(setupComplexity ? { setup_complexity: setupComplexity } : {}),
-        ...(skillRequired ? { skill_required: skillRequired } : {}),
-        ...(settingVal ? { setting: settingVal } : {}),
         businessTypes,
         hasScript: Boolean(scriptSv.trim()),
       };
+      // Nullable objective fields — write when set, explicitly delete when cleared
+      // so that toggling off removes the old override value from the DB.
+      if (setupComplexity) {
+        newOverrides['setup_complexity'] = setupComplexity;
+      } else {
+        delete newOverrides['setup_complexity'];
+      }
+      if (skillRequired) {
+        newOverrides['skill_required'] = skillRequired;
+      } else {
+        delete newOverrides['skill_required'];
+      }
+      if (settingVal) {
+        newOverrides['setting'] = settingVal;
+      } else {
+        delete newOverrides['setting'];
+      }
       const resp = await fetch(`/api/admin/concepts/${conceptId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },

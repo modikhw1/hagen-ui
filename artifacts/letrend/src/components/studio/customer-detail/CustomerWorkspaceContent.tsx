@@ -4094,11 +4094,6 @@ function CustomerWorkspacePageContent() {
                     <span>{concept.source === 'hagen' ? 'LeTrend' : 'CM-skapat'}</span>
                   </>
                 ) : null}
-                {concept.trendLevel >= 4 && (
-                  <span style={{ marginLeft: 4, fontSize: 10, padding: '1px 6px', borderRadius: 999, background: '#fef3c7', border: '1px solid #fde68a', color: '#92400e', fontWeight: 600 }}>
-                    {display.trendLevel(concept.trendLevel).icon} {display.trendLevel(concept.trendLevel).label}
-                  </span>
-                )}
               </div>
               {concept.description_sv && (
                 <p style={{
