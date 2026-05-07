@@ -1,0 +1,81 @@
+Du arbetar i hagen-ui:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 57: kartlägg och hårdna kontrollflödet för TikTok customer history sync.
+
+  Bakgrund:
+  Ingestmotorn är nu verifierad genom Phase 54-56.
+  Nästa område är TikTok scrape/history sync för kunder:
+  - initial fetch vid kundskapande/inbjudan
+  - manuell “Hämta historik” i customer workspace
+  - cron/batch sync
+  - preview/sync från hagen-library
+  - hur resultat/fel syns för CM/admin
+
+  Viktiga filer/ytor:
+  - artifacts/api-server/src/routes/admin/customers.ts
+    - POST /api/admin/customers/create
+    - skriver tiktok_profile_url/tiktok_handle
+    - triggar `triggerInitialTikTokSyncBackground(...)` om handle finns
+  - artifacts/api-server/src/lib/studio/tiktok-sync.ts
+    - syncCustomerHistory
+    - runSyncBatch
+    - triggerInitialTikTokSyncBackground
+  - artifacts/api-server/src/routes/studio-v2.ts
+    - POST /api/studio-v2/customers/:customerId/fetch-profile-history
+    - POST/GET sync-history endpoints
+    - internal sync-history-all cron
+  - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+    - “Hämta historik”
+    - “Förhandsgranska”
+    - “Synca från hagen”
+  - artifacts/letrend/src/lib/tiktok/trigger-initial-sync.ts
+    - legacy/client-side-ish path; audit whether still used or dead/unsafe
+  - docs/agent-plans/04-tiktok-sync-cron-observability.md
+  - docs/agent-plans/08-b1-b2-customer-create-invite-patch.md
+
+  Uppgift:
+  1. Synka hagen-ui main.
+  2. Rör inte Hagen-repot.
+  3. Gör ingen live RapidAPI-körning i första passet om det inte finns tydlig dryRun/preview.
+  4. Kartlägg alla entrypoints som kan starta TikTok history sync:
+     - admin customer create/invite
+     - profile link/update
+     - manual fetch-profile-history
+     - preview/sync-history
+     - cron/internal batch
+  5. För varje entrypoint, dokumentera:
+     - vilken route/funktion som anropas
+     - om den är fire-and-forget eller request-blocking
+     - vilken auth som krävs
+     - vilka DB-fält som uppdateras
+     - hur CM/admin ser status/fel idag
+     - om den kan skapa imported_history/customer_concepts
+     - om den kan trigga reconciliation/motor signals
+  6. Identifiera luckor:
+     - saknas statusrad/spinner?
+     - saknas sync_run/cron_run_log visibility?
+     - kan initial sync starta utan att användaren ser det?
+     - kan samma kund syncas dubbelt?
+     - finns legacy/dead path som bör tas bort?
+     - är errors synliga i UI eller bara logs?
+  7. Föreslå en konkret Phase 58 implementation:
+     - helst liten och verifierbar
+     - exempel: kundens “TikTok sync status panel” i customer workspace, eller admin customer create response/status,
+  eller safe dry-run route
+  8. Lägg till dokument:
+     docs/agent-plans/57-tiktok-history-sync-control-audit.md
+
+  Dokumentet ska innehålla:
+  - entrypoint-matris
+  - dataflöde från tiktok_handle till imported history rows
+  - status/error visibility
+  - live/dry-run möjligheter
+  - risker
+  - rekommenderad Phase 58 prompt
+
+  Verifiera:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
+
+  Commit/pusha till main.
