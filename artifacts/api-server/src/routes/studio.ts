@@ -429,6 +429,132 @@ router.put('/email/schedules/:id', requireAuth, CM_ONLY, async (req, res) => {
   }
 });
 
+// POST /api/studio/concepts/:id/reanalyze
+// Re-runs Hagen analyze (when source URL exists) + Gemini enrich for an existing concept.
+// Returns fresh backend_data and suggested overrides for CM review — NO DB writes.
+// CM must explicitly save via the review page for any changes to be persisted.
+router.post('/concepts/:id/reanalyze', requireAuth, CM_ONLY, async (req, res) => {
+  const supabase = createSupabaseAdmin();
+  const conceptId = req.params['id'];
+
+  let concept: Record<string, unknown>;
+  try {
+    const { data, error } = await supabase
+      .from('concepts')
+      .select('id, backend_data, overrides, source')
+      .eq('id', conceptId)
+      .single();
+    if (error || !data) {
+      res.status(404).json({ error: 'Konceptet hittades inte' });
+      return;
+    }
+    concept = data as Record<string, unknown>;
+  } catch (err) {
+    logger.error(err, 'studio reanalyze fetch error');
+    res.status(500).json({ error: 'Internt serverfel' });
+    return;
+  }
+
+  const bd = (concept['backend_data'] as Record<string, unknown>) ?? {};
+  const sourceUrl = ((bd['url'] ?? bd['source_url']) as string | undefined)?.trim() ?? '';
+  const existingGcsUri = (bd['gcs_uri'] as string | undefined)?.trim() ?? '';
+
+  let strategy: 'full_reanalyze' | 'enrich_only';
+  let workingBackendData: Record<string, unknown>;
+
+  if (sourceUrl) {
+    strategy = 'full_reanalyze';
+    const userId = req.user?.id ?? req.user?.email ?? 'anonymous';
+    const { allowed, retryAfterMs } = checkAnalyzeRateLimit(String(userId));
+    if (!allowed) {
+      const retryAfterSec = Math.ceil(retryAfterMs / 1000);
+      res.setHeader('Retry-After', String(retryAfterSec));
+      res.status(429).json({
+        error: `Analyskvot uppnådd. Försök igen om ${retryAfterSec} sekunder.`,
+        retryAfterSeconds: retryAfterSec,
+      });
+      return;
+    }
+
+    logger.info({ conceptId, sourceUrl }, 'studio reanalyze: full_reanalyze via analyze+enrich');
+    const analyzeResult = await fetchHagenJson({
+      method: 'POST',
+      path: '/api/studio/concepts/analyze',
+      body: { videoUrl: sourceUrl },
+      timeoutMs: 45000,
+      routeTag: 'studio.concepts.reanalyze.analyze',
+    });
+
+    if (!analyzeResult.ok) {
+      res.status(analyzeResult.clientStatus).json({
+        error: String(
+          (analyzeResult.body as Record<string, unknown>)['error'] ??
+          (analyzeResult.body as Record<string, unknown>)['message'] ??
+          'Analysen misslyckades'
+        ),
+      });
+      return;
+    }
+
+    const analyzePayload = analyzeResult.data as Record<string, unknown>;
+    const analyzeEnvelope = analyzePayload['analysis'] as Record<string, unknown> | undefined;
+    const clipData = (analyzeEnvelope?.['analysis'] as Record<string, unknown> | undefined) ?? analyzeEnvelope ?? {};
+    const freshGcsUri = (analyzePayload['upload'] as Record<string, unknown> | undefined)?.['gcsUri'] as string | undefined;
+
+    workingBackendData = {
+      ...clipData,
+      id: bd['id'] ?? conceptId,
+      url: sourceUrl,
+      source_url: sourceUrl,
+      ...(freshGcsUri ? { gcs_uri: freshGcsUri } : existingGcsUri ? { gcs_uri: existingGcsUri } : {}),
+    };
+  } else {
+    strategy = 'enrich_only';
+    logger.info({ conceptId }, 'studio reanalyze: enrich_only (no source URL)');
+    workingBackendData = { ...bd };
+  }
+
+  const enrichResult = await fetchHagenJson({
+    method: 'POST',
+    path: '/api/studio/concepts/enrich',
+    body: { backend_data: workingBackendData },
+    timeoutMs: 30000,
+    routeTag: 'studio.concepts.reanalyze.enrich',
+  });
+
+  if (!enrichResult.ok) {
+    if (strategy === 'full_reanalyze') {
+      logger.warn({ conceptId }, 'studio reanalyze: enrich failed after analyze, returning partial');
+      res.json({
+        strategy,
+        backend_data: workingBackendData,
+        suggested_overrides: {},
+        enrich_failed: true,
+      });
+    } else {
+      res.status(enrichResult.clientStatus).json({
+        error: String(
+          (enrichResult.body as Record<string, unknown>)['error'] ?? 'Förädlingen misslyckades'
+        ),
+      });
+    }
+    return;
+  }
+
+  const enrichPayload = enrichResult.data as Record<string, unknown>;
+  const suggestedOverrides = (enrichPayload['overrides'] as Record<string, unknown>) ?? {};
+  const finalBackendData = enrichPayload['backend_data']
+    ? { ...workingBackendData, ...(enrichPayload['backend_data'] as Record<string, unknown>) }
+    : workingBackendData;
+
+  logger.info({ conceptId, strategy, hasOverrides: Object.keys(suggestedOverrides).length > 0 }, 'studio reanalyze: complete');
+  res.json({
+    strategy,
+    backend_data: finalBackendData,
+    suggested_overrides: suggestedOverrides,
+  });
+});
+
 // DELETE /api/studio/email/schedules/:id
 router.delete('/email/schedules/:id', requireAuth, CM_ONLY, async (req, res) => {
   try {

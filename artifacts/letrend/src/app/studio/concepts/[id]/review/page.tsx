@@ -149,6 +149,15 @@ interface RawConcept {
   version: number;
 }
 
+interface ReanalyzeSuggestions {
+  strategy: 'full_reanalyze' | 'enrich_only';
+  script_mode: string;
+  setup_complexity: string | null;
+  skill_required: string | null;
+  setting: string | null;
+  enrich_failed?: boolean;
+}
+
 function counterColor(len: number, min: number, max: number) {
   if (len === 0) return '#9ca3af';
   if (len < min || len > max) return '#dc2626';
@@ -195,6 +204,11 @@ export default function ConceptReviewPage() {
   const [suggestedScript, setSuggestedScript] = useState('');
   const [nextDraft, setNextDraft] = useState<{ id: string; headline: string } | null | 'loading'>('loading');
   const [draftQueueProgress, setDraftQueueProgress] = useState<{ index: number; total: number } | null>(null);
+
+  const [reanalyzeState, setReanalyzeState] = useState<'idle' | 'reanalyzing' | 'done' | 'error'>('idle');
+  const [reanalyzeSuggestions, setReanalyzeSuggestions] = useState<ReanalyzeSuggestions | null>(null);
+  const [reanalyzeError, setReanalyzeError] = useState<string | null>(null);
+  const [pendingReanalyzeBackendData, setPendingReanalyzeBackendData] = useState<BackendClip | null>(null);
 
   const loadConcept = useCallback(async () => {
     if (!conceptId) return;
@@ -323,10 +337,14 @@ export default function ConceptReviewPage() {
       } else {
         delete newOverrides['setting'];
       }
+      const patchBody: Record<string, unknown> = { overrides: newOverrides };
+      if (pendingReanalyzeBackendData) {
+        patchBody['backend_data'] = pendingReanalyzeBackendData;
+      }
       const resp = await fetch(`/api/admin/concepts/${conceptId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ overrides: newOverrides }),
+        body: JSON.stringify(patchBody),
       });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({}));
@@ -336,12 +354,17 @@ export default function ConceptReviewPage() {
       setRaw(payload.concept as RawConcept);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
+      if (pendingReanalyzeBackendData) {
+        setPendingReanalyzeBackendData(null);
+        setReanalyzeState('idle');
+        setReanalyzeSuggestions(null);
+      }
     } catch (err) {
       alert(`Fel: ${err instanceof Error ? err.message : 'Okant fel'}`);
     } finally {
       setSaving(false);
     }
-  }, [businessTypes, conceptId, descriptionSv, difficulty, filmTime, headlineSv, market, peopleNeeded, productionNotesText, raw, scriptMode, scriptSv, session, settingVal, setupComplexity, skillRequired, whyItFitsText, whyItWorksSv]);
+  }, [businessTypes, conceptId, descriptionSv, difficulty, filmTime, headlineSv, market, peopleNeeded, pendingReanalyzeBackendData, productionNotesText, raw, scriptMode, scriptSv, session, settingVal, setupComplexity, skillRequired, whyItFitsText, whyItWorksSv]);
 
   const handleTogglePublish = useCallback(async (publish: boolean) => {
     const publishReady = Boolean(headlineSv.trim()) && Boolean(scriptSv.trim() || !publish) && Boolean(difficulty && filmTime && peopleNeeded && businessTypes.length > 0);
@@ -395,6 +418,48 @@ export default function ConceptReviewPage() {
       setTakingOver(false);
     }
   }, [conceptId, createdBy, session, user]);
+
+  const handleReanalyze = useCallback(async () => {
+    setReanalyzeState('reanalyzing');
+    setReanalyzeError(null);
+    setReanalyzeSuggestions(null);
+    setPendingReanalyzeBackendData(null);
+    try {
+      const { data: { session: s } } = await supabase.auth.getSession();
+      const resp = await fetch(`/api/studio/concepts/${conceptId}/reanalyze`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${s?.access_token}` },
+      });
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        const retryAfterSec = (errData as { retryAfterSeconds?: number }).retryAfterSeconds;
+        const errMsg = (errData as { error?: string }).error || `HTTP ${resp.status}`;
+        throw new Error(retryAfterSec ? `${errMsg}` : errMsg);
+      }
+      const data = await resp.json() as {
+        strategy: 'full_reanalyze' | 'enrich_only';
+        backend_data: BackendClip;
+        suggested_overrides: Record<string, unknown>;
+        enrich_failed?: boolean;
+      };
+      const newBd = data.backend_data;
+      const sug = data.suggested_overrides;
+      const proposed: ReanalyzeSuggestions = {
+        strategy: data.strategy,
+        script_mode: (sug['script_mode'] as string | undefined) ?? readScriptMode(newBd),
+        setup_complexity: (sug['setup_complexity'] as string | undefined) ?? readSetupComplexity(newBd) ?? null,
+        skill_required: (sug['skill_required'] as string | undefined) ?? readSkillRequired(newBd) ?? null,
+        setting: (sug['setting'] as string | undefined) ?? readSetting(newBd) ?? null,
+        enrich_failed: data.enrich_failed,
+      };
+      setPendingReanalyzeBackendData(newBd);
+      setReanalyzeSuggestions(proposed);
+      setReanalyzeState('done');
+    } catch (err) {
+      setReanalyzeError(err instanceof Error ? err.message : 'Analysfel');
+      setReanalyzeState('error');
+    }
+  }, [conceptId]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -491,6 +556,102 @@ export default function ConceptReviewPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 24, alignItems: 'start' }}>
         <div style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {(sourceUrl || gcsUri) ? <div><div style={{ fontSize: 12, fontWeight: 700, color: isActive ? '#065f46' : '#92400e', marginBottom: 6 }}>Status: {lifecycleStage}</div><VideoPlayer videoUrl={sourceUrl ?? undefined} gcsUri={gcsUri ?? undefined} showLabel={false} /><div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between' }}>{sourceUrl ? <span style={{ fontSize: 11, color: '#9ca3af' }}>{detectPlatform(sourceUrl) ?? 'Kallvideo'}</span> : null}{sourceUrl ? <a href={sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#4f46e5', textDecoration: 'none' }}>Oppna video →</a> : null}</div></div> : null}
+
+          {/* Reanalyze panel — available when a source URL or existing backend_data exists */}
+          {(sourceUrl || gcsUri || raw.source === 'hagen') ? (
+            <div style={{ ...cardStyle, padding: '12px 14px', border: '1px solid #e5e7eb' }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>AI-metadataanalys</span>
+                {pendingReanalyzeBackendData ? <span style={{ fontSize: 10, color: '#059669', fontWeight: 600, background: '#ecfdf5', padding: '2px 6px', borderRadius: 999 }}>Ny analys laddad</span> : null}
+              </div>
+
+              {reanalyzeState === 'idle' || reanalyzeState === 'error' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleReanalyze()}
+                    style={{ width: '100%', padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db', background: '#f9fafb', color: '#374151', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    {sourceUrl ? 'Reanalysera video med AI' : 'Förädla metadata med AI'}
+                  </button>
+                  {reanalyzeState === 'error' && reanalyzeError ? (
+                    <div style={{ marginTop: 6, fontSize: 11, color: '#dc2626', lineHeight: 1.4 }}>{reanalyzeError}</div>
+                  ) : null}
+                </>
+              ) : reanalyzeState === 'reanalyzing' ? (
+                <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', padding: '8px 0' }}>
+                  {sourceUrl ? 'Analyserar video… (kan ta upp till 1 min)' : 'Förädlar metadata…'}
+                </div>
+              ) : reanalyzeSuggestions ? (() => {
+                const smLabel = scriptModeOptions.find((o) => o.key === reanalyzeSuggestions.script_mode)?.label ?? reanalyzeSuggestions.script_mode;
+                const setupLabel = setupComplexityOptions.find((o) => o.key === reanalyzeSuggestions.setup_complexity)?.label;
+                const skillLabel = skillRequiredOptions.find((o) => o.key === reanalyzeSuggestions.skill_required)?.label;
+                const settingLabel = reviewSettingOptions.find((o) => o.key === reanalyzeSuggestions.setting)?.label;
+                const currentSmLabel = scriptModeOptions.find((o) => o.key === scriptMode)?.label ?? scriptMode;
+                const currentSetupLabel = setupComplexityOptions.find((o) => o.key === setupComplexity)?.label;
+                const currentSkillLabel = skillRequiredOptions.find((o) => o.key === skillRequired)?.label;
+                const currentSettingLabel = reviewSettingOptions.find((o) => o.key === settingVal)?.label;
+                const suggestions: Array<{ key: string; label: string; current: string | null; proposed: string | null; apply: () => void }> = [
+                  { key: 'script_mode', label: 'Manusläge', current: currentSmLabel, proposed: smLabel, apply: () => setScriptMode(reanalyzeSuggestions.script_mode) },
+                  { key: 'setup_complexity', label: 'Setup', current: currentSetupLabel ?? null, proposed: setupLabel ?? null, apply: () => setSetupComplexity(reanalyzeSuggestions.setup_complexity) },
+                  { key: 'skill_required', label: 'Skicklighet', current: currentSkillLabel ?? null, proposed: skillLabel ?? null, apply: () => setSkillRequired(reanalyzeSuggestions.skill_required) },
+                  { key: 'setting', label: 'Miljö', current: currentSettingLabel ?? null, proposed: settingLabel ?? null, apply: () => setSettingVal(reanalyzeSuggestions.setting) },
+                ];
+                const hasDiff = suggestions.some((s) => s.proposed && s.proposed !== s.current);
+                return (
+                  <div>
+                    {reanalyzeSuggestions.enrich_failed ? (
+                      <div style={{ marginBottom: 8, padding: '6px 8px', borderRadius: 6, background: '#fef3c7', fontSize: 11, color: '#92400e' }}>
+                        Video analyserad — förädling misslyckades. Sigma-förslag ej tillgängliga.
+                      </div>
+                    ) : null}
+                    <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 8, fontWeight: 600 }}>
+                      {reanalyzeSuggestions.strategy === 'full_reanalyze' ? 'Fullanalys (video + AI)' : 'Förädling (AI)'}
+                    </div>
+                    {hasDiff ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                        {suggestions.filter((s) => s.proposed && s.proposed !== s.current).map((s) => (
+                          <div key={s.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6, padding: '5px 8px', borderRadius: 6, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>{s.label}</div>
+                              <div style={{ fontSize: 11, color: '#374151', marginTop: 1 }}>
+                                <span style={{ color: '#9ca3af', textDecoration: 'line-through' }}>{s.current ?? '—'}</span>
+                                {' → '}
+                                <span style={{ fontWeight: 700, color: '#4f46e5' }}>{s.proposed}</span>
+                              </div>
+                            </div>
+                            <button type="button" onClick={s.apply} style={{ flexShrink: 0, padding: '3px 8px', borderRadius: 6, border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                              Tillämpa
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (reanalyzeSuggestions.script_mode) setScriptMode(reanalyzeSuggestions.script_mode);
+                            setSetupComplexity(reanalyzeSuggestions.setup_complexity);
+                            setSkillRequired(reanalyzeSuggestions.skill_required);
+                            setSettingVal(reanalyzeSuggestions.setting);
+                          }}
+                          style={{ width: '100%', padding: '6px', borderRadius: 8, border: '1px solid #4f46e5', background: '#4f46e5', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 2 }}
+                        >
+                          Tillämpa alla förslag
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: '#16a34a', marginBottom: 8 }}>Inga ändringar att tillämpa — formuläret är redan uppdaterat.</div>
+                    )}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" onClick={() => void handleReanalyze()} style={{ flex: 1, padding: '5px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#6b7280', fontSize: 11, cursor: 'pointer' }}>Kör igen</button>
+                      <button type="button" onClick={() => { setReanalyzeState('idle'); setReanalyzeSuggestions(null); setPendingReanalyzeBackendData(null); }} style={{ flex: 1, padding: '5px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#6b7280', fontSize: 11, cursor: 'pointer' }}>Stäng</button>
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 10, color: '#9ca3af' }}>Sparas med konceptet nästa gång du klickar Spara.</div>
+                  </div>
+                );
+              })() : null}
+            </div>
+          ) : null}
+
           {replicabilityHint ? <div style={{ ...cardStyle, border: '1px solid #e5e4e1', boxShadow: 'none', overflow: 'hidden' }}><button type="button" onClick={() => setShowHint((current) => !current)} style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: '10px 14px', border: 'none', background: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 12, fontWeight: 600 }}><span>Analysanteckning</span><span>{showHint ? '▲' : '▼'}</span></button>{showHint ? <div style={{ padding: '0 14px 14px', fontSize: 12, color: '#374151', lineHeight: 1.6 }}>{replicabilityHint}</div> : null}</div> : null}
           {raw && hasSigmaSignals(raw.backend_data) ? (() => {
             const sigma = getSigma(raw.backend_data);

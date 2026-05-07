@@ -1,0 +1,53 @@
+Du arbetar i hagen-ui. Börja med att köra `git pull --ff-only` och läs senaste dokumenten i `docs/agent-plans`,
+  särskilt Phase 28-38.
+
+  VIKTIGT:
+  - Rör inte `/admin/demos`.
+  - Du har inte Supabase MCP. Gör inga live DB-antaganden och inga DB-writes utanför appens befintliga API-flöden.
+  - Målet är Phase 39: existing concept re-ingest/review workflow.
+  - Bulk-backfill ska INTE implementeras. Orchestratorns Supabase-inventory visar att 26 aktiva concepts saknar
+  objective overrides och att 0 har sigma-data. Alla har däremot source URL eller GCS-pointer, så rätt väg är re-ingest
+  + CM review.
+
+  Bakgrund / produktlogik:
+  - AI/Gemini är ett förslagssystem, inte truth.
+  - Befintliga `overrides` är CM-confirmed och ska aldrig ersättas utan explicit ny save/confirm.
+  - Re-ingest ska hjälpa gamla concepts få ny `backend_data`/AI-förslag, men CM ska kunna granska innan något blir
+  aktivt.
+
+  Uppgift:
+  1. Kartlägg nuvarande ingest/review-flöde:
+     - `artifacts/letrend/src/components/studio/UploadConceptModal.tsx`
+     - `artifacts/letrend/src/app/studio/concepts/[id]/review/page.tsx`
+     - API-routes för analyze/enrich/save/update concept
+     - `translator.ts`, `objective-metadata-backfill.ts`, `script-mode-filter.ts`
+     - relevanta admin/api-client helpers
+
+  2. Föreslå och implementera minsta säkra Phase 39-slice:
+     - Lägg till ett tydligt review-flöde för befintliga concepts där CM kan starta “reanalysera metadata” från concept
+  review-sidan, om conceptet har source URL eller GCS/video-pointer.
+     - Visa loading/spinner, error och success-state.
+     - Reanalysis ska producera draft/förslag i UI:t.
+     - Befintliga overrides ska vara kvar som default/confirmed values.
+     - Nya AI-förslag ska bara bli sparade när CM klickar save/confirm i review-flödet.
+     - Om befintliga endpoints inte stödjer existing concept reanalysis rent, skapa hellre en liten intern helper/route
+  med tydligt namn än att pressa in otydlig logik i upload-modalens create-flow.
+     - Undvik att skapa duplicerade concepts när intentionen är att reanalysera ett befintligt concept.
+
+  3. Dokumentera beslutet i:
+     - `docs/agent-plans/39-existing-concept-reingest-review-workflow.md`
+
+  Dokumentet ska innehålla:
+  - Vad som implementerades
+  - Hur re-ingest/review-flödet fungerar
+  - Vilka fält som är safe att föreslå
+  - Vilka fält som aldrig auto-overwrite:as
+  - Kvarvarande luckor inför full ingest engine
+  - Teststatus och risker
+
+  Verifiering:
+  - Kör `pnpm --filter @workspace/api-server run typecheck`
+  - Kör `pnpm --filter @workspace/letrend run typecheck`
+  - Kör relevanta tests om testmiljön fungerar. Om Vitest/Rollup optional dependency blockerar lokalt, dokumentera det
+  tydligt.
+  - Avsluta med commit till main/checkpoint enligt normal agentprocess.
