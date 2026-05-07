@@ -10,10 +10,11 @@ import {
   DIFFICULTY_VALUES,
   FILM_TIME_VALUES,
   PEOPLE_VALUES,
+  SCRIPT_MODE_VALUES,
 } from '@/lib/concept-enrichment';
 import { categoryOptions, display } from '@/lib/display';
 import { supabase } from '@/lib/supabase/client';
-import { getSigma, hasSigmaSignals, translateClipToConcept } from '@/lib/translator';
+import { getSigma, hasSigmaSignals, readScriptMode, translateClipToConcept } from '@/lib/translator';
 import type { BackendClip, ClipOverride } from '@/lib/translator';
 import { conceptFieldConstraints } from '@/lib/concept-field-constraints';
 import { describeTranscriptLanguage, detectTranscriptLanguage } from '@/lib/transcript-language';
@@ -97,6 +98,10 @@ const peopleOptions = PEOPLE_VALUES.map((key) => ({
 }));
 const businessTypeOptions = BUSINESS_TYPE_VALUES.map((key) => ({ key, ...display.businessType(key) }));
 const marketOptions = categoryOptions.markets();
+const scriptModeOptions = SCRIPT_MODE_VALUES.map((key) => ({
+  key,
+  label: ({ none: 'Inget manus', text_overlay: 'Textoverlay', short_dialogue: 'Kort dialog', long_dialogue: 'Lång dialog', visual_only: 'Visuellt' } as Record<string, string>)[key] ?? key,
+}));
 
 function detectPlatform(url: string): string | null {
   if (url.includes('tiktok.com')) return 'TikTok';
@@ -162,6 +167,7 @@ export default function ConceptReviewPage() {
   const [filmTime, setFilmTime] = useState('');
   const [market, setMarket] = useState('');
   const [peopleNeeded, setPeopleNeeded] = useState('');
+  const [scriptMode, setScriptMode] = useState('none');
   const [businessTypes, setBusinessTypes] = useState<string[]>([]);
   const [replicabilityHint, setReplicabilityHint] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -206,6 +212,7 @@ export default function ConceptReviewPage() {
       setFilmTime(typeof overrides.filmTime === 'string' ? overrides.filmTime : translated.filmTime);
       setMarket(normalizedMarket);
       setPeopleNeeded(typeof overrides.peopleNeeded === 'string' ? overrides.peopleNeeded : translated.peopleNeeded);
+      setScriptMode(typeof overrides.script_mode === 'string' ? overrides.script_mode : readScriptMode(concept.backend_data, overrides));
       setBusinessTypes(
         Array.isArray(overrides.businessTypes) && overrides.businessTypes.length > 0
           ? overrides.businessTypes.filter((value) => typeof value === 'string') as string[]
@@ -272,6 +279,7 @@ export default function ConceptReviewPage() {
         filmTime,
         market,
         peopleNeeded,
+        script_mode: scriptMode,
         businessTypes,
         hasScript: Boolean(scriptSv.trim()),
       };
@@ -293,7 +301,7 @@ export default function ConceptReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [businessTypes, conceptId, descriptionSv, difficulty, filmTime, headlineSv, market, peopleNeeded, productionNotesText, raw, scriptSv, session, whyItFitsText, whyItWorksSv]);
+  }, [businessTypes, conceptId, descriptionSv, difficulty, filmTime, headlineSv, market, peopleNeeded, productionNotesText, raw, scriptMode, scriptSv, session, whyItFitsText, whyItWorksSv]);
 
   const handleTogglePublish = useCallback(async (publish: boolean) => {
     const publishReady = Boolean(headlineSv.trim()) && Boolean(scriptSv.trim() || !publish) && Boolean(difficulty && filmTime && peopleNeeded && businessTypes.length > 0);
@@ -574,6 +582,16 @@ export default function ConceptReviewPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                 <div><label style={{ ...fieldLabelStyle, fontSize: 12 }}>Marknad</label><select value={market} onChange={(event) => setMarket(event.target.value)} style={{ ...inputBaseStyle, fontSize: 13, padding: '9px 12px' }}>{marketOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></div>
                 <div><label style={{ ...fieldLabelStyle, fontSize: 12 }}>Manusstatus</label><div style={{ ...inputBaseStyle, fontSize: 13, padding: '9px 12px', background: '#fafaf9', color: scriptSv.trim() ? '#166534' : '#6b7280' }}>{scriptSv.trim() ? 'Med manus' : 'Utan manus'}</div></div>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <label style={{ ...fieldLabelStyle, marginBottom: 8, fontSize: 12 }}>Manusläge</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {scriptModeOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setScriptMode(option.key)} style={choiceButton(scriptMode === option.key, '#0f766e')}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div style={{ marginTop: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>

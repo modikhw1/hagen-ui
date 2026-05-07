@@ -1,0 +1,61 @@
+Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 31: Objective ingest fields in upload-confirm.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Behåll backward compatibility med gamla concepts.
+  - Nya fält ska sparas i overrides som platta fält, inte införa hela objective_signals namespace än.
+
+  Mål:
+
+  1. Koppla script_mode till CM-confirm
+     - UploadConceptModal ska visa script_mode som valbart fält i classify-steget.
+     - Prefill från pendingOverrides.script_mode om det finns, annars readScriptMode(backendData, overrides).
+     - Spara script_mode i overrides.
+     - Concept review-sidan ska också kunna visa/ändra script_mode.
+     - hasScript får vara kvar som legacy/backcompat.
+
+  2. Lägg till objektiva sigma-fält i upload-confirm
+     - Lägg till preselectable fält:
+       - setup_complexity
+       - skill_required
+       - setting
+     - Prefill från backend_data.sigma_taste.replicability_decomposed:
+       - environment_requirements.setup_complexity
+       - actor_requirements.skill_level
+       - environment_requirements.backdrop_interchangeability
+     - Spara dessa i overrides.
+     - Visa dem som enkla ButtonGroups/selects med svenska labels.
+
+  3. Lägg helper-funktioner i translator.ts
+     - readSetupComplexity(...)
+     - readSkillRequired(...)
+     - readSetting(...)
+     - De ska läsa overrides först, sedan sigma, sedan rimlig fallback.
+     - Exportera relevanta typer om de inte redan finns.
+
+  4. Ta bort residual budget från aktiva arbetsytor
+     - Ta bort budget-filter från customer workspace concept selection:
+       - artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx
+       - artifacts/letrend/src/hooks/useConceptWorkspace.ts
+     - Rör inte cron-health “budget”, det handlar om API-budget och är orelaterat.
+     - Legacy edit-sidan kan lämnas om den är gammal/deprecated, men dokumentera den.
+
+  5. Dokumentation
+     - Skapa docs/agent-plans/31-ingest-objective-fields.md.
+     - Beskriv ändrade filer, vilka overrides som nu sparas, och vad som återstår.
+
+  6. Verifiering
+     - Kör:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+
+  Output:
+  - Kodändringar enligt ovan.
+  - Ny docs/agent-plans/31-ingest-objective-fields.md.
+  - Kort sammanfattning av kvarstående nästa steg.
+
+  Det här är rätt nästa steg eftersom script_mode nu finns i maskineriet men ännu inte är en faktisk CM-kontroll. Nästa
+  implementation gör ingestflödet mer likt det gamla /analyze-rate-v1: AI prefill, CM bekräftar.

@@ -16,8 +16,8 @@ import {
   PEOPLE_VALUES,
 } from '@/lib/concept-enrichment';
 import { categoryOptions, display } from '@/lib/display';
-import { translateClipToConcept } from '@/lib/translator';
-import type { BackendClip } from '@/lib/translator';
+import { getSigma, readScriptMode, readSetupComplexity, readSkillRequired, readSetting, translateClipToConcept } from '@/lib/translator';
+import type { BackendClip, ScriptMode, SigmaBackdrop, SigmaSetupComplexity, SigmaSkillLevel } from '@/lib/translator';
 
 interface UploadConceptModalProps {
   isOpen: boolean;
@@ -45,6 +45,34 @@ const filmTimeGroups = FILM_TIME_VALUES.reduce<Array<{ key: string; label: strin
 const peopleOptions = PEOPLE_VALUES.map((key) => ({ key, label: display.peopleNeeded(key).label, shortLabel: display.peopleNeededShort(key) }));
 const businessTypeOptions = BUSINESS_TYPE_VALUES.map((key) => ({ key, ...display.businessType(key) }));
 const marketOptions = categoryOptions.markets();
+
+const scriptModeOptions: Array<{ key: ScriptMode; label: string }> = [
+  { key: 'none', label: 'Inget manus' },
+  { key: 'text_overlay', label: 'Textoverlay' },
+  { key: 'short_dialogue', label: 'Kort dialog' },
+  { key: 'long_dialogue', label: 'Lång dialog' },
+  { key: 'visual_only', label: 'Visuellt' },
+];
+
+const setupComplexityOptions: Array<{ key: SigmaSetupComplexity; label: string }> = [
+  { key: 'point_and_shoot', label: 'Point-and-shoot' },
+  { key: 'basic_tripod', label: 'Stativ' },
+  { key: 'multi_location', label: 'Flera platser' },
+  { key: 'elaborate_staging', label: 'Scenografi' },
+];
+
+const skillRequiredOptions: Array<{ key: SigmaSkillLevel; label: string }> = [
+  { key: 'anyone', label: 'Vem som helst' },
+  { key: 'comfortable_on_camera', label: 'Kameravant' },
+  { key: 'acting_required', label: 'Skådespel' },
+  { key: 'professional', label: 'Professionell' },
+];
+
+const settingOptions: Array<{ key: SigmaBackdrop; label: string }> = [
+  { key: 'any_venue', label: 'Valfri lokal' },
+  { key: 'similar_venue_type', label: 'Liknande lokal' },
+  { key: 'specific_setting_needed', label: 'Specifik miljö' },
+];
 
 function detectPlatform(url: string): { key: string; label: string; color: string } {
   const normalized = url.toLowerCase();
@@ -105,6 +133,10 @@ interface ClassificationDraft {
   market: string;
   peopleNeeded: string;
   businessTypes: string[];
+  script_mode: ScriptMode;
+  setup_complexity: SigmaSetupComplexity | null;
+  skill_required: SigmaSkillLevel | null;
+  setting: SigmaBackdrop | null;
 }
 
 export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConceptModalProps) {
@@ -247,6 +279,8 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
 
       // Translate so we can prefill classification step from heuristics
       const translated = translateClipToConcept(backendData);
+      const sigma = getSigma(backendData);
+      const rd = sigma.replicability_decomposed;
       setPendingId(conceptId);
       setPendingHeadline((overrides.headline_sv as string) || translated.headline_sv || 'Nytt koncept');
       setPendingBackend(backendData);
@@ -257,6 +291,10 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         market: translated.market === 'global' ? 'US' : translated.market,
         peopleNeeded: translated.peopleNeeded,
         businessTypes: translated.businessTypes.slice(0, 5),
+        script_mode: ((overrides as Record<string, unknown>).script_mode as ScriptMode | undefined) ?? readScriptMode(backendData),
+        setup_complexity: readSetupComplexity(backendData) ?? rd?.environment_requirements?.setup_complexity ?? null,
+        skill_required: readSkillRequired(backendData) ?? rd?.actor_requirements?.skill_level ?? null,
+        setting: readSetting(backendData) ?? rd?.environment_requirements?.backdrop_interchangeability ?? null,
       });
       setPhase('classify');
       setStep('classifying');
@@ -283,6 +321,10 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         market: classification.market,
         peopleNeeded: classification.peopleNeeded,
         businessTypes: classification.businessTypes,
+        script_mode: classification.script_mode,
+        ...(classification.setup_complexity ? { setup_complexity: classification.setup_complexity } : {}),
+        ...(classification.skill_required ? { skill_required: classification.skill_required } : {}),
+        ...(classification.setting ? { setting: classification.setting } : {}),
       };
       const saveRes = await fetch('/api/admin/concepts', {
         method: 'POST',
@@ -492,6 +534,56 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Manusläge</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {scriptModeOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setClassification((c) => c ? { ...c, script_mode: option.key } : c)} style={choiceButton(classification.script_mode === option.key, '#0f766e')}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                  Setup <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>(AI-förslag)</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {setupComplexityOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setClassification((c) => c ? { ...c, setup_complexity: c.setup_complexity === option.key ? null : option.key } : c)} style={choiceButton(classification.setup_complexity === option.key, '#7c3aed')}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                  Skicklighet <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>(AI-förslag)</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {skillRequiredOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setClassification((c) => c ? { ...c, skill_required: c.skill_required === option.key ? null : option.key } : c)} style={choiceButton(classification.skill_required === option.key, '#c2410c')}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                  Miljö <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>(AI-förslag)</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {settingOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setClassification((c) => c ? { ...c, setting: c.setting === option.key ? null : option.key } : c)} style={choiceButton(classification.setting === option.key, '#0369a1')}>
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

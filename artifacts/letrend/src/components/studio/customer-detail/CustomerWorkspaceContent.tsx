@@ -146,14 +146,6 @@ const WORKSPACE_SCRIPT_OPTIONS = [
   { key: 'without_script', label: 'Utan manus' },
 ];
 
-const WORKSPACE_BUDGET_OPTIONS = [
-  { key: 'all', label: 'Budget' },
-  { key: 'free', label: display.budget('free').label },
-  { key: 'low', label: display.budget('low').label },
-  { key: 'medium', label: display.budget('medium').label },
-  { key: 'high', label: display.budget('high').label },
-];
-
 const WORKSPACE_SOURCE_OPTIONS = [
   { key: 'all', label: 'Källa' },
   { key: 'hagen', label: 'LeTrend' },
@@ -490,8 +482,7 @@ function CustomerWorkspacePageContent() {
     setAddConceptBusinessTypeFilter,
     addConceptScriptFilter,
     setAddConceptScriptFilter,
-    addConceptBudgetFilter,
-    setAddConceptBudgetFilter,
+
     addConceptSourceFilter,
     setAddConceptSourceFilter,
     resetAddConceptFilters,
@@ -2174,12 +2165,10 @@ function CustomerWorkspacePageContent() {
         matchWorkspaceFilmTimeRange(concept.filmTime, addConceptFilmTimeFilter) &&
         matchWorkspaceBusinessType(concept.businessTypes, addConceptBusinessTypeFilter) &&
         matchWorkspaceScript(concept.hasScript, addConceptScriptFilter) &&
-        (addConceptBudgetFilter === 'all' || concept.estimatedBudget === addConceptBudgetFilter) &&
         (addConceptSourceFilter === 'all' || concept.source === addConceptSourceFilter)
       );
     });
   }, [
-    addConceptBudgetFilter,
     addConceptBusinessTypeFilter,
     addConceptDifficultyFilter,
     addConceptFilmTimeFilter,
@@ -2196,7 +2185,6 @@ function CustomerWorkspacePageContent() {
     addConceptFilmTimeFilter !== 'all',
     addConceptBusinessTypeFilter !== 'all',
     addConceptScriptFilter !== 'all',
-    addConceptBudgetFilter !== 'all',
     addConceptSourceFilter !== 'all',
   ].filter(Boolean).length;
 
@@ -3910,7 +3898,6 @@ function CustomerWorkspacePageContent() {
           <WorkspaceLibraryFilter label="Tid" value={addConceptFilmTimeFilter} options={WORKSPACE_FILM_TIME_OPTIONS} onChange={setAddConceptFilmTimeFilter} />
           <WorkspaceLibraryFilter label="Bransch" value={addConceptBusinessTypeFilter} options={WORKSPACE_BUSINESS_TYPE_OPTIONS} onChange={setAddConceptBusinessTypeFilter} />
           <WorkspaceLibraryFilter label="Manus" value={addConceptScriptFilter} options={WORKSPACE_SCRIPT_OPTIONS} onChange={setAddConceptScriptFilter} />
-          <WorkspaceLibraryFilter label="Budget" value={addConceptBudgetFilter} options={WORKSPACE_BUDGET_OPTIONS} onChange={setAddConceptBudgetFilter} />
           <WorkspaceLibraryFilter label="Källa" value={addConceptSourceFilter} options={WORKSPACE_SOURCE_OPTIONS} onChange={setAddConceptSourceFilter} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 12, fontSize: 12, color: LeTrendColors.textMuted, flexWrap: 'wrap' }}>

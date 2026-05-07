@@ -335,6 +335,10 @@ export interface ClipOverride {
   transcript?: string
   // V1 contract additions — set by upload-confirm or library edit
   script_mode?: ScriptMode
+  // V1 objective signals — from sigma_taste, confirmed by CM at ingest
+  setup_complexity?: SigmaSetupComplexity
+  skill_required?: SigmaSkillLevel
+  setting?: SigmaBackdrop
 }
 
 /**
@@ -375,6 +379,37 @@ export function readScriptMode(clip: BackendClip, override?: ClipOverride): Scri
   }
 
   return 'none'
+}
+
+/**
+ * Read the setup_complexity for a concept.
+ * Checks overrides first (V1 contract), then sigma replicability_decomposed.
+ * Returns null when no signal is available (old concepts without sigma).
+ */
+export function readSetupComplexity(clip: BackendClip, override?: ClipOverride): SigmaSetupComplexity | null {
+  if (override?.setup_complexity) return override.setup_complexity
+  const sigma = getSigma(clip)
+  return sigma.replicability_decomposed?.environment_requirements?.setup_complexity ?? null
+}
+
+/**
+ * Read the skill_required for a concept.
+ * Checks overrides first, then sigma actor_requirements.skill_level.
+ */
+export function readSkillRequired(clip: BackendClip, override?: ClipOverride): SigmaSkillLevel | null {
+  if (override?.skill_required) return override.skill_required
+  const sigma = getSigma(clip)
+  return sigma.replicability_decomposed?.actor_requirements?.skill_level ?? null
+}
+
+/**
+ * Read the setting (backdrop interchangeability) for a concept.
+ * Checks overrides first, then sigma environment_requirements.backdrop_interchangeability.
+ */
+export function readSetting(clip: BackendClip, override?: ClipOverride): SigmaBackdrop | null {
+  if (override?.setting) return override.setting
+  const sigma = getSigma(clip)
+  return sigma.replicability_decomposed?.environment_requirements?.backdrop_interchangeability ?? null
 }
 
 export interface ClipDefaults {

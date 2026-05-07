@@ -25,7 +25,6 @@ export function useConceptWorkspace({ initialConceptId }: UseConceptWorkspaceOpt
   const [addConceptFilmTimeFilter, setAddConceptFilmTimeFilter] = useState('all');
   const [addConceptBusinessTypeFilter, setAddConceptBusinessTypeFilter] = useState('all');
   const [addConceptScriptFilter, setAddConceptScriptFilter] = useState('all');
-  const [addConceptBudgetFilter, setAddConceptBudgetFilter] = useState('all');
   const [addConceptSourceFilter, setAddConceptSourceFilter] = useState('all');
 
   useEffect(() => {
@@ -45,7 +44,6 @@ export function useConceptWorkspace({ initialConceptId }: UseConceptWorkspaceOpt
     setAddConceptFilmTimeFilter('all');
     setAddConceptBusinessTypeFilter('all');
     setAddConceptScriptFilter('all');
-    setAddConceptBudgetFilter('all');
     setAddConceptSourceFilter('all');
   };
 
@@ -85,8 +83,6 @@ export function useConceptWorkspace({ initialConceptId }: UseConceptWorkspaceOpt
     setAddConceptBusinessTypeFilter,
     addConceptScriptFilter,
     setAddConceptScriptFilter,
-    addConceptBudgetFilter,
-    setAddConceptBudgetFilter,
     addConceptSourceFilter,
     setAddConceptSourceFilter,
     resetAddConceptFilters,
