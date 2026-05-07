@@ -5,6 +5,13 @@ import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
 import { fetchHagenJson, proxyHagenJson } from '../lib/upstream-proxy.js';
 import { updateIngestRun, safeRunId } from '../lib/ingest-runs.js';
+import {
+  extractSourceUrl,
+  extractGcsUri,
+  normalizeHagenError,
+  buildSuggestedOverrides,
+  buildReanalyzeResponse,
+} from './studio-helpers.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -456,8 +463,8 @@ router.post('/concepts/:id/reanalyze', requireAuth, CM_ONLY, async (req, res) =>
   }
 
   const bd = (concept['backend_data'] as Record<string, unknown>) ?? {};
-  const sourceUrl = ((bd['url'] ?? bd['source_url']) as string | undefined)?.trim() ?? '';
-  const existingGcsUri = (bd['gcs_uri'] as string | undefined)?.trim() ?? '';
+  const sourceUrl = extractSourceUrl(bd);
+  const existingGcsUri = extractGcsUri(bd);
 
   let strategy: 'full_reanalyze' | 'enrich_only';
   let workingBackendData: Record<string, unknown>;
@@ -487,11 +494,7 @@ router.post('/concepts/:id/reanalyze', requireAuth, CM_ONLY, async (req, res) =>
 
     if (!analyzeResult.ok) {
       res.status(analyzeResult.clientStatus).json({
-        error: String(
-          (analyzeResult.body as Record<string, unknown>)['error'] ??
-          (analyzeResult.body as Record<string, unknown>)['message'] ??
-          'Analysen misslyckades'
-        ),
+        error: normalizeHagenError(analyzeResult.body as Record<string, unknown>),
       });
       return;
     }
@@ -525,34 +528,34 @@ router.post('/concepts/:id/reanalyze', requireAuth, CM_ONLY, async (req, res) =>
   if (!enrichResult.ok) {
     if (strategy === 'full_reanalyze') {
       logger.warn({ conceptId }, 'studio reanalyze: enrich failed after analyze, returning partial');
-      res.json({
+      res.json(buildReanalyzeResponse({
         strategy,
-        backend_data: workingBackendData,
-        suggested_overrides: {},
-        enrich_failed: true,
-      });
+        backendData: workingBackendData,
+        suggestedOverrides: {},
+        enrichFailed: true,
+      }));
     } else {
       res.status(enrichResult.clientStatus).json({
-        error: String(
-          (enrichResult.body as Record<string, unknown>)['error'] ?? 'Förädlingen misslyckades'
-        ),
+        error: normalizeHagenError(enrichResult.body as Record<string, unknown>),
       });
     }
     return;
   }
 
   const enrichPayload = enrichResult.data as Record<string, unknown>;
-  const suggestedOverrides = (enrichPayload['overrides'] as Record<string, unknown>) ?? {};
+  const rawSuggestedOverrides = (enrichPayload['overrides'] as Record<string, unknown>) ?? {};
+  const confirmedOverrides = (concept['overrides'] as Record<string, unknown>) ?? {};
+  const suggestedOverrides = buildSuggestedOverrides(rawSuggestedOverrides, confirmedOverrides);
   const finalBackendData = enrichPayload['backend_data']
     ? { ...workingBackendData, ...(enrichPayload['backend_data'] as Record<string, unknown>) }
     : workingBackendData;
 
   logger.info({ conceptId, strategy, hasOverrides: Object.keys(suggestedOverrides).length > 0 }, 'studio reanalyze: complete');
-  res.json({
+  res.json(buildReanalyzeResponse({
     strategy,
-    backend_data: finalBackendData,
-    suggested_overrides: suggestedOverrides,
-  });
+    backendData: finalBackendData,
+    suggestedOverrides,
+  }));
 });
 
 // DELETE /api/studio/email/schedules/:id

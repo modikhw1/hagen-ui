@@ -155,6 +155,10 @@ interface ReanalyzeSuggestions {
   setup_complexity: string | null;
   skill_required: string | null;
   setting: string | null;
+  peopleNeeded?: string | null;
+  difficulty?: string | null;
+  filmTime?: string | null;
+  businessTypes?: string[] | null;
   enrich_failed?: boolean;
 }
 
@@ -450,6 +454,10 @@ export default function ConceptReviewPage() {
         setup_complexity: (sug['setup_complexity'] as string | undefined) ?? readSetupComplexity(newBd) ?? null,
         skill_required: (sug['skill_required'] as string | undefined) ?? readSkillRequired(newBd) ?? null,
         setting: (sug['setting'] as string | undefined) ?? readSetting(newBd) ?? null,
+        peopleNeeded: (sug['peopleNeeded'] as string | undefined) ?? null,
+        difficulty: (sug['difficulty'] as string | undefined) ?? null,
+        filmTime: (sug['filmTime'] as string | undefined) ?? null,
+        businessTypes: Array.isArray(sug['businessTypes']) ? (sug['businessTypes'] as string[]) : null,
         enrich_failed: data.enrich_failed,
       };
       setPendingReanalyzeBackendData(newBd);
@@ -591,18 +599,34 @@ export default function ConceptReviewPage() {
                 const currentSetupLabel = setupComplexityOptions.find((o) => o.key === setupComplexity)?.label;
                 const currentSkillLabel = skillRequiredOptions.find((o) => o.key === skillRequired)?.label;
                 const currentSettingLabel = reviewSettingOptions.find((o) => o.key === settingVal)?.label;
+                const sugPeopleLabel = peopleOptions.find((o) => o.key === reanalyzeSuggestions.peopleNeeded)?.label ?? reanalyzeSuggestions.peopleNeeded ?? null;
+                const currentPeopleLabel = peopleOptions.find((o) => o.key === peopleNeeded)?.label ?? peopleNeeded ?? null;
+                const sugDiffLabel = difficultyOptions.find((o) => o.key === reanalyzeSuggestions.difficulty)?.label ?? reanalyzeSuggestions.difficulty ?? null;
+                const currentDiffLabel = difficultyOptions.find((o) => o.key === difficulty)?.label ?? difficulty ?? null;
+                const sugFilmLabel = filmTimeGroups.find((o) => o.value === reanalyzeSuggestions.filmTime)?.label ?? reanalyzeSuggestions.filmTime ?? null;
+                const currentFilmLabel = filmTime ? (filmTimeGroups.find((o) => o.value === filmTime)?.label ?? filmTime) : null;
+                const sugBtLabel = reanalyzeSuggestions.businessTypes?.length
+                  ? reanalyzeSuggestions.businessTypes.map((bt) => businessTypeOptions.find((o) => o.key === bt)?.label ?? bt).join(', ')
+                  : null;
+                const currentBtLabel = businessTypes.length
+                  ? businessTypes.map((bt) => businessTypeOptions.find((o) => o.key === bt)?.label ?? bt).join(', ')
+                  : null;
                 const suggestions: Array<{ key: string; label: string; current: string | null; proposed: string | null; apply: () => void }> = [
                   { key: 'script_mode', label: 'Manusläge', current: currentSmLabel, proposed: smLabel, apply: () => setScriptMode(reanalyzeSuggestions.script_mode) },
                   { key: 'setup_complexity', label: 'Setup', current: currentSetupLabel ?? null, proposed: setupLabel ?? null, apply: () => setSetupComplexity(reanalyzeSuggestions.setup_complexity) },
                   { key: 'skill_required', label: 'Skicklighet', current: currentSkillLabel ?? null, proposed: skillLabel ?? null, apply: () => setSkillRequired(reanalyzeSuggestions.skill_required) },
                   { key: 'setting', label: 'Miljö', current: currentSettingLabel ?? null, proposed: settingLabel ?? null, apply: () => setSettingVal(reanalyzeSuggestions.setting) },
+                  { key: 'peopleNeeded', label: 'Antal personer', current: currentPeopleLabel, proposed: sugPeopleLabel, apply: () => { if (reanalyzeSuggestions.peopleNeeded) setPeopleNeeded(reanalyzeSuggestions.peopleNeeded); } },
+                  { key: 'difficulty', label: 'Svårighetsgrad', current: currentDiffLabel, proposed: sugDiffLabel, apply: () => { if (reanalyzeSuggestions.difficulty) setDifficulty(reanalyzeSuggestions.difficulty); } },
+                  { key: 'filmTime', label: 'Filmtid', current: currentFilmLabel, proposed: sugFilmLabel, apply: () => { if (reanalyzeSuggestions.filmTime) setFilmTime(reanalyzeSuggestions.filmTime); } },
+                  { key: 'businessTypes', label: 'Branscher', current: currentBtLabel, proposed: sugBtLabel, apply: () => { if (reanalyzeSuggestions.businessTypes?.length) setBusinessTypes(reanalyzeSuggestions.businessTypes); } },
                 ];
-                const hasDiff = suggestions.some((s) => s.proposed && s.proposed !== s.current);
+                const hasDiff = !reanalyzeSuggestions.enrich_failed && suggestions.some((s) => s.proposed && s.proposed !== s.current);
                 return (
                   <div>
                     {reanalyzeSuggestions.enrich_failed ? (
                       <div style={{ marginBottom: 8, padding: '6px 8px', borderRadius: 6, background: '#fef3c7', fontSize: 11, color: '#92400e' }}>
-                        Video analyserad — förädling misslyckades. Sigma-förslag ej tillgängliga.
+                        Video analyserad — AI-förädling misslyckades. Uppdaterade videodata är redo att sparas men AI-förslag på klassificering är inte tillgängliga.
                       </div>
                     ) : null}
                     <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 8, fontWeight: 600 }}>
@@ -632,6 +656,10 @@ export default function ConceptReviewPage() {
                             setSetupComplexity(reanalyzeSuggestions.setup_complexity);
                             setSkillRequired(reanalyzeSuggestions.skill_required);
                             setSettingVal(reanalyzeSuggestions.setting);
+                            if (reanalyzeSuggestions.peopleNeeded) setPeopleNeeded(reanalyzeSuggestions.peopleNeeded);
+                            if (reanalyzeSuggestions.difficulty) setDifficulty(reanalyzeSuggestions.difficulty);
+                            if (reanalyzeSuggestions.filmTime) setFilmTime(reanalyzeSuggestions.filmTime);
+                            if (reanalyzeSuggestions.businessTypes?.length) setBusinessTypes(reanalyzeSuggestions.businessTypes);
                           }}
                           style={{ width: '100%', padding: '6px', borderRadius: 8, border: '1px solid #4f46e5', background: '#4f46e5', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 2 }}
                         >
@@ -645,7 +673,7 @@ export default function ConceptReviewPage() {
                       <button type="button" onClick={() => void handleReanalyze()} style={{ flex: 1, padding: '5px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#6b7280', fontSize: 11, cursor: 'pointer' }}>Kör igen</button>
                       <button type="button" onClick={() => { setReanalyzeState('idle'); setReanalyzeSuggestions(null); setPendingReanalyzeBackendData(null); }} style={{ flex: 1, padding: '5px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#6b7280', fontSize: 11, cursor: 'pointer' }}>Stäng</button>
                     </div>
-                    <div style={{ marginTop: 6, fontSize: 10, color: '#9ca3af' }}>Sparas med konceptet nästa gång du klickar Spara.</div>
+                    <div style={{ marginTop: 6, fontSize: 10, color: '#9ca3af', fontStyle: 'italic' }}>Sparas med konceptet nästa gång du klickar Spara.</div>
                   </div>
                 );
               })() : null}
