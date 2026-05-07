@@ -10,7 +10,6 @@ import {
   inputStyle,
 } from '@/styles/letrend-design-system';
 import {
-  BUDGET_VALUES,
   BUSINESS_TYPE_VALUES,
   DIFFICULTY_VALUES,
   FILM_TIME_VALUES,
@@ -44,7 +43,6 @@ const filmTimeGroups = FILM_TIME_VALUES.reduce<Array<{ key: string; label: strin
   return groups;
 }, []);
 const peopleOptions = PEOPLE_VALUES.map((key) => ({ key, label: display.peopleNeeded(key).label, shortLabel: display.peopleNeededShort(key) }));
-const budgetOptions = BUDGET_VALUES.map((key) => ({ key, label: display.budget(key).label }));
 const businessTypeOptions = BUSINESS_TYPE_VALUES.map((key) => ({ key, ...display.businessType(key) }));
 const marketOptions = categoryOptions.markets();
 
@@ -106,7 +104,6 @@ interface ClassificationDraft {
   filmTime: string;
   market: string;
   peopleNeeded: string;
-  estimatedBudget: string;
   businessTypes: string[];
 }
 
@@ -259,7 +256,6 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         filmTime: translated.filmTime,
         market: translated.market === 'global' ? 'US' : translated.market,
         peopleNeeded: translated.peopleNeeded,
-        estimatedBudget: translated.estimatedBudget,
         businessTypes: translated.businessTypes.slice(0, 3),
       });
       setPhase('classify');
@@ -286,7 +282,6 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         filmTime: classification.filmTime,
         market: classification.market,
         peopleNeeded: classification.peopleNeeded,
-        estimatedBudget: classification.estimatedBudget,
         businessTypes: classification.businessTypes,
       };
       const saveRes = await fetch('/api/admin/concepts', {
@@ -296,6 +291,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
           id: pendingId,
           backend_data: pendingBackend,
           overrides,
+          is_active: true,
           ingest_run_id: ingestRunId,
         }),
       });
@@ -461,19 +457,11 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Marknad</div>
-                  <select value={classification.market} onChange={(e) => setClassification((c) => c ? { ...c, market: e.target.value } : c)} style={{ ...inputStyle(), fontSize: 13, padding: '8px 12px' }}>
-                    {marketOptions.map((opt) => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Budget</div>
-                  <select value={classification.estimatedBudget} onChange={(e) => setClassification((c) => c ? { ...c, estimatedBudget: e.target.value } : c)} style={{ ...inputStyle(), fontSize: 13, padding: '8px 12px' }}>
-                    {budgetOptions.map((opt) => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
-                  </select>
-                </div>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Marknad</div>
+                <select value={classification.market} onChange={(e) => setClassification((c) => c ? { ...c, market: e.target.value } : c)} style={{ ...inputStyle(), fontSize: 13, padding: '8px 12px', width: '50%' }}>
+                  {marketOptions.map((opt) => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+                </select>
               </div>
 
               <div>
@@ -523,7 +511,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
                 disabled={step === 'saving' || classification.businessTypes.length === 0}
                 style={{ ...buttonStyle('primary'), opacity: step === 'saving' ? 0.55 : 1, cursor: step === 'saving' ? 'not-allowed' : 'pointer' }}
               >
-                {step === 'saving' ? 'Sparar...' : 'Spara koncept som utkast'}
+                {step === 'saving' ? 'Sparar...' : 'Spara och aktivera →'}
               </button>
             </div>
           </>

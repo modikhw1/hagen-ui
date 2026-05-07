@@ -78,7 +78,7 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
       created_by: req.user!.id,
       backend_data: typeof body.backend_data === 'object' && body.backend_data ? body.backend_data : {},
       overrides: typeof body.overrides === 'object' && body.overrides ? body.overrides : {},
-      is_active: typeof body.is_active === 'boolean' ? body.is_active : false,
+      is_active: typeof body.is_active === 'boolean' ? body.is_active : true,
       version: 1,
     };
 

@@ -48,6 +48,8 @@ export interface BackendHumorAnalysis {
 // σTaste v1.1 schema (mirrored from artifacts/hagen/src/lib/services/signals/types.ts)
 // Source of truth for the rich per-video signals hagen produces. We accept these
 // either nested under `sigma_taste` or flattened at the top level of BackendClip.
+export type ScriptMode = 'none' | 'text_overlay' | 'short_dialogue' | 'long_dialogue' | 'visual_only'
+
 export type SigmaActorCount = 'solo' | 'duo' | 'small_group' | 'crowd'
 export type SigmaSkillLevel = 'anyone' | 'comfortable_on_camera' | 'acting_required' | 'professional'
 export type SigmaSetupComplexity = 'point_and_shoot' | 'basic_tripod' | 'multi_location' | 'elaborate_staging'
@@ -331,6 +333,48 @@ export interface ClipOverride {
   hasScript?: boolean
   estimatedBudget?: EstimatedBudget
   transcript?: string
+  // V1 contract additions — set by upload-confirm or library edit
+  script_mode?: ScriptMode
+}
+
+/**
+ * Read the script_mode for a concept.
+ * Checks overrides.script_mode first (V1 contract), then falls back to
+ * inferring from the legacy hasScript boolean and available transcript data.
+ * Safe to call on old concepts that have neither field.
+ */
+export function readScriptMode(clip: BackendClip, override?: ClipOverride): ScriptMode {
+  if (override?.script_mode) return override.script_mode
+
+  // Infer from sigma narrative signals when available
+  const sigma = getSigma(clip)
+  const beatType = sigma.narrative_flow?.beat_progression?.type
+  if (beatType === 'dialogue_escalation') return 'long_dialogue'
+
+  const hookStyle = sigma.hook_analysis?.hook_style
+  if (hookStyle === 'text_overlay') return 'text_overlay'
+
+  // Fall back to legacy hasScript inference
+  const hasScript = override?.hasScript ?? (clip.script?.hasScript ?? false)
+  const hasTranscript = Boolean(
+    clip.script?.transcript?.trim() || clip.script?.conceptCore?.trim(),
+  )
+
+  if (!hasScript && !hasTranscript) {
+    // Check if scene_breakdown suggests visual-only
+    const hasAudio = clip.scene_breakdown?.some(
+      (scene) => scene.audio && scene.audio.trim().length > 0,
+    )
+    return hasAudio ? 'none' : 'visual_only'
+  }
+
+  if (hasTranscript) {
+    const transcript = (clip.script?.transcript ?? '').toLowerCase()
+    const wordCount = transcript.split(/\s+/).filter(Boolean).length
+    return wordCount > 60 ? 'long_dialogue' : 'short_dialogue'
+  }
+
+  return 'none'
 }
 
 export interface ClipDefaults {

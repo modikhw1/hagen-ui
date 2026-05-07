@@ -1,0 +1,48 @@
+Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 29: första låg-risk-slicen från docs/agent-plans/28-ingest-metadata-contract-v1.md.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Gör ingen bred refaktor av hela metadata-kontraktet än.
+  - Behåll backward compatibility med befintliga concepts/backend_data/overrides.
+
+  Mål för detta pass:
+
+  1. Save = active
+     - Undersök artifacts/api-server/src/routes/admin/concepts.ts.
+     - Ändra så att nya concepts som sparas via nuvarande upload-confirm blir aktiva direkt.
+     - Om endpointen används av flera flöden, välj lägsta risk-lösning: frontend skickar explicit is_active: true och
+  backend respekterar/validerar det, eller backend defaultar till true endast där det är säkert.
+     - Dokumentera vilket val du gjorde.
+
+  2. Ta bort budget från CM-flödet
+     - Ta bort estimatedBudget från upload-confirm/classify UI i artifacts/letrend/src/components/studio/
+  UploadConceptModal.tsx.
+     - Skicka inte längre estimatedBudget som nytt CM-val från modalens save.
+     - Ta bort budget-filter från /studio/concepts i artifacts/letrend/src/app/studio/concepts/page.tsx.
+     - Behåll gamla data och gamla typer/constants om de behövs för backward compatibility. Gamla concepts får inte
+  krascha.
+
+  3. Förbered script_mode utan att bygga hela nya kontraktet
+     - Lägg inte in hela objective_signals-modellen än.
+     - Om det finns en enkel plats i translatorn där hasScript läses, lägg gärna en backward-compatible helper som kan
+  läsa overrides.script_mode först och falla tillbaka till hasScript.
+     - Om detta blir större än väntat, dokumentera det istället och lämna script_mode till nästa pass.
+
+  4. Dokumentation
+     - Skapa docs/agent-plans/29-ingest-contract-slice-a.md.
+     - Beskriv exakt vilka filer som ändrades, vad som nu fungerar, vilka risker som kvarstår och nästa rekommenderade
+  slice.
+
+  5. Verifiering
+     - Kör relevanta typechecks:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+     - Om test/lint faller på befintligt miljöproblem, dokumentera exakt fel.
+
+  Output:
+  - Kodändringar för save=active och budget removal.
+  - Ny docs/agent-plans/29-ingest-contract-slice-a.md.
+  - Kort sammanfattning av vad som är kvar till nästa slice.

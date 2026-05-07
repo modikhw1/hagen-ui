@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAdminPageHeader } from '@/admin-ui';
 import { UploadConceptModal } from '@/components/studio/UploadConceptModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { BUDGET_VALUES, BUSINESS_TYPE_VALUES, DIFFICULTY_VALUES, FILM_TIME_VALUES } from '@/lib/concept-enrichment';
+import { BUSINESS_TYPE_VALUES, DIFFICULTY_VALUES, FILM_TIME_VALUES } from '@/lib/concept-enrichment';
 import { display } from '@/lib/display';
 import { supabase } from '@/lib/supabase/client';
 import {
@@ -72,11 +72,6 @@ const BUSINESS_TYPE_OPTIONS = BUSINESS_TYPE_VALUES.map((key) => ({
   label: display.businessType(key).label,
   icon: display.businessType(key).icon,
   color: display.businessType(key).color,
-}));
-
-const BUDGET_OPTIONS = BUDGET_VALUES.map((key) => ({
-  key,
-  label: display.budget(key).label,
 }));
 
 const SOURCE_OPTIONS = [
@@ -733,7 +728,6 @@ export default function StudioConceptsPage() {
   const [filmTimeFilter, setFilmTimeFilter] = useState('all');
   const [businessTypeFilter, setBusinessTypeFilter] = useState('all');
   const [reuseFilter, setReuseFilter] = useState<ReuseFilter>('all');
-  const [budgetFilter, setBudgetFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [assignmentCounts, setAssignmentCounts] = useState<Record<string, number>>({});
   const [recentAssignmentByConcept, setRecentAssignmentByConcept] = useState<Record<string, string>>({});
@@ -1008,14 +1002,12 @@ export default function StudioConceptsPage() {
           matchPeopleRange(concept.peopleNeeded, peopleFilter) &&
           matchFilmTimeRange(concept.filmTime, filmTimeFilter) &&
           matchBusinessType(concept.businessTypes, businessTypeFilter) &&
-          (budgetFilter === 'all' || concept.estimatedBudget === budgetFilter) &&
           (sourceFilter === 'all' || concept.source === sourceFilter) &&
           matchReuseFilter(assignmentCounts[concept.id] ?? 0, reuseFilter)
         );
       }),
     [
       assignmentCounts,
-      budgetFilter,
       businessTypeFilter,
       difficultyFilter,
       enrichedConcepts,
@@ -1053,7 +1045,6 @@ export default function StudioConceptsPage() {
     filmTimeFilter !== 'all',
     businessTypeFilter !== 'all',
     reuseFilter !== 'all',
-    budgetFilter !== 'all',
     sourceFilter !== 'all',
   ].filter(Boolean).length;
 
@@ -1064,7 +1055,6 @@ export default function StudioConceptsPage() {
     setFilmTimeFilter('all');
     setBusinessTypeFilter('all');
     setReuseFilter('all');
-    setBudgetFilter('all');
     setSourceFilter('all');
   };
 
@@ -1311,12 +1301,6 @@ export default function StudioConceptsPage() {
             onChange={(value) => setSortMode(value as SortMode)}
           />
           <FilterDropdown
-            label="Budget"
-            value={budgetFilter}
-            options={BUDGET_OPTIONS}
-            onChange={setBudgetFilter}
-          />
-          <FilterDropdown
             label="Kalla"
             value={sourceFilter}
             options={SOURCE_OPTIONS}
@@ -1418,12 +1402,6 @@ export default function StudioConceptsPage() {
                     : '4+ kunder'
               }
               onClear={() => setReuseFilter('all')}
-            />
-          ) : null}
-          {budgetFilter !== 'all' ? (
-            <FilterPill
-              label={BUDGET_OPTIONS.find((option) => option.key === budgetFilter)?.label ?? ''}
-              onClear={() => setBudgetFilter('all')}
             />
           ) : null}
           {sourceFilter !== 'all' ? (
