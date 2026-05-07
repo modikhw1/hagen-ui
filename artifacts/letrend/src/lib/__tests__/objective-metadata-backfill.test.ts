@@ -168,7 +168,7 @@ describe('computeObjectiveBackfillPatch — sigma values proposed when overrides
   });
 });
 
-describe('computeObjectiveBackfillPatch — script_mode from legacy/inferred signals', () => {
+describe('computeObjectiveBackfillPatch — script_mode from transcript (inferred)', () => {
   it('proposes long_dialogue from long transcript with inferred provenance', () => {
     const patch = computeObjectiveBackfillPatch(clipWithTranscript, emptyOverrides);
     expect(patch.script_mode?.value).toBe('long_dialogue');
@@ -181,9 +181,29 @@ describe('computeObjectiveBackfillPatch — script_mode from legacy/inferred sig
     expect(patch.script_mode?.provenance).toBe('inferred');
   });
 
-  it('proposes none from hasScript=true without transcript (legacy_hasScript)', () => {
+  it('does NOT propose script_mode when hasScript=true but no transcript or sigma', () => {
+    // hasScript=true is too ambiguous — text_overlay, dialogue, none are all plausible.
+    // The helper must not guess.
     const patch = computeObjectiveBackfillPatch(clipWithHasScriptOnly, emptyOverrides);
-    expect(patch.script_mode).toEqual({ value: 'none', provenance: 'legacy_hasScript' });
+    expect(patch.script_mode).toBeUndefined();
+  });
+
+  it('does NOT propose script_mode for a clip with only scene_breakdown (no sigma, no transcript)', () => {
+    const clipSceneOnly: BackendClip = {
+      scene_breakdown: [
+        { scene_index: 1, audio: 'background music', description: 'product shot' },
+      ],
+    } as unknown as BackendClip;
+    const patch = computeObjectiveBackfillPatch(clipSceneOnly, emptyOverrides);
+    expect(patch.script_mode).toBeUndefined();
+  });
+
+  it('does NOT propose script_mode for a noisy clip with hasScript=false and no other signals', () => {
+    const noisy: BackendClip = {
+      script: { hasScript: false, transcript: '' },
+    } as unknown as BackendClip;
+    const patch = computeObjectiveBackfillPatch(noisy, emptyOverrides);
+    expect(patch.script_mode).toBeUndefined();
   });
 });
 

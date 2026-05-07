@@ -21,7 +21,7 @@ Exports:
 - `computeObjectiveBackfillPatch(clip, overrides)` → `ObjectiveBackfillPatch`
   - Only proposes fields missing from overrides
   - Never overwrites existing CM-confirmed values
-  - Returns provenance per field: `sigma | inferred | legacy_hasScript`
+  - Returns provenance per field: `sigma | inferred` (see Phase 38 for correction)
   - Omits fields with no reliable signal
 - `hasMissingObjectiveFields(patch)` → `boolean` — quick check if patch is non-empty
 - `patchToOverrideDelta(patch)` → `Partial<ClipOverride>` — flat delta ready to merge
@@ -32,11 +32,16 @@ Exports:
 |---|---|---|
 | `sigma` | `sigma_taste.replicability_decomposed` or narrative/hook signals | High — AI-analyzed |
 | `inferred` | Transcript word-count (>60 words → long_dialogue) | Medium — rule-based |
-| `legacy_hasScript` | `script.hasScript = true` but no transcript | Low — legacy boolean |
+| ~~`legacy_hasScript`~~ | ~~`script.hasScript = true` but no transcript~~ | ~~Removed in Phase 38~~ |
+
+> **Phase 38 correction:** The `legacy_hasScript` tier was removed from the helper.
+> `hasScript=true` without a transcript is too ambiguous to propose a specific `script_mode`
+> (text_overlay, dialogue, and none are all plausible). The helper now only emits
+> `sigma` or `inferred` provenance. See `docs/agent-plans/38-objective-backfill-decision.md`.
 
 **Safety contract:**
 - Fields already in `overrides` are unconditionally skipped
-- `scene_breakdown`-only fallback (no hasScript, no transcript, no sigma) is omitted — too weak
+- `scene_breakdown`-only fallback and `hasScript`-only signals are both omitted — too weak
 - The caller decides which provenance levels to apply (e.g. only `sigma` for first run)
 
 ### Unit Tests
@@ -251,7 +256,7 @@ written here as a template. Each batch requires explicit human approval.
 After sigma backfill is validated:
 - Run `inferred` provenance concepts (transcript-based)
 - These require more spot-checking since transcript quality varies
-- `legacy_hasScript` tier: lowest priority; only run after explicit sign-off
+- ~~`legacy_hasScript` tier~~ — removed in Phase 38; hasScript-only signals are not proposed
 
 ---
 

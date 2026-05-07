@@ -96,15 +96,14 @@ export function computeObjectiveBackfillPatch(
         const wordCount = transcript.split(/\s+/).filter(Boolean).length;
         const value: ScriptMode = wordCount > 60 ? 'long_dialogue' : 'short_dialogue';
         patch.script_mode = { value, provenance: 'inferred' };
-      } else {
-        const hasScript = overrides.hasScript ?? (clip.script?.hasScript ?? false);
-        if (hasScript) {
-          // hasScript=true but no transcript — weak legacy signal
-          patch.script_mode = { value: 'none', provenance: 'legacy_hasScript' };
-        }
-        // If neither hasScript nor transcript nor sigma → scene_breakdown fallback
-        // is too unreliable for unsupervised backfill. Omit the field.
       }
+      // hasScript=true without transcript: NOT proposed.
+      // hasScript=true means "this clip had spoken words" but tells us nothing reliable
+      // about which script_mode applies (text_overlay vs dialogue vs none are all plausible).
+      // Proposing 'none' here would be incorrect for most actual scripted clips.
+      // scene_breakdown-only fallback is also omitted — too weak for unsupervised backfill.
+      // Live inventory (May 2026): 22 hagen concepts have scene_breakdown but 0 sigma_taste →
+      // neither sigma nor transcript is available for them. No bulk backfill is possible.
     }
   }
 

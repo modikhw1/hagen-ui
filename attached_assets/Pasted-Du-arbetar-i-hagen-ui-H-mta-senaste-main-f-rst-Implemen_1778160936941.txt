@@ -1,0 +1,66 @@
+Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 38: Backfill safety correction and inventory decision.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Kör ingen live backfill.
+  - Anta att orkestratorn redan körde Supabase inventory.
+  - Fokus är att korrigera backfill-helpern och dokumentera beslutet: ingen bulk-backfill nu.
+
+  Live inventory från orkestratorn:
+  - 26 aktiva concepts totalt.
+  - 0 har overrides.script_mode.
+  - 0 har overrides.setup_complexity.
+  - 0 har overrides.skill_required.
+  - 0 har overrides.setting.
+  - 0 har nested backend_data.sigma_taste.
+  - 0 har flattened backend_data.replicability_decomposed.
+  - 22 source=hagen, 0 script object, 21 scene_breakdown.
+  - 4 source=cm_created, 4 script object/text.
+  - Slutsats: sigma-only backfill är inte möjlig just nu.
+
+  Mål:
+
+  1. Korrigera objective-metadata-backfill helpern
+     - Uppdatera artifacts/letrend/src/lib/objective-metadata-backfill.ts.
+     - Ta bort beteendet där legacy hasScript=true utan transcript föreslår script_mode: none.
+     - Om det bara finns hasScript=true men ingen transcript/conceptCore/sigma-signal, ska helpern inte föreslå
+  script_mode.
+     - Motivering: hasScript=true betyder inte “none”; det är för svagt för automatisk backfill.
+     - Behåll transcript-baserad inferred short_dialogue/long_dialogue.
+     - Behåll sigma-baserad long_dialogue/text_overlay.
+     - Behåll nullable objective fields endast från sigma.
+
+  2. Uppdatera tester
+     - Uppdatera artifacts/letrend/src/lib/__tests__/objective-metadata-backfill.test.ts.
+     - Testet “hasScript=true without transcript” ska nu förvänta sig att script_mode inte föreslås.
+     - Lägg gärna till test som tydliggör att empty/noisy legacy data inte ger patch.
+
+  3. Dokumentera inventory-beslut
+     - Skapa docs/agent-plans/38-objective-backfill-decision.md.
+     - Inkludera inventory-resultatet ovan.
+     - Dokumentera beslut:
+       - ingen bulk-backfill nu
+       - ingen sigma-only backfill är möjlig eftersom live concepts saknar sigma
+       - scene_breakdown-only backfill ska inte användas
+       - 4 cm_created concepts kan eventuellt hanteras manuellt via review
+       - rätt väg framåt är re-ingest/review för gamla concepts eller ny ingestmotor som sparar sigma korrekt framåt
+
+  4. Uppdatera Phase 37-dokumentet om nödvändigt
+     - Om Phase 37 säger att legacy_hasScript kan föreslå script_mode, justera formuleringen.
+     - Backfill ska bara använda sigma eller transcript-inferred i nuvarande implementation.
+
+  5. Verifiering
+     - Kör:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+     - Kör relevanta tester om miljön tillåter.
+     - Om Vitest faller på Rollup optional dependency-problem, dokumentera exakt fel.
+
+  Output:
+  - Korrigerad helper.
+  - Uppdaterade tester.
+  - Ny docs/agent-plans/38-objective-backfill-decision.md.
+  - Kort sammanfattning av varför ingen live backfill ska köras nu.
