@@ -1,0 +1,84 @@
+ Du arbetar i hagen-ui. Börja med `git pull --ff-only`.
+
+  Målet är Phase 41: fix frontend suggestion fallback + live smoke readiness för reanalyze/review-flödet.
+
+  VIKTIGT:
+  - Rör inte `/admin/demos`.
+  - Undvik breda demo/feedplan/UI-refactors i detta pass.
+  - Du har inte Supabase MCP och ska inte göra live DB-writes.
+  - Bevara huvudprincipen: reanalyze-route skriver inte till DB; CM sparar explicit via review-sidan.
+  - Befintliga `overrides` är CM-confirmed och ska aldrig föreslås som overwrite utan explicit avsikt.
+  - Subjective fields får aldrig auto-appliceras: headline, description, whyItWorks, humor analysis, production notes,
+  script/manus.
+
+  Bakgrund:
+  Phase 40 hårdnade backend och filtrerar bort `suggested_overrides` när key redan finns i confirmed `overrides`.
+  Men review-sidan gör fortfarande fallback från ny `backend_data` för:
+  - `script_mode`
+  - `setup_complexity`
+  - `skill_required`
+  - `setting`
+
+  Det finns på ungefär:
+  `artifacts/letrend/src/app/studio/concepts/[id]/review/page.tsx`
+  runt `handleReanalyze`, där `proposed` byggs med:
+  - `sug['script_mode'] ?? readScriptMode(newBd)`
+  - `sug['setup_complexity'] ?? readSetupComplexity(newBd)`
+  - `sug['skill_required'] ?? readSkillRequired(newBd)`
+  - `sug['setting'] ?? readSetting(newBd)`
+
+  Problemet:
+  Även om backend filtrerar bort ett fält för att det redan är CM-confirmed i `overrides`, kan frontend ändå skapa ett
+  nytt förslag via `readX(newBd)`. Det bryter intentionen att confirmed overrides inte ska föreslås för overwrite.
+
+  Uppgift:
+  1. Fix frontend suggestion-building:
+     - Bygg reanalyze suggestions endast från `data.suggested_overrides` för fält som ska visas som applicerbara
+  förslag.
+     - Använd inte `readScriptMode(newBd)`, `readSetupComplexity(newBd)`, `readSkillRequired(newBd)`,
+  `readSetting(newBd)` som fallback för applicerbara suggestions.
+     - Om `suggested_overrides` saknar ett fält ska det inte visas som “Tillämpa”-förslag.
+     - Behåll gärna ny `backend_data` som pending så CM kan spara den, men separera “ny analysdata finns” från “det
+  finns applicerbara override-förslag”.
+
+  2. Uppdatera UI-copy:
+     - Om reanalyze lyckas men inga suggestions finns: visa något i stil med:
+       “Ny analysdata är redo att sparas. Inga nya klassificeringsförslag kunde tillämpas utan att röra bekräftade
+  värden.”
+     - Om enrich misslyckas efter analyze: behåll partial-data-meddelandet.
+     - Tydliggör att “Spara” krävs för att pending backend_data ska persisteras.
+
+  3. Lägg till frontend/pure helper om det passar:
+     - Om review-sidan blir rörig, skapa en liten helper för att bygga `ReanalyzeSuggestions` från
+  `suggested_overrides`.
+     - Den ska vara enkel att testa och inte läsa från `backend_data` som fallback för confirmed/suppressed fields.
+
+  4. Tester:
+     - Lägg till eller uppdatera tests för helpern om möjligt:
+       - confirmed/suppressed field saknas i `suggested_overrides` -> visas inte som suggestion.
+       - suggestions byggs för `businessTypes` som array.
+       - inga suggestions men pending backend_data -> UI/helper returnerar “no applicable suggestions” state.
+     - Om testmiljön lokalt blockeras av Rollup optional dependency, dokumentera exakt.
+
+  5. Dokumentation:
+     - Uppdatera `docs/agent-plans/40-reanalyze-hardening.md` med denna upptäckta risk och att Phase 41 fixar den.
+     - Skapa `docs/agent-plans/41-reanalyze-suggestion-fallback-fix.md` med:
+       - problem
+       - fix
+       - safety contract
+       - teststatus
+       - kvarvarande risker
+       - rekommenderad live smoke procedure
+
+  Live smoke procedure ska vara read-safe:
+  - Välj ett befintligt concept i review UI.
+  - Kör “Reanalysera video med AI”.
+  - Bekräfta att ingen DB-write sker förrän `Spara`.
+  - Bekräfta att redan bekräftade override-fält inte visas som förslag.
+  - Bekräfta att pending backend_data sparas först när CM klickar `Spara`.
+
+  Verifiering:
+  - Kör `pnpm --filter @workspace/api-server run typecheck`
+  - Kör `pnpm --filter @workspace/letrend run typecheck`
+  - Kör relevanta tester om miljön tillåter.
+  - Commit/checkpointa till main.

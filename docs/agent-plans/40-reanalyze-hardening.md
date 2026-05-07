@@ -92,3 +92,18 @@ When `enrich_failed: true`, the panel shows an inline notice: "Video analyserad 
 2. **`businessTypes` display in suggestions** — currently rendered as a comma-joined string for the diff view. A multi-chip rendering (like the main classification section) would be cleaner UX.
 3. **Rate limit feedback** — the 429 response from the rate limiter surfaces a Swedish message in the error banner, but does not show a countdown timer in the UI.
 4. **Concept locking** — two CMs could reanalyze the same concept simultaneously and see conflicting pending data. A soft lock or last-write-wins warning would reduce confusion.
+
+## ⚠️ Discovered Risk — Fixed in Phase 41
+
+The frontend suggestion-building in `handleReanalyze` contained a bypass of the backend's
+`buildSuggestedOverrides` guarantee: it used `readX(backend_data)` as a fallback when a field
+was absent from `suggested_overrides`. This meant confirmed CM overrides could still surface
+as applicable "Tillämpa"-suggestions on the review page, contrary to the stated safety contract.
+
+Additionally, "Tillämpa alla" called `setSetupComplexity(null)` / `setSkillRequired(null)` /
+`setSettingVal(null)` unconditionally for absent nullable suggestion fields, risking silent
+clearing of confirmed values.
+
+**Fixed in Phase 41** via the new `src/lib/reanalyze-suggestions.ts` pure helper
+(`buildSuggestionsFromOverrides`, `hasApplicableSuggestions`) and corresponding updates to
+`review/page.tsx`. See `docs/agent-plans/41-reanalyze-suggestion-fallback-fix.md`.

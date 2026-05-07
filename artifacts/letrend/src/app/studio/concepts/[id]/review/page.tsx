@@ -16,6 +16,7 @@ import { categoryOptions, display } from '@/lib/display';
 import { supabase } from '@/lib/supabase/client';
 import { getSigma, hasSigmaSignals, readScriptMode, readSetupComplexity, readSkillRequired, readSetting, translateClipToConcept } from '@/lib/translator';
 import type { BackendClip, ClipOverride } from '@/lib/translator';
+import { buildSuggestionsFromOverrides, hasApplicableSuggestions } from '@/lib/reanalyze-suggestions';
 import { conceptFieldConstraints } from '@/lib/concept-field-constraints';
 import { describeTranscriptLanguage, detectTranscriptLanguage } from '@/lib/transcript-language';
 import { RegenerateField } from '@/components/studio/RegenerateField';
@@ -151,10 +152,10 @@ interface RawConcept {
 
 interface ReanalyzeSuggestions {
   strategy: 'full_reanalyze' | 'enrich_only';
-  script_mode: string;
-  setup_complexity: string | null;
-  skill_required: string | null;
-  setting: string | null;
+  script_mode?: string | null;
+  setup_complexity?: string | null;
+  skill_required?: string | null;
+  setting?: string | null;
   peopleNeeded?: string | null;
   difficulty?: string | null;
   filmTime?: string | null;
@@ -448,16 +449,13 @@ export default function ConceptReviewPage() {
       };
       const newBd = data.backend_data;
       const sug = data.suggested_overrides;
+      // Build suggestions exclusively from suggested_overrides — never fall back to
+      // readX(backend_data). The backend's buildSuggestedOverrides already filtered out
+      // keys confirmed by the CM. If a key is absent from sug it must stay null here
+      // so it never appears as a "Tillämpa"-suggestion on the review page.
       const proposed: ReanalyzeSuggestions = {
         strategy: data.strategy,
-        script_mode: (sug['script_mode'] as string | undefined) ?? readScriptMode(newBd),
-        setup_complexity: (sug['setup_complexity'] as string | undefined) ?? readSetupComplexity(newBd) ?? null,
-        skill_required: (sug['skill_required'] as string | undefined) ?? readSkillRequired(newBd) ?? null,
-        setting: (sug['setting'] as string | undefined) ?? readSetting(newBd) ?? null,
-        peopleNeeded: (sug['peopleNeeded'] as string | undefined) ?? null,
-        difficulty: (sug['difficulty'] as string | undefined) ?? null,
-        filmTime: (sug['filmTime'] as string | undefined) ?? null,
-        businessTypes: Array.isArray(sug['businessTypes']) ? (sug['businessTypes'] as string[]) : null,
+        ...buildSuggestionsFromOverrides(sug),
         enrich_failed: data.enrich_failed,
       };
       setPendingReanalyzeBackendData(newBd);
@@ -612,16 +610,19 @@ export default function ConceptReviewPage() {
                   ? businessTypes.map((bt) => businessTypeOptions.find((o) => o.key === bt)?.label ?? bt).join(', ')
                   : null;
                 const suggestions: Array<{ key: string; label: string; current: string | null; proposed: string | null; apply: () => void }> = [
-                  { key: 'script_mode', label: 'Manusläge', current: currentSmLabel, proposed: smLabel, apply: () => setScriptMode(reanalyzeSuggestions.script_mode) },
-                  { key: 'setup_complexity', label: 'Setup', current: currentSetupLabel ?? null, proposed: setupLabel ?? null, apply: () => setSetupComplexity(reanalyzeSuggestions.setup_complexity) },
-                  { key: 'skill_required', label: 'Skicklighet', current: currentSkillLabel ?? null, proposed: skillLabel ?? null, apply: () => setSkillRequired(reanalyzeSuggestions.skill_required) },
-                  { key: 'setting', label: 'Miljö', current: currentSettingLabel ?? null, proposed: settingLabel ?? null, apply: () => setSettingVal(reanalyzeSuggestions.setting) },
+                  { key: 'script_mode', label: 'Manusläge', current: currentSmLabel, proposed: smLabel ?? null, apply: () => { if (reanalyzeSuggestions.script_mode) setScriptMode(reanalyzeSuggestions.script_mode); } },
+                  { key: 'setup_complexity', label: 'Setup', current: currentSetupLabel ?? null, proposed: setupLabel ?? null, apply: () => { if (reanalyzeSuggestions.setup_complexity) setSetupComplexity(reanalyzeSuggestions.setup_complexity); } },
+                  { key: 'skill_required', label: 'Skicklighet', current: currentSkillLabel ?? null, proposed: skillLabel ?? null, apply: () => { if (reanalyzeSuggestions.skill_required) setSkillRequired(reanalyzeSuggestions.skill_required); } },
+                  { key: 'setting', label: 'Miljö', current: currentSettingLabel ?? null, proposed: settingLabel ?? null, apply: () => { if (reanalyzeSuggestions.setting) setSettingVal(reanalyzeSuggestions.setting); } },
                   { key: 'peopleNeeded', label: 'Antal personer', current: currentPeopleLabel, proposed: sugPeopleLabel, apply: () => { if (reanalyzeSuggestions.peopleNeeded) setPeopleNeeded(reanalyzeSuggestions.peopleNeeded); } },
                   { key: 'difficulty', label: 'Svårighetsgrad', current: currentDiffLabel, proposed: sugDiffLabel, apply: () => { if (reanalyzeSuggestions.difficulty) setDifficulty(reanalyzeSuggestions.difficulty); } },
                   { key: 'filmTime', label: 'Filmtid', current: currentFilmLabel, proposed: sugFilmLabel, apply: () => { if (reanalyzeSuggestions.filmTime) setFilmTime(reanalyzeSuggestions.filmTime); } },
                   { key: 'businessTypes', label: 'Branscher', current: currentBtLabel, proposed: sugBtLabel, apply: () => { if (reanalyzeSuggestions.businessTypes?.length) setBusinessTypes(reanalyzeSuggestions.businessTypes); } },
                 ];
                 const hasDiff = !reanalyzeSuggestions.enrich_failed && suggestions.some((s) => s.proposed && s.proposed !== s.current);
+                // True when suggested_overrides had at least one non-null field (even if values match current).
+                // Distinguishes "suggestions suppressed (all confirmed)" from "suggestions present but already applied".
+                const anyApplicable = !reanalyzeSuggestions.enrich_failed && hasApplicableSuggestions(reanalyzeSuggestions as Parameters<typeof hasApplicableSuggestions>[0]);
                 return (
                   <div>
                     {reanalyzeSuggestions.enrich_failed ? (
@@ -653,9 +654,9 @@ export default function ConceptReviewPage() {
                           type="button"
                           onClick={() => {
                             if (reanalyzeSuggestions.script_mode) setScriptMode(reanalyzeSuggestions.script_mode);
-                            setSetupComplexity(reanalyzeSuggestions.setup_complexity);
-                            setSkillRequired(reanalyzeSuggestions.skill_required);
-                            setSettingVal(reanalyzeSuggestions.setting);
+                            if (reanalyzeSuggestions.setup_complexity) setSetupComplexity(reanalyzeSuggestions.setup_complexity);
+                            if (reanalyzeSuggestions.skill_required) setSkillRequired(reanalyzeSuggestions.skill_required);
+                            if (reanalyzeSuggestions.setting) setSettingVal(reanalyzeSuggestions.setting);
                             if (reanalyzeSuggestions.peopleNeeded) setPeopleNeeded(reanalyzeSuggestions.peopleNeeded);
                             if (reanalyzeSuggestions.difficulty) setDifficulty(reanalyzeSuggestions.difficulty);
                             if (reanalyzeSuggestions.filmTime) setFilmTime(reanalyzeSuggestions.filmTime);
@@ -666,8 +667,12 @@ export default function ConceptReviewPage() {
                           Tillämpa alla förslag
                         </button>
                       </div>
-                    ) : (
+                    ) : anyApplicable ? (
                       <div style={{ fontSize: 12, color: '#16a34a', marginBottom: 8 }}>Inga ändringar att tillämpa — formuläret är redan uppdaterat.</div>
+                    ) : (
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8, lineHeight: 1.5 }}>
+                        Ny analysdata är redo att sparas. Inga nya klassificeringsförslag kunde tillämpas utan att röra bekräftade värden.
+                      </div>
                     )}
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button type="button" onClick={() => void handleReanalyze()} style={{ flex: 1, padding: '5px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', color: '#6b7280', fontSize: 11, cursor: 'pointer' }}>Kör igen</button>
