@@ -1,0 +1,135 @@
+  Du arbetar i hagen-ui. Börja med att hämta senaste main.
+
+  Målet är att skapa en produkt- och teknikplan för ingestmotorns metadata-kontrakt. Gör inte en bred implementation i
+  detta pass. Skapa eller uppdatera planfilen:
+
+  docs/agent-plans/28-ingest-metadata-contract-v1.md
+
+  Viktigt: bortse från /admin/demos. Det är inte del av detta pass.
+
+  Bakgrund:
+
+  Gamla hagen var en playground för att hämta TikTok-video och bryta ner den till jämförelsedata: vad gör två klipp
+  lika/olika, vilka klipp passar en viss kundstil, vilken svårighetsgrad passar kunden osv. Den breda similarity/
+  recommendation-idén var svår att få robust. Den del som kändes mest användbar var /analyze-rate-v1, särskilt dess
+  confirm/preselect-UI för mer objektiva metadatafält som antal personer, inspelningstid och svårighet.
+
+  Nuvarande upload-confirm i hagen-ui upplevs i grunden bra, men ingestmotorn behöver styras om från “AI analyserar
+  konceptet korrekt” till “AI föreslår strukturerade fält som CM granskar och sparar”.
+
+  Produktregler:
+
+  1. Gemini/AI är ett förslagssystem, inte sanningskälla.
+  2. En lyckad Gemini-fetch betyder inte att metadata är korrekt.
+  3. Save i upload-confirm är ett godkännande. Ett sparat koncept ska bli aktivt direkt.
+  4. Budget ska bort från core-metadata. Det är inte viktigt och säger lite.
+  5. businessTypes ska vara multi-value, eftersom ett koncept kan passa flera verksamhetstyper.
+  6. Metadata ska i v1 optimeras för hospitality/restaurang/bar/café.
+  7. AI ska inte sätta quality score eller recommendation score i v1.
+  8. AI ska inte sätta trendLevel i v1. Trend kan senare vara ett manuellt CM-fält, t.ex. “jag har sett denna”, “på väg
+  upp”, “överanvänd”.
+  9. Manus är optional. TikTok-koncept kan vara text-overlay, en 3-sekunders sketch, visuellt upplägg utan manus, kort
+  dialog eller längre manus.
+  10. Modellera därför manus som script_mode snarare än att anta att manus alltid finns:
+      - none
+      - text_overlay
+      - short_dialogue
+      - long_dialogue
+      - visual_only
+  11. Subjektiva fält är farligare och ska behandlas som AI-drafts som kräver CM-granskning:
+      - rubrik
+      - varför det fungerar
+      - humoranalys
+      - produktionstips
+      - manusförslag
+  12. Objektiva/preselectable fält ska prioriteras:
+      - antal personer
+      - antal scener
+      - script_mode
+      - setting/miljö
+      - setup complexity
+      - skill required
+      - difficulty
+      - businessTypes
+  13. Inspelningstid är osäkert eftersom modellen egentligen inte kan veta detta. Om fältet behålls ska det vara tydligt
+  att det är en uppskattning.
+  14. Replicerbarhet är svår som subjektiv score, men kan härledas från mer konkreta signaler: antal personer, antal
+  scener, script-längd, setup complexity, skill required.
+  15. Humor är huvudantagandet i main fetch, men icke-humor-koncept behöver diskuteras separat. Identifiera vilka
+  metadatafält som påverkas om library senare ska innehålla t.ex. produktvisning, ambience, behind the scenes,
+  erbjudande/event eller educational/how-to.
+  16. Konceptets grundinformation ska kunna ändras i library. Kundspecifika anpassningar ska däremot göras i /studio/
+  concepts eller motsvarande kundspecifikt flöde.
+
+  Undersök särskilt:
+
+  - artifacts/letrend/src/components/studio/UploadConceptModal.tsx
+  - artifacts/letrend/src/app/studio/concepts/page.tsx
+  - artifacts/letrend/src/lib/translator.ts
+  - artifacts/api-server/src/routes/studio.ts
+  - artifacts/api-server/src/routes/admin/concepts.ts
+  - artifacts/hagen/src/app/analyze-rate-v1
+  - artifacts/hagen/src/app/api/studio/concepts/enrich/route.ts
+
+  Planfilen ska innehålla:
+
+  1. Current State
+     Beskriv vilka metadatafält som finns idag, vilka kommer från Hagen/Gemini, vilka visas i upload-confirm, vilka
+  används i /studio/concepts filters och vilka sparas i concept/backend_data.
+
+  2. Lessons From /analyze-rate-v1
+     Jämför gamla /analyze-rate-v1 med nuvarande upload-confirm. Förklara varför gamla preselects kan ha träffat bättre,
+  särskilt kring enum-liknande objektiva fält.
+
+  3. Field Classification
+     Klassificera nuvarande och föreslagna fält i:
+     - V1 objective/preselectable
+     - V1 subjective AI draft
+     - CM-only/manual
+     - raw/future-only
+     - deprecated/remove
+
+  4. Proposed Contract
+     Föreslå ett tydligt ConceptMetadataV1 eller HagenConceptCandidateV1 med sektioner för:
+     - objective_signals
+     - subjective_copy
+     - cm_review_state eller review flags
+     - manual_cm_fields
+     - raw_hagen_payload
+     - warnings/confidence där det är relevant
+
+  5. Product Rules
+     Dokumentera explicit:
+     - save = approval / active direkt
+     - budget removed/deprecated
+     - businessTypes multi
+     - script optional via script_mode
+     - trend manual, not AI
+     - AI copy is draft, not truth
+     - no AI quality/recommendation score in v1
+     - hospitality/restaurang/bar/café är primär nisch
+
+  6. Code Impact
+     Lista exakt vilka filer som behöver ändras i nästa implementation:
+     - upload modal
+     - translator
+     - Hagen enrich prompt/schema
+     - API save route
+     - concept filters
+     - DB/schema om nödvändigt
+
+  7. Migration Strategy
+     Föreslå låg-risk väg:
+     - behåll raw backend_data
+     - introducera nytt kontrakt parallellt
+     - mappa gamla fält till nya
+     - dölj/ta bort budget från UI först
+     - ändra save/is_active-beteende tydligt
+     - undvik att bryta befintliga concept cards och filters
+
+  8. Open Questions
+     Håll frågorna få och konkreta. Fråga bara sådant som blockerar implementation, särskilt runt icke-humor-koncept och
+  vilka manuella CM-fält som behövs.
+
+  Gör inga stora implementationer i detta pass. Primärt output är docs/agent-plans/28-ingest-metadata-contract-v1.md.
+  Kör typecheck endast om du ändå gör kodändringar.
