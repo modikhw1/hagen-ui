@@ -491,6 +491,7 @@ export async function syncCustomerHistory(
               tiktok_likes: c.tiktok_likes,
               tiktok_comments: c.tiktok_comments,
               tiktok_thumbnail_url: c.tiktok_thumbnail_url ?? undefined,
+              tiktok_description: c.description ?? undefined,
               tiktok_last_synced_at: observedAt,
               last_observed_at: observedAt,
             };
@@ -529,6 +530,7 @@ export async function syncCustomerHistory(
             tiktok_views: c.tiktok_views,
             tiktok_likes: c.tiktok_likes,
             tiktok_comments: c.tiktok_comments,
+            tiktok_description: c.description ?? undefined,
             published_at: c.published_at,
             history_source: 'tiktok_profile' as const,
             observed_profile_handle: cleanedHandle,
