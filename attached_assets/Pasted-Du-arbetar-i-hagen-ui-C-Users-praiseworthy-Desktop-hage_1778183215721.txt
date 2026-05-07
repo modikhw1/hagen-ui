@@ -1,0 +1,58 @@
+Du arbetar i hagen-ui:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 53: rensa kvarvarande read-model legacy för `trendLevel` och `estimatedBudget` utan att röra DB-data
+  eller TikTok-sync budget.
+
+  Bakgrund:
+  Phase 52 stängde aktiva write paths:
+  - legacy concept pages redirectar till /studio/concepts/:id/review
+  - studio-v2 skriver inte längre `overrides.trendLevel`
+
+  Kvarvarande relevanta träffar finns i:
+  - artifacts/letrend/src/lib/translator.ts
+  - artifacts/letrend/src/lib/conceptLoader.ts
+  - artifacts/letrend/src/lib/conceptLoaderDB.ts
+  - artifacts/letrend/src/lib/display.ts
+  - artifacts/letrend/src/types/index.ts
+  - artifacts/letrend/src/data/categories.json
+  - artifacts/letrend/src/data/locale/sv.json
+  - artifacts/letrend/src/mocks/data.ts
+
+  Uppgift:
+  1. Synka hagen-ui main.
+  2. Rör inte Hagen-repot.
+  3. Rör inte TikTok-sync “budget”-fält. De gäller API/cron-budget, inte concept-budget.
+  4. Auditera aktiva imports/consumers för:
+     - trendLevel
+     - estimatedBudget
+     - estimatedBudgets
+     - trendLevels
+  5. Ta bort legacy `trendLevel`/`estimatedBudget` från aktiva concept read models om typecheck visar att de inte
+  behövs:
+     - `TranslatedConcept`
+     - `ClipOverride`
+     - `translateClipToConcept` return shape
+     - `translateTrendLevel`
+     - `translateBudget`
+     - budgetbaserad text i `translateWhyItFits`
+  6. Ta bort `trending` buckets från `conceptLoader.ts` och `conceptLoaderDB.ts` om de bara byggs från deprecated
+  `trendLevel`.
+  7. Ta bort display/category/locale helpers för budget/trend om inga aktiva imports återstår.
+  8. Uppdatera mocks så de inte producerar `trendLevel`.
+  9. Behåll gamla DB-värden passivt. Ingen migration och ingen bulk-delete.
+  10. Lägg till dokument:
+     docs/agent-plans/53-legacy-trend-budget-read-model-cleanup.md
+
+  Dokumentet ska innehålla:
+  - vad som togs bort
+  - vad som medvetet lämnades kvar
+  - varför TikTok-sync budget inte rördes
+  - `rg`-resultat efter cleanup
+  - typecheck-status
+
+  Verifiera:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
+
+  Commit/pusha till main.

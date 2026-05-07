@@ -16,10 +16,8 @@ export type Difficulty = keyof Categories['difficulties']
 export type FilmTime = keyof Categories['filmTimes']
 export type PeopleNeeded = keyof Categories['peopleNeeded']
 export type BusinessType = keyof Categories['businessTypes']
-export type EstimatedBudget = keyof Categories['estimatedBudgets']
 export type VibeAlignment = keyof Categories['vibeAlignments']
 export type Market = keyof Categories['markets']
-export type TrendLevel = keyof Categories['trendLevels']
 
 const locale: Locale = svLocale
 
@@ -128,20 +126,6 @@ export const display = {
     }
   },
 
-  budget(key: EstimatedBudget | string) {
-    const cat = categories.estimatedBudgets[key as EstimatedBudget]
-    const label = locale.estimatedBudgets[key as EstimatedBudget]
-
-    if (!cat) {
-      return { label: key, color: '#7D6E5D' }
-    }
-
-    return {
-      label: label || key,
-      color: cat.color,
-    }
-  },
-
   vibe(key: VibeAlignment | string) {
     const cat = categories.vibeAlignments[key as VibeAlignment]
     const label = locale.vibeAlignments[key as VibeAlignment]
@@ -167,21 +151,6 @@ export const display = {
     return {
       label: label || key,
       flag: cat.flag,
-    }
-  },
-
-  trendLevel(level: number | string) {
-    const key = String(level) as TrendLevel
-    const cat = categories.trendLevels[key]
-    const label = locale.trendLevels[key]
-
-    if (!cat) {
-      return { label: '—', icon: '📊' }
-    }
-
-    return {
-      label: label || cat.label,
-      icon: cat.icon,
     }
   },
 
@@ -239,13 +208,6 @@ export const categoryOptions = {
     return Object.keys(categories.businessTypes).map((key) => ({
       key: key as BusinessType,
       ...display.businessType(key),
-    }))
-  },
-
-  budgets(): Array<{ key: EstimatedBudget; label: string; color: string }> {
-    return Object.keys(categories.estimatedBudgets).map((key) => ({
-      key: key as EstimatedBudget,
-      ...display.budget(key),
     }))
   },
 

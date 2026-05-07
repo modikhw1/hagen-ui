@@ -281,12 +281,6 @@ export function generateDashboardRows(concepts: TranslatedConcept[]): DashboardR
       subtitle: 'Filma på under 15 minuter',
       concepts: concepts.filter(c => c.difficulty === 'easy').slice(0, 4),
     },
-    {
-      id: 'trending',
-      title: 'Trendar nu',
-      subtitle: 'Populära format just nu',
-      concepts: concepts.filter(c => c.trendLevel >= 4),
-    },
   ].filter(row => row.concepts.length > 0);
 }
 

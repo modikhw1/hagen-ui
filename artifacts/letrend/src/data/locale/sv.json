@@ -4,7 +4,6 @@
     "name": "Svenska",
     "description": "Swedish labels for UI display"
   },
-
   "humorMechanisms": {
     "contrast": "Två Världar Möts",
     "recognition": "Smärtsamt Relaterbart",
@@ -14,13 +13,11 @@
     "deadpan": "Torr & Rak",
     "absurdism": "Absurdism"
   },
-
   "difficulties": {
     "easy": "Lätt",
     "medium": "Medel",
     "advanced": "Avancerad"
   },
-
   "filmTimes": {
     "5min": "5 min",
     "10min": "10 min",
@@ -30,14 +27,12 @@
     "1hr": "1 timme",
     "1hr_plus": "1+ timme"
   },
-
   "peopleNeeded": {
     "solo": "Bara du",
     "duo": "2 personer",
     "small_team": "3 personer",
     "team": "4+ personer"
   },
-
   "businessTypes": {
     "bar": "Bar",
     "restaurang": "Restaurang",
@@ -48,14 +43,6 @@
     "nattklubb": "Nattklubb",
     "bageri": "Bageri"
   },
-
-  "estimatedBudgets": {
-    "free": "Gratis",
-    "low": "Låg",
-    "medium": "Medel",
-    "high": "Hög"
-  },
-
   "vibeAlignments": {
     "foodies": "Matälskare",
     "locals": "Lokalbefolkning",
@@ -64,22 +51,12 @@
     "millennials": "Millennials",
     "professionals": "Yrkesverksamma"
   },
-
   "markets": {
     "SE": "Sverige",
     "US": "USA",
     "UK": "Storbritannien",
     "global": "Global"
   },
-
-  "trendLevels": {
-    "1": "Låg",
-    "2": "Växande",
-    "3": "Stabil",
-    "4": "Trendig",
-    "5": "Viral"
-  },
-
   "ui": {
     "matchLabel": "match",
     "conceptsRemaining": "{count} av {total} kvar",
@@ -98,14 +75,24 @@
     "forBrand": "För {brand}",
     "filmTimeLabel": "Inspelningstid"
   },
-
   "whatYouGetItems": [
-    { "icon": "📹", "label": "Original videoreferens" },
-    { "icon": "📝", "label": "Fullständigt översatt manus" },
-    { "icon": "🎯", "label": "Produktionschecklista" },
-    { "icon": "🧠", "label": "Humor-analys & tips" }
+    {
+      "icon": "📹",
+      "label": "Original videoreferens"
+    },
+    {
+      "icon": "📝",
+      "label": "Fullständigt översatt manus"
+    },
+    {
+      "icon": "🎯",
+      "label": "Produktionschecklista"
+    },
+    {
+      "icon": "🧠",
+      "label": "Humor-analys & tips"
+    }
   ],
-
   "keyMoments": [
     "Setupen — gör den normal och relaterbar",
     "Kontrast-momentet — här landar humorn",

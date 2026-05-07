@@ -5,7 +5,6 @@
 import type {
   BusinessType,
   Difficulty,
-  EstimatedBudget,
   FilmTime,
   HumorMechanism,
   Market,
@@ -293,14 +292,12 @@ export interface TranslatedConcept {
   peopleNeeded: PeopleNeeded
   mechanism: HumorMechanism
   market: Market
-  trendLevel: number
   businessTypes: BusinessType[]
   hasScript: boolean
   script_mode?: ScriptMode
   setup_complexity?: SigmaSetupComplexity | null
   skill_required?: SigmaSkillLevel | null
   setting?: SigmaBackdrop | null
-  estimatedBudget: EstimatedBudget
   vibeAlignments: string[]
   whyItFits: string[]
   price: number
@@ -332,10 +329,8 @@ export interface ClipOverride {
   market?: Market
   peopleNeeded?: PeopleNeeded
   mechanism?: HumorMechanism
-  trendLevel?: number
   businessTypes?: BusinessType[]
   hasScript?: boolean
-  estimatedBudget?: EstimatedBudget
   transcript?: string
   // V1 contract additions — set by upload-confirm or library edit
   script_mode?: ScriptMode
@@ -435,11 +430,6 @@ const BUSINESS_TYPES: BusinessType[] = [
   'nattklubb',
   'bageri',
 ]
-
-function clampTrendLevel(value: number | undefined | null) {
-  if (typeof value !== 'number' || Number.isNaN(value)) return 3
-  return Math.max(1, Math.min(5, Math.round(value)))
-}
 
 function compactLines(value: string) {
   return value
@@ -775,14 +765,6 @@ function translateMechanism(clip: BackendClip): HumorMechanism {
   return 'subversion'
 }
 
-function translateTrendLevel(clip: BackendClip) {
-  const handling = firstNonEmpty(clip.humor_analysis?.handling).toLowerCase()
-  if (handling.includes('good')) return 4
-  if (handling.includes('bad')) return 2
-  if (handling.includes('viral')) return 5
-  return 3
-}
-
 function translateMarket(clip: BackendClip): Market {
   const combined = searchText(clip)
   if (combined.includes('stockholm') || combined.includes('sweden') || /[åäö]/i.test(combined)) return 'SE'
@@ -828,38 +810,6 @@ function translateBusinessTypes(clip: BackendClip): BusinessType[] {
   return BUSINESS_TYPES.filter((type) => result.has(type)).slice(0, 3)
 }
 
-function translateBudget(clip: BackendClip, difficulty: Difficulty, filmTime: FilmTime): EstimatedBudget {
-  const sigma = getSigma(clip)
-  const setup = sigma.replicability_decomposed?.environment_requirements?.setup_complexity
-  const propLevel = sigma.replicability_decomposed?.environment_requirements?.prop_dependency?.level
-  if (setup === 'elaborate_staging' || propLevel === 'custom_fabrication') return 'high'
-  if (setup === 'multi_location' || propLevel === 'specific_props') return 'medium'
-  if (setup === 'basic_tripod' || propLevel === 'common_items') return 'low'
-  if (setup === 'point_and_shoot' && (propLevel === 'none' || !propLevel)) return 'free'
-
-  const budgetSignal = clip.replicability_signals?.budget_requirements
-  if (typeof budgetSignal === 'number') {
-    if (budgetSignal <= 2) return 'free'
-    if (budgetSignal <= 4) return 'low'
-    if (budgetSignal <= 7) return 'medium'
-    return 'high'
-  }
-
-  const equipmentSignal = clip.replicability_signals?.equipment_requirements
-  if (typeof equipmentSignal === 'number') {
-    if (equipmentSignal <= 2) return 'free'
-    if (equipmentSignal <= 4) return 'low'
-    if (equipmentSignal <= 7) return 'medium'
-    return 'high'
-  }
-
-  if (difficulty === 'advanced' || filmTime === '1hr' || filmTime === '1hr_plus') {
-    return 'medium'
-  }
-
-  return 'low'
-}
-
 function translateHasScript(clip: BackendClip) {
   if (typeof clip.script?.hasScript === 'boolean') {
     return clip.script.hasScript
@@ -882,7 +832,6 @@ function translateWhyItFits(
   businessTypes: BusinessType[],
   filmTime: FilmTime,
   peopleNeeded: PeopleNeeded,
-  estimatedBudget: EstimatedBudget,
 ) {
   const reasons: string[] = []
 
@@ -902,9 +851,6 @@ function translateWhyItFits(
     reasons.push('Kan filmas av en person med enkel setup.')
   } else if (peopleNeeded === 'duo') {
     reasons.push('Kräver bara två personer för att få hook och payoff att landa.')
-  }
-  if (estimatedBudget === 'free' || estimatedBudget === 'low') {
-    reasons.push('Formatet går att producera med låg budget och vanlig mobilkamera.')
   }
 
   if (reasons.length === 0) {
@@ -934,16 +880,14 @@ export function translateClipToConcept(
   const peopleNeeded = override?.peopleNeeded ?? translatePeopleNeeded(clip)
   const mechanism = override?.mechanism ?? translateMechanism(clip)
   const market = override?.market ?? translateMarket(clip)
-  const trendLevel = clampTrendLevel(override?.trendLevel ?? translateTrendLevel(clip))
   const businessTypes = (override?.businessTypes?.filter(Boolean) as BusinessType[] | undefined) ?? translateBusinessTypes(clip)
   const hasScript = override?.hasScript ?? translateHasScript(clip)
   const script_mode = readScriptMode(clip, override)
   const setup_complexity = readSetupComplexity(clip, override)
   const skill_required = readSkillRequired(clip, override)
   const setting = readSetting(clip, override)
-  const estimatedBudget = override?.estimatedBudget ?? translateBudget(clip, difficulty, filmTime)
   const autoScript = buildScript(clip)
-  const whyItFits = override?.whyItFits_sv || defaults?.whyItFits_sv || translateWhyItFits(businessTypes, filmTime, peopleNeeded, estimatedBudget)
+  const whyItFits = override?.whyItFits_sv || defaults?.whyItFits_sv || translateWhyItFits(businessTypes, filmTime, peopleNeeded)
 
   return {
     id: clip.id,
@@ -954,14 +898,12 @@ export function translateClipToConcept(
     peopleNeeded,
     mechanism,
     market,
-    trendLevel,
     businessTypes,
     hasScript,
     script_mode,
     setup_complexity,
     skill_required,
     setting,
-    estimatedBudget,
     vibeAlignments: translateVibes(clip),
     whyItFits,
     price: override?.price ?? 24,
