@@ -178,6 +178,52 @@ router.post('/ingest-runs', requireAuth, CM_ONLY, async (req, res) => {
   }
 });
 
+// GET /api/studio/ingest-runs
+router.get('/ingest-runs', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const isAdmin = Boolean(req.user?.is_admin || req.user?.role === 'admin');
+
+    const limitParam = Number(req.query['limit'] ?? 25);
+    const limit = Math.min(Math.max(1, Number.isNaN(limitParam) ? 25 : limitParam), 100);
+
+    const statusParam = typeof req.query['status'] === 'string' ? req.query['status'] : null;
+    const VALID_STATUSES = ['queued', 'running', 'ready_for_review', 'completed', 'failed', 'canceled'];
+
+    const mineParam = req.query['mine'];
+    const mine = mineParam === 'true' || mineParam === '1';
+
+    let query = supabase
+      .from('ingest_runs')
+      .select(
+        'id, source, source_url, platform, status, stage, concept_id, error_code, error_message, warnings, result, created_at, updated_at, finished_at, started_at, created_by',
+      )
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    // Non-admins only see their own runs; admins see all unless ?mine=true
+    if (!isAdmin || mine) {
+      query = query.eq('created_by', req.user!.id);
+    }
+
+    if (statusParam && VALID_STATUSES.includes(statusParam)) {
+      query = query.eq('status', statusParam);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({ ingest_runs: data ?? [] });
+  } catch (err) {
+    logger.error(err, 'studio ingest-runs LIST error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
 // GET /api/studio/ingest-runs/:id
 router.get('/ingest-runs/:id', requireAuth, CM_ONLY, async (req, res) => {
   try {

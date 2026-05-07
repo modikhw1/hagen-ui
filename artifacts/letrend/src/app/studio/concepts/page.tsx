@@ -817,6 +817,309 @@ async function fetchTikTokThumbnails(concepts: ConceptLibraryItem[]): Promise<Re
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Ingest Status Panel
+// ---------------------------------------------------------------------------
+
+type IngestRunStatus = 'queued' | 'running' | 'ready_for_review' | 'completed' | 'failed' | 'canceled';
+
+interface IngestRun {
+  id: string;
+  source: string | null;
+  source_url: string | null;
+  platform: string | null;
+  status: IngestRunStatus;
+  stage: string | null;
+  concept_id: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  warnings: unknown[];
+  result: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+}
+
+const INGEST_STATUS_CONFIG: Record<IngestRunStatus, { label: string; color: string; bg: string; dot?: boolean }> = {
+  queued:           { label: 'Köad',       color: LeTrendColors.textSecondary, bg: LeTrendColors.surface },
+  running:          { label: 'Pågår',      color: '#1d4ed8',                   bg: '#eff6ff',             dot: true },
+  ready_for_review: { label: 'Klar',       color: LeTrendColors.success,        bg: '#f0fdf4' },
+  completed:        { label: 'Klart',      color: LeTrendColors.success,        bg: '#f0fdf4' },
+  failed:           { label: 'Fel',        color: LeTrendColors.error,          bg: LeTrendColors.errorLight },
+  canceled:         { label: 'Avbruten',   color: LeTrendColors.textMuted,      bg: LeTrendColors.surface },
+};
+
+function truncateUrl(url: string | null, maxLen = 38): string {
+  if (!url) return '—';
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/+$/, '');
+    const short = `${u.hostname}${path}`;
+    return short.length > maxLen ? short.slice(0, maxLen) + '…' : short;
+  } catch {
+    return url.length > maxLen ? url.slice(0, maxLen) + '…' : url;
+  }
+}
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s sedan`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m sedan`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h sedan`;
+  return new Date(iso).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+}
+
+function IngestStatusPanel() {
+  const [runs, setRuns] = useState<IngestRun[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+  const [, setTick] = useState(0);
+
+  const fetchRuns = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch('/api/studio/ingest-runs?limit=25', {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
+      if (!resp.ok) return;
+      const payload = await resp.json() as { ingest_runs?: IngestRun[] };
+      setRuns(payload.ingest_runs ?? []);
+    } catch {
+      // non-fatal
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void fetchRuns(); }, [fetchRuns]);
+
+  // Auto-refresh every 5s only while there are active runs
+  useEffect(() => {
+    const hasActive = runs.some((r) => r.status === 'queued' || r.status === 'running');
+    if (!hasActive) return;
+    const timer = setInterval(() => {
+      void fetchRuns();
+      setTick((t) => t + 1);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [runs, fetchRuns]);
+
+  if (!loading && runs.length === 0) return null;
+
+  const hasActive = runs.some((r) => r.status === 'queued' || r.status === 'running');
+  const failedCount = runs.filter((r) => r.status === 'failed').length;
+
+  return (
+    <div
+      style={{
+        marginBottom: 14,
+        borderRadius: LeTrendRadius.xl,
+        border: `1px solid ${failedCount > 0 ? LeTrendColors.error + '33' : LeTrendColors.border}`,
+        background: failedCount > 0 ? LeTrendColors.errorLight : '#fff',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header row */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+        onClick={() => setCollapsed((c) => !c)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {hasActive ? (
+            <span
+              style={{
+                display: 'inline-block',
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: '#1d4ed8',
+                boxShadow: '0 0 0 4px rgba(29,78,216,0.18)',
+                flexShrink: 0,
+              }}
+            />
+          ) : null}
+          <span
+            style={{
+              fontSize: LeTrendTypography.fontSize.sm,
+              fontWeight: LeTrendTypography.fontWeight.semibold,
+              color: failedCount > 0 ? LeTrendColors.error : LeTrendColors.brownDark,
+            }}
+          >
+            Ingest-status
+          </span>
+          {failedCount > 0 ? (
+            <span
+              style={{
+                padding: '2px 8px',
+                borderRadius: LeTrendRadius.full,
+                background: LeTrendColors.error + '18',
+                color: LeTrendColors.error,
+                fontSize: LeTrendTypography.fontSize.xs,
+                fontWeight: LeTrendTypography.fontWeight.semibold,
+              }}
+            >
+              {failedCount} fel
+            </span>
+          ) : null}
+          {loading ? (
+            <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted }}>
+              Laddar…
+            </span>
+          ) : (
+            <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted }}>
+              {runs.length} körning{runs.length !== 1 ? 'ar' : ''}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); void fetchRuns(); }}
+            style={{
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: LeTrendColors.textSecondary,
+              fontSize: LeTrendTypography.fontSize.xs,
+              padding: '2px 6px',
+              borderRadius: LeTrendRadius.sm,
+            }}
+          >
+            ↻
+          </button>
+          <span style={{ fontSize: 11, color: LeTrendColors.textMuted }}>{collapsed ? '▸' : '▾'}</span>
+        </div>
+      </div>
+
+      {/* Run list */}
+      {!collapsed ? (
+        <div style={{ borderTop: `1px solid ${LeTrendColors.border}` }}>
+          {runs.map((run) => {
+            const cfg = INGEST_STATUS_CONFIG[run.status] ?? INGEST_STATUS_CONFIG.queued;
+            return (
+              <div
+                key={run.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  padding: '9px 16px',
+                  borderBottom: `1px solid ${LeTrendColors.border}`,
+                  background: '#fff',
+                }}
+              >
+                {/* Status badge */}
+                <span
+                  style={{
+                    flexShrink: 0,
+                    padding: '2px 8px',
+                    borderRadius: LeTrendRadius.full,
+                    background: cfg.bg,
+                    color: cfg.color,
+                    fontSize: LeTrendTypography.fontSize.xs,
+                    fontWeight: LeTrendTypography.fontWeight.semibold,
+                    whiteSpace: 'nowrap',
+                    minWidth: 54,
+                    textAlign: 'center',
+                  }}
+                >
+                  {cfg.label}
+                </span>
+
+                {/* Stage */}
+                {run.stage ? (
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      fontSize: LeTrendTypography.fontSize.xs,
+                      color: LeTrendColors.textMuted,
+                      paddingTop: 3,
+                    }}
+                  >
+                    {run.stage}
+                  </span>
+                ) : null}
+
+                {/* Source URL label */}
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: LeTrendTypography.fontSize.xs,
+                    color: LeTrendColors.textSecondary,
+                    wordBreak: 'break-all',
+                    paddingTop: 3,
+                  }}
+                  title={run.source_url ?? undefined}
+                >
+                  {truncateUrl(run.source_url)}
+                </span>
+
+                {/* Relative time */}
+                <span
+                  style={{
+                    flexShrink: 0,
+                    fontSize: LeTrendTypography.fontSize.xs,
+                    color: LeTrendColors.textMuted,
+                    paddingTop: 3,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {relativeTime(run.created_at)}
+                </span>
+
+                {/* Link to review */}
+                {run.concept_id ? (
+                  <Link
+                    to={`/studio/concepts/${run.concept_id}/review`}
+                    style={{
+                      flexShrink: 0,
+                      fontSize: LeTrendTypography.fontSize.xs,
+                      color: LeTrendColors.brownLight,
+                      textDecoration: 'none',
+                      fontWeight: LeTrendTypography.fontWeight.semibold,
+                      paddingTop: 3,
+                      whiteSpace: 'nowrap',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Granska →
+                  </Link>
+                ) : null}
+
+                {/* Error message */}
+                {run.status === 'failed' && run.error_message ? (
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      maxWidth: 200,
+                      fontSize: LeTrendTypography.fontSize.xs,
+                      color: LeTrendColors.error,
+                      paddingTop: 3,
+                    }}
+                    title={run.error_message}
+                  >
+                    {run.error_message.length > 60 ? run.error_message.slice(0, 60) + '…' : run.error_message}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function StudioConceptsPage() {
   useAdminPageHeader({ title: 'Konceptbibliotek', eyebrow: 'LeTrend Studio' }, []);
   const router = useRouter();
@@ -1319,6 +1622,8 @@ export default function StudioConceptsPage() {
           + Nytt koncept
         </button>
       </div>
+
+      <IngestStatusPanel />
 
       {draftPendingConcepts.length > 0 ? (
         <div

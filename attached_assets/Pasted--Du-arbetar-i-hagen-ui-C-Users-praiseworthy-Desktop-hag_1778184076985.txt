@@ -1,0 +1,90 @@
+ Du arbetar i hagen-ui:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 55: skapa en lätt operativ statusvy för ingest_runs i Studio.
+
+  Bakgrund:
+  Phase 54 verifierade att ny ingest fungerar end-to-end:
+  URL → ingest_run → analyze → enrich → classify/save → active concept → cleanup.
+
+  Men idag finns bara:
+  - POST /api/studio/ingest-runs
+  - GET /api/studio/ingest-runs/:id
+
+  Det saknas listvy/API för att snabbt se:
+  - pågående ingest
+  - misslyckade ingest
+  - senaste lyckade ingest
+  - vilket concept en ingest skapade
+  - felmeddelanden utan att läsa logs
+
+  Uppgift:
+  1. Synka hagen-ui main.
+  2. Rör inte Hagen-repot.
+  3. Lägg till API:
+     GET /api/studio/ingest-runs
+
+     Query params:
+     - limit, default 25, max 100
+     - status optional: queued | running | ready_for_review | completed | failed | canceled
+     - mine optional boolean, om användbar enligt auth-mönster
+
+     Response:
+     {
+       "ingest_runs": [...]
+     }
+
+     Varje row bör innehålla:
+     - id
+     - source
+     - source_url
+     - platform
+     - status
+     - stage
+     - concept_id
+     - error_code
+     - error_message
+     - warnings
+     - result summary
+     - created_at
+     - updated_at
+     - finished_at
+
+     Säkerhet:
+     - requireAuth + CM/admin access enligt befintligt studio-mönster.
+     - Direkt Supabase-access ska fortsatt vara blockerad av RLS; API-server använder service role.
+     - Om non-admin CM kan använda routen, begränsa till created_by = req.user.id.
+
+  4. Lägg till en kompakt UI-yta i /studio/concepts:
+     - exempelvis “Ingest-status” nära “Nytt koncept”
+     - visa senaste 10-25 körningar
+     - status badge
+     - stage
+     - kort source/url-label
+     - länk till concept review om concept_id finns
+     - visa error_message för failed
+     - refresh-knapp
+     - auto-refresh var 5-10s bara om queued/running finns
+
+  5. UI ska följa befintligt designspråk. Ingen stor layout-refactor.
+
+  6. Lägg till tester där rimligt:
+     - API helper/query logic om lätt att isolera
+     - åtminstone typecheck
+
+  7. Dokumentera:
+     docs/agent-plans/55-ingest-runs-ops-status.md
+
+  Dokumentet ska innehålla:
+  - API endpoint-shape
+  - UI-placering
+  - auth/access-beslut
+  - hur failed/running/completed visas
+  - verifiering
+  - kvarvarande luckor
+
+  Verifiera:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
+
+  Commit/pusha till main.
