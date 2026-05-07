@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { ArrowDown, ArrowUp, ExternalLink, Heart, MessageCircle, Play, RotateCcw } from "lucide-react";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ExternalLink, Heart, MessageCircle, Play, RotateCcw, ArrowDown, ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type CustomerPlannerSlot = {
@@ -70,7 +70,7 @@ function LeTBadge({ onThumb, size = "md" }: { onThumb?: boolean; size?: "sm" | "
       alt="LeTrend"
       className={cn(
         "object-contain flex-shrink-0 pointer-events-none select-none",
-        onThumb && "brightness-0 invert",
+        onThumb ? "brightness-0 invert opacity-60" : "opacity-40",
         size === "sm" && "h-5 w-5",
         size === "md" && "h-7 w-7",
         size === "lg" && "h-10 w-10",
@@ -78,6 +78,61 @@ function LeTBadge({ onThumb, size = "md" }: { onThumb?: boolean; size?: "sm" | "
     />
   );
 }
+
+// ── Custom hover popup (works in iframe + any overflow context) ──────────────
+
+function HoverTrigger({
+  children,
+  popup,
+}: {
+  children: React.ReactNode;
+  popup: React.ReactNode;
+}) {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, flipLeft: false });
+  const ref = useRef<HTMLDivElement>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function open() {
+    timer.current = setTimeout(() => {
+      if (!ref.current) return;
+      const rect = ref.current.getBoundingClientRect();
+      const popupW = 288;
+      const flipLeft = rect.right + popupW + 12 > window.innerWidth;
+      setPos({
+        top: Math.min(rect.top, window.innerHeight - 320),
+        left: flipLeft ? rect.left - popupW - 10 : rect.right + 10,
+        flipLeft,
+      });
+      setVisible(true);
+    }, 130);
+  }
+
+  function close() {
+    if (timer.current) clearTimeout(timer.current);
+    setVisible(false);
+  }
+
+  return (
+    <div ref={ref} onMouseEnter={open} onMouseLeave={close} className="contents">
+      {children}
+      {visible &&
+        createPortal(
+          <div
+            style={{ position: "fixed", top: pos.top, left: pos.left, zIndex: 9999, width: 288 }}
+            onMouseEnter={open}
+            onMouseLeave={close}
+            className="rounded-xl border-2 border-foreground bg-card p-4 shadow-hard"
+          >
+            {popup}
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+// ── Grid ─────────────────────────────────────────────────────────────────────
 
 export function CustomerPlannerGrid({
   slots,
@@ -173,18 +228,9 @@ function PlannerCell({
   if (!hasPopup) return cardEl;
 
   return (
-    <HoverCard openDelay={120} closeDelay={80}>
-      <HoverCardTrigger asChild>{cardEl}</HoverCardTrigger>
-      <HoverCardContent
-        side="right"
-        align="start"
-        sideOffset={10}
-        collisionPadding={12}
-        className="w-72 border-2 border-foreground bg-card p-4 shadow-hard z-50"
-      >
-        <ConceptPopup slot={slot} companyName={companyName} isHistory={isHistory} />
-      </HoverCardContent>
-    </HoverCard>
+    <HoverTrigger popup={<ConceptPopup slot={slot} companyName={companyName} isHistory={isHistory} />}>
+      {cardEl}
+    </HoverTrigger>
   );
 }
 
@@ -286,7 +332,7 @@ function HistoryCard({ slot, isNow }: { slot: CustomerPlannerSlot; isNow: boolea
     >
       <div className="p-2.5">
         <TikTokGlyph
-          className={cn("h-4 w-4", hasThumb ? "text-white/75" : "text-foreground/45")}
+          className={cn("h-4 w-4", hasThumb ? "text-white/60" : "text-foreground/35")}
         />
       </div>
 
