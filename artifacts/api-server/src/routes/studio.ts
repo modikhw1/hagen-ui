@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
-import { fetchHagenJson, proxyHagenJson } from '../lib/upstream-proxy.js';
+import { fetchHagenJson, getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
 import { updateIngestRun, safeRunId } from '../lib/ingest-runs.js';
 import {
   extractSourceUrl,
@@ -55,6 +55,85 @@ function checkAnalyzeRateLimit(userId: string): { allowed: boolean; retryAfterMs
   analyzeTimestamps.set(userId, timestamps);
   return { allowed: true, retryAfterMs: 0 };
 }
+
+// ---------------------------------------------------------------------------
+// Hagen connectivity diagnostics
+// ---------------------------------------------------------------------------
+
+// GET /api/studio/hagen/status
+// Authenticated (CM+). Returns Hagen reachability info for live smoke / ops use.
+// NEVER exposes HAGEN_API_KEY or any other secret — only host/origin and version metadata.
+router.get('/hagen/status', requireAuth, CM_ONLY, async (_req, res) => {
+  const hagenBase = getHagenBase();
+
+  if (!hagenBase) {
+    res.status(503).json({
+      configured: false,
+      error: 'HAGEN_BASE_URL is not set on api-server',
+      hint: 'Add HAGEN_BASE_URL to Replit Secrets or the deployment environment. No .env file is loaded at runtime — the variable must be present in process.env.',
+    });
+    return;
+  }
+
+  // Sanitize: show only the URL origin (scheme + host + port), never a path or key.
+  let hagenOrigin: string;
+  try {
+    hagenOrigin = new URL(hagenBase).origin;
+  } catch {
+    res.status(503).json({
+      configured: true,
+      error: 'HAGEN_BASE_URL is not a valid URL',
+      raw_length: hagenBase.length,
+    });
+    return;
+  }
+
+  // Probe Hagen's version handshake endpoint.
+  const versionResult = await fetchHagenJson({
+    method: 'GET',
+    path: '/api/letrend/version',
+    timeoutMs: 8000,
+    routeTag: 'studio.hagen.status',
+  });
+
+  if (!versionResult.ok) {
+    res.status(versionResult.clientStatus).json({
+      configured: true,
+      hagen_origin: hagenOrigin,
+      reachable: false,
+      request_id: versionResult.requestId,
+      error: versionResult.body['error'] ?? 'hagen-unreachable',
+      message: versionResult.body['message'] ?? null,
+    });
+    return;
+  }
+
+  const vd = versionResult.data;
+  const routes = (vd['routes'] as Record<string, unknown>) ?? {};
+  const hasAnalyze = 'studio_concepts_analyze' in routes;
+  const hasEnrich = 'studio_concepts_enrich' in routes;
+
+  res.json({
+    configured: true,
+    hagen_origin: hagenOrigin,
+    reachable: true,
+    request_id: versionResult.requestId,
+    hagen_service: vd['service'] ?? null,
+    hagen_git_sha: vd['git_sha'] ?? null,
+    hagen_git_branch: vd['git_branch'] ?? null,
+    hagen_schema_version: vd['schema_version'] ?? null,
+    hagen_started_at: vd['started_at'] ?? null,
+    routes: {
+      studio_concepts_analyze: hasAnalyze ? (routes['studio_concepts_analyze'] as string) : null,
+      studio_concepts_enrich: hasEnrich ? (routes['studio_concepts_enrich'] as string) : null,
+    },
+    capabilities_ok: hasAnalyze && hasEnrich,
+    capabilities_missing: [
+      ...(!hasAnalyze ? ['studio_concepts_analyze'] : []),
+      ...(!hasEnrich ? ['studio_concepts_enrich'] : []),
+    ],
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Ingest runs — POST create / GET by id

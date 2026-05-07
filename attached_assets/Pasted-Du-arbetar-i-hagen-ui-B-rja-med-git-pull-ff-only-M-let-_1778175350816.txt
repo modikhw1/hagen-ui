@@ -1,0 +1,57 @@
+Du arbetar i hagen-ui. Börja med `git pull --ff-only`.
+
+  Målet är Phase 44: Hagen connectivity diagnostics för ingest/reanalyze.
+
+  VIKTIGT:
+  - Rör inte `/admin/demos`.
+  - Gör inga DB-writes.
+  - Gör inga ingest-featureändringar.
+  - Fokusera bara på varför hagen-ui/api-server inte anropar Hagen korrekt lokalt/staging.
+
+  Bakgrund:
+  Reanalyze-flowet är code-level verifierat, men live smoke blockerades eftersom hagen-ui inte verkar nå Hagen korrekt.
+  Orchestratorn såg:
+  - `HAGEN_BASE_URL` är inte satt i shell/processmiljön.
+  - `app/.env.local` innehåller `HAGEN_BASE_URL`.
+  - `artifacts/api-server/src/lib/upstream-proxy.ts` läser `process.env.HAGEN_BASE_URL` direkt.
+  - `artifacts/api-server` verkar inte ladda `app/.env.local` automatiskt.
+
+  Uppgift:
+  1. Kartlägg dev/startup-konfigurationen:
+     - Hur startas `artifacts/api-server` lokalt?
+     - Vilka env-filer laddas?
+     - Läser api-server någonsin `app/.env.local`?
+     - Finns risk att frontend har `HAGEN_BASE_URL` men api-server saknar den?
+
+  2. Kartlägg Hagen proxy-kedjan:
+     - `/api/studio/concepts/analyze`
+     - `/api/studio/concepts/enrich`
+     - `/api/studio/concepts/:id/reanalyze`
+     - `fetchHagenJson`
+     - Hagen route `/api/letrend/version`
+
+  3. Lägg till minimal diagnostik om det är säkert:
+     - Exempel: authenticated `GET /api/studio/hagen/status`
+     - Den ska INTE exponera secrets.
+     - Den får visa:
+       - om `HAGEN_BASE_URL` är satt
+       - sanitized host/origin
+       - om `/api/letrend/version` svarar
+       - om version response annonserar `studio_concepts_analyze` och `studio_concepts_enrich`
+       - request_id/status/error vid misslyckande
+
+  4. Dokumentera i:
+     `docs/agent-plans/44-hagen-connectivity-diagnostics.md`
+
+  Dokumentet ska innehålla:
+  - faktisk rotorsak om den hittas
+  - hur lokal env ska sättas
+  - hur man verifierar Hagen connectivity
+  - hur detta påverkar reanalyze/live smoke
+  - kvarvarande risker
+
+  Verifiering:
+  - Kör `pnpm --filter @workspace/api-server run typecheck`
+  - Kör `pnpm --filter @workspace/letrend run typecheck`
+  - Kör relevanta tester om möjligt.
+  - Commit/checkpointa till main.
