@@ -17,7 +17,7 @@ import {
 } from '@/lib/concept-enrichment';
 import { categoryOptions, display } from '@/lib/display';
 import { getSigma, readScriptMode, readSetupComplexity, readSkillRequired, readSetting, translateClipToConcept } from '@/lib/translator';
-import type { BackendClip, ScriptMode, SigmaBackdrop, SigmaSetupComplexity, SigmaSkillLevel } from '@/lib/translator';
+import type { BackendClip, ClipOverride, ScriptMode, SigmaBackdrop, SigmaSetupComplexity, SigmaSkillLevel } from '@/lib/translator';
 
 interface UploadConceptModalProps {
   isOpen: boolean;
@@ -291,10 +291,10 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         market: translated.market === 'global' ? 'US' : translated.market,
         peopleNeeded: translated.peopleNeeded,
         businessTypes: translated.businessTypes.slice(0, 5),
-        script_mode: ((overrides as Record<string, unknown>).script_mode as ScriptMode | undefined) ?? readScriptMode(backendData),
-        setup_complexity: readSetupComplexity(backendData) ?? rd?.environment_requirements?.setup_complexity ?? null,
-        skill_required: readSkillRequired(backendData) ?? rd?.actor_requirements?.skill_level ?? null,
-        setting: readSetting(backendData) ?? rd?.environment_requirements?.backdrop_interchangeability ?? null,
+        script_mode: readScriptMode(backendData, overrides as ClipOverride),
+        setup_complexity: readSetupComplexity(backendData, overrides as ClipOverride),
+        skill_required: readSkillRequired(backendData, overrides as ClipOverride),
+        setting: readSetting(backendData, overrides as ClipOverride),
       });
       setPhase('classify');
       setStep('classifying');

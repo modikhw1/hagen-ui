@@ -35,6 +35,8 @@ type ConceptLibraryItem = TranslatedConcept & {
   is_active: boolean;
   platform?: string | null;
   tiktokThumbnail?: string | null;
+  /** Raw DB overrides — used to determine which fields are CM-confirmed vs sigma-inferred */
+  raw_overrides: Record<string, unknown>;
 };
 type PendingConcept = {
   id: string;
@@ -714,10 +716,12 @@ function ConceptCard({
           <span>{difficulty.label}</span>
         </div>
 
-        {/* Script mode + objective field badges */}
-        {(concept.script_mode || concept.setup_complexity || concept.skill_required || concept.setting) ? (
+        {/* Objective field badges — only shown when CM has explicitly confirmed them in overrides.
+            Fields that come from sigma/AI fallback are intentionally hidden to avoid
+            presenting AI inferences as verified metadata. */}
+        {(concept.raw_overrides['script_mode'] || concept.raw_overrides['setup_complexity'] || concept.raw_overrides['skill_required'] || concept.raw_overrides['setting']) ? (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-            {concept.script_mode ? (
+            {concept.raw_overrides['script_mode'] && concept.script_mode ? (
               <span style={{
                 padding: '2px 7px',
                 borderRadius: LeTrendRadius.full,
@@ -730,7 +734,7 @@ function ConceptCard({
                 {SCRIPT_MODE_CARD_LABELS[concept.script_mode] ?? concept.script_mode}
               </span>
             ) : null}
-            {concept.setup_complexity ? (
+            {concept.raw_overrides['setup_complexity'] && concept.setup_complexity ? (
               <span style={{
                 padding: '2px 7px',
                 borderRadius: LeTrendRadius.full,
@@ -743,7 +747,7 @@ function ConceptCard({
                 {SETUP_COMPLEXITY_LABELS[concept.setup_complexity] ?? concept.setup_complexity}
               </span>
             ) : null}
-            {concept.skill_required ? (
+            {concept.raw_overrides['skill_required'] && concept.skill_required ? (
               <span style={{
                 padding: '2px 7px',
                 borderRadius: LeTrendRadius.full,
@@ -756,7 +760,7 @@ function ConceptCard({
                 {SKILL_REQUIRED_LABELS[concept.skill_required] ?? concept.skill_required}
               </span>
             ) : null}
-            {concept.setting ? (
+            {concept.raw_overrides['setting'] && concept.setting ? (
               <span style={{
                 padding: '2px 7px',
                 borderRadius: LeTrendRadius.full,
@@ -898,6 +902,7 @@ export default function StudioConceptsPage() {
             platform: backend.platform ?? detectPlatform(backend.source_url ?? backend.url),
             sourceUrl: backend.source_url ?? concept.sourceUrl,
             gcsUri: backend.gcs_uri ?? concept.gcsUri,
+            raw_overrides: (row.overrides as Record<string, unknown>) ?? {},
           };
         }),
       );

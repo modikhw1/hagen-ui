@@ -1,0 +1,160 @@
+Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 35: Ingest smoke test and objective provenance audit.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Gör inte en bred refaktor.
+  - Primärt mål är verifiering, små bugfixar och dokumentation.
+  - Behåll backward compatibility med gamla concepts.
+  - Ta inte bort legacy trend/budget/hasScript från translator i detta pass.
+
+  Mål:
+
+  1. Smoke-testa ingestflödet statiskt och lokalt där möjligt
+
+  Gå igenom hela flödet:
+
+  UploadConceptModal
+  → /api/studio/concepts/analyze
+  → /api/studio/concepts/enrich
+  → classify-steget
+  → POST /api/admin/concepts
+  → /studio/concepts/:id/review
+  → /studio/concepts library
+  → customer workspace concept selection
+
+  Kontrollera att fält som skapas, sparas och läses har konsekventa namn:
+
+  - script_mode
+  - setup_complexity
+  - skill_required
+  - setting
+  - businessTypes
+  - difficulty
+  - filmTime
+  - peopleNeeded
+  - market
+  - hasScript legacy
+
+  Dokumentera eventuella runtime-risker även om de inte syns i typecheck.
+
+  2. Kontrollera provenance för objective fields
+
+  Undersök var dessa fält kommer från:
+
+  - setup_complexity
+  - skill_required
+  - setting
+  - script_mode
+
+  Klassificera varje visning/användning som:
+
+  - CM-confirmed override
+  - AI/Gemini/Hagen enrich output
+  - sigma_taste fallback
+  - legacy hasScript fallback
+  - null/unknown
+
+  Särskilt viktigt:
+
+  - /studio/concepts ConceptCard visar nu badges för objective fields.
+  - Bedöm om dessa badges riskerar att visa AI/sigma-förslag som om de vore CM-bekräftad metadata.
+  - Om en liten säker fix är möjlig, implementera den:
+    - exempel: visa “AI-förslag” eller annan diskret markör när värdet kommer från sigma fallback
+    - eller visa bara objective badges när värdet finns i overrides
+  - Om fixen kräver större ändring, dokumentera rekommendationen istället.
+
+  3. Kontrollera script_mode-filter
+
+  Verifiera att /studio/concepts och customer workspace beter sig konsekvent.
+
+  Förväntat beteende:
+
+  - with_script ska matcha:
+    - text_overlay
+    - short_dialogue
+    - long_dialogue
+    - eller fallback hasScript=true för gamla concepts
+
+  - without_script ska matcha:
+    - visual_only
+    - none
+    - eller fallback hasScript=false för gamla concepts
+
+  - specifika script_mode-filter:
+    - text_overlay
+    - short_dialogue
+    - long_dialogue
+    - visual_only
+    - none
+
+  ska bara matcha explicit script_mode där det finns. Undvik falska matchningar för gamla concepts utan script_mode.
+
+  4. Kontrollera save/review-loop
+
+  Verifiera statiskt att:
+
+  - UploadConceptModal sparar:
+    - script_mode
+    - setup_complexity när valt
+    - skill_required när valt
+    - setting när valt
+    - businessTypes upp till 5
+    - is_active: true
+
+  - Review page kan:
+    - läsa alla dessa fält
+    - ändra dem
+    - spara dem
+    - rensa nullable fields korrekt när CM togglar bort dem
+
+  - Review page ska inte oavsiktligt skriva tillbaka deprecated:
+    - estimatedBudget
+    - trendLevel
+
+  5. Lägg till fokuserade tester om rimligt
+
+  Om matchScriptMode eller translator helpers enkelt kan testas utan stor setup, lägg till små unit tests.
+
+  Bra kandidater:
+
+  - readScriptMode
+  - readSetupComplexity
+  - readSkillRequired
+  - readSetting
+  - matchScriptMode om den kan extraheras eller testas enkelt
+
+  Undvik stora testhärvor om repo-miljön inte stödjer det rent.
+
+  6. Dokumentation
+
+  Skapa:
+
+  docs/agent-plans/35-ingest-e2e-smoke-and-provenance.md
+
+  Dokumentet ska innehålla:
+
+  - vad som verifierades
+  - smoke-testresultat
+  - datakontrakt genom flödet
+  - fältens provenance
+  - om objective badges är CM-confirmed eller AI/sigma-inferred
+  - vilka små bugfixar som eventuellt gjordes
+  - kvarstående risker
+  - nästa rekommenderade steg
+
+  7. Verifiering
+
+  Kör:
+
+  pnpm --filter @workspace/api-server run typecheck
+  pnpm --filter @workspace/letrend run typecheck
+
+  Om tester läggs till, kör relevanta testkommandon.
+
+  Output:
+  - Eventuella små kodfixar.
+  - Ny docs/agent-plans/35-ingest-e2e-smoke-and-provenance.md.
+  - Kort sammanfattning av vad som är verifierat och vad som återstår.
