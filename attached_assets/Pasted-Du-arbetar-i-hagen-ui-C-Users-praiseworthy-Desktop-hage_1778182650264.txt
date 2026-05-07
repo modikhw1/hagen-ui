@@ -1,0 +1,61 @@
+Du arbetar i hagen-ui:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 51: verifiera reanalyze/apply/save via exakt samma API-route som review-sidan använder.
+
+  Bakgrund:
+  Phase 50 verifierade DB-persistence och suppression, men Save gjordes via Supabase REST direkt.
+  Review-sidan använder istället:
+  PATCH /api/admin/concepts/:id
+
+  Vi behöver verifiera att hela appens faktiska save path fungerar innan legacy cleanup.
+
+  Uppgift:
+  1. Synka hagen-ui main.
+  2. Rör inte Hagen-repot.
+  3. Använd `clip-contraband-coffee` om det fortfarande saknar:
+     - script_mode
+     - setup_complexity
+     - skill_required
+     - setting
+     i `overrides`.
+  4. Ta snapshot via:
+     GET /api/admin/concepts/clip-contraband-coffee
+     med giltig CM/admin bearer token.
+  5. Kör:
+     POST /api/studio/concepts/clip-contraband-coffee/reanalyze
+  6. Verifiera att `suggested_overrides` innehåller objective fields och saknar:
+     - trendLevel
+     - estimatedBudget
+  7. Emulera review-sidans “Tillämpa alla” + “Spara” exakt:
+     PATCH /api/admin/concepts/clip-contraband-coffee
+     body:
+     {
+       "overrides": existing overrides + selected objective suggestions,
+       "backend_data": backend_data from reanalyze response
+     }
+  8. Verifiera response från `/api/admin/concepts/:id`.
+  9. Kör:
+     GET /api/admin/concepts/clip-contraband-coffee
+     och verifiera att objective fields faktiskt finns i `overrides`.
+  10. Kör reanalyze en andra gång och verifiera att de fyra objective fields suppressas.
+  11. Återställ conceptet till snapshot efter testet.
+  12. Lägg till dokument:
+     docs/agent-plans/51-reanalyze-admin-save-route-smoke.md
+
+  Dokumentet ska tydligt säga:
+  - att Phase 50 använde Supabase REST
+  - att Phase 51 använder faktisk `/api/admin/concepts/:id` route
+  - vilka fields som sparades
+  - att reload via admin route visar sparade fields
+  - att andra reanalyze suppressar dem
+  - att snapshot återställdes
+  - test/typecheck-status
+
+  Verifiera:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
+
+  Om denna fas passerar utan kodändring är nästa steg Phase 52:
+  quarantina eller redirecta legacy-sidorna `/studio/concepts/:id` och `/studio/concepts/:id/edit`, så de inte längre
+  kan skriva `trendLevel`.
