@@ -1,0 +1,90 @@
+ Du arbetar i hagen-ui-repot:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 49: live smoke av reanalyze-flödet mot nya Hagen enrich-kontraktet.
+
+  Bakgrund:
+  Hagen Railway är nu frisk och live på commit:
+  d9c828becc191f7aeebae51495301a621fa04a01
+
+  Verifierat:
+  - GET https://hagen-production.up.railway.app/api/letrend/version
+    - git_sha visar d9c828b
+    - now ändras mellan requests
+    - Cache-Control är no-store
+  - POST /api/studio/concepts/enrich med minimal backend_data returnerar:
+    - script_mode
+    - setup_complexity
+    - skill_required
+    - setting
+    - businessTypes
+    - ingen trendLevel
+    - ingen estimatedBudget
+
+  Uppgift:
+  1. Pull/synka hagen-ui main.
+
+  2. Kör live smoke för:
+     POST /api/studio/concepts/:id/reanalyze
+
+     Använd gärna concept:
+     clip-contraband-coffee
+
+     Detta concept användes i Phase 46 och hade source URL, så det bör gå genom full_reanalyze.
+
+  3. Verifiera backend-response:
+     - strategy ska vara full_reanalyze
+     - backend_data ska returneras
+     - suggested_overrides ska innehålla nya objective fields om de inte redan är bekräftade:
+       - script_mode
+       - setup_complexity
+       - skill_required
+       - setting
+     - suggested_overrides ska inte innehålla:
+       - trendLevel
+       - estimatedBudget
+     - reanalyze får inte skriva till databasen före Save
+
+  4. Verifiera review-UI:
+     - Öppna /studio/concepts/clip-contraband-coffee/review
+     - Klicka reanalyze/ny analys
+     - Panelen ska visa “Ny analys laddad · osparad”
+     - Panelen ska visa tillämpbara förslag för objective fields
+     - Den ska inte hamna i suppressed-state om nya fields faktiskt kom tillbaka
+     - “Tillämpa” per fält ska uppdatera rätt formfält
+     - “Tillämpa alla” ska uppdatera alla nya objective fields
+     - Spara ska persistera både pending backend_data och valda overrides
+
+  5. Efter Save:
+     - Ladda om sidan
+     - Bekräfta att valda objective fields finns kvar
+     - Kör reanalyze igen
+     - Bekräfta att redan bekräftade fields inte föreslås som overwrite
+
+  6. Om något fallerar:
+     - Gör minsta möjliga kodändring i hagen-ui.
+     - Rör inte designspråket.
+     - Rör inte Hagen-repot i detta pass.
+     - Bevara regeln att suggested_overrides är enda källa för förslag. Läs inte fallback direkt från backend_data för
+  bekräftade fält.
+
+  7. Lägg till dokumentation:
+     docs/agent-plans/49-reanalyze-objective-field-live-smoke.md
+
+     Dokumentet ska innehålla:
+     - Vilken Hagen git_sha som testades
+     - Vilket concept-id som användes
+     - Raw response-shape eller sammanfattning
+     - Vilka suggestions som visades
+     - Om Save persisterade korrekt
+     - Om andra reanalyze efter Save suppressade bekräftade fields
+     - Eventuella buggar och fixar
+     - Teststatus
+
+  8. Kör verifiering:
+     - pnpm --filter @workspace/api-server run typecheck
+     - pnpm --filter @workspace/letrend run typecheck
+     - relevanta tester om miljön tillåter
+     - om Rollup optional dependency blockerar lokal Vitest, dokumentera det istället för att dölja felet
+
+  Commit/pusha till main när fasen är klar.
