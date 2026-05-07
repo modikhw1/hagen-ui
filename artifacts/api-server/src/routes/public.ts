@@ -15,6 +15,9 @@ type DemoPreviewConcept = {
   thumbnailUrl: string | null;
   publishedAt: string | null;
   views: number | null;
+  likes: number | null;
+  comments: number | null;
+  description: string | null;
   headline: string | null;
   whyWorks: string | null;
   whyFits: string | null;
@@ -171,6 +174,9 @@ function buildPreviewConcept(row: JsonRecord): DemoPreviewConcept | null {
     ),
     publishedAt: readString(row['published_at']),
     views: readNumber(row['tiktok_views']),
+    likes: readNumber(row['tiktok_likes']),
+    comments: readNumber(row['tiktok_comments']),
+    description: null,
     headline: firstString(contentOverrides['headline'], row['custom_headline'], baseOverrides['headline_sv']) ?? title,
     whyWorks,
     whyFits,
@@ -203,6 +209,9 @@ function extractFeedplanFallback(plan: unknown): DemoPreviewConcept[] {
         thumbnailUrl: firstString(row['thumbnail_url'], row['thumbnailUrl']),
         publishedAt: firstString(row['published_at'], row['publishedAt']),
         views: readNumber(row['views']),
+        likes: readNumber(row['likes']),
+        comments: readNumber(row['comments']),
+        description: null,
         headline: firstString(row['headline'], row['title']),
         whyWorks: firstString(row['why_works'], row['whyWorks']),
         whyFits: firstString(row['why_fits'], row['whyFits']),

@@ -41,7 +41,13 @@
 
   --font-sans: var(--app-font-sans);
   --font-serif: var(--app-font-serif);
+  --font-serif-display: var(--app-font-serif);
   --font-mono: var(--app-font-mono);
+
+  --color-blush: #F4E4D8;
+
+  --shadow-hard: 4px 4px 0 #1F1A14;
+  --shadow-hard-sm: 2px 2px 0 #1F1A14;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
