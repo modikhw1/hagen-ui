@@ -1,0 +1,142 @@
+Du arbetar i hagen-ui:
+  C:\Users\praiseworthy\Desktop\hagen-ui
+
+  Målet är Phase 54: live E2E-smoke för nya ingestflödet efter trend/budget-cleanup.
+
+  Bakgrund:
+  Phase 49-51 verifierade reanalyze/save/suppression.
+  Phase 52 stängde legacy routes/write paths.
+  Phase 53 tog bort legacy read-model för trendLevel/estimatedBudget.
+
+  Nu behöver vi verifiera ny ingest:
+  URL → ingest_run → analyze → enrich → classify/confirm → save active concept → visible in library → cleanup.
+
+  Viktigt:
+  - Rör inte Hagen-repot.
+  - Gör inga UI-designändringar.
+  - Använd appens API-routes, inte direkt Supabase REST, för huvudflödet.
+  - Lämna inte permanent testdata aktivt i concept library.
+
+  Uppgift:
+  1. Synka hagen-ui main.
+  2. Verifiera Hagen status:
+     GET /api/studio/hagen/status
+     - configured true
+     - reachable true
+     - capabilities_ok true
+     - Hagen git_sha bör vara d9c828b eller senare
+
+  3. Skapa ingest run:
+     POST /api/studio/ingest-runs
+     body:
+     {
+       "source_url": "<en riktig TikTok/Instagram/Youtube URL som Hagen kan analysera>",
+       "platform": "tiktok"
+     }
+
+     Om du saknar ny URL, använd source_url från `clip-contraband-coffee` för smoke-testet, men spara conceptet med ett
+  unikt test-id så befintligt concept inte påverkas.
+
+  4. Kör analyze:
+     POST /api/studio/concepts/analyze
+     body:
+     {
+       "videoUrl": "<same url>",
+       "platform": "tiktok",
+       "ingest_run_id": "<run id>"
+     }
+
+     Verifiera:
+     - response är JSON
+     - upload.gcsUri finns om Hagen returnerar den
+     - analysis finns
+     - inga HTML/404-svar
+
+  5. Bygg backend_data som UploadConceptModal gör:
+     - unikt id, exempel: `smoke-ingest-${Date.now()}`
+     - url
+     - source_url
+     - platform
+     - gcs_uri om tillgänglig
+     - analysdata från analyze
+
+  6. Kör enrich:
+     POST /api/studio/concepts/enrich
+     body:
+     {
+       "backend_data": backendData,
+       "ingest_run_id": "<run id>"
+     }
+
+     Verifiera enrich overrides:
+     - innehåller script_mode
+     - innehåller setup_complexity
+     - innehåller skill_required
+     - innehåller setting
+     - businessTypes max 5
+     - innehåller inte trendLevel
+     - innehåller inte estimatedBudget
+
+  7. Emulera classify + save:
+     POST /api/admin/concepts
+     body:
+     {
+       "id": "<unique smoke id>",
+       "backend_data": backendData,
+       "overrides": {
+         ...enrich overrides,
+         "difficulty": "...",
+         "filmTime": "...",
+         "market": "...",
+         "peopleNeeded": "...",
+         "businessTypes": [...],
+         "script_mode": "...",
+         "setup_complexity": "...",
+         "skill_required": "...",
+         "setting": "..."
+       },
+       "is_active": true,
+       "ingest_run_id": "<run id>"
+     }
+
+  8. Verifiera sparat concept:
+     GET /api/admin/concepts/<smoke id>
+     - is_active true
+     - backend_data sparad
+     - overrides innehåller de fyra objective fields
+     - overrides innehåller inte trendLevel/estimatedBudget
+
+  9. Verifiera library visibility:
+     GET /api/admin/concepts?is_active=true&limit=500
+     - smoke concept finns med
+     - objective fields ligger i overrides
+
+  10. Verifiera ingest run:
+     GET /api/studio/ingest-runs/<run id>
+     - status completed
+     - stage/result rimligt
+     - concept_id pekar på smoke concept
+
+  11. Cleanup:
+     DELETE /api/admin/concepts/<smoke id>
+     Verifiera sedan att conceptet inte längre är aktivt.
+
+  12. Dokumentera:
+     docs/agent-plans/54-new-ingest-live-e2e-smoke.md
+
+  Dokumentet ska innehålla:
+  - URL/platform som användes
+  - Hagen git_sha
+  - ingest_run id
+  - smoke concept id
+  - analyze/enrich/save/reload/library/cleanup-resultat
+  - om humor-enrich kördes eller skippades
+  - att trendLevel/estimatedBudget saknas
+  - typecheck-status
+  - eventuella buggar och fixar
+
+  Verifiera:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
+
+  Commit/pusha till main.
