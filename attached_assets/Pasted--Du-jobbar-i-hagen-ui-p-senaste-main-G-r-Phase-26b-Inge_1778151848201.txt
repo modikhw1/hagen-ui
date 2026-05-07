@@ -1,0 +1,50 @@
+ Du jobbar i hagen-ui på senaste main. Gör Phase 26b: Ingest run reliability hardening.
+
+  Läs först:
+  - docs/agent-plans/26-ingest-engine-foundation.md
+  - artifacts/api-server/src/lib/ingest-runs.ts
+  - artifacts/api-server/src/routes/studio.ts
+  - artifacts/api-server/src/routes/admin/concepts.ts
+  - artifacts/letrend/src/components/studio/UploadConceptModal.tsx
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Rör inte feedplanner.
+  - Gör ingen bred Hagen/prompt/metadata-refaktor.
+  - Målet är att göra ingest_runs tillförlitlig som teknisk grund innan vi går vidare till större ingest-arkitektur.
+
+  Problem att fixa:
+  1. `updateIngestRun()` skriver över hela `result` och `warnings`.
+     - Lägg till merge-/append-semantik så `analyze_summary`, `enrich_summary`, `save_summary` och `humor_enrich` kan
+  samexistera.
+     - Warnings ska appendas, inte ersättas.
+
+  2. Status/stage efter enrich/save bör bli tydligare.
+     - Efter lyckad enrich: sätt gärna `status='ready_for_review'`, `stage='classifying'`.
+     - När save börjar/lyckas: `stage='saving'`, sedan `status='completed'`, `finished_at`.
+     - Humor-enrich efter completed ska inte göra hela runnen “running” igen. Lägg humor-status under
+  `result.humor_enrich`, t.ex. `{ status: 'running' | 'completed' | 'failed' }`.
+
+  3. Save-fel ska markera run som failed.
+     - I `POST /api/admin/concepts`, om insert misslyckas och `ingest_run_id` finns: uppdatera run med
+  `status='failed'`, `stage='saving'`, `error_code='save_failed'`, `error_message`.
+
+  4. Lägg till smala tester om teststruktur finns.
+     - Minst för merge/append-helpern.
+     - Annars dokumentera varför test inte lades till.
+
+  5. Dokumentera i:
+     docs/agent-plans/27-ingest-run-reliability-hardening.md
+
+  Dokumentera:
+  - ändrade filer
+  - exakt result/warnings merge-semantik
+  - status/stage-tabell efter ändring
+  - kvarvarande risker
+  - testresultat
+
+  Kör:
+  - pnpm --filter @workspace/api-server run typecheck
+  - pnpm --filter @workspace/letrend run typecheck
+
+  Committa och pusha till main.

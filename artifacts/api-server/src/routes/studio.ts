@@ -178,7 +178,7 @@ router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
       const data = result.data as Record<string, unknown>;
       const upload = data['upload'] as Record<string, unknown> | undefined;
       void updateIngestRun(ingestRunId, {
-        result: {
+        mergeResult: {
           analyze_summary: {
             gcs_uri: upload?.['gcsUri'] ?? null,
             has_analysis: Boolean(data['analysis']),
@@ -228,8 +228,11 @@ router.post('/concepts/enrich', requireAuth, CM_ONLY, async (req, res) => {
 
   if (ingestRunId) {
     if (result.ok) {
+      // Enrich succeeded: surface for CM review before they save.
       void updateIngestRun(ingestRunId, {
-        result: {
+        status: 'ready_for_review',
+        stage: 'classifying',
+        mergeResult: {
           enrich_summary: { has_overrides: Boolean(result.data['overrides']) },
         },
       });
@@ -269,8 +272,12 @@ router.post('/concepts/humor-enrich', requireAuth, CM_ONLY, async (req, res) => 
 
   const ingestRunId = safeRunId(body.ingest_run_id);
 
+  // Humor-enrich runs after the concept is already saved (status=completed).
+  // We must NOT change the top-level status/stage — only update result.humor_enrich.
   if (ingestRunId) {
-    void updateIngestRun(ingestRunId, { stage: 'humor_enriching' });
+    void updateIngestRun(ingestRunId, {
+      mergeResult: { humor_enrich: { status: 'running' } },
+    });
   }
 
   // Run the proxy and instrument the run result asynchronously — callers
@@ -288,12 +295,13 @@ router.post('/concepts/humor-enrich', requireAuth, CM_ONLY, async (req, res) => 
     if (result.ok) {
       const fields = (result.data['fields'] ?? {}) as Record<string, unknown>;
       void updateIngestRun(ingestRunId, {
-        result: { humor_enrich: { ok: true, fields } },
+        mergeResult: { humor_enrich: { status: 'completed', fields } },
       });
     } else {
+      const errCode = String(result.body['error'] ?? 'humor-enrich failed');
       void updateIngestRun(ingestRunId, {
-        warnings: [{ stage: 'humor_enriching', error: result.body['error'] ?? 'humor-enrich failed' }],
-        result: { humor_enrich: { ok: false, error: result.body['error'] } },
+        mergeResult: { humor_enrich: { status: 'failed', error: errCode } },
+        appendWarning: { stage: 'humor_enriching', error: errCode },
       });
     }
   }).catch(() => {

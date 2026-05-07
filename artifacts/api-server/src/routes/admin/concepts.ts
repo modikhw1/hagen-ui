@@ -82,6 +82,11 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
       version: 1,
     };
 
+    // Mark run as saving before the insert so partial failures are visible.
+    if (ingestRunId) {
+      void updateIngestRun(ingestRunId, { status: 'running', stage: 'saving' });
+    }
+
     const { data, error } = await supabase
       .from('concepts')
       .insert(insert)
@@ -89,18 +94,28 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
       .single();
 
     if (error) {
+      // Mark run as failed so it doesn't linger in ready_for_review.
+      if (ingestRunId) {
+        void updateIngestRun(ingestRunId, {
+          status: 'failed',
+          stage: 'saving',
+          finished_at: new Date().toISOString(),
+          error_code: 'save_failed',
+          error_message: error.message,
+        });
+      }
       res.status(500).json({ error: error.message });
       return;
     }
 
-    // Mark ingest run as completed after successful concept save.
+    // Mark run completed and link to the new concept.
     if (ingestRunId) {
       const savedId = (data as Record<string, unknown>)['id'] as string | undefined ?? insert.id;
       void updateIngestRun(ingestRunId, {
         status: 'completed',
-        stage: 'saving',
         concept_id: savedId,
         finished_at: new Date().toISOString(),
+        mergeResult: { save_summary: { concept_id: savedId } },
       });
     }
 
