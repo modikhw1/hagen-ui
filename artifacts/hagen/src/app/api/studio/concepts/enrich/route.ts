@@ -33,9 +33,11 @@ const MECHANISM_VALUES = [
   'subversion', 'contrast', 'recognition', 'dark', 'escalation', 'deadpan', 'absurdism',
 ] as const
 const MARKET_VALUES = ['SE', 'US', 'UK'] as const
-const BUDGET_VALUES = ['free', 'low', 'medium', 'high'] as const
 const BUSINESS_TYPE_VALUES = [
   'bar', 'restaurang', 'cafe', 'bistro', 'hotell', 'foodtruck', 'nattklubb', 'bageri',
+] as const
+const SCRIPT_MODE_VALUES = [
+  'none', 'text_overlay', 'short_dialogue', 'long_dialogue', 'visual_only',
 ] as const
 
 type DifficultyValue = typeof DIFFICULTY_VALUES[number]
@@ -43,8 +45,8 @@ type FilmTimeValue = typeof FILM_TIME_VALUES[number]
 type PeopleValue = typeof PEOPLE_VALUES[number]
 type MechanismValue = typeof MECHANISM_VALUES[number]
 type MarketValue = typeof MARKET_VALUES[number]
-type BudgetValue = typeof BUDGET_VALUES[number]
 type BusinessTypeValue = typeof BUSINESS_TYPE_VALUES[number]
+type ScriptModeValue = typeof SCRIPT_MODE_VALUES[number]
 
 interface EnrichedConcept {
   headline_sv: string
@@ -58,10 +60,9 @@ interface EnrichedConcept {
   peopleNeeded: PeopleValue
   mechanism: MechanismValue
   market: MarketValue
-  trendLevel: number
   businessTypes: BusinessTypeValue[]
   hasScript: boolean
-  estimatedBudget: BudgetValue
+  script_mode: ScriptModeValue
 }
 
 // ── System prompt (exact copy of ENRICH_CONCEPT_SYSTEM_PROMPT) ─────────────
@@ -84,15 +85,14 @@ Regler:
 - script_sv: använd befintligt transkript om det finns, annars skriv ett föreslaget manus med rätt notation.
 - productionNotes_sv: 3-5 tydliga steg som går att följa i produktion.
 - whyItFits_sv: 2-3 korta argument som hjälper en CM att motivera konceptet till kund.
-- businessTypes: välj 1-3 av [bar, restaurang, cafe, bistro, hotell, foodtruck, nattklubb, bageri].
+- businessTypes: välj 1-5 av [bar, restaurang, cafe, bistro, hotell, foodtruck, nattklubb, bageri].
 - difficulty: easy, medium eller advanced.
 - filmTime: 5min, 10min, 15min, 20min, 30min, 1hr eller 1hr_plus.
 - peopleNeeded: solo, duo, small_team eller team.
 - mechanism: subversion, contrast, recognition, dark, escalation, deadpan eller absurdism.
 - market: SE, US eller UK.
-- trendLevel: 1-5.
-- estimatedBudget: free, low, medium eller high.
-- hasScript ska vara true om konceptet har ett tydligt manus eller tydliga repliker att följa.`
+- hasScript ska vara true om konceptet har ett tydligt manus eller tydliga repliker att följa.
+- script_mode: välj ett av [none, text_overlay, short_dialogue, long_dialogue, visual_only] baserat på innehållet.`
 
 // ── Tool definition (mirrors ENRICH_CONCEPT_TOOL from letrend) ─────────────
 // Use SchemaType enum so values match the Google AI SDK's expected literals.
@@ -116,21 +116,58 @@ const enrichFunctionDeclaration: FunctionDeclaration = {
       peopleNeeded:       { type: SchemaType.STRING, enum: [...PEOPLE_VALUES] },
       mechanism:          { type: SchemaType.STRING, enum: [...MECHANISM_VALUES] },
       market:             { type: SchemaType.STRING, enum: [...MARKET_VALUES] },
-      trendLevel:         { type: SchemaType.NUMBER },
       businessTypes:      { type: SchemaType.ARRAY, items: { type: SchemaType.STRING, enum: [...BUSINESS_TYPE_VALUES] } },
       hasScript:          { type: SchemaType.BOOLEAN },
-      estimatedBudget:    { type: SchemaType.STRING, enum: [...BUDGET_VALUES] },
+      script_mode:        { type: SchemaType.STRING, enum: [...SCRIPT_MODE_VALUES] },
     },
     required: [
       'headline_sv', 'description_sv', 'whyItWorks_sv', 'script_sv',
       'productionNotes_sv', 'whyItFits_sv', 'difficulty', 'filmTime',
-      'peopleNeeded', 'mechanism', 'market', 'trendLevel',
-      'businessTypes', 'hasScript', 'estimatedBudget',
+      'peopleNeeded', 'mechanism', 'market',
+      'businessTypes', 'hasScript', 'script_mode',
     ],
   } as unknown as FunctionDeclaration['parameters'],
 }
 
 const ENRICH_TOOL: Tool = { functionDeclarations: [enrichFunctionDeclaration] }
+
+// ── Local script_mode inference (used in heuristic fallback) ───────────────
+
+function inferScriptMode(data: Record<string, unknown>): ScriptModeValue {
+  const getObj = (obj: unknown, key: string): Record<string, unknown> => {
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      const v = (obj as Record<string, unknown>)[key]
+      return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
+    }
+    return {}
+  }
+
+  const script = getObj(data, 'script')
+  const visual = getObj(data, 'visual')
+  const audio = getObj(data, 'audio')
+
+  const hasScript = script['hasScript'] === true
+  const transcript = typeof script['transcript'] === 'string' ? script['transcript'].trim() : ''
+  const textOverlays = Array.isArray(visual['textOverlays'])
+    ? (visual['textOverlays'] as unknown[]).filter((x): x is string => typeof x === 'string')
+    : []
+  const hasAudio = audio['hasVoiceover'] === true || audio['hasSpeech'] === true
+
+  if (!hasScript && !transcript && !hasAudio) {
+    return textOverlays.length > 0 ? 'text_overlay' : 'visual_only'
+  }
+
+  if (textOverlays.length > 0 && !hasAudio && !transcript) {
+    return 'text_overlay'
+  }
+
+  if (transcript) {
+    const wordCount = transcript.split(/\s+/).filter(Boolean).length
+    return wordCount > 60 ? 'long_dialogue' : 'short_dialogue'
+  }
+
+  return hasScript ? 'short_dialogue' : 'none'
+}
 
 // ── Fallback from raw analysis ─────────────────────────────────────────────
 
@@ -229,6 +266,8 @@ function buildFallback(data: Record<string, unknown>): EnrichedConcept {
   const peopleNeeded: PeopleValue =
     (typeof actors === 'string' && actorMap[actors]) ? actorMap[actors] : 'solo'
 
+  const hasScript = typeof script['hasScript'] === 'boolean' ? script['hasScript'] : hasVoiceover
+
   return {
     headline_sv: (conceptCore || keyMessage).slice(0, 60) || 'Nytt videokoncept',
     description_sv: keyMessage.slice(0, 400),
@@ -241,10 +280,9 @@ function buildFallback(data: Record<string, unknown>): EnrichedConcept {
     peopleNeeded,
     mechanism,
     market: 'SE',
-    trendLevel: 3,
     businessTypes: ['restaurang'],
-    hasScript: typeof script['hasScript'] === 'boolean' ? script['hasScript'] : hasVoiceover,
-    estimatedBudget: 'low',
+    hasScript,
+    script_mode: inferScriptMode(data),
   }
 }
 
@@ -259,7 +297,7 @@ function mergeToolCall(
 
   const productionNotes = dedupeStringArray(args['productionNotes_sv'], 5)
   const whyItFits = dedupeStringArray(args['whyItFits_sv'], 4)
-  const businessTypes = clampEnumArray(args['businessTypes'], BUSINESS_TYPE_VALUES, 3)
+  const businessTypes = clampEnumArray(args['businessTypes'], BUSINESS_TYPE_VALUES, 5)
 
   return {
     headline_sv: str('headline_sv', 120, fallback.headline_sv),
@@ -273,12 +311,9 @@ function mergeToolCall(
     peopleNeeded: clampEnum(args['peopleNeeded'], PEOPLE_VALUES, fallback.peopleNeeded),
     mechanism: clampEnum(args['mechanism'], MECHANISM_VALUES, fallback.mechanism),
     market: clampEnum(args['market'], MARKET_VALUES, 'SE'),
-    trendLevel: typeof args['trendLevel'] === 'number'
-      ? Math.max(1, Math.min(5, Math.round(args['trendLevel'] as number)))
-      : fallback.trendLevel,
     businessTypes: businessTypes.length ? businessTypes : fallback.businessTypes,
     hasScript: typeof args['hasScript'] === 'boolean' ? args['hasScript'] as boolean : fallback.hasScript,
-    estimatedBudget: clampEnum(args['estimatedBudget'], BUDGET_VALUES, fallback.estimatedBudget),
+    script_mode: clampEnum(args['script_mode'], SCRIPT_MODE_VALUES, fallback.script_mode),
   }
 }
 

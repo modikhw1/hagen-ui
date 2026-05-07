@@ -256,7 +256,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         filmTime: translated.filmTime,
         market: translated.market === 'global' ? 'US' : translated.market,
         peopleNeeded: translated.peopleNeeded,
-        businessTypes: translated.businessTypes.slice(0, 3),
+        businessTypes: translated.businessTypes.slice(0, 5),
       });
       setPhase('classify');
       setStep('classifying');
@@ -466,13 +466,13 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
 
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Branschtyper (max 3)</div>
-                  <div style={{ fontSize: 11, color: classification.businessTypes.length >= 3 ? '#92400e' : '#6b7280', fontWeight: 700 }}>{classification.businessTypes.length} av 3</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Branschtyper (max 5)</div>
+                  <div style={{ fontSize: 11, color: classification.businessTypes.length >= 5 ? '#92400e' : '#6b7280', fontWeight: 700 }}>{classification.businessTypes.length} av 5</div>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {businessTypeOptions.map((type) => {
                     const checked = classification.businessTypes.includes(type.key);
-                    const limitReached = classification.businessTypes.length >= 3 && !checked;
+                    const limitReached = classification.businessTypes.length >= 5 && !checked;
                     return (
                       <button
                         key={type.key}
@@ -482,7 +482,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
                           if (!c) return c;
                           const next = checked
                             ? c.businessTypes.filter((v) => v !== type.key)
-                            : c.businessTypes.length >= 3 ? c.businessTypes : [...c.businessTypes, type.key];
+                            : c.businessTypes.length >= 5 ? c.businessTypes : [...c.businessTypes, type.key];
                           return { ...c, businessTypes: next };
                         })}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '6px 10px', borderRadius: 999, border: `1px solid ${checked ? type.color : '#e5e7eb'}`, background: checked ? `${type.color}14` : '#fff', cursor: limitReached ? 'not-allowed' : 'pointer', fontSize: 12, color: checked ? type.color : '#374151', opacity: limitReached ? 0.45 : 1 }}

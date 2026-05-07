@@ -6,7 +6,6 @@ import { useParams, useRouter } from '@/lib/navigation-compat';
 import { useAuth } from '@/contexts/AuthContext';
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import {
-  BUDGET_VALUES,
   BUSINESS_TYPE_VALUES,
   DIFFICULTY_VALUES,
   FILM_TIME_VALUES,
@@ -96,7 +95,6 @@ const peopleOptions = PEOPLE_VALUES.map((key) => ({
   label: display.peopleNeeded(key).label,
   shortLabel: display.peopleNeededShort(key),
 }));
-const budgetOptions = BUDGET_VALUES.map((key) => ({ key, label: display.budget(key).label }));
 const businessTypeOptions = BUSINESS_TYPE_VALUES.map((key) => ({ key, ...display.businessType(key) }));
 const marketOptions = categoryOptions.markets();
 
@@ -164,7 +162,6 @@ export default function ConceptReviewPage() {
   const [filmTime, setFilmTime] = useState('');
   const [market, setMarket] = useState('');
   const [peopleNeeded, setPeopleNeeded] = useState('');
-  const [estimatedBudget, setEstimatedBudget] = useState('');
   const [businessTypes, setBusinessTypes] = useState<string[]>([]);
   const [replicabilityHint, setReplicabilityHint] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -209,7 +206,6 @@ export default function ConceptReviewPage() {
       setFilmTime(typeof overrides.filmTime === 'string' ? overrides.filmTime : translated.filmTime);
       setMarket(normalizedMarket);
       setPeopleNeeded(typeof overrides.peopleNeeded === 'string' ? overrides.peopleNeeded : translated.peopleNeeded);
-      setEstimatedBudget(typeof overrides.estimatedBudget === 'string' ? overrides.estimatedBudget : translated.estimatedBudget);
       setBusinessTypes(
         Array.isArray(overrides.businessTypes) && overrides.businessTypes.length > 0
           ? overrides.businessTypes.filter((value) => typeof value === 'string') as string[]
@@ -276,7 +272,6 @@ export default function ConceptReviewPage() {
         filmTime,
         market,
         peopleNeeded,
-        estimatedBudget,
         businessTypes,
         hasScript: Boolean(scriptSv.trim()),
       };
@@ -298,7 +293,7 @@ export default function ConceptReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [businessTypes, conceptId, descriptionSv, difficulty, estimatedBudget, filmTime, headlineSv, market, peopleNeeded, productionNotesText, raw, scriptSv, session, whyItFitsText, whyItWorksSv]);
+  }, [businessTypes, conceptId, descriptionSv, difficulty, filmTime, headlineSv, market, peopleNeeded, productionNotesText, raw, scriptSv, session, whyItFitsText, whyItWorksSv]);
 
   const handleTogglePublish = useCallback(async (publish: boolean) => {
     const publishReady = Boolean(headlineSv.trim()) && Boolean(scriptSv.trim() || !publish) && Boolean(difficulty && filmTime && peopleNeeded && businessTypes.length > 0);
@@ -576,21 +571,20 @@ export default function ConceptReviewPage() {
                 <div><label style={{ ...fieldLabelStyle, marginBottom: 8, fontSize: 12 }}>Inspelningstid</label><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{filmTimeGroups.map((option) => <button key={option.key} type="button" onClick={() => setFilmTime(option.value)} style={choiceButton(selectedFilmTimeGroup === option.key, '#6366f1')}>{option.label}</button>)}</div></div>
                 <div><label style={{ ...fieldLabelStyle, marginBottom: 8, fontSize: 12 }}>Antal personer</label><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{peopleOptions.map((option) => <button key={option.key} type="button" onClick={() => setPeopleNeeded(option.key)} style={{ ...choiceButton(peopleNeeded === option.key, '#111827'), minWidth: 108 }}><div style={{ fontSize: 16, fontWeight: 700 }}>{option.shortLabel}</div><div style={{ marginTop: 2, fontSize: 11, opacity: 0.82 }}>{option.label}</div></button>)}</div></div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                 <div><label style={{ ...fieldLabelStyle, fontSize: 12 }}>Marknad</label><select value={market} onChange={(event) => setMarket(event.target.value)} style={{ ...inputBaseStyle, fontSize: 13, padding: '9px 12px' }}>{marketOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></div>
-                <div><label style={{ ...fieldLabelStyle, fontSize: 12 }}>Budget</label><select value={estimatedBudget} onChange={(event) => setEstimatedBudget(event.target.value)} style={{ ...inputBaseStyle, fontSize: 13, padding: '9px 12px' }}>{budgetOptions.map((option) => <option key={option.key} value={option.key}>{option.label}</option>)}</select></div>
                 <div><label style={{ ...fieldLabelStyle, fontSize: 12 }}>Manusstatus</label><div style={{ ...inputBaseStyle, fontSize: 13, padding: '9px 12px', background: '#fafaf9', color: scriptSv.trim() ? '#166534' : '#6b7280' }}>{scriptSv.trim() ? 'Med manus' : 'Utan manus'}</div></div>
               </div>
               <div style={{ marginTop: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Branschtyper</div>
-                  <div style={{ fontSize: 12, color: businessTypes.length >= 3 ? '#92400e' : '#6b7280', fontWeight: 700 }}>{businessTypes.length} av 3 valda</div>
+                  <div style={{ fontSize: 12, color: businessTypes.length >= 5 ? '#92400e' : '#6b7280', fontWeight: 700 }}>{businessTypes.length} av 5 valda</div>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {businessTypeOptions.map((type) => {
                     const checked = businessTypes.includes(type.key);
-                    const limitReached = businessTypes.length >= 3 && !checked;
-                    return <button key={type.key} type="button" disabled={limitReached} onClick={() => setBusinessTypes((current) => checked ? current.filter((value) => value !== type.key) : current.length >= 3 ? current : [...current, type.key])} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 999, border: `1px solid ${checked ? type.color : '#e5e7eb'}`, background: checked ? `${type.color}14` : '#fff', cursor: limitReached ? 'not-allowed' : 'pointer', fontSize: 13, color: checked ? type.color : '#374151', opacity: limitReached ? 0.45 : 1 }}><span>{type.icon}</span><span>{type.label}</span></button>;
+                    const limitReached = businessTypes.length >= 5 && !checked;
+                    return <button key={type.key} type="button" disabled={limitReached} onClick={() => setBusinessTypes((current) => checked ? current.filter((value) => value !== type.key) : current.length >= 5 ? current : [...current, type.key])} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 10px', borderRadius: 999, border: `1px solid ${checked ? type.color : '#e5e7eb'}`, background: checked ? `${type.color}14` : '#fff', cursor: limitReached ? 'not-allowed' : 'pointer', fontSize: 13, color: checked ? type.color : '#374151', opacity: limitReached ? 0.45 : 1 }}><span>{type.icon}</span><span>{type.label}</span></button>;
                   })}
                 </div>
               </div>

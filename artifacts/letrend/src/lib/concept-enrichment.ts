@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import type { BusinessType, Difficulty, EstimatedBudget, FilmTime, HumorMechanism, Market, PeopleNeeded } from './display'
-import { translateClipToConcept, type BackendClip, type ClipOverride } from './translator'
+import type { BusinessType, Difficulty, FilmTime, HumorMechanism, Market, PeopleNeeded } from './display'
+import { readScriptMode, translateClipToConcept, type BackendClip, type ClipOverride, type ScriptMode } from './translator'
 
 export const BUSINESS_TYPE_VALUES = [
   'bar',
@@ -35,7 +35,16 @@ export const MECHANISM_VALUES = [
   'absurdism',
 ] as const satisfies readonly HumorMechanism[]
 export const MARKET_VALUES = ['SE', 'US', 'UK'] as const satisfies readonly Market[]
-export const BUDGET_VALUES = ['free', 'low', 'medium', 'high'] as const satisfies readonly EstimatedBudget[]
+// BUDGET_VALUES kept for backward compat with old overrides/UI that still reads it
+export const BUDGET_VALUES = ['free', 'low', 'medium', 'high'] as const
+
+export const SCRIPT_MODE_VALUES = [
+  'none',
+  'text_overlay',
+  'short_dialogue',
+  'long_dialogue',
+  'visual_only',
+] as const satisfies readonly ScriptMode[]
 
 export const enrichedConceptSchema = z.object({
   headline_sv: z.string().min(1).max(120),
@@ -49,10 +58,9 @@ export const enrichedConceptSchema = z.object({
   peopleNeeded: z.enum(PEOPLE_VALUES),
   mechanism: z.enum(MECHANISM_VALUES),
   market: z.enum(MARKET_VALUES),
-  trendLevel: z.number().min(1).max(5),
-  businessTypes: z.array(z.enum(BUSINESS_TYPE_VALUES)).min(1).max(3),
+  businessTypes: z.array(z.enum(BUSINESS_TYPE_VALUES)).min(1).max(5),
   hasScript: z.boolean(),
-  estimatedBudget: z.enum(BUDGET_VALUES),
+  script_mode: z.enum(SCRIPT_MODE_VALUES),
 })
 
 export type EnrichedConceptOverride = z.infer<typeof enrichedConceptSchema> & ClipOverride
@@ -75,15 +83,14 @@ Regler:
 - script_sv: använd befintligt transkript om det finns, annars skriv ett föreslaget manus med rätt notation.
 - productionNotes_sv: 3-5 tydliga steg som går att följa i produktion.
 - whyItFits_sv: 2-3 korta argument som hjälper en CM att motivera konceptet till kund.
-- businessTypes: välj 1-3 av [bar, restaurang, cafe, bistro, hotell, foodtruck, nattklubb, bageri].
+- businessTypes: välj 1-5 av [bar, restaurang, cafe, bistro, hotell, foodtruck, nattklubb, bageri].
 - difficulty: easy, medium eller advanced.
 - filmTime: 5min, 10min, 15min, 20min, 30min, 1hr eller 1hr_plus.
 - peopleNeeded: solo, duo, small_team eller team.
 - mechanism: subversion, contrast, recognition, dark, escalation, deadpan eller absurdism.
 - market: SE, US eller UK.
-- trendLevel: 1-5.
-- estimatedBudget: free, low, medium eller high.
-- hasScript ska vara true om konceptet har ett tydligt manus eller tydliga repliker att följa.`
+- hasScript ska vara true om konceptet har ett tydligt manus eller tydliga repliker att följa.
+- script_mode: välj ett av [none, text_overlay, short_dialogue, long_dialogue, visual_only] baserat på innehållet.`
 
 export const ENRICH_CONCEPT_TOOL = {
   type: 'function',
@@ -104,10 +111,9 @@ export const ENRICH_CONCEPT_TOOL = {
         peopleNeeded: { type: 'string', enum: PEOPLE_VALUES },
         mechanism: { type: 'string', enum: MECHANISM_VALUES },
         market: { type: 'string', enum: MARKET_VALUES },
-        trendLevel: { type: 'number' },
         businessTypes: { type: 'array', items: { type: 'string', enum: BUSINESS_TYPE_VALUES } },
         hasScript: { type: 'boolean' },
-        estimatedBudget: { type: 'string', enum: BUDGET_VALUES },
+        script_mode: { type: 'string', enum: SCRIPT_MODE_VALUES },
       },
       required: [
         'headline_sv',
@@ -121,10 +127,9 @@ export const ENRICH_CONCEPT_TOOL = {
         'peopleNeeded',
         'mechanism',
         'market',
-        'trendLevel',
         'businessTypes',
         'hasScript',
-        'estimatedBudget',
+        'script_mode',
       ],
       additionalProperties: false,
     },
@@ -164,10 +169,9 @@ export function buildFallbackEnrichedConcept(backendData: BackendClip): Enriched
     peopleNeeded: translated.peopleNeeded,
     mechanism: translated.mechanism,
     market: translated.market === 'global' ? 'US' : translated.market,
-    trendLevel: translated.trendLevel,
     businessTypes: translated.businessTypes,
     hasScript: translated.hasScript,
-    estimatedBudget: translated.estimatedBudget,
+    script_mode: readScriptMode(backendData),
   }
 }
 
@@ -189,10 +193,9 @@ export function normalizeEnrichedConcept(input: unknown, backendData: BackendCli
     peopleNeeded: candidate.peopleNeeded,
     mechanism: candidate.mechanism,
     market: candidate.market,
-    trendLevel: typeof candidate.trendLevel === 'number' ? candidate.trendLevel : fallback.trendLevel,
-    businessTypes: dedupeStrings(candidate.businessTypes).slice(0, 3),
+    businessTypes: dedupeStrings(candidate.businessTypes).slice(0, 5),
     hasScript: typeof candidate.hasScript === 'boolean' ? candidate.hasScript : fallback.hasScript,
-    estimatedBudget: candidate.estimatedBudget,
+    script_mode: candidate.script_mode,
   }
 
   const parsed = enrichedConceptSchema.safeParse({

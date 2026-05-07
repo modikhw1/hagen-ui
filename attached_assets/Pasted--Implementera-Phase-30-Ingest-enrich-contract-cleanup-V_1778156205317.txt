@@ -1,0 +1,63 @@
+ Implementera Phase 30: Ingest enrich contract cleanup.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Behåll backward compatibility med gamla concepts som redan har estimatedBudget, trendLevel och hasScript i
+  overrides/backend_data.
+  - Ta inte bort translatorns legacy-fält om andra ytor fortfarande behöver dem. Nya ingest/enrich-resultat ska däremot
+  sluta producera deprecated fält.
+
+  Mål:
+
+  1. Stoppa nya enrich-resultat från att producera budget och AI-trend
+     - Uppdatera artifacts/letrend/src/lib/concept-enrichment.ts.
+     - Ta bort estimatedBudget från enrichedConceptSchema, ENRICH_CONCEPT_SYSTEM_PROMPT, ENRICH_CONCEPT_TOOL, required-
+  listan, fallback och normalize.
+     - Ta bort trendLevel från samma enrich-schema/prompt/tool/fallback/normalize.
+     - Behåll BUDGET_VALUES endast om andra imports fortfarande kräver det, annars ta bort import/export där det är
+  säkert.
+     - Gamla overrides.estimatedBudget och overrides.trendLevel ska inte krascha translator eller gamla concept cards.
+
+  2. Synka Hagen enrich route
+     - Uppdatera artifacts/hagen/src/app/api/studio/concepts/enrich/route.ts så den speglar letrend-kontraktet.
+     - Ta bort BUDGET_VALUES, BudgetValue, estimatedBudget och trendLevel från EnrichedConcept, prompt, function
+  declaration, required-lista, buildFallback och mergeToolCall.
+     - Returnera inte dessa fält i nya overrides.
+
+  3. Lägg till script_mode i enrich-kontraktet
+     - Lägg till ScriptMode enum:
+       none, text_overlay, short_dialogue, long_dialogue, visual_only.
+     - Lägg till script_mode i letrend enrichedConceptSchema och tool schema.
+     - Lägg till script_mode i Hagen route interface, tool schema, fallback och mergeToolCall.
+     - Använd befintlig readScriptMode i artifacts/letrend/src/lib/translator.ts där möjligt.
+     - I Hagen route, implementera en enkel lokal inferScriptMode från hasScript/transcript/textOverlays/audio.
+     - Behåll hasScript parallellt för backward compatibility i detta pass.
+
+  4. Ta bort kvarvarande budget från concept review UI
+     - Uppdatera artifacts/letrend/src/app/studio/concepts/[id]/review/page.tsx.
+     - Ta bort BUDGET_VALUES-import, budgetOptions, estimatedBudget state, setEstimatedBudget, budget select och
+  estimatedBudget från PATCH-overrides.
+     - Gamla budgetfält i DB ska lämnas orörda, bara inte visas eller skrivas om.
+
+  5. Justera businessTypes-gräns till 5
+     - UploadConceptModal: ändra max 3 till max 5 i text, counter, disabled logic och initial slice.
+     - Concept review page: ändra max 3 till max 5.
+     - concept-enrichment.ts: ändra businessTypes schema/normalization/prompt från max 3 till max 5.
+     - Hagen route: ändra prompt och clampEnumArray max från 3 till 5.
+     - Concept cards får fortfarande bara visa de första 3 badges om det är en ren layoutfråga.
+
+  6. Dokumentation
+     - Skapa docs/agent-plans/30-ingest-enrich-contract-cleanup.md.
+     - Beskriv ändrade filer, vad som nu är deprecated men backward-compatible, och nästa rekommenderade slice.
+
+  7. Verifiering
+     - Kör:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+     - Dokumentera resultatet i planfilen.
+
+  Output:
+  - Kodändringar enligt ovan.
+  - Ny docs/agent-plans/30-ingest-enrich-contract-cleanup.md.
+  - Kort sammanfattning av kvarstående nästa steg, särskilt objective signals i upload-confirm.
