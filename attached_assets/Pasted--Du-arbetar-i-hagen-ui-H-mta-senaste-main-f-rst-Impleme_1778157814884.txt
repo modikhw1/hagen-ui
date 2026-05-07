@@ -1,0 +1,60 @@
+ Du arbetar i hagen-ui. Hämta senaste main först.
+
+  Implementera Phase 32: Objective field review consistency and script_mode propagation.
+
+  Viktigt:
+  - Rör inte /admin/demos.
+  - Gör ingen DB-migration.
+  - Behåll backward compatibility med gamla concepts.
+  - Nya fält ska fortsatt ligga platt i overrides: script_mode, setup_complexity, skill_required, setting.
+
+  Mål:
+
+  1. Gör alla objective fields redigerbara i concept review
+     - Uppdatera artifacts/letrend/src/app/studio/concepts/[id]/review/page.tsx.
+     - Lägg till state för:
+       - setup_complexity
+       - skill_required
+       - setting
+     - Initiera med readSetupComplexity, readSkillRequired, readSetting.
+     - Visa samma typ av ButtonGroup/selects som i UploadConceptModal.
+     - Spara dessa fält i PATCH-overrides.
+     - Om ett fält är null/ej valt, skriv inte över med tom string.
+
+  2. Propagera script_mode till TranslatedConcept
+     - Uppdatera artifacts/letrend/src/lib/translator.ts.
+     - Lägg till scriptMode eller script_mode i TranslatedConcept.
+     - Värdet ska komma från readScriptMode(clip, override).
+     - Behåll hasScript som legacy/backcompat.
+
+  3. Uppdatera script-filter från boolean till script_mode där det är rimligt
+     - Undersök /studio/concepts och customer workspace concept selection.
+     - Där filter idag bara använder hasScript, gör filter mer användbart med script_mode:
+       - all
+       - text_overlay
+       - short_dialogue
+       - long_dialogue
+       - visual_only
+       - none
+     - Om full UI-ändring blir för stor, dokumentera exakt var hasScript fortfarande används.
+
+  4. Lägg till headline/description preview i upload-confirm
+     - I UploadConceptModal, visa headline_sv och description_sv som read-only AI-förhandsgranskning innan “Spara och
+  aktivera”.
+     - Märk tydligt att det är AI-förslag och kan redigeras i library.
+     - Gör inte dessa redigerbara i modal i detta pass.
+
+  5. Dokumentation
+     - Skapa docs/agent-plans/32-ingest-review-consistency.md.
+     - Beskriv ändrade filer, vilka overrides som nu är redigerbara efter save, och vilka legacyfält som fortfarande
+  finns kvar.
+
+  6. Verifiering
+     - Kör:
+       pnpm --filter @workspace/api-server run typecheck
+       pnpm --filter @workspace/letrend run typecheck
+
+  Output:
+  - Kodändringar enligt ovan.
+  - Ny docs/agent-plans/32-ingest-review-consistency.md.
+  - Kort sammanfattning av kvarstående nästa steg.

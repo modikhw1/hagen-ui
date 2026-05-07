@@ -14,7 +14,7 @@ import {
 } from '@/lib/concept-enrichment';
 import { categoryOptions, display } from '@/lib/display';
 import { supabase } from '@/lib/supabase/client';
-import { getSigma, hasSigmaSignals, readScriptMode, translateClipToConcept } from '@/lib/translator';
+import { getSigma, hasSigmaSignals, readScriptMode, readSetupComplexity, readSkillRequired, readSetting, translateClipToConcept } from '@/lib/translator';
 import type { BackendClip, ClipOverride } from '@/lib/translator';
 import { conceptFieldConstraints } from '@/lib/concept-field-constraints';
 import { describeTranscriptLanguage, detectTranscriptLanguage } from '@/lib/transcript-language';
@@ -102,6 +102,23 @@ const scriptModeOptions = SCRIPT_MODE_VALUES.map((key) => ({
   key,
   label: ({ none: 'Inget manus', text_overlay: 'Textoverlay', short_dialogue: 'Kort dialog', long_dialogue: 'Lång dialog', visual_only: 'Visuellt' } as Record<string, string>)[key] ?? key,
 }));
+const setupComplexityOptions: Array<{ key: string; label: string }> = [
+  { key: 'point_and_shoot', label: 'Point-and-shoot' },
+  { key: 'basic_tripod', label: 'Stativ' },
+  { key: 'multi_location', label: 'Flera platser' },
+  { key: 'elaborate_staging', label: 'Scenografi' },
+];
+const skillRequiredOptions: Array<{ key: string; label: string }> = [
+  { key: 'anyone', label: 'Vem som helst' },
+  { key: 'comfortable_on_camera', label: 'Kameravant' },
+  { key: 'acting_required', label: 'Skådespel' },
+  { key: 'professional', label: 'Professionell' },
+];
+const reviewSettingOptions: Array<{ key: string; label: string }> = [
+  { key: 'any_venue', label: 'Valfri lokal' },
+  { key: 'similar_venue_type', label: 'Liknande lokal' },
+  { key: 'specific_setting_needed', label: 'Specifik miljö' },
+];
 
 function detectPlatform(url: string): string | null {
   if (url.includes('tiktok.com')) return 'TikTok';
@@ -168,6 +185,9 @@ export default function ConceptReviewPage() {
   const [market, setMarket] = useState('');
   const [peopleNeeded, setPeopleNeeded] = useState('');
   const [scriptMode, setScriptMode] = useState('none');
+  const [setupComplexity, setSetupComplexity] = useState<string | null>(null);
+  const [skillRequired, setSkillRequired] = useState<string | null>(null);
+  const [settingVal, setSettingVal] = useState<string | null>(null);
   const [businessTypes, setBusinessTypes] = useState<string[]>([]);
   const [replicabilityHint, setReplicabilityHint] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
@@ -213,6 +233,9 @@ export default function ConceptReviewPage() {
       setMarket(normalizedMarket);
       setPeopleNeeded(typeof overrides.peopleNeeded === 'string' ? overrides.peopleNeeded : translated.peopleNeeded);
       setScriptMode(typeof overrides.script_mode === 'string' ? overrides.script_mode : readScriptMode(concept.backend_data, overrides));
+      setSetupComplexity(readSetupComplexity(concept.backend_data, overrides));
+      setSkillRequired(readSkillRequired(concept.backend_data, overrides));
+      setSettingVal(readSetting(concept.backend_data, overrides));
       setBusinessTypes(
         Array.isArray(overrides.businessTypes) && overrides.businessTypes.length > 0
           ? overrides.businessTypes.filter((value) => typeof value === 'string') as string[]
@@ -280,6 +303,9 @@ export default function ConceptReviewPage() {
         market,
         peopleNeeded,
         script_mode: scriptMode,
+        ...(setupComplexity ? { setup_complexity: setupComplexity } : {}),
+        ...(skillRequired ? { skill_required: skillRequired } : {}),
+        ...(settingVal ? { setting: settingVal } : {}),
         businessTypes,
         hasScript: Boolean(scriptSv.trim()),
       };
@@ -301,7 +327,7 @@ export default function ConceptReviewPage() {
     } finally {
       setSaving(false);
     }
-  }, [businessTypes, conceptId, descriptionSv, difficulty, filmTime, headlineSv, market, peopleNeeded, productionNotesText, raw, scriptMode, scriptSv, session, whyItFitsText, whyItWorksSv]);
+  }, [businessTypes, conceptId, descriptionSv, difficulty, filmTime, headlineSv, market, peopleNeeded, productionNotesText, raw, scriptMode, scriptSv, session, settingVal, setupComplexity, skillRequired, whyItFitsText, whyItWorksSv]);
 
   const handleTogglePublish = useCallback(async (publish: boolean) => {
     const publishReady = Boolean(headlineSv.trim()) && Boolean(scriptSv.trim() || !publish) && Boolean(difficulty && filmTime && peopleNeeded && businessTypes.length > 0);
@@ -588,6 +614,42 @@ export default function ConceptReviewPage() {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {scriptModeOptions.map((option) => (
                     <button key={option.key} type="button" onClick={() => setScriptMode(option.key)} style={choiceButton(scriptMode === option.key, '#0f766e')}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <label style={{ ...fieldLabelStyle, marginBottom: 8, fontSize: 12 }}>
+                  Setup <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>(AI-förslag)</span>
+                </label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {setupComplexityOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setSetupComplexity((c) => c === option.key ? null : option.key)} style={choiceButton(setupComplexity === option.key, '#7c3aed')}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <label style={{ ...fieldLabelStyle, marginBottom: 8, fontSize: 12 }}>
+                  Skicklighet <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>(AI-förslag)</span>
+                </label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {skillRequiredOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setSkillRequired((c) => c === option.key ? null : option.key)} style={choiceButton(skillRequired === option.key, '#c2410c')}>
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ marginTop: 14 }}>
+                <label style={{ ...fieldLabelStyle, marginBottom: 8, fontSize: 12 }}>
+                  Miljö <span style={{ fontWeight: 400, color: '#9ca3af', fontSize: 11 }}>(AI-förslag)</span>
+                </label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {reviewSettingOptions.map((option) => (
+                    <button key={option.key} type="button" onClick={() => setSettingVal((c) => c === option.key ? null : option.key)} style={choiceButton(settingVal === option.key, '#0369a1')}>
                       {option.label}
                     </button>
                   ))}

@@ -144,6 +144,11 @@ const WORKSPACE_SCRIPT_OPTIONS = [
   { key: 'all', label: 'Manus' },
   { key: 'with_script', label: 'Med manus' },
   { key: 'without_script', label: 'Utan manus' },
+  { key: 'text_overlay', label: 'Textoverlay' },
+  { key: 'short_dialogue', label: 'Kort dialog' },
+  { key: 'long_dialogue', label: 'Lång dialog' },
+  { key: 'visual_only', label: 'Visuellt' },
+  { key: 'none', label: 'Inget manus' },
 ];
 
 const WORKSPACE_SOURCE_OPTIONS = [
@@ -170,10 +175,15 @@ function matchWorkspaceBusinessType(types: string[] | undefined, filter: string)
   return (types || []).includes(filter);
 }
 
-function matchWorkspaceScript(hasScript: boolean | undefined, filter: string) {
+function matchWorkspaceScript(hasScript: boolean | undefined, scriptMode: string | undefined, filter: string) {
   if (filter === 'all') return true;
   if (filter === 'with_script') return Boolean(hasScript);
   if (filter === 'without_script') return !hasScript;
+  // Script-mode-specific filter values
+  if (scriptMode) return scriptMode === filter;
+  // Fallback for old concepts without script_mode: infer from hasScript
+  if (filter === 'none' || filter === 'visual_only') return !hasScript;
+  if (filter === 'text_overlay' || filter === 'short_dialogue' || filter === 'long_dialogue') return Boolean(hasScript);
   return true;
 }
 
@@ -2164,7 +2174,7 @@ function CustomerWorkspacePageContent() {
         matchWorkspacePeopleRange(concept.peopleNeeded, addConceptPeopleFilter) &&
         matchWorkspaceFilmTimeRange(concept.filmTime, addConceptFilmTimeFilter) &&
         matchWorkspaceBusinessType(concept.businessTypes, addConceptBusinessTypeFilter) &&
-        matchWorkspaceScript(concept.hasScript, addConceptScriptFilter) &&
+        matchWorkspaceScript(concept.hasScript, concept.script_mode, addConceptScriptFilter) &&
         (addConceptSourceFilter === 'all' || concept.source === addConceptSourceFilter)
       );
     });

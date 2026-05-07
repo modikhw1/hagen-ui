@@ -296,6 +296,7 @@ export interface TranslatedConcept {
   trendLevel: number
   businessTypes: BusinessType[]
   hasScript: boolean
+  script_mode?: ScriptMode
   estimatedBudget: EstimatedBudget
   vibeAlignments: string[]
   whyItFits: string[]
@@ -933,6 +934,7 @@ export function translateClipToConcept(
   const trendLevel = clampTrendLevel(override?.trendLevel ?? translateTrendLevel(clip))
   const businessTypes = (override?.businessTypes?.filter(Boolean) as BusinessType[] | undefined) ?? translateBusinessTypes(clip)
   const hasScript = override?.hasScript ?? translateHasScript(clip)
+  const script_mode = readScriptMode(clip, override)
   const estimatedBudget = override?.estimatedBudget ?? translateBudget(clip, difficulty, filmTime)
   const autoScript = buildScript(clip)
   const whyItFits = override?.whyItFits_sv || defaults?.whyItFits_sv || translateWhyItFits(businessTypes, filmTime, peopleNeeded, estimatedBudget)
@@ -949,6 +951,7 @@ export function translateClipToConcept(
     trendLevel,
     businessTypes,
     hasScript,
+    script_mode,
     estimatedBudget,
     vibeAlignments: translateVibes(clip),
     whyItFits,

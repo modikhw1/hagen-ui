@@ -594,6 +594,24 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
               </div>
             ) : null}
 
+            {/* AI-förhandsgranskning av rubrik + beskrivning */}
+            <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 10, border: '1px solid #e0e7ff', background: '#eef2ff' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 8 }}>
+                AI-förhandsgranskning
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#1e1b4b', marginBottom: 4, lineHeight: 1.35 }}>
+                {(pendingOverrides.headline_sv as string | undefined) || pendingHeadline || '—'}
+              </div>
+              {typeof pendingOverrides.description_sv === 'string' && (pendingOverrides.description_sv as string).trim() ? (
+                <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.55 }}>
+                  {pendingOverrides.description_sv as string}
+                </div>
+              ) : null}
+              <div style={{ fontSize: 11, color: '#818cf8', marginTop: 8, fontStyle: 'italic' }}>
+                Rubrik och beskrivning kan redigeras i biblioteket efter att du sparat.
+              </div>
+            </div>
+
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => { setPhase('url'); setStep('idle'); }} style={{ ...buttonStyle('primary'), background: '#fff', color: LeTrendColors.textPrimary, border: '1px solid #e5e7eb' }}>
                 ← Tillbaka
