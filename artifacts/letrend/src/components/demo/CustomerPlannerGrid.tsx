@@ -61,14 +61,16 @@ function TikTokGlyph({ className }: { className?: string }) {
   );
 }
 
+const LET_LOGO_SRC = `${import.meta.env.BASE_URL}lt-logo.png`;
+
 function LeTBadge({ onThumb, size = "md" }: { onThumb?: boolean; size?: "sm" | "md" | "lg" }) {
   return (
     <img
-      src="/let-logo.png"
+      src={LET_LOGO_SRC}
       alt="LeTrend"
       className={cn(
         "object-contain flex-shrink-0 pointer-events-none select-none",
-        onThumb ? "brightness-0 invert opacity-90" : "opacity-85",
+        onThumb && "brightness-0 invert",
         size === "sm" && "h-5 w-5",
         size === "md" && "h-7 w-7",
         size === "lg" && "h-10 w-10",

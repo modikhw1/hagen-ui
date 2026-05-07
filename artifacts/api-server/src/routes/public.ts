@@ -176,7 +176,7 @@ function buildPreviewConcept(row: JsonRecord): DemoPreviewConcept | null {
     views: readNumber(row['tiktok_views']),
     likes: readNumber(row['tiktok_likes']),
     comments: readNumber(row['tiktok_comments']),
-    description: null,
+    description: firstString(row['tiktok_description'], row['description']),
     headline: firstString(contentOverrides['headline'], row['custom_headline'], baseOverrides['headline_sv']) ?? title,
     whyWorks,
     whyFits,
