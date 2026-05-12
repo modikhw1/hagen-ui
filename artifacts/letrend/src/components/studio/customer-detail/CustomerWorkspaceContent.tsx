@@ -606,6 +606,14 @@ function CustomerWorkspacePageContent() {
     totalMatched: number;
     samples: Array<{ tiktok_url: string; source_username: string | null; description: string | null }>;
     availableUsernames?: string[];
+    hagenDiagnostics?: {
+      totalTikTokClips?: number;
+      returnedClips?: number;
+      unresolvedUsernameCount?: number;
+      handleFilter?: string | null;
+      availableUsernames?: string[];
+      availableUsernameCount?: number;
+    } | null;
   } | null>(null);
   const [syncPreviewError, setSyncPreviewError] = useState<string | null>(null);
   const [reconciliationCandidates, setReconciliationCandidates] = useState<ReconciliationCandidate[]>([]);
@@ -2584,6 +2592,8 @@ function CustomerWorkspacePageContent() {
         wouldSkip: data.wouldSkip ?? 0,
         totalMatched: data.totalMatched ?? 0,
         samples: data.samples ?? [],
+        availableUsernames: data.availableUsernames,
+        hagenDiagnostics: data.hagenDiagnostics ?? null,
       });
     } catch (err) {
       setSyncPreviewError((err as Error).message);
@@ -3770,6 +3780,17 @@ function CustomerWorkspacePageContent() {
                       {syncPreviewResult.totalMatched === 0 && (!syncPreviewResult.availableUsernames || syncPreviewResult.availableUsernames.length === 0) && (
                         <div style={{ color: LeTrendColors.textMuted, fontStyle: 'italic' }}>
                           Inga klipp hittades i hagen.
+                        </div>
+                      )}
+                      {syncPreviewResult.hagenDiagnostics && (
+                        <div style={{ marginTop: 6, padding: '4px 6px', background: 'rgba(0,0,0,0.03)', borderRadius: 4, fontSize: 9, color: LeTrendColors.textMuted, fontFamily: 'monospace' }}>
+                          Hagen: {syncPreviewResult.hagenDiagnostics.totalTikTokClips ?? 0} TikTok-klipp totalt
+                          {typeof syncPreviewResult.hagenDiagnostics.availableUsernameCount === 'number' && (
+                            <>, {syncPreviewResult.hagenDiagnostics.availableUsernameCount} upplösta konton</>
+                          )}
+                          {typeof syncPreviewResult.hagenDiagnostics.unresolvedUsernameCount === 'number' && syncPreviewResult.hagenDiagnostics.unresolvedUsernameCount > 0 && (
+                            <>, {syncPreviewResult.hagenDiagnostics.unresolvedUsernameCount} klipp utan upplöst konto</>
+                          )}
                         </div>
                       )}
                       {syncPreviewResult.totalMatched > 0 && syncPreviewResult.wouldImport === 0 && (

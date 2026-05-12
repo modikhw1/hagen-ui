@@ -987,13 +987,19 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
         typeof c.tiktok_url === 'string' && c.tiktok_url.trim() !== '',
     );
 
+    // Extract diagnostics from Hagen response
+    const hagenDiagnostics = hagenResult.data['diagnostics'] as Record<string, unknown> | undefined;
+
     // Resolve usernames for all clips (from metadata or URL parsing)
+    // Prefer diagnostics from Hagen if available, otherwise resolve locally
     const allResolvedUsernames = rawClips
       .map((c) => resolveClipUsername(c))
       .filter((u): u is string => u !== null);
 
-    // Available usernames across all clips — shown in preview when handle doesn't match
-    const availableUsernames = [...new Set(allResolvedUsernames)].sort();
+    const availableUsernames =
+      Array.isArray(hagenDiagnostics?.['availableUsernames'])
+        ? (hagenDiagnostics['availableUsernames'] as string[])
+        : [...new Set(allResolvedUsernames)].sort();
 
     // Match clips by resolved username == customer handle
     // Only clips where username can be positively resolved and matches are included
@@ -1031,6 +1037,7 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
         wouldSkip: skippedCount,
         samples,
         availableUsernames: matchedClips.length === 0 ? availableUsernames : [],
+        hagenDiagnostics: hagenDiagnostics ?? null,
       });
       return;
     }
