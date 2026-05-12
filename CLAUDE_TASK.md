@@ -25,89 +25,117 @@ work. Only edit files needed for the current task.
 7. Commit and push only when the implemented change is coherent. If both repos
    changed, commit/push each repo separately with clear messages.
 
-## Current Task: Phase 60 - Safe Hagen Clip Handle Matching
+## Current Task: Phase 61 - Hagen Library Sync Live Preview Readiness
 
 ### Context
 
-Phase 59 aligned the hagen-ui to Hagen contract by adding this Hagen route:
+Phase 59 created the missing Hagen endpoint:
 
 ```text
 GET /api/studio-v2/customers/:customerId/hagen-clips
 ```
 
-and by improving hagen-ui UI error handling.
+Phase 60 fixed unsafe matching in hagen-ui so clips only match a customer when
+the username can be positively resolved from `source_username` or TikTok URL.
 
-However, the current hagen-ui matching logic is still unsafe:
+The remaining gap is operational: the sync path still fetches the full Hagen
+TikTok library, then filters in hagen-ui. It also has not been live-smoked as a
+preview path with Hagen running and JSON returning from upstream.
 
-```ts
-const matchedClips = allClipsWithUrl.filter(
-  (c) =>
-    !c.source_username ||
-    c.source_username.replace(/^@/, '').toLowerCase() === handle.toLowerCase(),
-);
-```
-
-That means clips with no `source_username` are treated as matches for every
-customer. If Hagen returns library clips without a parsed username, hagen-ui can
-preview/import unrelated TikTok history rows for the wrong customer.
-
-The Phase 59 doc already notes this risk. Phase 60 should fix it before any
-live import smoke is trusted.
+This phase should make preview/import readiness concrete before any live import
+is trusted.
 
 ### Read First
 
 In `hagen-ui`:
 
-- `docs/agent-plans/58-hagen-library-sync-history-post-route.md`
 - `docs/agent-plans/59-hagen-library-sync-contract-alignment.md`
+- `docs/agent-plans/60-safe-hagen-clip-handle-matching.md`
 - `artifacts/api-server/src/routes/studio-v2.ts`
+- `artifacts/api-server/src/lib/upstream-proxy.ts`
 - `artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx`
 
 In `hagen`:
 
 - `src/app/api/studio-v2/customers/[customerId]/hagen-clips/route.ts`
+- `src/app/api/letrend/library/route.ts`
+- `src/app/api/videos/library/route.ts`
 
 ### Goal
 
-Make Hagen-library import safe by requiring a positive handle match. A clip may
-only be previewed/imported for a customer when the system can tie the clip to
-the customer's TikTok handle by metadata username or by parsing the TikTok URL.
+Make the Hagen library sync preview path operationally testable and efficient:
+
+- Hagen should support `?handle=username` server-side filtering.
+- hagen-ui should pass the customer handle to Hagen.
+- hagen-ui must still validate matches itself as defense in depth.
+- Preview should return structured JSON and write nothing.
+- If a live preview can be run safely, document the exact result.
 
 ### Required Behavior
 
-1. Add reusable helpers in hagen-ui server code near the sync-history route:
-   - `normalizeTikTokHandle(value: unknown): string`
-   - `extractTikTokUsernameFromUrl(url: string): string | null`
-   - `resolveClipUsername(clip): string | null`
-   - `clipMatchesHandle(clip, handle): boolean`
+1. Update the Hagen endpoint to support optional handle filtering:
 
-2. Matching rule:
-   - Normalize the customer's `tiktok_handle`.
-   - Normalize `clip.source_username` when present.
-   - If `clip.source_username` is missing, parse username from TikTok URL.
-   - Match only when resolved username equals customer handle.
-   - Do not match/import clips where username cannot be resolved.
+```text
+GET /api/studio-v2/customers/:customerId/hagen-clips?handle=username
+```
 
-3. Update `availableUsernames`:
-   - Include usernames resolved from `source_username`.
-   - Include usernames parsed from TikTok URLs.
-   - Deduplicate and sort if practical.
+Rules:
 
-4. Update preview samples if useful:
-   - Keep existing fields.
-   - Add optional `resolved_username` or `match_source` only if it helps debug
-     without cluttering UI.
+- Normalize `handle` by trimming, stripping leading `@`, and lowercasing.
+- Resolve each clip username using metadata first, then TikTok URL fallback.
+- If `handle` is present, return only clips whose resolved username matches.
+- If `handle` is absent, keep current behavior and return all TikTok clips.
+- Return JSON even when no clips match.
+- Preserve the existing `{ clips: [...] }` shape.
+- Optional but useful: include a `diagnostics` object with counts:
+  - `totalTikTokClips`
+  - `returnedClips`
+  - `unresolvedUsernameCount`
+  - `handleFilter`
 
-5. Update the Hagen endpoint:
-   - Add URL username fallback when `metadata.author.uniqueId`,
-     `metadata.author.username`, and `metadata.username` are missing.
-   - Optional but preferred: support `?handle=username` to filter results server
-     side. If added, hagen-ui should pass the handle query param.
-   - Even if Hagen filters, hagen-ui must still validate matches itself.
+2. Update hagen-ui sync-history POST route:
 
-6. Do not change Supabase schema.
+- Normalize the customer's `tiktok_handle` once.
+- Pass `query: new URLSearchParams({ handle }).toString()` to `fetchHagenJson`.
+- Keep existing hagen-ui positive-match filtering from Phase 60.
+- Preview response may include diagnostics from Hagen if easy, but do not break
+  existing UI consumers.
 
-7. Do not touch unrelated `/admin/demos` work.
+3. Improve preview diagnostics:
+
+- If Hagen returns zero clips for the handle, preview should still respond with:
+  - `handle`
+  - `totalMatched: 0`
+  - `wouldImport: 0`
+  - `wouldSkip: 0`
+  - `samples: []`
+  - `availableUsernames` if available
+- Do not treat "zero matched clips" as an error.
+
+4. Live/readiness smoke:
+
+Run whatever is safe in the local environment. At minimum:
+
+- Hagen endpoint direct GET returns JSON, not HTML.
+- Hagen endpoint with `?handle=` returns JSON and preserves `{ clips }`.
+- hagen-ui no-auth POST to `/sync-history?preview=true` still returns 401.
+
+If authenticated hagen-ui preview is possible:
+
+- Run preview only first.
+- Confirm no Supabase rows are inserted.
+- Record customer ID, handle, `totalMatched`, `wouldImport`, and `wouldSkip`.
+- Do not run import unless preview shows clear `wouldImport > 0` and the target
+  customer/handle is known to be safe for a test.
+
+If authenticated preview is not possible:
+
+- Document the blocker precisely.
+- Add manual browser test steps in the phase doc.
+
+5. Do not change Supabase schema.
+
+6. Do not touch unrelated `/admin/demos` work.
 
 ### Verification
 
@@ -120,32 +148,26 @@ pnpm --filter @workspace/letrend run typecheck
 
 If `hagen` changes, run its relevant typecheck/build command as well.
 
-Add focused tests if there is an obvious local test pattern. If not, document
-manual/code-level verification in the phase doc, including at least these cases:
-
-- `@customer` matches `source_username: customer`
-- `customer` matches `source_username: @customer`
-- missing `source_username` matches URL `https://www.tiktok.com/@customer/video/...`
-- missing `source_username` with URL for another handle does not match
-- missing `source_username` with unparseable URL does not match
-- `availableUsernames` includes URL-derived usernames
+Also document any direct HTTP smoke commands used, including status code and
+short response shape.
 
 ### Output
 
 Create:
 
 ```text
-hagen-ui/docs/agent-plans/60-safe-hagen-clip-handle-matching.md
+hagen-ui/docs/agent-plans/61-hagen-library-sync-live-preview-readiness.md
 ```
 
 Include:
 
-- root cause
-- exact matching rule after the fix
-- whether Hagen got `?handle=` filtering
-- files changed in each repo
+- what changed in Hagen
+- what changed in hagen-ui
+- exact endpoint contract after this phase
+- whether authenticated preview was run
+- row-safety result: whether preview wrote zero rows
 - verification results
-- remaining risks
+- remaining risks or blockers
 
-When finished, commit and push coherent changes. If one repo changed and the
-other did not, say that clearly in the phase doc.
+When finished, commit and push coherent changes. If both repos changed, commit
+and push each repo separately with clear messages.
