@@ -1,6 +1,15 @@
 FROM node:20-slim AS build
 RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
+
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_APP_URL
+ARG VITE_MARKETING_URL
+ARG VITE_STRIPE_PUBLISHABLE_KEY
+ARG VITE_STRIPE_ENV
+ARG VITE_CONTACT_EMAIL
+
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @workspace/api-server build
