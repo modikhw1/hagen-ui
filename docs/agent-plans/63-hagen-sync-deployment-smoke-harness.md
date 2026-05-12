@@ -553,3 +553,47 @@ The Railway service at `https://hagen-production.up.railway.app` appears not to 
 - Phase 62 `HAGEN_SYNC_SECRET` protection
 
 Deploy latest Hagen to Railway and configure `HAGEN_SYNC_SECRET` before rerunning the smoke harness.
+
+---
+
+## Live Smoke Result - Hagen Railway After Redeploy
+
+**Timestamp**: 2026-05-12 (orchestrator verification after Railway redeploy)
+
+**Environment**:
+- Hagen URL: `https://hagen-production.up.railway.app`
+- `HAGEN_SYNC_SECRET`: not available in orchestrator shell, so only the missing-secret auth path was tested
+
+**Command shape**:
+```powershell
+Invoke-WebRequest `
+  -Uri "https://hagen-production.up.railway.app/api/studio-v2/customers/smoke-test/hagen-clips?handle=nonexistent-smoke-handle" `
+  -Headers @{ Accept = "application/json" } `
+  -Method GET
+```
+
+**Result**: **PARTIAL PASS - route is deployed and auth is active**
+
+**Status codes**:
+- Direct endpoint call without secret: `401`
+- Content-Type: `application/json`
+- Body: `{"error":"unauthorized","message":"Missing or invalid Hagen sync secret"}`
+
+**What this verifies**:
+- Railway no longer returns HTML `404`; the Phase 59 route is now present.
+- Phase 62 shared-secret protection is active.
+- Missing-secret failures return structured JSON, not HTML.
+
+**What remains untested**:
+- Correct-secret request returning `200` with `{ clips, diagnostics }`
+- hagen-ui preview response including `hagenDiagnostics`
+- Preview row-safety against `customer_concepts`
+
+**Current blocker**:
+The orchestrator shell does not have `HAGEN_SYNC_SECRET` set. To complete the smoke harness, rerun with:
+
+```powershell
+$env:HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
+$env:HAGEN_SYNC_SECRET = "<redacted matching secret>"
+node scripts/smoke-hagen-sync.mjs
+```
