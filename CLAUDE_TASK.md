@@ -15,149 +15,145 @@ work. Only edit files needed for the current task.
 
 1. Start in `hagen-ui`.
 2. Pull latest `main` if the worktree allows it.
-3. Inspect `hagen` only if needed.
-4. Make the smallest changes needed to complete the task.
-5. Add or update one phase document under `hagen-ui/docs/agent-plans/`.
-6. Run the relevant checks and record exact results in the phase doc.
-7. Do not push to git. You may create local commits if the change is coherent,
-   but the orchestrator will review, rebase if needed, and push to `main`.
+3. Do not push to git. The orchestrator reviews, rebases if needed, and pushes.
+4. Do not call import mode unless the orchestrator explicitly asks for a
+   controlled import test.
+5. Do not write secrets to files or docs.
 
-## Current Status
+## Current Task: Full hagen-ui Preview Smoke
 
-The live smoke pass has exposed deployment blockers rather than a passing smoke.
+Direct Hagen smoke has passed against Railway:
 
-Phase 63 added the smoke harness:
+- `HAGEN_BASE_URL=https://hagen-production.up.railway.app`
+- correct shared secret returned JSON `{ clips, diagnostics }`
+- missing secret returned JSON `401 unauthorized`
 
-```text
-scripts/smoke-hagen-sync.mjs
-```
-
-Documented results:
-
-- Replit dev URL returned `401 {"error":"Du maste logga in"}` before the
-  Phase 62 `HAGEN_SYNC_SECRET` contract could be reached.
-- Railway URL `https://hagen-production.up.railway.app` returned `404` HTML for
-  `/api/studio-v2/customers/smoke-test/hagen-clips?handle=...`, which means the
-  deployed Railway service likely does not include the latest Phase 59-62 Hagen
-  route.
-
-No active code implementation task is queued.
-
-## Next Required External Step
-
-Deploy latest `hagen` main to Railway and ensure these env vars exist in the
-Railway service:
+The remaining smoke step is the hagen-ui preview endpoint:
 
 ```text
-NODE_ENV=production
-HAGEN_SYNC_SECRET=<same-secret-as-hagen-ui>
+POST /api/studio-v2/customers/:customerId/sync-history?preview=true
 ```
 
-Ensure hagen-ui/Replit has:
+This must be preview-only. Do not call:
 
 ```text
-HAGEN_BASE_URL=https://hagen-production.up.railway.app
-HAGEN_SYNC_SECRET=<same-secret-as-hagen>
+POST /api/studio-v2/customers/:customerId/sync-history
 ```
 
-Do not commit real secrets.
+## Required Local Inputs
 
-## If Asked To Continue After Deployment
-
-Run the live/deployed Hagen smoke test against Railway.
-
-## Required Environment
-
-Use this Hagen URL:
+Use the shared secret from the local file if present:
 
 ```text
-HAGEN_BASE_URL=https://hagen-production.up.railway.app
+C:\Users\praiseworthy\Desktop\nyckel3.txt
 ```
 
-`HAGEN_SYNC_SECRET` is required for the deployed Hagen endpoint. Do not write
-the actual secret into this file or any committed doc. Read it from the shell
-environment.
+The file must contain a single-line `HAGEN_SYNC_SECRET`. The smoke script now
+rejects private keys and multiline values.
 
-If `HAGEN_SYNC_SECRET` is not set, stop and report that it must be set before
-the smoke test can run.
-
-`HAGEN_SYNC_SECRET` must be a single-line shared token, for example the output
-of `openssl rand -hex 32`. Do not use SSH private keys, PEM files, or any
-multiline key file as `HAGEN_SYNC_SECRET`.
-
-Optional env vars for a broader hagen-ui API test:
+You also need these env vars for full hagen-ui preview:
 
 ```text
 API_SERVER_BASE_URL=<hagen-ui api base url>
-HAGEN_SYNC_TEST_CUSTOMER_ID=<real customer_profile id>
-HAGEN_SYNC_TEST_HANDLE=<customer tiktok_handle>
-HAGEN_UI_AUTH_COOKIE=<browser auth cookie>
+HAGEN_UI_AUTH_COOKIE=<browser auth cookie for logged-in admin/CM>
 ```
 
-Do not require optional values for the first smoke pass. The first target is the
-direct Hagen endpoint smoke only.
+If either `API_SERVER_BASE_URL` or `HAGEN_UI_AUTH_COOKIE` is missing, stop and
+report that the full preview smoke cannot run yet.
 
-## Commands
+## Suggested Zero-Match Customer
 
-In PowerShell, first verify the secret exists:
+The orchestrator found this customer via Supabase:
 
-```powershell
-if (-not $env:HAGEN_SYNC_SECRET) { throw "HAGEN_SYNC_SECRET is not set" }
+```text
+HAGEN_SYNC_TEST_CUSTOMER_ID=0cd8f4d8-8bb8-4456-ba85-1108b5e69a65
+HAGEN_SYNC_TEST_HANDLE=consorconsulting
 ```
 
-Then run:
+Direct Hagen lookup for `consorconsulting` returned `clips=0`, with library
+diagnostics `totalTikTokClips=193`, `availableUsernameCount=98`,
+`unresolvedUsernameCount=0`.
+
+This is useful for verifying zero-match preview behavior and diagnostics. It is
+not useful for import testing.
+
+Other tested customer handles also returned `clips=0`:
+
+```text
+icafolkeslivs
+icavast
+roligtkonto2
+blubnan.liljeholm
+```
+
+## PowerShell Setup
+
+Use this shape. Do not print the secret.
 
 ```powershell
 $env:HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
-node scripts/smoke-hagen-sync.mjs
+$env:HAGEN_SYNC_SECRET = (Get-Content -LiteralPath "C:\Users\praiseworthy\Desktop\nyckel3.txt" -Raw).Trim()
+$env:HAGEN_SYNC_TEST_CUSTOMER_ID = "0cd8f4d8-8bb8-4456-ba85-1108b5e69a65"
+$env:HAGEN_SYNC_TEST_HANDLE = "consorconsulting"
+
+# Required, must be provided by the user/session:
+# $env:API_SERVER_BASE_URL = "<hagen-ui api base url>"
+# $env:HAGEN_UI_AUTH_COOKIE = "<browser auth cookie>"
+
+node scripts\smoke-hagen-sync.mjs
 ```
 
-If running from a bash-like shell:
+## Expected Result
 
-```bash
-export HAGEN_BASE_URL=https://hagen-production.up.railway.app
-node scripts/smoke-hagen-sync.mjs
+The smoke script should:
+
+- pass direct Hagen secret test
+- pass direct Hagen missing-secret `401` test
+- pass hagen-ui no-auth preview `401/403` test
+- pass authenticated hagen-ui preview if `HAGEN_UI_AUTH_COOKIE` is valid
+- return preview fields:
+  - `handle`
+  - `totalMatched`
+  - `wouldImport`
+  - `wouldSkip`
+  - `hagenDiagnostics`
+- not perform any import
+
+For the suggested customer, a successful preview is expected to be a zero-match
+preview unless production data changes:
+
+```text
+totalMatched=0
+wouldImport=0
+wouldSkip=0
+hagenDiagnostics present
 ```
-
-## Safety Rules
-
-- Do not call import mode.
-- Do not modify sync implementation.
-- Do not add secrets to files.
-- Do not push.
-- Only update documentation with actual smoke results from this run.
-
-## Expected Checks
-
-The smoke script should verify:
-
-- Hagen endpoint returns JSON with `{ clips, diagnostics }` when the correct
-  `HAGEN_SYNC_SECRET` is sent.
-- Hagen endpoint returns `401 unauthorized` when the secret is omitted.
-- If no hagen-ui API URL is provided, hagen-ui preview checks are skipped.
 
 ## Documentation Update
 
-After running the smoke test, update:
+If the full hagen-ui preview smoke is actually run, update:
 
 ```text
 docs/agent-plans/63-hagen-sync-deployment-smoke-harness.md
 ```
 
-Add a short section named:
+Add a section:
 
 ```text
-## Live Smoke Result - Hagen Railway
+## Live Smoke Result - hagen-ui Preview
 ```
 
 Include:
 
-- exact timestamp
-- command shape, with secret redacted
-- pass/fail result
-- returned status codes
-- whether `{ clips, diagnostics }` was present
-- whether missing-secret check returned 401
-- any blocker or error body
+- timestamp
+- command shape with secrets redacted
+- `API_SERVER_BASE_URL` used
+- customer id and handle used
+- status codes
+- whether hagen-ui no-auth returned 401/403
+- whether authenticated preview returned 200
+- preview counts (`totalMatched`, `wouldImport`, `wouldSkip`)
+- whether `hagenDiagnostics` was present
+- any blocker/error body
 
-Do not update the doc if no real smoke test was run.
+Do not update the doc if the preview smoke did not run.
