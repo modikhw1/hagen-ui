@@ -464,3 +464,52 @@ Phase 63 — Hagen Sync Deployment Smoke Harness
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>
 ```
+
+---
+
+## Live Smoke Result - Replit Dev Server
+
+**Timestamp**: 2026-05-12 (Phase 63 execution)
+
+**Environment**:
+- Hagen URL: `https://72ede591-2293-453b-b41d-a99522630201-00-29z0j81ipx73a.worf.replit.dev`
+- `HAGEN_SYNC_SECRET`: not set (local dev mode expected)
+- `NODE_ENV`: unknown
+
+**Command**:
+```bash
+export HAGEN_BASE_URL="https://72ede591-2293-453b-b41d-a99522630201-00-29z0j81ipx73a.worf.replit.dev"
+node scripts/smoke-hagen-sync.mjs
+```
+
+**Result**: ❌ **BLOCKED by unexpected auth layer**
+
+**Status codes**:
+- Direct endpoint call: `401 Unauthorized`
+- Response body: `{"error":"Du måste logga in"}` (Swedish: "You must log in")
+
+**Issue**: The Replit deployment has user authentication middleware enabled that blocks the sync endpoint before reaching the Phase 62 `HAGEN_SYNC_SECRET` check. This is a different auth layer than designed.
+
+**Expected behavior** (from Phase 62):
+- If `HAGEN_SYNC_SECRET` is not set AND `NODE_ENV !== production` → allow request (local dev mode)
+- If `HAGEN_SYNC_SECRET` is set → require `x-hagen-sync-secret` header
+
+**Actual behavior**: Replit returns `401 "Du måste logga in"` before Phase 62 auth check runs, suggesting:
+1. Next.js middleware or route protection requires Supabase user auth
+2. The `/api/studio-v2/customers/:customerId/hagen-clips` endpoint is protected by a global auth layer
+
+**Blocker for smoke test**: Cannot test the Phase 62 `HAGEN_SYNC_SECRET` contract because requests are blocked by an earlier auth layer that requires user login.
+
+**Recommendations**:
+1. **Option A**: Disable user auth middleware for the `/api/studio-v2/customers/*/hagen-clips` route in Replit (if this was added after Phase 62)
+2. **Option B**: Test against the Railway deployment (2 weeks old) which may not have this auth layer
+3. **Option C**: Add a Supabase auth token to the smoke test request if user auth is intentional
+4. **Option D**: Deploy latest Hagen code (with Phase 59-62 changes) to Railway and test against that
+
+**What was NOT tested**:
+- ❌ Hagen endpoint with correct `HAGEN_SYNC_SECRET` (blocked by user auth)
+- ❌ Hagen endpoint without secret returning 401 from Phase 62 check (blocked by user auth)
+- ❌ Response shape `{ clips, diagnostics }` (blocked by user auth)
+- ⏭️ hagen-ui API tests (skipped, no `API_SERVER_BASE_URL` provided)
+
+**Conclusion**: The smoke test revealed an auth configuration mismatch between the designed Phase 62 contract and the deployed Replit environment. The Replit server has an additional authentication layer that prevents testing the `HAGEN_SYNC_SECRET` functionality.
