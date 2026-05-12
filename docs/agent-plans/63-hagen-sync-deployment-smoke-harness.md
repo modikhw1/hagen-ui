@@ -896,3 +896,86 @@ node scripts/smoke-hagen-sync.mjs
 5. No rows imported to `customer_concepts`
 
 **Phase 63 smoke harness: COMPLETE**
+
+---
+
+## Live Smoke Result - Positive hagen-ui Preview
+
+**Timestamp**: 2026-05-12T17:50Z
+
+**Environment**:
+- Hagen URL: `https://hagen-production.up.railway.app`
+- `API_SERVER_BASE_URL`: `https://app.letrend.se`
+- `HAGEN_SYNC_SECRET`: set (from nyckel3.txt)
+- Test Customer ID: `3e4173ee-2ff2-454f-9bac-7a77b1163af8`
+- Test Customer Name: "Hagen Sync Smoke - icacitylivs - 2026-05-12"
+- Test Handle: `icacitylivs`
+- `HAGEN_UI_AUTH_COOKIE`: set (Bearer token)
+
+**Pre-verification by orchestrator**:
+- Direct Hagen filter for `icacitylivs`: **1 clip** ✅
+- `customer_concepts` rows for smoke customer: **0** (before test) ✅
+
+**Command shape**:
+```bash
+HAGEN_BASE_URL="https://hagen-production.up.railway.app" \
+HAGEN_SYNC_SECRET="<redacted>" \
+HAGEN_SYNC_TEST_CUSTOMER_ID="3e4173ee-2ff2-454f-9bac-7a77b1163af8" \
+HAGEN_SYNC_TEST_HANDLE="icacitylivs" \
+API_SERVER_BASE_URL="https://app.letrend.se" \
+HAGEN_UI_AUTH_COOKIE="sb-auth-token=<redacted JWT>" \
+node scripts/smoke-hagen-sync.mjs
+```
+
+**Result**: ✅ **ALL TESTS PASSED WITH POSITIVE MATCH**
+
+| Test | Status | Details |
+|---|---|---|
+| Test 1: Hagen with correct secret | ✅ 200 | clips=1, diagnostics present |
+| Test 2: Hagen without secret | ✅ 401 | `error: "unauthorized"` |
+| Test 3: hagen-ui preview without auth | ✅ 401 | Correctly rejects unauthenticated |
+| Test 4: hagen-ui preview with auth | ✅ 200 | Positive preview response |
+
+**Direct Hagen response (Test 1)**:
+- Clips returned: **1** ✅
+- `diagnostics.handleFilter`: `"icacitylivs"` ✅
+- `diagnostics.totalTikTokClips`: `193` ✅
+- `diagnostics.availableUsernameCount`: `98` ✅
+
+**Authenticated preview response (Test 4)**:
+- `handle`: `"icacitylivs"` ✅
+- `totalMatched`: **1** ✅ (expected: 1)
+- `wouldImport`: **1** ✅ (expected: 1)
+- `wouldSkip`: **0** ✅ (expected: 0)
+- `hagenDiagnostics`: **present** ✅
+
+**Positive match verification**:
+The preview correctly identified 1 clip from Hagen's library matching handle 
+`icacitylivs` and reported it would import 1 clip (and skip 0).
+
+**Row-safety verification**:
+Post-run Supabase verification by orchestrator:
+
+```sql
+select count(*)::int as customer_concept_rows
+from public.customer_concepts
+where customer_profile_id = '3e4173ee-2ff2-454f-9bac-7a77b1163af8';
+```
+
+Result: `customer_concept_rows=0`. Preview did not create rows.
+
+**Conclusion**: The positive preview smoke confirms:
+1. ✅ Direct Hagen endpoint returns positive clip count for handle with matches
+2. ✅ hagen-ui preview correctly propagates positive match counts
+3. ✅ `hagenDiagnostics` includes library stats for positive matches
+4. ✅ Preview reports correct `totalMatched`, `wouldImport`, `wouldSkip` values
+5. ✅ No import triggered (preview-only mode respected)
+
+**End-to-end positive flow verified**:
+1. Smoke customer created with handle `icacitylivs` (has 1 clip in Hagen)
+2. Direct Hagen query returned 1 clip with diagnostics
+3. hagen-ui authenticated preview returned positive match counts
+4. Preview correctly showed 1 clip would be imported
+5. No rows actually imported (preview-only safety)
+
+**Phase 63 positive smoke: COMPLETE**
