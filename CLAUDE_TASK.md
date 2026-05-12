@@ -16,149 +16,112 @@ work. Only edit files needed for the current task.
 1. Start in `hagen-ui`.
 2. Pull latest `main` if the worktree allows it.
 3. Do not push to git. The orchestrator reviews, rebases if needed, and pushes.
-4. Do not write secrets or cookies to files or docs.
-5. Do not touch any customer except the exact smoke customer listed below.
+4. Do not write secrets, cookies, tokens, or production credentials to files or docs.
+5. Do not run live import/sync endpoints in this task.
 
-## Current Task: Controlled hagen-ui Import Smoke
+## Current Task: Phase 64 - Studio Sync Status Visibility
 
-The user explicitly approved a controlled import test. This is the only import
-mode allowed, and only for the smoke customer below.
+We just completed the live Hagen import smoke. The next planned step is Phase 5
+/ G5 from the TikTok history audit: CM visibility into per-customer sync status.
 
-You may call these endpoints only for customer
-`3e4173ee-2ff2-454f-9bac-7a77b1163af8`:
-
-```text
-POST /api/studio-v2/customers/3e4173ee-2ff2-454f-9bac-7a77b1163af8/sync-history?preview=true
-POST /api/studio-v2/customers/3e4173ee-2ff2-454f-9bac-7a77b1163af8/sync-history
-```
-
-Do not call import mode for any other customer.
-
-## Smoke Customer
-
-Production Supabase smoke customer:
+Important finding from the orchestrator:
 
 ```text
-HAGEN_SYNC_TEST_CUSTOMER_ID=3e4173ee-2ff2-454f-9bac-7a77b1163af8
-HAGEN_SYNC_TEST_HANDLE=icacitylivs
-Business name=Hagen Sync Smoke - icacitylivs - 2026-05-12
+GET /api/studio-v2/customers/:customerId/sync-history currently queries
+public.tiktok_sync_history, but that view/table does not exist in Supabase.
+The route catches the error and returns { history: [] }, hiding the issue.
 ```
 
-Orchestrator preconditions verified before this task:
+Supabase has `public.sync_runs` with these columns:
 
 ```text
-Direct Hagen filter returned clips=1 for handle icacitylivs.
-customer_concepts rows for the smoke customer = 0.
+id uuid
+customer_id uuid
+mode text
+started_at timestamptz
+finished_at timestamptz
+status text
+fetched_count int
+imported_count int
+stats_updated_count int
+reconciled boolean
+error text
+calls_used int
 ```
 
-Expected import behavior:
+## Scope
 
-```text
-Preview before import: totalMatched=1, wouldImport=1, wouldSkip=0
-First import: imported=1, skipped=0
-Second import: imported=0, skipped=1
-Preview after import: totalMatched=1, wouldImport=0, wouldSkip=1
-```
+Fix the read-only status path and surface it in the Studio customer workspace.
 
-## Required Local Inputs
+Backend:
 
-You need:
+- Update `artifacts/api-server/src/routes/studio-v2.ts`.
+- Change `GET /api/studio-v2/customers/:customerId/sync-history` to read from
+  `sync_runs`, not `tiktok_sync_history`.
+- Preserve the response envelope `{ history: [...] }`.
+- Return normalized rows ordered by `started_at desc`, limit 20.
+- Include at least:
+  - `id`
+  - `mode`
+  - `status`
+  - `started_at`
+  - `finished_at`
+  - `fetched_count`
+  - `imported_count`
+  - `stats_updated_count`
+  - `reconciled`
+  - `calls_used`
+  - `error`
+- Do not swallow database errors as an empty successful response. Return `500`
+  with a useful Swedish error message and log the underlying error.
 
-```text
-API_SERVER_BASE_URL=https://app.letrend.se
-HAGEN_UI_AUTH_TOKEN=<Supabase access_token copied fresh from browser localStorage>
-```
+Frontend:
 
-If `HAGEN_UI_AUTH_TOKEN` is missing, stop and report that the import smoke
-cannot run yet. Do not attempt to bypass auth.
+- Update `artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx`.
+- Add read-only state/fetching for sync history using the GET route above.
+- Fetch sync history when the customer workspace loads and after these actions:
+  - `fetch-profile-history`
+  - `sync-history` import
+  - `sync-history?preview=true` may refresh status only if low-friction; preview
+    itself should not create status rows.
+- Add a compact sync-status surface near the existing TikTok/Hagen sync controls.
+- Keep the current design language. Do not redesign the workspace.
+- Show:
+  - latest status (`ok`, `error`, `running`, etc.)
+  - latest run time
+  - mode
+  - fetched/imported/stats-updated/calls-used counts when present
+  - error text for failed runs
+  - a small recent-run list if there is room
+- Empty state should say that no sync runs have been logged yet.
+- Loading and error states must be visible but quiet.
 
-The browser may not show an auth cookie. That is OK. If the session is stored
-in localStorage, open DevTools on `https://app.letrend.se` and copy only the
-fresh `access_token` from the Supabase auth entry, usually named like:
+Documentation:
 
-```text
-sb-<project-ref>-auth-token
-```
+- Add `docs/agent-plans/64-studio-sync-status-visibility.md`.
+- Document:
+  - the missing `tiktok_sync_history` view issue
+  - the backend route fix
+  - the UI surface added
+  - test commands and results
+  - any remaining gaps
 
-Do not use the refresh token. Do not paste the full localStorage JSON into docs
-or logs.
+## Constraints
 
-## PowerShell Runbook
+- Do not call live import endpoints.
+- Do not create or delete Supabase rows.
+- Do not touch the smoke customer.
+- Do not broaden this into cron scheduling, reconciliation scoring, or demo flow.
+- Keep edits scoped to the read route, the customer workspace UI, and the new doc.
 
-Use this shape. Do not print the token.
+## Verification
+
+Run:
 
 ```powershell
-$env:API_SERVER_BASE_URL = "https://app.letrend.se"
-$customerId = "3e4173ee-2ff2-454f-9bac-7a77b1163af8"
-
-if (-not $env:HAGEN_UI_AUTH_TOKEN) {
-  throw "HAGEN_UI_AUTH_TOKEN is not set"
-}
-
-$headers = @{
-  Accept = "application/json"
-  Authorization = "Bearer $env:HAGEN_UI_AUTH_TOKEN"
-}
-
-$previewUrl = "$env:API_SERVER_BASE_URL/api/studio-v2/customers/$customerId/sync-history?preview=true"
-$importUrl = "$env:API_SERVER_BASE_URL/api/studio-v2/customers/$customerId/sync-history"
-
-$previewBefore = Invoke-RestMethod -Method Post -Uri $previewUrl -Headers $headers
-$previewBefore | ConvertTo-Json -Depth 8
-
-$firstImport = Invoke-RestMethod -Method Post -Uri $importUrl -Headers $headers
-$firstImport | ConvertTo-Json -Depth 8
-
-$secondImport = Invoke-RestMethod -Method Post -Uri $importUrl -Headers $headers
-$secondImport | ConvertTo-Json -Depth 8
-
-$previewAfter = Invoke-RestMethod -Method Post -Uri $previewUrl -Headers $headers
-$previewAfter | ConvertTo-Json -Depth 8
+pnpm --filter "./artifacts/api-server" run typecheck
+pnpm --filter "./artifacts/letrend" run typecheck
 ```
 
-## Assertions
-
-Treat the task as failed if any assertion is false:
-
-- `previewBefore.handle` is `icacitylivs`
-- `previewBefore.totalMatched` is `1`
-- `previewBefore.wouldImport` is `1`
-- `previewBefore.wouldSkip` is `0`
-- `firstImport.imported` is `1`
-- `firstImport.skipped` is `0`
-- `secondImport.imported` is `0`
-- `secondImport.skipped` is `1`
-- `previewAfter.totalMatched` is `1`
-- `previewAfter.wouldImport` is `0`
-- `previewAfter.wouldSkip` is `1`
-
-If `firstImport` returns `imported=0, skipped=1`, stop and document that the
-row already existed before this run. Do not retry with another customer.
-
-## Documentation Update
-
-If the import smoke is actually run, update:
-
-```text
-docs/agent-plans/63-hagen-sync-deployment-smoke-harness.md
-```
-
-Add a section:
-
-```text
-## Live Smoke Result - Controlled hagen-ui Import
-```
-
-Include:
-
-- timestamp
-- command shape with token redacted
-- `API_SERVER_BASE_URL` used
-- customer id and handle used
-- preview-before counts
-- first import response
-- second import response
-- preview-after counts
-- any error body or blocker
-
-Do not update the doc if the import smoke did not run.
+If a typecheck fails because of unrelated pre-existing errors, document the exact
+failure and keep the implementation as narrow as possible.
