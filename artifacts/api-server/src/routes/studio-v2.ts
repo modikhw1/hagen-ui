@@ -912,7 +912,12 @@ function clipMatchesHandle(
 // If ?preview=true: compares but writes nothing — returns { handle, wouldImport, wouldSkip, totalMatched, samples, availableUsernames }.
 // If not preview: inserts new rows — returns { imported, skipped }.
 // Returns 502 when Hagen is unavailable (HAGEN_BASE_URL not set or upstream error).
+// Logs sync_runs for import mode (not preview) to enable CM status visibility.
 router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (req, res) => {
+  const supabase = createSupabaseAdmin();
+  let syncRunId: string | null = null;
+  const startedAt = new Date().toISOString();
+
   try {
     const customerId = String(req.params['customerId'] ?? '');
     if (!customerId) {
@@ -923,16 +928,7 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
 
     const isPreview = req.query['preview'] === 'true';
 
-    if (!getHagenBase()) {
-      res.status(502).json({
-        error: 'hagen-not-configured',
-        message: 'Hagen-källan är inte konfigurerad på API-servern. Kontakta admin.',
-      });
-      return;
-    }
-
     // ── 1. Fetch customer tiktok_handle ───────────────────────────────────────
-    const supabase = createSupabaseAdmin();
     const { data: customer, error: customerError } = await supabase
       .from('customer_profiles')
       .select('tiktok_handle')
@@ -951,6 +947,58 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
       return;
     }
 
+    // ── 1.1 Create sync_run for import mode (after auth/customer/handle validated) ─
+    if (!isPreview) {
+      try {
+        const { data: runData, error: runInsertError } = await supabase
+          .from('sync_runs')
+          .insert({
+            customer_id: customerId,
+            mode: 'manual',
+            started_at: startedAt,
+            status: 'running',
+          })
+          .select('id')
+          .single();
+        if (runInsertError) {
+          logger.warn({ err: runInsertError, customerId }, 'sync_runs insert failed (non-fatal)');
+        } else {
+          syncRunId = runData?.id ?? null;
+        }
+      } catch (runInsertErr) {
+        // Non-fatal: log but don't break import
+        logger.warn({ err: runInsertErr, customerId }, 'sync_runs insert failed (non-fatal)');
+      }
+    }
+
+    // ── 1.2 Check Hagen config (moved after customer/handle so errors can be logged) ─
+    if (!getHagenBase()) {
+      const errorMsg = 'Hagen-källan är inte konfigurerad på API-servern. Kontakta admin.';
+      if (syncRunId) {
+        try {
+          const { error: runUpdateError } = await supabase
+            .from('sync_runs')
+            .update({
+              finished_at: new Date().toISOString(),
+              status: 'error',
+              error: errorMsg,
+              calls_used: 0,
+            })
+            .eq('id', syncRunId);
+          if (runUpdateError) {
+            logger.warn({ err: runUpdateError, syncRunId }, 'sync_runs update failed (non-fatal)');
+          }
+        } catch (runUpdateErr) {
+          logger.warn({ err: runUpdateErr }, 'sync_runs update failed (non-fatal)');
+        }
+      }
+      res.status(502).json({
+        error: 'hagen-not-configured',
+        message: errorMsg,
+      });
+      return;
+    }
+
     // ── 2. Fetch clips from Hagen library ─────────────────────────────────────
     // Pass handle query param to Hagen for server-side filtering
     const query = new URLSearchParams({ handle }).toString();
@@ -963,6 +1011,25 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
     });
 
     if (!hagenResult.ok) {
+      const errorMsg = hagenResult.body?.error || hagenResult.body?.message || 'Hagen-anrop misslyckades';
+      if (syncRunId) {
+        try {
+          const { error: runUpdateError } = await supabase
+            .from('sync_runs')
+            .update({
+              finished_at: new Date().toISOString(),
+              status: 'error',
+              calls_used: 0,
+              error: errorMsg,
+            })
+            .eq('id', syncRunId);
+          if (runUpdateError) {
+            logger.warn({ err: runUpdateError, syncRunId }, 'sync_runs Hagen error update failed (non-fatal)');
+          }
+        } catch (runUpdateErr) {
+          logger.warn({ err: runUpdateErr }, 'sync_runs Hagen error update failed (non-fatal)');
+        }
+      }
       res.status(hagenResult.clientStatus).json(hagenResult.body);
       return;
     }
@@ -1044,49 +1111,113 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
     }
 
     // ── 4b. Import mode — insert new rows ─────────────────────────────────────
-    if (newClips.length === 0) {
-      res.json({ imported: 0, skipped: skippedCount });
-      return;
-    }
-
-    const observedAt = new Date().toISOString();
-    const inserts = newClips.map((c) => ({
-      customer_profile_id: customerId,
-      customer_id: customerId,
-      status: 'history_import',
-      row_kind: 'history_import',
-      history_source: 'hagen_library',
-      concept_id: null as string | null,
-      tiktok_url: c.tiktok_url,
-      tiktok_thumbnail_url: c.tiktok_thumbnail_url ?? null,
-      tiktok_views: typeof c.tiktok_views === 'number' ? c.tiktok_views : null,
-      tiktok_likes: typeof c.tiktok_likes === 'number' ? c.tiktok_likes : null,
-      tiktok_comments: typeof c.tiktok_comments === 'number' ? c.tiktok_comments : null,
-      published_at: typeof c.published_at === 'string' ? c.published_at : null,
-      tiktok_description: typeof c.description === 'string' && c.description.trim() ? c.description.trim() : null,
-      observed_profile_handle: handle,
-      provider_name: 'hagen_library',
-      first_observed_at: observedAt,
-      tiktok_last_synced_at: observedAt,
-      last_observed_at: observedAt,
-    }));
-
-    const { error: insertError } = await supabase
-      .from('customer_concepts')
-      .insert(inserts);
-
-    if (insertError) {
-      logger.error({ err: insertError, customerId }, 'sync-history POST: insert failed');
-      res.status(500).json({ error: `Import misslyckades: ${insertError.message}` });
-      return;
-    }
-
     const imported = newClips.length;
+
+    if (newClips.length > 0) {
+      const observedAt = new Date().toISOString();
+      const inserts = newClips.map((c) => ({
+        customer_profile_id: customerId,
+        customer_id: customerId,
+        status: 'history_import',
+        row_kind: 'history_import',
+        history_source: 'hagen_library',
+        concept_id: null as string | null,
+        tiktok_url: c.tiktok_url,
+        tiktok_thumbnail_url: c.tiktok_thumbnail_url ?? null,
+        tiktok_views: typeof c.tiktok_views === 'number' ? c.tiktok_views : null,
+        tiktok_likes: typeof c.tiktok_likes === 'number' ? c.tiktok_likes : null,
+        tiktok_comments: typeof c.tiktok_comments === 'number' ? c.tiktok_comments : null,
+        published_at: typeof c.published_at === 'string' ? c.published_at : null,
+        tiktok_description: typeof c.description === 'string' && c.description.trim() ? c.description.trim() : null,
+        observed_profile_handle: handle,
+        provider_name: 'hagen_library',
+        first_observed_at: observedAt,
+        tiktok_last_synced_at: observedAt,
+        last_observed_at: observedAt,
+      }));
+
+      const { error: insertError } = await supabase
+        .from('customer_concepts')
+        .insert(inserts);
+
+      if (insertError) {
+        const errorMsg = `Import misslyckades: ${insertError.message}`;
+        logger.error({ err: insertError, customerId }, 'sync-history POST: insert failed');
+        // Update sync_run with error
+        if (syncRunId) {
+          try {
+            const { error: runUpdateError } = await supabase
+              .from('sync_runs')
+              .update({
+                finished_at: new Date().toISOString(),
+                status: 'error',
+                fetched_count: matchedClips.length,
+                imported_count: 0,
+                stats_updated_count: 0,
+                calls_used: 0,
+                error: errorMsg,
+              })
+              .eq('id', syncRunId);
+            if (runUpdateError) {
+              logger.warn({ err: runUpdateError, syncRunId }, 'sync_runs error update failed (non-fatal)');
+            }
+          } catch (runUpdateErr) {
+            logger.warn({ err: runUpdateErr }, 'sync_runs error update failed (non-fatal)');
+          }
+        }
+        res.status(500).json({ error: errorMsg });
+        return;
+      }
+    }
+
+    // ── 4c. Update sync_run with success ──────────────────────────────────────
+    if (syncRunId) {
+      try {
+        const { error: runUpdateError } = await supabase
+          .from('sync_runs')
+          .update({
+            finished_at: new Date().toISOString(),
+            status: 'ok',
+            fetched_count: matchedClips.length,
+            imported_count: imported,
+            stats_updated_count: 0,
+            calls_used: 0,
+            error: null,
+          })
+          .eq('id', syncRunId);
+        if (runUpdateError) {
+          logger.warn({ err: runUpdateError, syncRunId }, 'sync_runs success update failed (non-fatal)');
+        }
+      } catch (runUpdateErr) {
+        logger.warn({ err: runUpdateErr }, 'sync_runs success update failed (non-fatal)');
+      }
+    }
+
     logger.info({ customerId, handle, imported, skipped: skippedCount }, 'sync-history POST: done');
     res.json({ imported, skipped: skippedCount });
   } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'Internt serverfel';
     logger.error(err, 'studio-v2 sync-history POST error');
-    res.status(500).json({ error: err instanceof Error ? err.message : 'Internt serverfel' });
+    // Update sync_run with unexpected error
+    if (syncRunId) {
+      try {
+        const { error: runUpdateError } = await supabase
+          .from('sync_runs')
+          .update({
+            finished_at: new Date().toISOString(),
+            status: 'error',
+            calls_used: 0,
+            error: errorMsg,
+          })
+          .eq('id', syncRunId);
+        if (runUpdateError) {
+          logger.warn({ err: runUpdateError, syncRunId }, 'sync_runs error update failed (non-fatal)');
+        }
+      } catch (runUpdateErr) {
+        logger.warn({ err: runUpdateErr }, 'sync_runs error update failed (non-fatal)');
+      }
+    }
+    res.status(500).json({ error: errorMsg });
   }
 });
 
