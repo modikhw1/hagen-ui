@@ -66,27 +66,38 @@ You need:
 
 ```text
 API_SERVER_BASE_URL=https://app.letrend.se
-HAGEN_UI_AUTH_COOKIE=<browser auth cookie for logged-in admin/CM>
+HAGEN_UI_AUTH_TOKEN=<Supabase access_token copied fresh from browser localStorage>
 ```
 
-If `HAGEN_UI_AUTH_COOKIE` is missing, stop and report that the import smoke
+If `HAGEN_UI_AUTH_TOKEN` is missing, stop and report that the import smoke
 cannot run yet. Do not attempt to bypass auth.
+
+The browser may not show an auth cookie. That is OK. If the session is stored
+in localStorage, open DevTools on `https://app.letrend.se` and copy only the
+fresh `access_token` from the Supabase auth entry, usually named like:
+
+```text
+sb-<project-ref>-auth-token
+```
+
+Do not use the refresh token. Do not paste the full localStorage JSON into docs
+or logs.
 
 ## PowerShell Runbook
 
-Use this shape. Do not print the cookie.
+Use this shape. Do not print the token.
 
 ```powershell
 $env:API_SERVER_BASE_URL = "https://app.letrend.se"
 $customerId = "3e4173ee-2ff2-454f-9bac-7a77b1163af8"
 
-if (-not $env:HAGEN_UI_AUTH_COOKIE) {
-  throw "HAGEN_UI_AUTH_COOKIE is not set"
+if (-not $env:HAGEN_UI_AUTH_TOKEN) {
+  throw "HAGEN_UI_AUTH_TOKEN is not set"
 }
 
 $headers = @{
   Accept = "application/json"
-  Cookie = $env:HAGEN_UI_AUTH_COOKIE
+  Authorization = "Bearer $env:HAGEN_UI_AUTH_TOKEN"
 }
 
 $previewUrl = "$env:API_SERVER_BASE_URL/api/studio-v2/customers/$customerId/sync-history?preview=true"
@@ -141,7 +152,7 @@ Add a section:
 Include:
 
 - timestamp
-- command shape with cookie redacted
+- command shape with token redacted
 - `API_SERVER_BASE_URL` used
 - customer id and handle used
 - preview-before counts
