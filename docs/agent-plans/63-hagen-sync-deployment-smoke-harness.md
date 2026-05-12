@@ -104,6 +104,222 @@ Code fix made after this failed smoke:
 
 **Task status**: Import smoke **BLOCKED** until this code fix is deployed and the controlled import smoke is rerun.
 
+### Rerun Attempt - 2026-05-12T14:45 UTC
+
+Code fix verified in local repository:
+- `artifacts/api-server/src/routes/studio-v2.ts:1065` now writes `tiktok_description`
+- `artifacts/api-server/src/routes/studio-v2.ts:1054` includes `customer_id: customerId`
+
+Rerun results:
+
+**Preview before import**: ✓ PASS (unchanged)
+```json
+{
+  "handle": "icacitylivs",
+  "totalMatched": 1,
+  "wouldImport": 1,
+  "wouldSkip": 0
+}
+```
+
+**First import**: ✗ FAIL (same error)
+```json
+{
+  "error": "Import misslyckades: Could not find the 'description' column of 'customer_concepts' in the schema cache"
+}
+```
+
+**Conclusion**: The code fix exists in the local repository but has not been deployed to production (https://app.letrend.se). The deployed Railway service is still running the old code version that attempts to insert `description` instead of `tiktok_description`.
+
+**Next step required by orchestrator**: Deploy the fixed code to Railway and rerun the controlled import smoke test.
+
+### Rerun Attempt - 2026-05-12T15:00 UTC (Post-Deployment)
+
+Fresh auth token provided. Testing with deployed code.
+
+**Discovery**: Auth format matters:
+- `Authorization: Bearer <token>` → Session expired
+- `Cookie: sb-access-token=<token>` → Works for preview
+
+**Results**:
+
+**Preview before import**: ✓ PASS
+```json
+{
+  "handle": "icacitylivs",
+  "totalMatched": 1,
+  "wouldImport": 1,
+  "wouldSkip": 0
+}
+```
+
+**First import**: ✗ AUTH FAILURE
+```
+Session expired ("Sessionen har gått ut")
+```
+
+**Blocker**: The auth token successfully authenticates preview requests but expires/fails for POST import requests. Possible causes:
+1. Session rotation on POST operations
+2. CSRF protection requiring additional headers
+3. Cookie-based auth requires full cookie string from browser (not just JWT)
+4. Token expired between preview and import calls
+
+**Next step**: User must extract the complete `Cookie:` header from an authenticated browser request to https://app.letrend.se (not just the JWT token), including all Supabase session cookies (sb-access-token, sb-refresh-token, etc.).
+
+### Rerun Attempt - 2026-05-12T15:10 UTC (With Full Session Object)
+
+User provided complete Supabase session object with access_token and refresh_token.
+
+**Token validation**:
+- JWT exp: 1778613727 (2026-05-12T19:22:07 UTC)
+- Current time: 1778610194 (2026-05-12T18:23:14 UTC)
+- Time until expiry: 59 minutes
+- Token structure: Valid
+
+**Test result**: Still "Sessionen har gått ut"
+
+**Root cause**: The middleware calls `supabase.auth.getUser()` which validates the token against Supabase's backend. Supabase is rejecting the token despite valid JWT claims. This indicates the session was invalidated server-side (logout, refresh token rotation, or session revocation).
+
+**Blocker**: Cannot proceed with controlled import smoke test. The auth token provided by the user is being rejected by Supabase's session validation, independent of JWT expiry claims.
+
+**Required**: User must:
+1. Open browser DevTools → Network tab
+2. Navigate to https://app.letrend.se
+3. Find any authenticated API request
+4. Copy the EXACT `Cookie:` header value from the request headers
+5. Provide the full cookie string (not the parsed JSON from localStorage)
+
+### Rerun Attempt - 2026-05-12T15:20 UTC (Fresh Session After Logout/Login)
+
+User logged out and back in, providing fresh localStorage token:
+- Issued at (iat): 1778610652 (18:30:52 UTC)
+- Expires at (exp): 1778614252 (19:30:52 UTC)
+- Session ID: 128fdb34-1103-4375-916c-d1522ee669aa (new)
+- Token issuer: https://fllzlpecwwabwgfbnxfu.supabase.co/auth/v1
+
+Test with `Authorization: Bearer` format (per CLAUDE_TASK.md line 100):
+
+**All four calls**: "Sessionen har gått ut"
+
+**Root cause identified**: The token is valid locally but Supabase's `auth.getUser()` rejects it. This indicates **Railway environment misconfiguration**:
+
+1. Token issued by: `https://fllzlpecwwabwgfbnxfu.supabase.co`
+2. Server must have matching `SUPABASE_URL` and `SUPABASE_ANON_KEY` env vars
+3. If Railway has wrong Supabase URL/key, token validation fails
+
+**Blocker**: Railway deployment likely has mismatched Supabase credentials. The frontend (which issued the token) is using the correct Supabase instance, but the API server (which validates tokens) may be configured for a different instance or has stale credentials.
+
+**Required verification**: Check Railway env vars for:
+- `SUPABASE_URL` should be `https://fllzlpecwwabwgfbnxfu.supabase.co`
+- `SUPABASE_ANON_KEY` should match the anon key for project `fllzlpecwwabwgfbnxfu`
+- `SUPABASE_SERVICE_ROLE_KEY` should match the service role key for same project
+
+### Final Rerun - 2026-05-12T18:50 UTC (Browser Fetch After Railway Config Fix)
+
+**Railway configuration issues resolved**:
+1. Added missing `SUPABASE_URL` and `SUPABASE_ANON_KEY` (without VITE_/NEXT_ prefix)
+2. Fixed newline escapes (`\n`) in service role keys
+3. Redeployed to Railway
+
+**Discovery**: curl requests blocked but browser fetch() works with identical token and headers. Executed smoke test via browser DevTools Console using JavaScript fetch API.
+
+**Test method**:
+```javascript
+// Run in browser console at https://app.letrend.se
+const token = JSON.parse(localStorage.getItem('letrend-auth')).access_token;
+const baseUrl = 'https://app.letrend.se/api/studio-v2/customers/3e4173ee-2ff2-454f-9bac-7a77b1163af8/sync-history';
+
+// Preview before, import, import again, preview after
+```
+
+**Results - ALL ASSERTIONS PASS ✅**
+
+**1. Preview Before Import**: ✓ PASS
+```json
+{
+  "handle": "icacitylivs",
+  "totalMatched": 1,
+  "wouldImport": 1,
+  "wouldSkip": 0
+}
+```
+
+**2. First Import**: ✓ PASS
+```json
+{
+  "imported": 1,
+  "skipped": 0
+}
+```
+
+**3. Second Import**: ✓ PASS
+```json
+{
+  "imported": 0,
+  "skipped": 1
+}
+```
+
+**4. Preview After Import**: ✓ PASS
+```json
+{
+  "handle": "icacitylivs",
+  "totalMatched": 1,
+  "wouldImport": 0,
+  "wouldSkip": 1
+}
+```
+
+**Assertion Verification**:
+- ✅ previewBefore.handle is `icacitylivs`
+- ✅ previewBefore.totalMatched is `1`
+- ✅ previewBefore.wouldImport is `1`
+- ✅ previewBefore.wouldSkip is `0`
+- ✅ firstImport.imported is `1`
+- ✅ firstImport.skipped is `0`
+- ✅ secondImport.imported is `0`
+- ✅ secondImport.skipped is `1`
+- ✅ previewAfter.totalMatched is `1`
+- ✅ previewAfter.wouldImport is `0`
+- ✅ previewAfter.wouldSkip is `1`
+
+**Task status**: Controlled hagen-ui import smoke **COMPLETE** ✅
+
+**Behavior verified**:
+1. Preview correctly identifies 1 clip matching handle `icacitylivs`
+2. First import successfully inserts 1 new customer_concepts row
+3. Second import correctly skips existing row (deduplication working)
+4. Preview after import shows 0 would import, 1 would skip
+5. Hagen diagnostics passthrough working (totalTikTokClips: 193, returnedClips: 1)
+6. Handle filtering working correctly
+
+**Notes**:
+- Smoke test executed via browser fetch() due to Railway/edge blocking curl User-Agent
+- Code fix deployed successfully (tiktok_description schema alignment)
+- Auth working correctly with Bearer token from localStorage
+- Import flow safe: idempotent, no duplicates created
+
+**Post-run Supabase verification by orchestrator**:
+
+```sql
+select id, customer_profile_id, customer_id, status, row_kind, history_source,
+       observed_profile_handle, provider_name, tiktok_url, added_at
+from public.customer_concepts
+where customer_profile_id = '3e4173ee-2ff2-454f-9bac-7a77b1163af8'
+order by added_at desc;
+```
+
+Result: exactly one row exists:
+
+- `id`: `06d341ff-5b43-4ac7-b97e-2d9303ae2a05`
+- `status`: `history_import`
+- `row_kind`: `history_import`
+- `history_source`: `hagen_library`
+- `observed_profile_handle`: `icacitylivs`
+- `provider_name`: `hagen_library`
+- `customer_id` matches `customer_profile_id`
+- TikTok URL: `https://www.tiktok.com/@icacitylivs/video/7627010329964186902?is_from_webapp=1&sender_device=pc`
+
 ---
 
 ## What Was Added
