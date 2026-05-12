@@ -779,3 +779,120 @@ node scripts/smoke-hagen-sync.mjs
 - CRON_SECRET and RAPIDAPI_KEY configured
 
 **Status**: ✅ Direct Hagen tests complete, ⏸️ hagen-ui tests blocked by stale deployment
+
+---
+
+## Live Smoke Result - hagen-ui Preview
+
+**Timestamp**: 2026-05-12T17:15Z
+
+**Environment**:
+- hagen-ui URL: `https://app.letrend.se`
+- Hagen URL: `https://hagen-production.up.railway.app`
+- `HAGEN_SYNC_SECRET`: set (from nyckel3.txt)
+- `API_SERVER_BASE_URL`: `https://app.letrend.se`
+- Test Customer ID: `0cd8f4d8-8bb8-4456-ba85-1108b5e69a65`
+- Test Handle: `consorconsulting`
+- `HAGEN_UI_AUTH_COOKIE`: not set (frontend not yet loading for login)
+
+**Command shape**:
+```bash
+HAGEN_BASE_URL="https://hagen-production.up.railway.app" \
+HAGEN_SYNC_SECRET="<redacted>" \
+HAGEN_SYNC_TEST_CUSTOMER_ID="0cd8f4d8-8bb8-4456-ba85-1108b5e69a65" \
+HAGEN_SYNC_TEST_HANDLE="consorconsulting" \
+API_SERVER_BASE_URL="https://app.letrend.se" \
+node scripts/smoke-hagen-sync.mjs
+```
+
+**Result**: ✅ **PASS (Tests 1-3)**
+
+| Test | Status | Details |
+|---|---|---|
+| Test 1: Hagen with correct secret | ✅ 200 | clips=0, diagnostics present |
+| Test 2: Hagen without secret | ✅ 401 | `error: "unauthorized"` |
+| Test 3: hagen-ui preview without auth | ✅ 401 | Correctly rejects unauthenticated requests |
+| Test 4: hagen-ui preview with auth | ⏭️ Skipped | `HAGEN_UI_AUTH_COOKIE` not set |
+
+**Diagnostics verified**:
+- `diagnostics.handleFilter`: `"consorconsulting"` ✅
+- `diagnostics.totalTikTokClips`: `193` ✅
+- `diagnostics.availableUsernameCount`: `98` ✅
+
+**hagen-ui no-auth test**:
+- POST `/api/studio-v2/customers/{id}/sync-history?preview=true` without Cookie header
+- Returned: `401` ✅
+- Confirms: hagen-ui correctly requires authentication for preview endpoint
+
+**What remains untested**:
+- ❌ Authenticated preview (Test 4) — requires browser login to extract cookie
+- ❌ Preview fields: `handle`, `totalMatched`, `wouldImport`, `wouldSkip`
+- ❌ `hagenDiagnostics` passthrough in preview response
+
+**Test 4 completed** (see below).
+
+**Conclusion**: The hagen-ui API server is deployed and correctly:
+1. Rejects unauthenticated preview requests with 401
+2. Routes exist and respond (not 404)
+3. No import is triggered by any test
+
+---
+
+## Live Smoke Result - Full hagen-ui Preview (All Tests Pass)
+
+**Timestamp**: 2026-05-12T17:45Z
+
+**Environment**:
+- Hagen URL: `https://hagen-production.up.railway.app`
+- `API_SERVER_BASE_URL`: `https://app.letrend.se`
+- `HAGEN_SYNC_SECRET`: set (from nyckel3.txt)
+- Test Customer ID: `0cd8f4d8-8bb8-4456-ba85-1108b5e69a65`
+- Test Handle: `consorconsulting`
+- `HAGEN_UI_AUTH_COOKIE`: set (Bearer token via sb-auth-token cookie format)
+
+**Command shape**:
+```bash
+HAGEN_BASE_URL="https://hagen-production.up.railway.app" \
+HAGEN_SYNC_SECRET="<redacted>" \
+HAGEN_SYNC_TEST_CUSTOMER_ID="0cd8f4d8-8bb8-4456-ba85-1108b5e69a65" \
+HAGEN_SYNC_TEST_HANDLE="consorconsulting" \
+API_SERVER_BASE_URL="https://app.letrend.se" \
+HAGEN_UI_AUTH_COOKIE="sb-auth-token=<redacted JWT>" \
+node scripts/smoke-hagen-sync.mjs
+```
+
+**Result**: ✅ **ALL TESTS PASSED**
+
+| Test | Status | Details |
+|---|---|---|
+| Test 1: Hagen with correct secret | ✅ 200 | clips=0, diagnostics present |
+| Test 2: Hagen without secret | ✅ 401 | `error: "unauthorized"` |
+| Test 3: hagen-ui preview without auth | ✅ 401 | Correctly rejects unauthenticated |
+| Test 4: hagen-ui preview with auth | ✅ 200 | Full preview response |
+
+**Test 4 preview response fields**:
+- `handle`: `"consorconsulting"` ✅
+- `totalMatched`: `0` ✅ (zero-match as expected)
+- `wouldImport`: `0` ✅
+- `wouldSkip`: (implicit 0)
+- `hagenDiagnostics`: **present** ✅
+
+**Diagnostics from Hagen**:
+- `totalTikTokClips`: 193
+- `availableUsernameCount`: 98
+- `handleFilter`: "consorconsulting"
+
+**Security verification**:
+- ✅ No-auth requests rejected (401)
+- ✅ Missing Hagen secret rejected (401)
+- ✅ Authenticated preview returns data
+- ✅ Preview is read-only (no import triggered)
+
+**End-to-end flow verified**:
+1. hagen-ui receives authenticated POST with `?preview=true`
+2. hagen-ui calls Hagen with `x-hagen-sync-secret` header and `?handle=consorconsulting`
+3. Hagen returns clips (0 matches) and diagnostics
+4. hagen-ui passes through `hagenDiagnostics` in preview response
+5. No rows imported to `customer_concepts`
+
+**Phase 63 smoke harness: COMPLETE**
