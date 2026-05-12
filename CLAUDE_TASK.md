@@ -19,20 +19,29 @@ work. Only edit files needed for the current task.
 4. Do not write secrets, cookies, tokens, or production credentials to files or docs.
 5. Do not run live import/sync endpoints in this task.
 
-## Current Task: Phase 64 - Studio Sync Status Visibility
+## Current Task: Phase 65 - Hagen Import Sync Run Logging
 
-We just completed the live Hagen import smoke. The next planned step is Phase 5
-/ G5 from the TikTok history audit: CM visibility into per-customer sync status.
+Phase 64 made the Studio customer workspace read sync status from `sync_runs`.
+The remaining gap is that Hagen-library import (`POST /sync-history`) currently
+creates `customer_concepts` history rows but does not write `sync_runs`, so CM
+status remains empty after a successful Hagen import.
 
-Important finding from the orchestrator:
+Add sync-run logging for the Hagen-library import route.
+
+## Supabase Contract
+
+The orchestrator verified the production `sync_runs` constraints:
 
 ```text
-GET /api/studio-v2/customers/:customerId/sync-history currently queries
-public.tiktok_sync_history, but that view/table does not exist in Supabase.
-The route catches the error and returns { history: [] }, hiding the issue.
+mode must be one of: cron, manual, mark_produced
+status must be one of: running, ok, error
 ```
 
-Supabase has `public.sync_runs` with these columns:
+Do not add a migration in this task. Use `mode='manual'` for Hagen-library
+imports and document that source-specific mode (for example `hagen_library`)
+requires a later schema migration.
+
+`sync_runs` columns available:
 
 ```text
 id uuid
@@ -51,68 +60,69 @@ calls_used int
 
 ## Scope
 
-Fix the read-only status path and surface it in the Studio customer workspace.
-
 Backend:
 
 - Update `artifacts/api-server/src/routes/studio-v2.ts`.
-- Change `GET /api/studio-v2/customers/:customerId/sync-history` to read from
-  `sync_runs`, not `tiktok_sync_history`.
-- Preserve the response envelope `{ history: [...] }`.
-- Return normalized rows ordered by `started_at desc`, limit 20.
-- Include at least:
-  - `id`
-  - `mode`
-  - `status`
+- Only touch the Hagen-library route:
+  - `POST /api/studio-v2/customers/:customerId/sync-history`
+  - `POST /api/studio-v2/customers/:customerId/sync-history?preview=true`
+- Preview mode must remain read-only and must not write `sync_runs`.
+- Import mode must write one `sync_runs` row per request attempt after:
+  - auth/access has passed
+  - customer exists
+  - customer has a TikTok handle
+- Start the run with:
+  - `customer_id`
+  - `mode='manual'`
   - `started_at`
+  - `status='running'`
+- On successful import/no-op, update the run with:
   - `finished_at`
-  - `fetched_count`
-  - `imported_count`
-  - `stats_updated_count`
-  - `reconciled`
-  - `calls_used`
-  - `error`
-- Do not swallow database errors as an empty successful response. Return `500`
-  with a useful Swedish error message and log the underlying error.
+  - `status='ok'`
+  - `fetched_count = matchedClips.length`
+  - `imported_count = imported`
+  - `stats_updated_count = 0`
+  - `calls_used = 0`
+  - `error = null`
+- If no new clips exist, still log `status='ok'`, `imported_count=0`, and
+  `fetched_count=matchedClips.length`.
+- On Hagen upstream failure or insert failure, update the run with:
+  - `finished_at`
+  - `status='error'`
+  - best-known counts
+  - `calls_used=0`
+  - `error=<message returned/logged by route>`
+- Do not let sync-run logging failure break the import. If inserting/updating
+  `sync_runs` fails, log the observability error and continue route behavior.
+- If needed, move the `getHagenBase()` check so import-mode config failures can
+  be logged after the customer/handle is known. Preserve response behavior.
 
 Frontend:
 
-- Update `artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx`.
-- Add read-only state/fetching for sync history using the GET route above.
-- Fetch sync history when the customer workspace loads and after these actions:
-  - `fetch-profile-history`
-  - `sync-history` import
-  - `sync-history?preview=true` may refresh status only if low-friction; preview
-    itself should not create status rows.
-- Add a compact sync-status surface near the existing TikTok/Hagen sync controls.
-- Keep the current design language. Do not redesign the workspace.
-- Show:
-  - latest status (`ok`, `error`, `running`, etc.)
-  - latest run time
-  - mode
-  - fetched/imported/stats-updated/calls-used counts when present
-  - error text for failed runs
-  - a small recent-run list if there is room
-- Empty state should say that no sync runs have been logged yet.
-- Loading and error states must be visible but quiet.
+- No UI redesign in this task.
+- If Phase 64 already refreshes sync status after import, no frontend change is
+  needed.
+- If not, add only the minimal refresh needed.
 
 Documentation:
 
-- Add `docs/agent-plans/64-studio-sync-status-visibility.md`.
+- Add `docs/agent-plans/65-hagen-import-sync-run-logging.md`.
 - Document:
-  - the missing `tiktok_sync_history` view issue
-  - the backend route fix
-  - the UI surface added
-  - test commands and results
-  - any remaining gaps
+  - why this phase exists after Phase 64
+  - why `mode='manual'` is used
+  - what counts are written
+  - how errors are logged
+  - verification results
+  - remaining gap: source-specific Hagen mode needs schema migration if desired
 
 ## Constraints
 
 - Do not call live import endpoints.
-- Do not create or delete Supabase rows.
+- Do not create, update, or delete Supabase rows manually.
 - Do not touch the smoke customer.
-- Do not broaden this into cron scheduling, reconciliation scoring, or demo flow.
-- Keep edits scoped to the read route, the customer workspace UI, and the new doc.
+- Do not broaden into cron scheduling, reconciliation scoring, or demo flow.
+- Keep edits scoped to the Hagen import route, minimal frontend refresh if
+  required, and the new doc.
 
 ## Verification
 
@@ -123,5 +133,5 @@ pnpm --filter "./artifacts/api-server" run typecheck
 pnpm --filter "./artifacts/letrend" run typecheck
 ```
 
-If a typecheck fails because of unrelated pre-existing errors, document the exact
-failure and keep the implementation as narrow as possible.
+If LeTrend typecheck still fails due to known React 19 dependency/type issues,
+document that and verify no new errors are introduced by this task.
