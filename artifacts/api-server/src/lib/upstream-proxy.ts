@@ -90,13 +90,21 @@ export async function fetchHagenJson(opts: ProxyJsonOptions): Promise<UpstreamRe
 
   let upstream: globalThis.Response;
   try {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      [REQUEST_ID_HEADER]: requestId,
+    };
+
+    // Add shared secret header if configured
+    const hagenSyncSecret = process.env['HAGEN_SYNC_SECRET'];
+    if (hagenSyncSecret) {
+      headers['x-hagen-sync-secret'] = hagenSyncSecret;
+    }
+
     upstream = await fetch(url, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        [REQUEST_ID_HEADER]: requestId,
-      },
+      headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
     });
