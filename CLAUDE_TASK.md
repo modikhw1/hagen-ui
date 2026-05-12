@@ -25,119 +25,93 @@ work. Only edit files needed for the current task.
 7. Commit and push only when the implemented change is coherent. If both repos
    changed, commit/push each repo separately with clear messages.
 
-## Current Task: Phase 59 - Hagen Library Sync Contract Alignment
+## Current Task: Phase 60 - Safe Hagen Clip Handle Matching
 
 ### Context
 
-Phase 58 in `hagen-ui` implemented the missing Studio customer workspace POST
-route:
+Phase 59 aligned the hagen-ui to Hagen contract by adding this Hagen route:
 
 ```text
-POST /api/studio-v2/customers/:customerId/sync-history
-POST /api/studio-v2/customers/:customerId/sync-history?preview=true
+GET /api/studio-v2/customers/:customerId/hagen-clips
 ```
 
-That fixed the previous `Cannot POST` failure for the "Synca fran hagen" and
-"Forhandsgranska" buttons. However, the new route calls this Hagen upstream path:
+and by improving hagen-ui UI error handling.
 
-```text
-/api/studio-v2/customers/:customerId/hagen-clips
+However, the current hagen-ui matching logic is still unsafe:
+
+```ts
+const matchedClips = allClipsWithUrl.filter(
+  (c) =>
+    !c.source_username ||
+    c.source_username.replace(/^@/, '').toLowerCase() === handle.toLowerCase(),
+);
 ```
 
-In latest local `hagen`, that route does not appear to exist. Existing Hagen
-library-style routes appear to include:
+That means clips with no `source_username` are treated as matches for every
+customer. If Hagen returns library clips without a parsed username, hagen-ui can
+preview/import unrelated TikTok history rows for the wrong customer.
 
-```text
-/api/letrend/library
-/api/videos/library?all=true&platform=tiktok
-```
-
-The next job is to align the contract so the Studio buttons use a real,
-stable Hagen source and can be previewed/imported safely.
+The Phase 59 doc already notes this risk. Phase 60 should fix it before any
+live import smoke is trusted.
 
 ### Read First
 
 In `hagen-ui`:
 
-- `docs/agent-plans/57-tiktok-history-sync-control-audit.md`
 - `docs/agent-plans/58-hagen-library-sync-history-post-route.md`
+- `docs/agent-plans/59-hagen-library-sync-contract-alignment.md`
 - `artifacts/api-server/src/routes/studio-v2.ts`
-- `artifacts/api-server/src/routes/letrend.ts`
-- `artifacts/api-server/src/lib/upstream-proxy.ts`
 - `artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx`
 
 In `hagen`:
 
-- inspect all routes under `src/app/api`
-- inspect existing library endpoints, especially:
-  - `src/app/api/letrend/library/route.ts`
-  - `src/app/api/videos/library/route.ts`
+- `src/app/api/studio-v2/customers/[customerId]/hagen-clips/route.ts`
 
 ### Goal
 
-Make the Hagen-library history sync path use an actual, stable Hagen contract.
-The CM should be able to click "Forhandsgranska" and get a truthful dry-run
-result, then click "Synca fran hagen" to import only deduped TikTok history rows.
+Make Hagen-library import safe by requiring a positive handle match. A clip may
+only be previewed/imported for a customer when the system can tie the clip to
+the customer's TikTok handle by metadata username or by parsing the TikTok URL.
 
 ### Required Behavior
 
-1. Verify the current upstream mismatch:
-   - `hagen-ui` currently calls `/api/studio-v2/customers/:id/hagen-clips`.
-   - Latest `hagen` does not expose that route unless you find otherwise.
+1. Add reusable helpers in hagen-ui server code near the sync-history route:
+   - `normalizeTikTokHandle(value: unknown): string`
+   - `extractTikTokUsernameFromUrl(url: string): string | null`
+   - `resolveClipUsername(clip): string | null`
+   - `clipMatchesHandle(clip, handle): boolean`
 
-2. Choose the cleanest contract:
-   - Preferred: add or use a stable Hagen endpoint that returns TikTok library
-     clips in a simple history-sync shape.
-   - Acceptable: adapt `hagen-ui` to call an existing Hagen endpoint if it
-     already contains enough data.
-   - Do not depend on Hagen knowing `hagen-ui` customer IDs unless that is
-     actually true. Matching should be by TikTok handle, not by LeTrend customer ID.
+2. Matching rule:
+   - Normalize the customer's `tiktok_handle`.
+   - Normalize `clip.source_username` when present.
+   - If `clip.source_username` is missing, parse username from TikTok URL.
+   - Match only when resolved username equals customer handle.
+   - Do not match/import clips where username cannot be resolved.
 
-3. The clip shape consumed by `hagen-ui` should resolve to:
-   - `tiktok_url`
-   - `source_username` if derivable from metadata or TikTok URL
-   - `description` or title
-   - `tiktok_thumbnail_url` if available
-   - `tiktok_views`, `tiktok_likes`, `tiktok_comments` if available
-   - `published_at` or `created_at` if available
+3. Update `availableUsernames`:
+   - Include usernames resolved from `source_username`.
+   - Include usernames parsed from TikTok URLs.
+   - Deduplicate and sort if practical.
 
-4. Matching rules in `hagen-ui`:
-   - Normalize the customer's `customer_profiles.tiktok_handle`.
-   - Match `source_username` to handle when present.
-   - If `source_username` is missing, derive username from TikTok URL and match
-     that to handle.
-   - Do not auto-import clips that cannot be tied to the handle.
-   - Deduplicate against existing `customer_concepts.tiktok_url`.
+4. Update preview samples if useful:
+   - Keep existing fields.
+   - Add optional `resolved_username` or `match_source` only if it helps debug
+     without cluttering UI.
 
-5. Preview mode must be read-only and return:
-   - `handle`
-   - `totalMatched`
-   - `wouldImport`
-   - `wouldSkip`
-   - `samples`
-   - `availableUsernames` when useful
-   - optional diagnostic fields such as `sourceEndpoint` or `sourceShape`
+5. Update the Hagen endpoint:
+   - Add URL username fallback when `metadata.author.uniqueId`,
+     `metadata.author.username`, and `metadata.username` are missing.
+   - Optional but preferred: support `?handle=username` to filter results server
+     side. If added, hagen-ui should pass the handle query param.
+   - Even if Hagen filters, hagen-ui must still validate matches itself.
 
-6. Import mode should insert only new deduped rows into `customer_concepts`:
-   - `status: 'history_import'`
-   - `row_kind: 'history_import'`
-   - `history_source: 'hagen_library'`
-   - `concept_id: null`
-   - TikTok URL/stats/description/timestamps when available
+6. Do not change Supabase schema.
 
-7. Improve UI error handling in `CustomerWorkspaceContent.tsx`:
-   - Prefer `data.message` before `data.error`.
-   - Handle non-JSON responses defensively.
-   - Show useful Swedish error text when Hagen is unavailable, missing data, or
-     the upstream contract is wrong.
-
-8. Do not add Supabase migrations for this phase.
-
-9. Do not touch unrelated `/admin/demos` work.
+7. Do not touch unrelated `/admin/demos` work.
 
 ### Verification
 
-Run at minimum in `hagen-ui`:
+Run in `hagen-ui`:
 
 ```text
 pnpm --filter @workspace/api-server run typecheck
@@ -146,32 +120,31 @@ pnpm --filter @workspace/letrend run typecheck
 
 If `hagen` changes, run its relevant typecheck/build command as well.
 
-Smoke expectations:
+Add focused tests if there is an obvious local test pattern. If not, document
+manual/code-level verification in the phase doc, including at least these cases:
 
-- No-auth POST still returns 401.
-- Missing handle still returns 400.
-- Preview with Hagen unavailable returns a structured JSON error.
-- Preview with Hagen available returns JSON, not HTML.
-- Preview does not write to Supabase.
-- Import should only be tested live if preview clearly shows `wouldImport > 0`.
-  If live import is tested, document customer ID and row counts before/after.
+- `@customer` matches `source_username: customer`
+- `customer` matches `source_username: @customer`
+- missing `source_username` matches URL `https://www.tiktok.com/@customer/video/...`
+- missing `source_username` with URL for another handle does not match
+- missing `source_username` with unparseable URL does not match
+- `availableUsernames` includes URL-derived usernames
 
 ### Output
 
 Create:
 
 ```text
-hagen-ui/docs/agent-plans/59-hagen-library-sync-contract-alignment.md
+hagen-ui/docs/agent-plans/60-safe-hagen-clip-handle-matching.md
 ```
 
 Include:
 
 - root cause
-- selected contract between `hagen-ui` and `hagen`
-- exact mapping from Hagen video/library row to `customer_concepts`
+- exact matching rule after the fix
+- whether Hagen got `?handle=` filtering
 - files changed in each repo
 - verification results
-- live smoke result or explicit blocker
 - remaining risks
 
 When finished, commit and push coherent changes. If one repo changed and the
