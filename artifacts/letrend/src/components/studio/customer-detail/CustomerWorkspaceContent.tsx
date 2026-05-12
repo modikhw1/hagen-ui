@@ -89,6 +89,7 @@ import { GamePlanSection } from './GamePlanSection';
 import { KonceptSection } from './KonceptSection';
 import { FeedPlannerSection } from './FeedPlannerSection';
 import { KommunikationSection } from './KommunikationSection';
+import { UnifiedKundarbeteSection } from './UnifiedKundarbeteSection';
 import { useConceptWorkspace } from '@/hooks/useConceptWorkspace';
 import { useFeedPlannerState } from '@/hooks/useFeedPlannerState';
 import { useCommunicationState } from '@/hooks/useCommunicationState';
@@ -102,6 +103,7 @@ const MemoGamePlanSection = React.memo(GamePlanSection);
 const MemoKonceptSection = React.memo(KonceptSection);
 const MemoFeedPlannerSection = React.memo(FeedPlannerSection);
 const MemoKommunikationSection = React.memo(KommunikationSection);
+const MemoUnifiedKundarbeteSection = React.memo(UnifiedKundarbeteSection);
 
 type WorkspaceLibraryConcept = ConceptWithProvenance & {
   source?: 'hagen' | 'cm_created' | null;
@@ -432,10 +434,10 @@ function CustomerWorkspacePageContent() {
       const stored = window.sessionStorage.getItem(`studio:workspace:last-section:${customerId}`);
       if (stored) return getStudioWorkspaceSection(stored);
     }
-    // Role-aware default: CMs start in Koncept (their daily work),
+    // Role-aware default: CMs start in Kundarbete (their daily work),
     // Admins start in Game Plan (strategic overview).
     // Profile may not be loaded yet at init time — we handle that in a useEffect below.
-    return 'koncept';
+    return 'kundarbete';
   });
   const [loading, setLoading] = useState(true);
   const [editingBrief, setEditingBrief] = useState(false);
@@ -1956,10 +1958,10 @@ function CustomerWorkspacePageContent() {
       }
 
       event.preventDefault();
-      setActiveSection('koncept');
-      router.replace(buildStudioWorkspaceHref(customerId, 'koncept'));
+      setActiveSection('kundarbete');
+      router.replace(buildStudioWorkspaceHref(customerId, 'kundarbete'));
       if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(`studio:workspace:last-section:${customerId}`, 'koncept');
+        window.sessionStorage.setItem(`studio:workspace:last-section:${customerId}`, 'kundarbete');
       }
       setShowAddConceptPanel(true);
       setSlotAddTargetFeedOrder(null);
@@ -2122,7 +2124,7 @@ function CustomerWorkspacePageContent() {
   ) => {
     setEditorInitialSections(sections);
     setEditingConceptId(conceptId);
-    setWorkspaceSection('koncept');
+    setWorkspaceSection('kundarbete');
     setExpandedConceptId(conceptId);
   };
 
@@ -2143,7 +2145,7 @@ function CustomerWorkspacePageContent() {
 
   const handleBeginFeedPlacement = (conceptId: string) => {
     setPendingFeedPlacementConceptId(conceptId);
-    setWorkspaceSection('feed');
+    setWorkspaceSection('kundarbete');
   };
 
   // Unplaced, active collaboration customer concepts — shown in the slot-pick panel
@@ -3299,6 +3301,34 @@ function CustomerWorkspacePageContent() {
             />
           )}
 
+          {activeSection === 'kundarbete' && (
+            <MemoUnifiedKundarbeteSection
+              customerId={customerId}
+              concepts={concepts}
+              expandedConceptId={expandedConceptId}
+              setExpandedConceptId={setExpandedConceptId}
+              getConceptDetails={getConceptDetails}
+              handleDeleteConcept={handleDeleteConcept}
+              handleChangeStatus={handleChangeStatus}
+              handleUpdateConcept={handleUpdateConcept}
+              handleUpdateCmNote={handleUpdateCmNote}
+              handleUpdateConceptTags={handleUpdateConceptTags}
+              handleMarkProduced={(conceptId) => handleMarkProduced(conceptId)}
+              handleRemoveFromSlot={handleRemoveFromSlot}
+              handleAssignToSlot={handleAssignToSlot}
+              handleSwapFeedOrder={handleSwapFeedOrder}
+              openConceptEditor={openConceptEditor}
+              setShowAddConceptPanel={setShowAddConceptPanel}
+              formatDate={formatDate}
+              onSendConcept={(conceptId) => openEmailComposer('new_concept', [conceptId])}
+              cmDisplayNames={cmDisplayNames}
+              cmTags={cmTags}
+              brief={{ tone: brief.tone, constraints: brief.constraints, current_focus: brief.current_focus }}
+              justAddedConceptId={justAddedConceptId}
+              justProducedConceptId={justProducedConceptId}
+            />
+          )}
+
           {activeSection === 'koncept' && (
             <MemoKonceptSection
               concepts={concepts}
@@ -3321,7 +3351,7 @@ function CustomerWorkspacePageContent() {
               cmDisplayNames={cmDisplayNames}
               brief={{ tone: brief.tone, constraints: brief.constraints, current_focus: brief.current_focus }}
               onNavigateToFeedSlot={(feedOrder) => {
-                setWorkspaceSection('feed');
+                setWorkspaceSection('kundarbete');
                 setHistoryOffset(gridConfig.currentSlotIndex - feedOrder);
               }}
               onBeginFeedPlacement={handleBeginFeedPlacement}
@@ -3479,7 +3509,7 @@ function CustomerWorkspacePageContent() {
               tempoWeekdays={brief.posting_weekdays != null ? brief.posting_weekdays : DEFAULT_TEMPO_WEEKDAYS}
               isTempoExplicit={brief.posting_weekdays != null}
               onTempoWeekdaysChange={handleSaveTempoWeekdays}
-              onOpenKonceptSection={() => setWorkspaceSection('koncept')}
+              onOpenKonceptSection={() => setWorkspaceSection('kundarbete')}
               onCancelPendingPlacement={() => setPendingFeedPlacementConceptId(null)}
               onCreateEmailDraft={handleCreateEmailDraftFromNote}
               reconciliationCandidates={reconciliationCandidates}

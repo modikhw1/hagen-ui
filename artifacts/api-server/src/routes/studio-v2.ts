@@ -370,6 +370,35 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
       : isCollaboration ? null : 1;
     const cmId = req.user!.id;
 
+    // Pre-populate content_overrides from base concept's overrides (Phase 71)
+    let prePopulated: Record<string, string> = {};
+    if (conceptId) {
+      const { data: baseConcept } = await supabase
+        .from('concepts')
+        .select('overrides')
+        .eq('id', conceptId)
+        .single();
+      const baseOv = (baseConcept?.overrides ?? {}) as Record<string, unknown>;
+      if (typeof baseOv.headline_sv === 'string' && baseOv.headline_sv) {
+        prePopulated.headline = baseOv.headline_sv;
+      }
+      if (typeof baseOv.script_sv === 'string' && baseOv.script_sv) {
+        prePopulated.script = baseOv.script_sv;
+      }
+      if (typeof baseOv.whyItWorks_sv === 'string' && baseOv.whyItWorks_sv) {
+        prePopulated.why_it_fits = baseOv.whyItWorks_sv;
+      }
+      if (Array.isArray(baseOv.productionNotes_sv) && baseOv.productionNotes_sv.length > 0) {
+        prePopulated.filming_instructions = baseOv.productionNotes_sv.join('\n');
+      }
+    }
+    const finalContentOverrides = {
+      ...prePopulated,
+      ...(typeof body.content_overrides === 'object' && body.content_overrides
+        ? (body.content_overrides as Record<string, unknown>)
+        : {}),
+    };
+
     const insert: Record<string, unknown> = {
       customer_profile_id: customerId,
       customer_id: customerId,
@@ -379,7 +408,7 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
       status: 'draft',
       match_percentage: typeof body.match_percentage === 'number' ? body.match_percentage : null,
       cm_note: typeof body.cm_note === 'string' ? body.cm_note : null,
-      content_overrides: typeof body.content_overrides === 'object' && body.content_overrides ? body.content_overrides : {},
+      content_overrides: finalContentOverrides,
       added_at: new Date().toISOString(),
     };
 

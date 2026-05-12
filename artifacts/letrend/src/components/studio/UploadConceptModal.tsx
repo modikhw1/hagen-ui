@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   LeTrendColors,
   LeTrendRadius,
@@ -22,17 +22,25 @@ import type { BackendClip, ClipOverride, ScriptMode, SigmaBackdrop, SigmaSetupCo
 interface UploadConceptModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (conceptId: string) => void;
+  onSuccess: (conceptId: string, meta: { assignedTo: string | null }) => void;
+  preSelectedCustomerId?: string | null;
+}
+
+interface CustomerOption {
+  id: string;
+  business_name: string | null;
+  tiktok_handle: string | null;
 }
 
 type JsonRecord = Record<string, unknown>;
 
-type UploadStep = 'idle' | 'analyzing' | 'enriching' | 'classifying' | 'saving';
+type UploadStep = 'idle' | 'analyzing' | 'enriching' | 'classifying' | 'assigning' | 'saving';
 
 const STEPS: Array<{ key: Exclude<UploadStep, 'idle'>; label: string }> = [
   { key: 'analyzing', label: 'Laddar upp & analyserar' },
   { key: 'enriching', label: 'Förädlar' },
   { key: 'classifying', label: 'Klassificera' },
+  { key: 'assigning', label: 'Tilldela' },
   { key: 'saving', label: 'Sparar' },
 ];
 
@@ -139,11 +147,11 @@ interface ClassificationDraft {
   setting: SigmaBackdrop | null;
 }
 
-export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConceptModalProps) {
+export function UploadConceptModal({ isOpen, onClose, onSuccess, preSelectedCustomerId }: UploadConceptModalProps) {
   const [videoUrl, setVideoUrl] = useState('');
   const [step, setStep] = useState<UploadStep>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [phase, setPhase] = useState<'url' | 'classify'>('url');
+  const [phase, setPhase] = useState<'url' | 'classify' | 'assign'>('url');
 
   // Held while the user finishes step-2 classification.
   const [pendingId, setPendingId] = useState<string | null>(null);
@@ -156,11 +164,39 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
   // Ingest run tracking — created before analyze, forwarded to all subsequent steps.
   const [ingestRunId, setIngestRunId] = useState<string | null>(null);
 
+  // Phase 72: customer assignment state
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(preSelectedCustomerId ?? null);
+  const [assignError, setAssignError] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const platform = videoUrl.trim() ? detectPlatform(videoUrl) : null;
   const busy = step !== 'idle';
   const stepIndex = STEPS.findIndex((currentStep) => currentStep.key === step);
+
+  // Fetch CM's customers when entering the assign phase
+  useEffect(() => {
+    if (phase !== 'assign') return;
+    let cancelled = false;
+    setLoadingCustomers(true);
+    fetch('/api/studio-v2/customers')
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        const list = (data.customers ?? []).map((c: Record<string, unknown>) => ({
+          id: c.id as string,
+          business_name: (c.business_name as string) || null,
+          tiktok_handle: (c.tiktok_handle as string) || null,
+        }));
+        setCustomers(list);
+      })
+      .catch(() => { if (!cancelled) setCustomers([]); })
+      .finally(() => { if (!cancelled) setLoadingCustomers(false); });
+    return () => { cancelled = true; };
+  }, [phase]);
 
   const reset = () => {
     setVideoUrl('');
@@ -174,6 +210,10 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
     setPendingHeadline('');
     setAnalyzedGcsUri(null);
     setIngestRunId(null);
+    setCustomers([]);
+    setCustomerSearch('');
+    setSelectedCustomerId(preSelectedCustomerId ?? null);
+    setAssignError(null);
   };
 
   const handleClose = () => {
@@ -309,60 +349,103 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
     }
   };
 
-  const handleSaveWithClassification = async () => {
-    if (!pendingId || !pendingBackend || !classification) return;
-    setError(null);
-    setStep('saving');
-    try {
-      const overrides = {
-        ...pendingOverrides,
-        difficulty: classification.difficulty,
-        filmTime: classification.filmTime,
-        market: classification.market,
-        peopleNeeded: classification.peopleNeeded,
-        businessTypes: classification.businessTypes,
-        script_mode: classification.script_mode,
-        ...(classification.setup_complexity ? { setup_complexity: classification.setup_complexity } : {}),
-        ...(classification.skill_required ? { skill_required: classification.skill_required } : {}),
-        ...(classification.setting ? { setting: classification.setting } : {}),
-      };
-      const saveRes = await fetch('/api/admin/concepts', {
+  const handleProceedToAssign = () => {
+    if (!classification || classification.businessTypes.length === 0) return;
+    setPhase('assign');
+    setStep('assigning');
+  };
+
+  const buildOverrides = () => {
+    if (!classification) return pendingOverrides;
+    return {
+      ...pendingOverrides,
+      difficulty: classification.difficulty,
+      filmTime: classification.filmTime,
+      market: classification.market,
+      peopleNeeded: classification.peopleNeeded,
+      businessTypes: classification.businessTypes,
+      script_mode: classification.script_mode,
+      ...(classification.setup_complexity ? { setup_complexity: classification.setup_complexity } : {}),
+      ...(classification.skill_required ? { skill_required: classification.skill_required } : {}),
+      ...(classification.setting ? { setting: classification.setting } : {}),
+    };
+  };
+
+  const saveConceptToLibrary = async (): Promise<string> => {
+    const overrides = buildOverrides();
+    const saveRes = await fetch('/api/admin/concepts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: pendingId,
+        backend_data: pendingBackend,
+        overrides,
+        is_active: true,
+        ingest_run_id: ingestRunId,
+      }),
+    });
+    const saveData = await readJsonResponse(saveRes);
+    if (!saveRes.ok) throw new Error(saveData.error || 'Kunde inte spara konceptet');
+    const id = saveData.concept?.id || pendingId!;
+
+    // Fire v7.B humor enrichment as fire-and-forget background request.
+    const scriptHumor = (pendingBackend?.script as Record<string, unknown> | undefined)?.['humor'] as Record<string, unknown> | undefined;
+    const isHumorous = scriptHumor?.['isHumorous'] === true;
+    if (isHumorous && analyzedGcsUri) {
+      fetch('/api/studio/concepts/humor-enrich', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: pendingId,
-          backend_data: pendingBackend,
-          overrides,
-          is_active: true,
+          videoUrl,
+          gcsUri: analyzedGcsUri,
           ingest_run_id: ingestRunId,
         }),
-      });
-      const saveData = await readJsonResponse(saveRes);
-      if (!saveRes.ok) throw new Error(saveData.error || 'Kunde inte spara konceptet');
-      const id = saveData.concept?.id || pendingId;
+      }).catch(() => {});
+    }
 
-      // Fire v7.B humor enrichment as fire-and-forget background request.
-      // Only when the concept is humorous and we have a Gemini URI from analyze.
-      const scriptHumor = (pendingBackend?.script as Record<string, unknown> | undefined)?.['humor'] as Record<string, unknown> | undefined;
-      const isHumorous = scriptHumor?.['isHumorous'] === true;
-      if (isHumorous && analyzedGcsUri) {
-        fetch('/api/studio/concepts/humor-enrich', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            videoUrl,
-            gcsUri: analyzedGcsUri,
-            ingest_run_id: ingestRunId,
-          }),
-        }).catch(() => {});
-      }
+    return id;
+  };
 
+  const handleSaveToLibrary = async () => {
+    if (!pendingId || !pendingBackend || !classification) return;
+    setError(null);
+    setAssignError(null);
+    setStep('saving');
+    try {
+      const id = await saveConceptToLibrary();
       reset();
-      onSuccess(id);
+      onSuccess(id, { assignedTo: null });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Nagot gick fel';
       setError(message);
-      setStep('classifying');
+      setStep('assigning');
+    }
+  };
+
+  const handleSaveAndAssign = async () => {
+    if (!pendingId || !pendingBackend || !classification || !selectedCustomerId) return;
+    setError(null);
+    setAssignError(null);
+    setStep('saving');
+    try {
+      const id = await saveConceptToLibrary();
+
+      const assignRes = await fetch(`/api/studio-v2/customers/${selectedCustomerId}/concepts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ concept_id: id }),
+      });
+      if (!assignRes.ok) {
+        const assignData = await assignRes.json().catch(() => ({}));
+        throw new Error((assignData as { error?: string }).error || 'Kunde inte tilldela koncept till kund');
+      }
+
+      reset();
+      onSuccess(id, { assignedTo: selectedCustomerId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Nagot gick fel';
+      setAssignError(message);
+      setStep('assigning');
     }
   };
 
@@ -385,17 +468,19 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        style={{ width: '100%', maxWidth: phase === 'classify' ? 640 : 480, background: '#fff', borderRadius: LeTrendRadius.xl, boxShadow: LeTrendShadows.xl, padding: 28, fontFamily: LeTrendTypography.fontFamily.body, maxHeight: '90vh', overflowY: 'auto' }}
+        style={{ width: '100%', maxWidth: (phase === 'classify' || phase === 'assign') ? 640 : 480, background: '#fff', borderRadius: LeTrendRadius.xl, boxShadow: LeTrendShadows.xl, padding: 28, fontFamily: LeTrendTypography.fontFamily.body, maxHeight: '90vh', overflowY: 'auto' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: LeTrendTypography.fontSize['3xl'], fontWeight: LeTrendTypography.fontWeight.bold, color: LeTrendColors.textPrimary, fontFamily: LeTrendTypography.fontFamily.heading }}>
-              {phase === 'classify' ? 'Klassificera koncept' : 'Nytt koncept'}
+              {phase === 'assign' ? 'Tilldela koncept' : phase === 'classify' ? 'Klassificera koncept' : 'Nytt koncept'}
             </h3>
             <p style={{ margin: '6px 0 0', color: LeTrendColors.textMuted, fontSize: LeTrendTypography.fontSize.sm }}>
-              {phase === 'classify'
-                ? `Slutför klassificeringen av "${pendingHeadline}" innan du sparar.`
-                : 'Klistra in en video-URL för att ladda upp och analysera.'}
+              {phase === 'assign'
+                ? `Välj en kund för "${pendingHeadline}" eller spara till biblioteket.`
+                : phase === 'classify'
+                  ? `Slutför klassificeringen av "${pendingHeadline}" innan du sparar.`
+                  : 'Klistra in en video-URL för att ladda upp och analysera.'}
             </p>
           </div>
           <button onClick={handleClose} disabled={busy && phase !== 'classify'} aria-label="Stang" style={{ border: 'none', background: 'none', color: LeTrendColors.textMuted, cursor: (busy && phase !== 'classify') ? 'not-allowed' : 'pointer', fontSize: 20, lineHeight: 1, padding: 4 }}>
@@ -617,11 +702,117 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
                 ← Tillbaka
               </button>
               <button
-                onClick={() => void handleSaveWithClassification()}
-                disabled={step === 'saving' || classification.businessTypes.length === 0}
-                style={{ ...buttonStyle('primary'), opacity: step === 'saving' ? 0.55 : 1, cursor: step === 'saving' ? 'not-allowed' : 'pointer' }}
+                onClick={handleProceedToAssign}
+                disabled={classification.businessTypes.length === 0}
+                style={{ ...buttonStyle('primary'), opacity: classification.businessTypes.length === 0 ? 0.55 : 1, cursor: classification.businessTypes.length === 0 ? 'not-allowed' : 'pointer' }}
               >
-                {step === 'saving' ? 'Sparar...' : 'Spara och aktivera →'}
+                Nästa →
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {phase === 'assign' ? (
+          <>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#374151', marginBottom: 12 }}>
+                Vem är det här till?
+              </div>
+              <input
+                type="text"
+                placeholder="Sök kund..."
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                style={{ ...inputStyle(), width: '100%', marginBottom: 12 }}
+              />
+              {loadingCustomers ? (
+                <div style={{ fontSize: 12, color: LeTrendColors.textMuted, padding: '12px 0' }}>
+                  Laddar kunder...
+                </div>
+              ) : customers.length === 0 ? (
+                <div style={{ fontSize: 12, color: LeTrendColors.textMuted, padding: '12px 0', fontStyle: 'italic' }}>
+                  Du har inga tilldelade kunder.
+                </div>
+              ) : (
+                <div style={{ maxHeight: 240, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {customers
+                    .filter((c) => {
+                      if (!customerSearch.trim()) return true;
+                      const q = customerSearch.toLowerCase();
+                      return (c.business_name?.toLowerCase().includes(q)) ||
+                        (c.tiktok_handle?.toLowerCase().includes(q));
+                    })
+                    .map((c) => {
+                      const isSelected = selectedCustomerId === c.id;
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setSelectedCustomerId(isSelected ? null : c.id)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 14px',
+                            borderRadius: LeTrendRadius.md,
+                            border: `1.5px solid ${isSelected ? LeTrendColors.brownDark : '#e5e7eb'}`,
+                            background: isSelected ? '#faf5f0' : '#fff',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            width: '100%',
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: LeTrendColors.brownDark }}>
+                              {c.business_name || '(Namnlös)'}
+                            </div>
+                            {c.tiktok_handle && (
+                              <div style={{ fontSize: 11, color: LeTrendColors.textMuted, marginTop: 2 }}>
+                                @{c.tiktok_handle}
+                              </div>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <span style={{ fontSize: 16, color: LeTrendColors.brownDark }}>✓</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            {assignError && (
+              <div style={{ marginBottom: 12, background: '#FEF2F2', border: `1px solid ${LeTrendColors.error}33`, borderRadius: LeTrendRadius.md, color: LeTrendColors.error, padding: '10px 14px', fontSize: 12 }}>
+                {assignError}
+              </div>
+            )}
+            {error && (
+              <div style={{ marginBottom: 12, background: '#FEF2F2', border: `1px solid ${LeTrendColors.error}33`, borderRadius: LeTrendRadius.md, color: LeTrendColors.error, padding: '10px 14px', fontSize: 12 }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => { setPhase('classify'); setStep('classifying'); setAssignError(null); }}
+                style={{ ...buttonStyle('primary'), background: '#fff', color: LeTrendColors.textPrimary, border: '1px solid #e5e7eb' }}
+              >
+                ← Tillbaka
+              </button>
+              <button
+                onClick={() => void handleSaveToLibrary()}
+                disabled={step === 'saving'}
+                style={{ ...buttonStyle('primary'), background: '#fff', color: LeTrendColors.brownDark, border: `1px solid ${LeTrendColors.brownLight}`, opacity: step === 'saving' ? 0.55 : 1 }}
+              >
+                Bara bibliotek
+              </button>
+              <button
+                onClick={() => void handleSaveAndAssign()}
+                disabled={step === 'saving' || !selectedCustomerId}
+                style={{ ...buttonStyle('primary'), opacity: (step === 'saving' || !selectedCustomerId) ? 0.55 : 1, cursor: (step === 'saving' || !selectedCustomerId) ? 'not-allowed' : 'pointer' }}
+              >
+                {step === 'saving' ? 'Sparar...' : 'Tilldela & spara →'}
               </button>
             </div>
           </>

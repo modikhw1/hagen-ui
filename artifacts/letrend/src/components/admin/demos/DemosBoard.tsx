@@ -287,7 +287,7 @@ export function DemosBoard({ days = 30 }: { days?: number }) {
         } else if (result.sync?.status === 'ok') {
           toast.success(`TikTok-historik hämtad: ${result.sync.imported ?? 0} nya klipp.`);
         }
-        window.open(`/studio/customers/${result.customerId}?section=feed`, '_blank');
+        window.open(`/studio/customers/${result.customerId}?section=kundarbete`, '_blank');
       } else {
         toast.error(result.error || 'Kunde inte förbereda Studio.');
       }

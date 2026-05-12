@@ -1521,7 +1521,7 @@ export default function StudioConceptsPage() {
       setSelectedConcept(null);
       setSelectedCustomer('');
       router.push(
-        `/studio/customers/${selectedCustomer}?section=koncept${
+        `/studio/customers/${selectedCustomer}?section=kundarbete${
           assignedId ? `&justAdded=${assignedId}` : ''
         }`,
       );
@@ -2083,9 +2083,13 @@ export default function StudioConceptsPage() {
       <UploadConceptModal
         isOpen={showUploadModal}
         onClose={() => setShowUploadModal(false)}
-        onSuccess={(id) => {
+        onSuccess={(id, meta) => {
           setShowUploadModal(false);
-          router.push(`/studio/concepts/${id}/review`);
+          if (meta.assignedTo) {
+            router.push(`/studio/customers/${meta.assignedTo}?section=kundarbete`);
+          } else {
+            router.push(`/studio/concepts/${id}/review`);
+          }
         }}
       />
     </div>

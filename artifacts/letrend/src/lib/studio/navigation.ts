@@ -23,10 +23,10 @@ export const STUDIO_SHELL_NAV_ITEMS: StudioShellNavItem[] = [
 
 export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [
   {
-    key: 'koncept',
-    label: 'Konceptarbete',
-    short_label: 'Koncept',
-    description: 'Tilldelade koncept, redigering och handoff.',
+    key: 'kundarbete',
+    label: 'Kundarbete',
+    short_label: 'Kundarbete',
+    description: 'Koncept, placering, redigering och handoff i en vy.',
     kind: 'primary',
   },
   {
@@ -34,13 +34,6 @@ export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [
     label: 'Game Plan och Notes',
     short_label: 'Game Plan',
     description: 'Strategi, brief och löpande notes till kunden.',
-    kind: 'primary',
-  },
-  {
-    key: 'feed',
-    label: 'Feedplan',
-    short_label: 'Feedplan',
-    description: 'Placeringar i planen, timing och tidigare historik.',
     kind: 'primary',
   },
   {
@@ -53,9 +46,11 @@ export const STUDIO_WORKSPACE_SECTIONS: StudioWorkspaceSectionItem[] = [
 ];
 
 export function getStudioWorkspaceSection(value: string | null | undefined): Section {
+  // Map legacy tab keys to the unified view
+  if (value === 'koncept' || value === 'feed') return 'kundarbete';
   return STUDIO_WORKSPACE_SECTIONS.some((section) => section.key === value)
     ? (value as Section)
-    : 'koncept';
+    : 'kundarbete';
 }
 
 export function getStudioWorkspaceSectionMeta(section: Section): StudioWorkspaceSectionItem {
@@ -66,7 +61,7 @@ export function getStudioWorkspaceSectionMeta(section: Section): StudioWorkspace
 }
 
 export function buildStudioWorkspaceHref(customerId: string, section?: Section): string {
-  if (!section || section === 'koncept') {
+  if (!section || section === 'kundarbete' || section === 'koncept') {
     return `/studio/customers/${customerId}`;
   }
 

@@ -527,7 +527,7 @@ export interface OldFeedSlot {
 /**
  * Section navigation
  */
-export type Section = 'gameplan' | 'koncept' | 'feed' | 'kommunikation' | 'demo';
+export type Section = 'kundarbete' | 'gameplan' | 'koncept' | 'feed' | 'kommunikation' | 'demo';
 
 // =====================================================
 // API Request/Response Types
