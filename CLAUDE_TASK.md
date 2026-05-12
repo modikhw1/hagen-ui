@@ -22,8 +22,10 @@ work. Only edit files needed for the current task.
    - files changed
    - verification run
    - remaining risks or blockers
-7. Commit and push only when the implemented change is coherent. If both repos
-   changed, commit/push each repo separately with clear messages.
+7. Do not push to git. You may create local commits if the change is coherent,
+   but the orchestrator will review, rebase if needed, and push to `main`.
+   If both repos changed, leave each repo in a clear state and document the
+   intended commit messages in the phase doc.
 
 ## Current Task: Phase 63 - Hagen Sync Deployment Smoke Harness
 

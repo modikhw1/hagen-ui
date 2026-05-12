@@ -38,19 +38,19 @@ function log(msg, color = 'reset') {
 }
 
 function pass(msg) {
-  log(`✓ ${msg}`, 'green');
+  log(`[OK] ${msg}`, 'green');
 }
 
 function fail(msg) {
-  log(`✗ ${msg}`, 'red');
+  log(`[ERR] ${msg}`, 'red');
 }
 
 function info(msg) {
-  log(`ℹ ${msg}`, 'cyan');
+  log(`[INFO] ${msg}`, 'cyan');
 }
 
 function warn(msg) {
-  log(`⚠ ${msg}`, 'yellow');
+  log(`[WARN] ${msg}`, 'yellow');
 }
 
 async function checkHagenEndpoint() {
@@ -103,10 +103,10 @@ async function checkHagenEndpoint() {
         return false;
       }
 
-      pass(`  ✓ JSON response with clips (${data.clips.length}) and diagnostics`);
-      pass(`  ✓ diagnostics.handleFilter = "${data.diagnostics.handleFilter}"`);
-      pass(`  ✓ diagnostics.totalTikTokClips = ${data.diagnostics.totalTikTokClips ?? 'null'}`);
-      pass(`  ✓ diagnostics.availableUsernameCount = ${data.diagnostics.availableUsernameCount ?? 'null'}`);
+      pass(`  JSON response with clips (${data.clips.length}) and diagnostics`);
+      pass(`  diagnostics.handleFilter = "${data.diagnostics.handleFilter}"`);
+      pass(`  diagnostics.totalTikTokClips = ${data.diagnostics.totalTikTokClips ?? 'null'}`);
+      pass(`  diagnostics.availableUsernameCount = ${data.diagnostics.availableUsernameCount ?? 'null'}`);
     } catch (err) {
       fail(`  Network error: ${err.message}`);
       return false;
@@ -130,7 +130,7 @@ async function checkHagenEndpoint() {
         return false;
       }
 
-      pass(`  ✓ 401 unauthorized when secret is missing`);
+      pass(`  401 unauthorized when secret is missing`);
     } catch (err) {
       fail(`  Network error: ${err.message}`);
       return false;
@@ -155,7 +155,7 @@ async function checkHagenEndpoint() {
         return false;
       }
 
-      pass(`  ✓ JSON response with clips (${data.clips.length}) and diagnostics (no auth)`);
+      pass(`  JSON response with clips (${data.clips.length}) and diagnostics (no auth)`);
     } catch (err) {
       fail(`  Network error: ${err.message}`);
       return false;
@@ -187,7 +187,7 @@ async function checkHagenUIPreview() {
       return false;
     }
 
-    pass(`  ✓ ${res.status} when no auth provided`);
+    pass(`  ${res.status} when no auth provided`);
   } catch (err) {
     fail(`  Network error: ${err.message}`);
     return false;
@@ -228,11 +228,11 @@ async function checkHagenUIPreview() {
       if (!data.hagenDiagnostics) {
         warn('  Preview response missing hagenDiagnostics (may be from older api-server)');
       } else {
-        pass(`  ✓ Preview response includes hagenDiagnostics`);
+        pass(`  Preview response includes hagenDiagnostics`);
       }
 
-      pass(`  ✓ Preview: handle="${data.handle}", totalMatched=${data.totalMatched}, wouldImport=${data.wouldImport}`);
-      info('  ⚠ Note: This was a PREVIEW only. No rows were imported.');
+      pass(`  Preview: handle="${data.handle}", totalMatched=${data.totalMatched}, wouldImport=${data.wouldImport}`);
+      info('  Note: This was a PREVIEW only. No rows were imported.');
     } catch (err) {
       fail(`  Network error: ${err.message}`);
       return false;
