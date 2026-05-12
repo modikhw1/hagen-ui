@@ -2,13 +2,10 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["corepack enable", "corepack prepare pnpm@9.15.9 --activate", "pnpm install --frozen-lockfile"]
+cmds = ["corepack enable", "corepack prepare pnpm@9.15.9 --activate", "NODE_ENV=development pnpm install --frozen-lockfile"]
 
 [phases.build]
-cmds = [
-  "cd artifacts/api-server && pnpm run build",
-  "cd artifacts/letrend && PORT=3000 BASE_PATH=/ pnpm run build"
-]
+cmds = ["pnpm --filter @workspace/api-server build", "PORT=3000 BASE_PATH=/ pnpm --filter @workspace/letrend... build"]
 
 [start]
-cmd = "cd artifacts/api-server && NODE_ENV=production pnpm run start"
+cmd = "cd artifacts/api-server && NODE_ENV=production node --enable-source-maps ./dist/index.mjs"
