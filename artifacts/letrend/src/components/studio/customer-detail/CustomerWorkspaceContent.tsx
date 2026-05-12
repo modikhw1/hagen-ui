@@ -2546,8 +2546,11 @@ function CustomerWorkspacePageContent() {
       const res = await fetch(`/api/studio-v2/customers/${customerId}/sync-history`, {
         method: 'POST',
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Synk misslyckades');
+      const data = await res.json().catch(() => ({ error: 'Ogiltigt svar från servern' }));
+      if (!res.ok) {
+        const errorMsg = data?.message || data?.error || 'Synk misslyckades';
+        throw new Error(errorMsg);
+      }
       setSyncHistoryResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
       // Cue is derived from backend via the customer profile effect — no direct set needed here.
       await fetchCustomer(true);
@@ -2570,8 +2573,11 @@ function CustomerWorkspacePageContent() {
       const res = await fetch(`/api/studio-v2/customers/${customerId}/sync-history?preview=true`, {
         method: 'POST',
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Förhandsvisning misslyckades');
+      const data = await res.json().catch(() => ({ error: 'Ogiltigt svar från servern' }));
+      if (!res.ok) {
+        const errorMsg = data?.message || data?.error || 'Förhandsvisning misslyckades';
+        throw new Error(errorMsg);
+      }
       setSyncPreviewResult({
         handle: data.handle ?? '',
         wouldImport: data.wouldImport ?? 0,
