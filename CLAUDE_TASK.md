@@ -25,144 +25,124 @@ work. Only edit files needed for the current task.
 7. Commit and push only when the implemented change is coherent. If both repos
    changed, commit/push each repo separately with clear messages.
 
-## Current Task: Phase 62 - Secure Hagen Sync Endpoint And Preserve Diagnostics
+## Current Task: Phase 63 - Hagen Sync Deployment Smoke Harness
 
 ### Context
 
-Phase 59 created:
+Phases 59-62 made the Hagen library history sync path structurally safe:
 
-```text
-GET /api/studio-v2/customers/:customerId/hagen-clips
-```
+- Phase 59: created the missing Hagen `hagen-clips` endpoint.
+- Phase 60: required positive handle matching before preview/import.
+- Phase 61: added `?handle=` server-side filtering.
+- Phase 62: protected the Hagen endpoint with `HAGEN_SYNC_SECRET` and passed
+  diagnostics through to the Studio UI.
 
-Phase 60 made hagen-ui require a positive handle match before importing.
-Phase 61 added `?handle=username` filtering in Hagen and made hagen-ui pass the
-customer handle to reduce payload size.
-
-Two gaps remain:
-
-1. The Hagen endpoint is described as internal but currently has no auth. If the
-   deployed Hagen app is reachable publicly, the endpoint can expose TikTok
-   library data, especially when `handle` is omitted.
-2. Because Phase 61 filters server-side by handle, hagen-ui no longer receives
-   all usernames on a zero-match preview. The old "available accounts in hagen"
-   debug text can become empty even when Hagen has clips for other usernames.
+The recurring remaining gap is that live HTTP smoke tests have not actually
+been run because Hagen was not running locally during the previous phases.
+Before adding more product behavior, make this flow easy to verify repeatedly.
 
 ### Read First
 
 In `hagen-ui`:
 
-- `docs/agent-plans/59-hagen-library-sync-contract-alignment.md`
-- `docs/agent-plans/60-safe-hagen-clip-handle-matching.md`
 - `docs/agent-plans/61-hagen-library-sync-live-preview-readiness.md`
+- `docs/agent-plans/62-secure-hagen-sync-endpoint-and-diagnostics.md`
 - `artifacts/api-server/src/lib/upstream-proxy.ts`
 - `artifacts/api-server/src/routes/studio-v2.ts`
 - `artifacts/letrend/src/components/studio/customer-detail/CustomerWorkspaceContent.tsx`
+- inspect `package.json` files to see existing script conventions
 
 In `hagen`:
 
 - `src/app/api/studio-v2/customers/[customerId]/hagen-clips/route.ts`
+- inspect env/example files and package scripts
 
 ### Goal
 
-Make the Hagen hagen-clips endpoint safe for deployment and keep preview
-diagnostics useful after server-side handle filtering.
+Create a practical smoke harness and deployment checklist for Hagen library sync.
+The goal is not to add new sync behavior. The goal is to make it hard to deploy
+this flow with missing env vars, wrong secret config, or a broken preview route.
 
 ### Required Behavior
 
-#### 1. Internal Secret Between hagen-ui And Hagen
+#### 1. Document Required Env Contract
 
-Use this shared contract unless the codebase clearly has an existing equivalent:
+Add or update docs so both repos clearly define:
 
-- Env var in both services: `HAGEN_SYNC_SECRET`
-- Request header from hagen-ui to Hagen: `x-hagen-sync-secret`
+- `HAGEN_BASE_URL` in hagen-ui api-server
+- `HAGEN_SYNC_SECRET` in both hagen-ui and Hagen
+- `NODE_ENV=production` behavior in Hagen
+- local dev behavior when `HAGEN_SYNC_SECRET` is omitted
 
-In `hagen-ui`:
+If either repo has `.env.example`, `.env.sample`, deployment docs, or README
+sections for env vars, update the appropriate existing location. If there is no
+obvious place, document it in the Phase 63 doc only.
 
-- Update `fetchHagenJson()` in `artifacts/api-server/src/lib/upstream-proxy.ts`
-  so it sends `x-hagen-sync-secret` when `process.env.HAGEN_SYNC_SECRET` is set.
-- Do not log the secret.
-- Keep existing headers and request id behavior.
-- Do not require the secret for unrelated local development if env is missing.
+Do not commit real secrets.
 
-In `hagen`:
+#### 2. Add A Safe Smoke Script Or Command Set
 
-- Protect only `GET /api/studio-v2/customers/:customerId/hagen-clips`.
-- If `HAGEN_SYNC_SECRET` is set, require the exact `x-hagen-sync-secret` header.
-- If the header is missing or wrong, return JSON 401:
-
-```json
-{ "error": "unauthorized", "message": "Missing or invalid Hagen sync secret" }
-```
-
-- If `NODE_ENV === "production"` and `HAGEN_SYNC_SECRET` is missing, return JSON
-  500:
-
-```json
-{ "error": "hagen-sync-secret-not-configured", "message": "HAGEN_SYNC_SECRET is required in production" }
-```
-
-- If not production and the secret is missing, allow the request for local dev.
-- Always return JSON, never HTML, for auth/config failures.
-
-#### 2. Preserve Useful Diagnostics With Server-Side Filtering
-
-Update the Hagen endpoint diagnostics so they remain useful even when `?handle=`
-filters the returned clips.
-
-Diagnostics should include, at minimum:
-
-```json
-{
-  "totalTikTokClips": 100,
-  "returnedClips": 5,
-  "unresolvedUsernameCount": 3,
-  "handleFilter": "restaurangx",
-  "availableUsernames": ["bar1", "cafe2", "restaurangx"],
-  "availableUsernameCount": 3
-}
-```
-
-Rules:
-
-- `availableUsernames` should be resolved from the full TikTok library before
-  handle filtering, not just returned clips.
-- Normalize, dedupe, and sort usernames.
-- Limit the array if needed to avoid huge responses, for example first 50.
-- If you limit it, include enough count metadata to know the list was truncated.
-
-#### 3. Pass Diagnostics Through hagen-ui Preview
-
-In `artifacts/api-server/src/routes/studio-v2.ts`:
-
-- Read `hagenResult.data.diagnostics` if present.
-- Preview response should include a safe diagnostics object, for example
-  `hagenDiagnostics`.
-- When `matchedClips.length === 0`, prefer diagnostics usernames from Hagen for
-  `availableUsernames`, falling back to locally resolved usernames.
-- Do not change import behavior.
-- Preview must remain read-only.
-
-#### 4. Surface Diagnostics In The Studio UI
-
-In `CustomerWorkspaceContent.tsx`:
-
-- Extend the `syncPreviewResult` state type for optional `hagenDiagnostics`.
-- Store the diagnostics from preview response.
-- Render a compact, non-intrusive diagnostics line in the existing preview
-  result box.
-- For zero-match previews, show a useful Swedish message such as:
+Preferred: add a small smoke script in `hagen-ui`, for example:
 
 ```text
-Hagen hittade 0 klipp for @handle. Biblioteket har X TikTok-klipp, Y upplosta konton och Z klipp utan upplost konto.
+scripts/smoke-hagen-sync.mjs
 ```
 
-- Keep existing design language. Do not redesign the section.
-- Avoid showing raw JSON in the UI.
+It should be safe by default and should not perform imports.
 
-Use ASCII text in code/docs unless the existing file clearly already uses
-Swedish characters in user-facing UI strings. It is okay to use Swedish
-characters in React UI text if that file already uses them.
+Suggested env inputs:
+
+- `HAGEN_BASE_URL`
+- `HAGEN_SYNC_SECRET`
+- `HAGEN_SYNC_TEST_CUSTOMER_ID` optional, default `smoke-test`
+- `HAGEN_SYNC_TEST_HANDLE` optional, default `nonexistent-smoke-handle`
+- `API_SERVER_BASE_URL` optional, for hagen-ui API checks
+- `HAGEN_UI_AUTH_COOKIE` optional, only if an authenticated preview should be tested
+
+Minimum checks:
+
+- Direct Hagen GET with correct secret if secret is set:
+  `/api/studio-v2/customers/{id}/hagen-clips?handle={handle}`
+- Assert response is JSON.
+- Assert response has `{ clips: Array, diagnostics: Object }`.
+- Assert `diagnostics.handleFilter` equals normalized handle when handle is provided.
+- If `HAGEN_SYNC_SECRET` is set, also check direct Hagen GET without the secret
+  returns `401` or document why this cannot be tested in local dev.
+- If `API_SERVER_BASE_URL` is set, call hagen-ui preview without auth and assert
+  it returns `401`.
+- If `HAGEN_UI_AUTH_COOKIE` is set, call authenticated hagen-ui preview and assert:
+  - status is 200
+  - response includes `hagenDiagnostics`
+  - preview shape includes `handle`, `totalMatched`, `wouldImport`, `wouldSkip`
+  - no import call is made
+
+The script must not call import mode.
+
+If adding a script is awkward in the repo structure, write the equivalent
+commands in the Phase 63 doc with exact curl examples and expected responses.
+
+#### 3. Optional Row-Safety Check
+
+If Supabase service env vars are readily available in hagen-ui and there is an
+existing safe helper pattern, the script may optionally count:
+
+```sql
+customer_concepts where customer_profile_id = X and history_source = 'hagen_library'
+```
+
+before/after authenticated preview and assert the count is unchanged.
+
+Do not add this if it requires messy credential handling.
+
+#### 4. Keep Scope Tight
+
+Do not:
+
+- change import behavior
+- add new database migrations
+- add new admin UI
+- touch unrelated `/admin/demos`
+- modify the Sanity docs/framework unless a merge conflict requires it
 
 #### 5. Verification
 
@@ -173,36 +153,31 @@ pnpm --filter @workspace/api-server run typecheck
 pnpm --filter @workspace/letrend run typecheck
 ```
 
-If `hagen` changes, run its relevant typecheck/build command as well.
+If a smoke script is added, run at least its no-auth/direct-Hagen path if env
+allows it. If env is missing, run the script enough to verify it prints a clear
+missing-env message and exits nonzero.
 
-If practical, add or document smoke checks:
-
-- Direct Hagen endpoint without secret when secret is configured returns 401.
-- Direct Hagen endpoint with correct secret returns JSON `{ clips, diagnostics }`.
-- Direct Hagen endpoint in local dev without secret still works.
-- hagen-ui preview response includes `hagenDiagnostics`.
-- Preview writes zero rows.
-
-If these cannot be run locally, document the exact blocker and commands.
+If `hagen` changes, run its relevant typecheck/build command.
 
 ### Output
 
 Create:
 
 ```text
-hagen-ui/docs/agent-plans/62-secure-hagen-sync-endpoint-and-diagnostics.md
+hagen-ui/docs/agent-plans/63-hagen-sync-deployment-smoke-harness.md
 ```
 
 Include:
 
-- root cause
-- secret/header contract
-- production/local behavior
-- diagnostics contract
-- UI behavior
+- what env vars are required and where
+- what script or command set was added
+- exact smoke commands
+- which checks were actually run
+- whether authenticated preview was tested
+- whether preview row-safety was verified
 - files changed in each repo
 - verification results
-- remaining risks or blockers
+- remaining blockers
 
 When finished, commit and push coherent changes. If both repos changed, commit
 and push each repo separately with clear messages.
