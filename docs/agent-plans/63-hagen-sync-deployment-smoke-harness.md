@@ -745,3 +745,37 @@ node scripts/smoke-hagen-sync.mjs
 - 0 matching clips (handle not in Hagen's TikTok library)
 - Full diagnostics showing 193 total TikTok clips across 98 unique accounts
 - This confirms Phase 61-62 diagnostics preservation works correctly
+
+---
+
+## Live Smoke Result - hagen-ui Preview (Blocked)
+
+**Timestamp**: 2026-05-12
+
+**Environment**:
+- hagen-ui URL: `https://app.letrend.se`
+- Deployment age: ~2 weeks old
+- API server: Separate service (artifacts/api-server), deployment URL unknown
+
+**Blocker**: The deployed hagen-ui at `app.letrend.se` is approximately 2 weeks old and predates Phases 58-62:
+- Phase 58: Added POST /api/studio-v2/customers/:customerId/sync-history routes
+- Phase 59: Created Hagen /api/studio-v2/customers/:customerId/hagen-clips endpoint
+- Phase 60: Required positive handle matching
+- Phase 61: Added ?handle= server-side filtering
+- Phase 62: Added HAGEN_SYNC_SECRET auth and hagenDiagnostics passthrough
+
+**What cannot be tested**:
+- ❌ hagen-ui preview endpoint may not exist (Phase 58)
+- ❌ hagenDiagnostics passthrough (Phase 62)
+- ❌ Improved error handling preferring data.message (Phase 62)
+- ❌ Handle query param passing to Hagen (Phase 61)
+
+**Recommendation**: Deploy latest hagen-ui code to Railway/Vercel before attempting full smoke test.
+
+**Configuration found**:
+- `.env.local` has `HAGEN_BASE_URL=https://hagen-production.up.railway.app`
+- Supabase configured: `https://fllzlpecwwabwgfbnxfu.supabase.co`
+- Separate api-server artifact in `artifacts/api-server`
+- CRON_SECRET and RAPIDAPI_KEY configured
+
+**Status**: ✅ Direct Hagen tests complete, ⏸️ hagen-ui tests blocked by stale deployment
