@@ -640,3 +640,53 @@ $env:HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
 $env:HAGEN_SYNC_SECRET = "<redacted single-line shared secret>"
 node scripts/smoke-hagen-sync.mjs
 ```
+
+---
+
+## Live Smoke Result - Hagen Railway With Shared Secret
+
+**Timestamp**: 2026-05-12 (orchestrator verification after key rotation)
+
+**Environment**:
+- Hagen URL: `https://hagen-production.up.railway.app`
+- `HAGEN_SYNC_SECRET`: loaded from local secret file, redacted from logs
+- `API_SERVER_BASE_URL`: not set, so hagen-ui API preview checks were skipped
+- `HAGEN_SYNC_TEST_CUSTOMER_ID`: default `smoke-test`
+- `HAGEN_SYNC_TEST_HANDLE`: default `nonexistent-smoke-handle`
+
+**Command shape**:
+```powershell
+$env:HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
+$env:HAGEN_SYNC_SECRET = "<redacted single-line shared secret>"
+node scripts\smoke-hagen-sync.mjs
+```
+
+**Result**: **PASS - direct Hagen endpoint smoke succeeded**
+
+**Checks performed**:
+- Correct-secret request returned JSON with `{ clips, diagnostics }`
+- `diagnostics.handleFilter` matched `nonexistent-smoke-handle`
+- `diagnostics.totalTikTokClips = 193`
+- `diagnostics.availableUsernameCount = 98`
+- Missing-secret request returned `401 unauthorized`
+- hagen-ui API checks were skipped because `API_SERVER_BASE_URL` was not set
+
+**Observed script output summary**:
+```text
+[OK] JSON response with clips (0) and diagnostics
+[OK] diagnostics.handleFilter = "nonexistent-smoke-handle"
+[OK] diagnostics.totalTikTokClips = 193
+[OK] diagnostics.availableUsernameCount = 98
+[OK] 401 unauthorized when secret is missing
+[OK] All smoke tests passed!
+```
+
+**What remains untested**:
+- hagen-ui preview endpoint through `API_SERVER_BASE_URL`
+- authenticated preview response including `hagenDiagnostics`
+- preview row-safety against `customer_concepts`
+
+**Next step**:
+Run the same smoke harness with `API_SERVER_BASE_URL`, a real customer id,
+the customer's TikTok handle, and an authenticated cookie if the full hagen-ui
+preview path should be verified end-to-end.
