@@ -616,6 +616,21 @@ function CustomerWorkspacePageContent() {
     } | null;
   } | null>(null);
   const [syncPreviewError, setSyncPreviewError] = useState<string | null>(null);
+  const [syncStatusHistory, setSyncStatusHistory] = useState<Array<{
+    id: string;
+    mode: string;
+    status: string;
+    started_at: string;
+    finished_at: string | null;
+    fetched_count: number | null;
+    imported_count: number | null;
+    stats_updated_count: number | null;
+    reconciled: boolean | null;
+    calls_used: number | null;
+    error: string | null;
+  }>>([]);
+  const [fetchingSyncStatus, setFetchingSyncStatus] = useState(false);
+  const [syncStatusError, setSyncStatusError] = useState<string | null>(null);
   const [reconciliationCandidates, setReconciliationCandidates] = useState<ReconciliationCandidate[]>([]);
   const [generatingCandidates, setGeneratingCandidates] = useState(false);
 
@@ -1008,6 +1023,13 @@ function CustomerWorkspacePageContent() {
       setCmDisplayNames(identities);
     })();
   }, []);
+
+  // Fetch sync status history when workspace loads
+  useEffect(() => {
+    if (customerId) {
+      void fetchSyncStatus();
+    }
+  }, [customerId]);
 
   const fetchCustomer = async (force = false) => {
     try {
@@ -2536,7 +2558,7 @@ function CustomerWorkspacePageContent() {
       setProfileHistoryFetchResult({ fetched: data.fetched ?? 0, imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
       setHistoryHasMore(data.has_more ?? false);
       setHistoryNextCursor(data.cursor ?? null);
-      await Promise.all([fetchCustomer(true), fetchConcepts(true)]);
+      await Promise.all([fetchCustomer(true), fetchConcepts(true), fetchSyncStatus()]);
     } catch (err) {
       setProfileHistoryFetchError((err as Error).message);
     } finally {
@@ -2561,8 +2583,7 @@ function CustomerWorkspacePageContent() {
       }
       setSyncHistoryResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
       // Cue is derived from backend via the customer profile effect — no direct set needed here.
-      await fetchCustomer(true);
-      await fetchConcepts(true);
+      await Promise.all([fetchCustomer(true), fetchConcepts(true), fetchSyncStatus()]);
     } catch (err) {
       setSyncHistoryError((err as Error).message);
     } finally {
@@ -2599,6 +2620,24 @@ function CustomerWorkspacePageContent() {
       setSyncPreviewError((err as Error).message);
     } finally {
       setPreviewingSync(false);
+    }
+  };
+
+  const fetchSyncStatus = async () => {
+    if (!customerId) return;
+    setFetchingSyncStatus(true);
+    setSyncStatusError(null);
+    try {
+      const res = await fetch(`/api/studio-v2/customers/${customerId}/sync-history`);
+      const data = await res.json().catch(() => ({ error: 'Ogiltigt svar från servern' }));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Kunde inte hämta synkstatus');
+      }
+      setSyncStatusHistory(data.history ?? []);
+    } catch (err) {
+      setSyncStatusError((err as Error).message);
+    } finally {
+      setFetchingSyncStatus(false);
     }
   };
 
@@ -3796,6 +3835,81 @@ function CustomerWorkspacePageContent() {
                       {syncPreviewResult.totalMatched > 0 && syncPreviewResult.wouldImport === 0 && (
                         <div style={{ color: LeTrendColors.textMuted, fontStyle: 'italic' }}>
                           Inga nya klipp att importera.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Sync Status */}
+                  {fetchingSyncStatus && (
+                    <div style={{ fontSize: 11, color: LeTrendColors.textMuted, marginTop: 8 }}>
+                      Hämtar synkstatus...
+                    </div>
+                  )}
+                  {syncStatusError && (
+                    <div style={{ fontSize: 11, color: LeTrendColors.error, marginTop: 8 }}>
+                      {syncStatusError}
+                    </div>
+                  )}
+                  {!fetchingSyncStatus && !syncStatusError && syncStatusHistory.length === 0 && (
+                    <div style={{ fontSize: 11, color: LeTrendColors.textMuted, fontStyle: 'italic', marginTop: 8 }}>
+                      Inga synkkörningar loggade ännu.
+                    </div>
+                  )}
+                  {!fetchingSyncStatus && syncStatusHistory.length > 0 && (
+                    <div style={{
+                      background: LeTrendColors.surface,
+                      borderRadius: LeTrendRadius.md,
+                      padding: '8px 12px',
+                      marginTop: 8,
+                      fontSize: 10,
+                      color: LeTrendColors.textSecondary,
+                    }}>
+                      <div style={{ fontWeight: 600, fontSize: 11, color: LeTrendColors.textPrimary, marginBottom: 6 }}>
+                        Synkstatus
+                      </div>
+                      {syncStatusHistory.slice(0, 3).map((run) => {
+                        const startTime = new Date(run.started_at);
+                        const finishTime = run.finished_at ? new Date(run.finished_at) : null;
+                        const duration = finishTime ? Math.round((finishTime.getTime() - startTime.getTime()) / 1000) : null;
+                        const statusColor = run.status === 'ok' ? '#166534' : run.status === 'error' ? LeTrendColors.error : LeTrendColors.textMuted;
+
+                        return (
+                          <div key={run.id} style={{
+                            borderBottom: `1px solid ${LeTrendColors.border}`,
+                            paddingBottom: 6,
+                            marginBottom: 6,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 2,
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ color: statusColor, fontWeight: 500 }}>
+                                {run.status === 'ok' ? '✓' : run.status === 'error' ? '✗' : '⋯'} {run.mode}
+                              </span>
+                              <span style={{ color: LeTrendColors.textMuted }}>
+                                {startTime.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' })}
+                                {duration !== null && ` (${duration}s)`}
+                              </span>
+                            </div>
+                            {(run.fetched_count !== null || run.imported_count !== null || run.stats_updated_count !== null) && (
+                              <div style={{ color: LeTrendColors.textMuted, fontFamily: 'monospace', fontSize: 9 }}>
+                                {run.fetched_count !== null && `hämtade: ${run.fetched_count}`}
+                                {run.imported_count !== null && ` · nya: ${run.imported_count}`}
+                                {run.stats_updated_count !== null && ` · uppdaterade: ${run.stats_updated_count}`}
+                                {run.calls_used !== null && ` · anrop: ${run.calls_used}`}
+                              </div>
+                            )}
+                            {run.error && (
+                              <div style={{ color: LeTrendColors.error, fontSize: 9, fontStyle: 'italic' }}>
+                                {run.error}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {syncStatusHistory.length > 3 && (
+                        <div style={{ fontSize: 9, color: LeTrendColors.textMuted, fontStyle: 'italic' }}>
+                          +{syncStatusHistory.length - 3} äldre körningar
                         </div>
                       )}
                     </div>

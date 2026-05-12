@@ -820,21 +820,22 @@ router.post('/customers/:customerId/fetch-profile-history', requireAuth, CM_ONLY
 });
 
 // GET /api/studio-v2/customers/:customerId/sync-history
+// Reads sync run history from sync_runs table for customer visibility.
 router.get('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { customerId } = req.params;
     if (!(await ensureCustomerAccess(req, res, customerId))) return;
     const supabase = createSupabaseAdmin();
-    const { data, error } = await (supabase as any)
-      .from('tiktok_sync_history')
-      .select('*')
+    const { data, error } = await supabase
+      .from('sync_runs')
+      .select('id, customer_id, mode, started_at, finished_at, status, fetched_count, imported_count, stats_updated_count, reconciled, calls_used, error')
       .eq('customer_id', customerId)
-      .order('synced_at', { ascending: false })
-      .limit(50)
-;
+      .order('started_at', { ascending: false })
+      .limit(20);
 
     if (error) {
-      res.json({ history: [] });
+      logger.error({ err: error, customerId }, 'sync-history read failed');
+      res.status(500).json({ error: 'Kunde inte hämta synkhistorik' });
       return;
     }
     res.json({ history: data ?? [] });
