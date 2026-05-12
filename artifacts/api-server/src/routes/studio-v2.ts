@@ -844,6 +844,67 @@ router.get('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (r
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────────
+// Hagen Library Sync Helpers
+// ────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Normalizes a TikTok handle by stripping @ prefix and lowercasing.
+ * Returns empty string if input is not a non-empty string.
+ */
+function normalizeTikTokHandle(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/^@/, '').toLowerCase();
+}
+
+/**
+ * Extracts the username from a TikTok URL.
+ * Supports formats:
+ *   - https://www.tiktok.com/@username/video/123
+ *   - https://vm.tiktok.com/... (returns null, short URLs don't contain username)
+ * Returns null if URL is unparseable or does not contain a username.
+ */
+function extractTikTokUsernameFromUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== 'www.tiktok.com' && parsed.hostname !== 'tiktok.com') {
+      return null; // Short URLs like vm.tiktok.com don't have usernames
+    }
+    // Path format: /@username/video/123...
+    const match = parsed.pathname.match(/^\/@([^/]+)/);
+    return match ? match[1].toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolves the TikTok username for a clip by checking source_username first,
+ * then falling back to parsing the tiktok_url.
+ * Returns null if username cannot be resolved.
+ */
+function resolveClipUsername(clip: { source_username?: string | null; tiktok_url?: string | null }): string | null {
+  const normalized = normalizeTikTokHandle(clip.source_username);
+  if (normalized) return normalized;
+  if (typeof clip.tiktok_url === 'string') {
+    return extractTikTokUsernameFromUrl(clip.tiktok_url);
+  }
+  return null;
+}
+
+/**
+ * Returns true if the clip's resolved username matches the customer's handle.
+ * Returns false if username cannot be resolved or does not match.
+ */
+function clipMatchesHandle(
+  clip: { source_username?: string | null; tiktok_url?: string | null },
+  handle: string
+): boolean {
+  const resolvedUsername = resolveClipUsername(clip);
+  if (!resolvedUsername) return false;
+  return resolvedUsername === normalizeTikTokHandle(handle);
+}
+
 // POST /api/studio-v2/customers/:customerId/sync-history
 // Imports TikTok clips from the Hagen library into customer_concepts as history_import rows.
 // Source: Hagen's /api/studio-v2/customers/:customerId/hagen-clips endpoint.
@@ -923,21 +984,17 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
         typeof c.tiktok_url === 'string' && c.tiktok_url.trim() !== '',
     );
 
-    // Available usernames across all clips — shown in preview when handle doesn't match
-    const availableUsernames = [
-      ...new Set(
-        rawClips
-          .map((c) => c.source_username)
-          .filter((u): u is string => typeof u === 'string' && u.trim() !== ''),
-      ),
-    ];
+    // Resolve usernames for all clips (from metadata or URL parsing)
+    const allResolvedUsernames = rawClips
+      .map((c) => resolveClipUsername(c))
+      .filter((u): u is string => u !== null);
 
-    // Match clips by source_username == customer handle (case-insensitive)
-    const matchedClips = allClipsWithUrl.filter(
-      (c) =>
-        !c.source_username ||
-        c.source_username.replace(/^@/, '').toLowerCase() === handle.toLowerCase(),
-    );
+    // Available usernames across all clips — shown in preview when handle doesn't match
+    const availableUsernames = [...new Set(allResolvedUsernames)].sort();
+
+    // Match clips by resolved username == customer handle
+    // Only clips where username can be positively resolved and matches are included
+    const matchedClips = allClipsWithUrl.filter((c) => clipMatchesHandle(c, handle));
 
     // ── 3. Compare against existing customer_concepts ────────────────────────
     const { data: existing } = await supabase
