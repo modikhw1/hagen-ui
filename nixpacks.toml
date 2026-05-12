@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["nodejs_20", "pnpm"]
+
+[phases.install]
+cmds = ["pnpm install --frozen-lockfile"]
+
+[phases.build]
+cmds = [
+  "cd artifacts/api-server && pnpm run build",
+  "cd artifacts/letrend && PORT=3000 BASE_PATH=/ pnpm run build"
+]
+
+[start]
+cmd = "cd artifacts/api-server && NODE_ENV=production pnpm run start"
