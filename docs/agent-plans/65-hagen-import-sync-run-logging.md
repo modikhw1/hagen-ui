@@ -322,7 +322,52 @@ pnpm --filter "./artifacts/letrend" run typecheck
 
 ### Manual testing
 
-Per CLAUDE_TASK.md constraints, no live testing performed. Expected behavior:
+Live verification was performed by the orchestrator after the implementation
+was pushed and deployed.
+
+**Timestamp**: 2026-05-12T19:50 UTC
+**API_SERVER_BASE_URL**: `https://app.letrend.se`
+**Customer ID**: `3e4173ee-2ff2-454f-9bac-7a77b1163af8`
+**Handle**: `icacitylivs`
+**Sync run ID**: `8f5d5085-7eff-44fb-99eb-317001662432`
+
+**Method**:
+- Created a temporary Supabase auth user with admin access for the smoke run.
+- Called `POST /api/studio-v2/customers/:customerId/sync-history`.
+- Queried Supabase to verify `sync_runs` and `customer_concepts`.
+- Deleted the temporary auth user and profile after the run.
+
+**Endpoint response**:
+```json
+{
+  "imported": 0,
+  "skipped": 1
+}
+```
+
+**Supabase verification**:
+```json
+{
+  "mode": "manual",
+  "status": "ok",
+  "fetched_count": 1,
+  "imported_count": 0,
+  "stats_updated_count": 0,
+  "calls_used": 0,
+  "error": null
+}
+```
+
+**Assertions passed**:
+- Endpoint returned 200.
+- No-op import shape was correct: `imported=0`, `skipped=1`.
+- `customer_concepts` count stayed at 1, so no duplicate row was created.
+- A new `sync_runs` row was created.
+- The run was finalized with `status='ok'`.
+- Counts were written correctly: `fetched_count=1`, `imported_count=0`.
+- Temporary smoke auth/profile rows were cleaned up.
+
+Expected behavior for additional cases:
 
 **Test 1: Successful import**
 1. CM clicks "Synca från hagen"
