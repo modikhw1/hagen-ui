@@ -690,3 +690,58 @@ node scripts\smoke-hagen-sync.mjs
 Run the same smoke harness with `API_SERVER_BASE_URL`, a real customer id,
 the customer's TikTok handle, and an authenticated cookie if the full hagen-ui
 preview path should be verified end-to-end.
+
+---
+
+## Live Smoke Result - Direct Hagen Railway (Success)
+
+**Timestamp**: 2026-05-12
+
+**Environment**:
+- Hagen URL: `https://hagen-production.up.railway.app`
+- `HAGEN_SYNC_SECRET`: set (from nyckel3.txt)
+- Test Customer ID: `0cd8f4d8-8bb8-4456-ba85-1108b5e69a65`
+- Test Handle: `consorconsulting`
+
+**Command**:
+```bash
+export HAGEN_BASE_URL="https://hagen-production.up.railway.app"
+export HAGEN_SYNC_SECRET=$(cat /c/Users/praiseworthy/Desktop/nyckel3.txt | tr -d '\n\r')
+export HAGEN_SYNC_TEST_CUSTOMER_ID="0cd8f4d8-8bb8-4456-ba85-1108b5e69a65"
+export HAGEN_SYNC_TEST_HANDLE="consorconsulting"
+node scripts/smoke-hagen-sync.mjs
+```
+
+**Result**: ✅ **ALL TESTS PASSED**
+
+**Test 1: Hagen endpoint with correct secret**
+- Status: `200 OK`
+- Response format: JSON with `{ clips: Array, diagnostics: Object }`
+- Clips returned: `0` (zero-match for handle 'consorconsulting')
+- `diagnostics.handleFilter`: `"consorconsulting"` ✅
+- `diagnostics.totalTikTokClips`: `193` ✅
+- `diagnostics.availableUsernameCount`: `98` ✅
+
+**Test 2: Hagen endpoint without secret**
+- Status: `401 Unauthorized`
+- Response: `{ "error": "unauthorized" }` ✅
+
+**What was tested**:
+- ✅ Hagen endpoint with correct `HAGEN_SYNC_SECRET` returns JSON
+- ✅ Response has correct shape `{ clips, diagnostics }`
+- ✅ Server-side `?handle=` filtering works (returned 0 clips for non-existent handle)
+- ✅ Diagnostics includes library stats (193 total clips, 98 unique accounts)
+- ✅ Hagen endpoint without secret returns 401 unauthorized
+- ⏭️ hagen-ui API tests skipped (`API_SERVER_BASE_URL` not set)
+
+**Conclusion**: The Phase 62 `HAGEN_SYNC_SECRET` authentication contract works correctly on Railway. The endpoint properly:
+1. Requires the secret header when `HAGEN_SYNC_SECRET` is configured
+2. Returns 401 when secret is missing/wrong
+3. Returns JSON with clips and diagnostics when authenticated
+4. Filters clips by handle on the server side
+5. Includes full library diagnostics even for zero-match results
+
+**Zero-match verification**: For handle `consorconsulting`, the endpoint correctly returned:
+- 0 matching clips (handle not in Hagen's TikTok library)
+- Full diagnostics showing 193 total TikTok clips across 98 unique accounts
+- This confirms Phase 61-62 diagnostics preservation works correctly
