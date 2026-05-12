@@ -513,3 +513,43 @@ node scripts/smoke-hagen-sync.mjs
 - ⏭️ hagen-ui API tests (skipped, no `API_SERVER_BASE_URL` provided)
 
 **Conclusion**: The smoke test revealed an auth configuration mismatch between the designed Phase 62 contract and the deployed Replit environment. The Replit server has an additional authentication layer that prevents testing the `HAGEN_SYNC_SECRET` functionality.
+
+---
+
+## Live Smoke Result - Hagen Railway
+
+**Timestamp**: 2026-05-12 (orchestrator verification)
+
+**Environment**:
+- Hagen URL: `https://hagen-production.up.railway.app`
+- `HAGEN_SYNC_SECRET`: not available in orchestrator shell, so only the missing-secret/route reachability path was tested
+
+**Command shape**:
+```powershell
+Invoke-WebRequest `
+  -Uri "https://hagen-production.up.railway.app/api/studio-v2/customers/smoke-test/hagen-clips?handle=nonexistent-smoke-handle" `
+  -Headers @{ Accept = "application/json" } `
+  -Method GET
+```
+
+**Result**: **BLOCKED - Railway deployment does not expose the Phase 59 route**
+
+**Status codes**:
+- Direct endpoint call without secret: `404`
+- Content-Type: `text/html; charset=utf-8`
+- Body shape: Next.js HTML 404 page, not JSON
+
+**Expected behavior after latest Hagen deploy**:
+- Without `x-hagen-sync-secret`: JSON `401` with `error: "unauthorized"` if `HAGEN_SYNC_SECRET` is configured
+- With correct `x-hagen-sync-secret`: JSON `200` with `{ clips, diagnostics }`
+
+**Actual behavior**:
+- Railway returns HTML 404 before the Phase 62 auth contract can be reached.
+
+**Conclusion**:
+The Railway service at `https://hagen-production.up.railway.app` appears not to be running the latest Hagen code that includes:
+- Phase 59 `/api/studio-v2/customers/:customerId/hagen-clips`
+- Phase 61 `?handle=` filtering
+- Phase 62 `HAGEN_SYNC_SECRET` protection
+
+Deploy latest Hagen to Railway and configure `HAGEN_SYNC_SECRET` before rerunning the smoke harness.

@@ -22,13 +22,47 @@ work. Only edit files needed for the current task.
 7. Do not push to git. You may create local commits if the change is coherent,
    but the orchestrator will review, rebase if needed, and push to `main`.
 
-## Current Task: Run Live Hagen Sync Smoke Test
+## Current Status
+
+The live smoke pass has exposed deployment blockers rather than a passing smoke.
 
 Phase 63 added the smoke harness:
 
 ```text
 scripts/smoke-hagen-sync.mjs
 ```
+
+Documented results:
+
+- Replit dev URL returned `401 {"error":"Du maste logga in"}` before the
+  Phase 62 `HAGEN_SYNC_SECRET` contract could be reached.
+- Railway URL `https://hagen-production.up.railway.app` returned `404` HTML for
+  `/api/studio-v2/customers/smoke-test/hagen-clips?handle=...`, which means the
+  deployed Railway service likely does not include the latest Phase 59-62 Hagen
+  route.
+
+No active code implementation task is queued.
+
+## Next Required External Step
+
+Deploy latest `hagen` main to Railway and ensure these env vars exist in the
+Railway service:
+
+```text
+NODE_ENV=production
+HAGEN_SYNC_SECRET=<same-secret-as-hagen-ui>
+```
+
+Ensure hagen-ui/Replit has:
+
+```text
+HAGEN_BASE_URL=https://hagen-production.up.railway.app
+HAGEN_SYNC_SECRET=<same-secret-as-hagen>
+```
+
+Do not commit real secrets.
+
+## If Asked To Continue After Deployment
 
 Run the live/deployed Hagen smoke test against Railway.
 
