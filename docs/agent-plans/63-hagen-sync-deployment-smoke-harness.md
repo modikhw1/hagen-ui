@@ -19,6 +19,93 @@ Phases 59-62 made the Hagen library history sync path structurally safe:
 
 ---
 
+## Live Smoke Result - Controlled hagen-ui Import
+
+**Timestamp**: 2026-05-12T14:30 UTC
+**API_SERVER_BASE_URL**: https://app.letrend.se
+**Customer ID**: 3e4173ee-2ff2-454f-9bac-7a77b1163af8
+**Handle**: icacitylivs
+**Business name**: Hagen Sync Smoke - icacitylivs - 2026-05-12
+
+### Command Shape
+
+```bash
+export API_SERVER_BASE_URL="https://app.letrend.se"
+export CUSTOMER_ID="3e4173ee-2ff2-454f-9bac-7a77b1163af8"
+TOKEN="<redacted>"
+
+# Preview before import
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  "$API_SERVER_BASE_URL/api/studio-v2/customers/$CUSTOMER_ID/sync-history?preview=true"
+
+# First import
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  "$API_SERVER_BASE_URL/api/studio-v2/customers/$CUSTOMER_ID/sync-history"
+
+# Second import
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  "$API_SERVER_BASE_URL/api/studio-v2/customers/$CUSTOMER_ID/sync-history"
+
+# Preview after import
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  "$API_SERVER_BASE_URL/api/studio-v2/customers/$CUSTOMER_ID/sync-history?preview=true"
+```
+
+### Results
+
+**Preview before import**: ✓ PASS
+```json
+{
+  "handle": "icacitylivs",
+  "totalMatched": 1,
+  "wouldImport": 1,
+  "wouldSkip": 0
+}
+```
+
+**First import**: ✗ FAIL
+```json
+{
+  "error": "Import misslyckades: Could not find the 'description' column of 'customer_concepts' in the schema cache"
+}
+```
+
+### Blocker
+
+The import endpoint failed due to a code/schema mismatch in the Hagen-library import route.
+
+Post-run Supabase verification by orchestrator:
+
+```sql
+select count(*)::int as customer_concept_rows
+from public.customer_concepts
+where customer_profile_id = '3e4173ee-2ff2-454f-9bac-7a77b1163af8';
+```
+
+Result: `customer_concept_rows=0`. The failed import did not create a partial row.
+
+Production schema check showed:
+
+- `customer_concepts.tiktok_description` exists.
+- `customer_concepts.description` does not exist.
+- `customer_concepts.customer_id` is `NOT NULL` with no default.
+
+Root cause:
+
+- `artifacts/api-server/src/routes/studio-v2.ts` inserted `description`.
+- The same insert also omitted required `customer_id`, which would have been the next failure after fixing `description`.
+- The older RapidAPI sync path already writes `tiktok_description` and `customer_id`, so the Hagen-library import route should match that contract.
+
+Code fix made after this failed smoke:
+
+- Changed imported Hagen rows to write `tiktok_description`.
+- Added `customer_id: customerId`.
+- Added `observed_profile_handle`, `provider_name`, and `first_observed_at` so Hagen-imported history rows carry the same operational metadata shape as other imported history rows.
+
+**Task status**: Import smoke **BLOCKED** until this code fix is deployed and the controlled import smoke is rerun.
+
+---
+
 ## What Was Added
 
 ### 1. Smoke Script: `scripts/smoke-hagen-sync.mjs`

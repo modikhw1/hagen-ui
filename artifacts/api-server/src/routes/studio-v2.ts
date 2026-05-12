@@ -1051,6 +1051,7 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
     const observedAt = new Date().toISOString();
     const inserts = newClips.map((c) => ({
       customer_profile_id: customerId,
+      customer_id: customerId,
       status: 'history_import',
       row_kind: 'history_import',
       history_source: 'hagen_library',
@@ -1061,7 +1062,10 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
       tiktok_likes: typeof c.tiktok_likes === 'number' ? c.tiktok_likes : null,
       tiktok_comments: typeof c.tiktok_comments === 'number' ? c.tiktok_comments : null,
       published_at: typeof c.published_at === 'string' ? c.published_at : null,
-      description: typeof c.description === 'string' && c.description.trim() ? c.description.trim() : null,
+      tiktok_description: typeof c.description === 'string' && c.description.trim() ? c.description.trim() : null,
+      observed_profile_handle: handle,
+      provider_name: 'hagen_library',
+      first_observed_at: observedAt,
       tiktok_last_synced_at: observedAt,
       last_observed_at: observedAt,
     }));
