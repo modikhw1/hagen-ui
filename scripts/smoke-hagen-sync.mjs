@@ -53,6 +53,28 @@ function warn(msg) {
   log(`[WARN] ${msg}`, 'yellow');
 }
 
+function safeErrorMessage(err) {
+  const message = err instanceof Error ? err.message : String(err);
+  if (
+    message.includes('invalid header value') ||
+    message.includes('Headers.append') ||
+    message.includes('Headers.set')
+  ) {
+    return 'Invalid HTTP header value. Check HAGEN_SYNC_SECRET is a single-line shared secret, not a private key or multiline file.';
+  }
+  return message;
+}
+
+function validateSecretValue(secret) {
+  if (!secret) return true;
+  if (/[\r\n]/.test(secret) || secret.includes('BEGIN ') || secret.includes('PRIVATE KEY')) {
+    fail('HAGEN_SYNC_SECRET is not a valid shared secret for an HTTP header.');
+    fail('Use a single-line random token, for example: openssl rand -hex 32');
+    return false;
+  }
+  return true;
+}
+
 async function checkHagenEndpoint() {
   if (!HAGEN_BASE_URL) {
     fail('HAGEN_BASE_URL not set. Cannot test Hagen endpoint.');
@@ -108,7 +130,7 @@ async function checkHagenEndpoint() {
       pass(`  diagnostics.totalTikTokClips = ${data.diagnostics.totalTikTokClips ?? 'null'}`);
       pass(`  diagnostics.availableUsernameCount = ${data.diagnostics.availableUsernameCount ?? 'null'}`);
     } catch (err) {
-      fail(`  Network error: ${err.message}`);
+      fail(`  Network error: ${safeErrorMessage(err)}`);
       return false;
     }
 
@@ -132,7 +154,7 @@ async function checkHagenEndpoint() {
 
       pass(`  401 unauthorized when secret is missing`);
     } catch (err) {
-      fail(`  Network error: ${err.message}`);
+      fail(`  Network error: ${safeErrorMessage(err)}`);
       return false;
     }
   } else {
@@ -157,7 +179,7 @@ async function checkHagenEndpoint() {
 
       pass(`  JSON response with clips (${data.clips.length}) and diagnostics (no auth)`);
     } catch (err) {
-      fail(`  Network error: ${err.message}`);
+      fail(`  Network error: ${safeErrorMessage(err)}`);
       return false;
     }
   }
@@ -189,7 +211,7 @@ async function checkHagenUIPreview() {
 
     pass(`  ${res.status} when no auth provided`);
   } catch (err) {
-    fail(`  Network error: ${err.message}`);
+    fail(`  Network error: ${safeErrorMessage(err)}`);
     return false;
   }
 
@@ -234,7 +256,7 @@ async function checkHagenUIPreview() {
       pass(`  Preview: handle="${data.handle}", totalMatched=${data.totalMatched}, wouldImport=${data.wouldImport}`);
       info('  Note: This was a PREVIEW only. No rows were imported.');
     } catch (err) {
-      fail(`  Network error: ${err.message}`);
+      fail(`  Network error: ${safeErrorMessage(err)}`);
       return false;
     }
   } else {
@@ -265,6 +287,10 @@ async function main() {
   log(`  HANDLE: ${HANDLE}`);
   log(`  API_SERVER_BASE_URL: ${API_SERVER_BASE_URL || '(not set)'}`);
   log(`  AUTH_COOKIE: ${AUTH_COOKIE ? '(set)' : '(not set)'}\n`);
+
+  if (!validateSecretValue(HAGEN_SYNC_SECRET)) {
+    exit(1);
+  }
 
   let allPassed = true;
 

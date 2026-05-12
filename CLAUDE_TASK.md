@@ -81,6 +81,10 @@ environment.
 If `HAGEN_SYNC_SECRET` is not set, stop and report that it must be set before
 the smoke test can run.
 
+`HAGEN_SYNC_SECRET` must be a single-line shared token, for example the output
+of `openssl rand -hex 32`. Do not use SSH private keys, PEM files, or any
+multiline key file as `HAGEN_SYNC_SECRET`.
+
 Optional env vars for a broader hagen-ui API test:
 
 ```text

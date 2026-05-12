@@ -597,3 +597,46 @@ $env:HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
 $env:HAGEN_SYNC_SECRET = "<redacted matching secret>"
 node scripts/smoke-hagen-sync.mjs
 ```
+
+---
+
+## Smoke Harness Hardening - Invalid Secret File
+
+**Timestamp**: 2026-05-12 (orchestrator verification)
+
+**Context**:
+A local file was provided as the presumed `HAGEN_SYNC_SECRET`, but its contents
+were in multiline private-key format. `HAGEN_SYNC_SECRET` must be a single-line
+shared token suitable for an HTTP header.
+
+**Result**: **BLOCKED - invalid secret format**
+
+**What changed**:
+The smoke script now validates `HAGEN_SYNC_SECRET` before making any network
+request. It rejects values that:
+
+- contain newlines
+- contain `BEGIN `
+- contain `PRIVATE KEY`
+
+It also sanitizes header-related exception messages so invalid header values are
+not echoed back in terminal output.
+
+**Verification**:
+Running the smoke script with the invalid multiline file now exits before the
+network call with:
+
+```text
+[ERR] HAGEN_SYNC_SECRET is not a valid shared secret for an HTTP header.
+[ERR] Use a single-line random token, for example: openssl rand -hex 32
+```
+
+**Required next step**:
+Generate/use the actual single-line `HAGEN_SYNC_SECRET` configured in Railway
+and hagen-ui, then rerun:
+
+```powershell
+$env:HAGEN_BASE_URL = "https://hagen-production.up.railway.app"
+$env:HAGEN_SYNC_SECRET = "<redacted single-line shared secret>"
+node scripts/smoke-hagen-sync.mjs
+```
