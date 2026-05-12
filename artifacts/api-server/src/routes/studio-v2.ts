@@ -944,16 +944,19 @@ router.post('/customers/:customerId/sync-history', requireAuth, CM_ONLY, async (
     }
 
     const handleRaw = customer.tiktok_handle as unknown;
-    const handle = typeof handleRaw === 'string' ? handleRaw.trim().replace(/^@/, '') : '';
+    const handle = typeof handleRaw === 'string' ? handleRaw.trim().replace(/^@/, '').toLowerCase() : '';
     if (!handle) {
       res.status(400).json({ error: 'Kunden saknar TikTok-handle' });
       return;
     }
 
     // ── 2. Fetch clips from Hagen library ─────────────────────────────────────
+    // Pass handle query param to Hagen for server-side filtering
+    const query = new URLSearchParams({ handle }).toString();
     const hagenResult = await fetchHagenJson({
       method: 'GET',
       path: `/api/studio-v2/customers/${customerId}/hagen-clips`,
+      query,
       timeoutMs: 10000,
       routeTag: 'studio-v2.sync-history',
     });
