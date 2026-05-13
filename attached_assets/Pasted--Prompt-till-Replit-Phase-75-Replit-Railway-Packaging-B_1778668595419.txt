@@ -1,0 +1,50 @@
+ Prompt till Replit:
+
+  Phase 75 - Replit/Railway Packaging Boundary
+
+  Context:
+  The latest main includes Replit-specific package manager changes. This helped Replit preview, but Railway deploy
+  expects the Dockerfile path:
+  - Dockerfile prepares pnpm@9.15.9
+  - package.json currently says pnpm@10.26.1
+  This mismatch must be cleaned up before more deploy-bound commits.
+
+  Task:
+  1. Restore root package.json packageManager to:
+     "pnpm@9.15.9"
+
+  2. Keep Replit local preview support, but make the boundary explicit:
+     - scripts/replit-overrides.sh may exist as a Replit-only local patch helper.
+     - It must be documented as local-only.
+     - Its package.json modification must not be committed as the final state.
+     - Add a clear warning in the script/doc: before committing for main/Railway, package.json must be pnpm@9.15.9.
+
+  3. Add a small guard script, for example:
+     scripts/assert-railway-packaging.sh
+     It should fail if:
+     - package.json packageManager is not pnpm@9.15.9
+     - Dockerfile does not prepare pnpm@9.15.9
+
+  4. Add docs/agent-plans/75-replit-railway-packaging-boundary.md documenting:
+     - why Replit needs pnpm 10 locally
+     - why Railway/main must stay pnpm 9.15.9
+     - exact verification commands
+     - instruction that Replit-local package.json patch must not be part of final commit
+
+  5. Verification:
+     - pnpm --filter "./artifacts/api-server" run typecheck
+     - PORT=5173 BASE_PATH=/ pnpm --filter "./artifacts/letrend" run build
+     - run the new assert-railway-packaging script
+     - Frontend typecheck may still fail locally on known React/@types issues; document exact result, do not claim it
+  passes unless it actually does.
+
+  Constraints:
+  - Do not change app UX.
+  - Do not touch Supabase.
+  - Do not change Dockerfile unless strictly needed for the assertion/doc.
+  - Do not push.
+  - Final committed state must have package.json packageManager = pnpm@9.15.9.
+
+  Efter Phase 75 är nästa större steg fortfarande canonical ingest contract, men jag skulle inte starta den förrän
+  deploy-packeteringen är ren. Annars riskerar varje kommande Replit-commit att vara funktionellt rätt men Railway-
+  farlig.
