@@ -81,6 +81,72 @@ export function normalizeOverrides(raw: unknown): NormalizeResult {
  *
  * `mechanism` is NOT required — it is AI-only and made optional in Phase 78.
  */
+// ---------------------------------------------------------------------------
+// Dry-run backfill helper
+// ---------------------------------------------------------------------------
+
+export type DryRunChangeKey =
+  | 'add_overrides_version'
+  | 'remove_estimatedBudget'
+  | 'remove_trendLevel'
+  | 'remove_hasScript';
+
+export interface DryRunCandidate {
+  id: string;
+  source: string | null;
+  would_change: boolean;
+  current_overrides_version: string | null;
+  next_overrides_version: string;
+  change_keys: DryRunChangeKey[];
+  warnings: string[];
+}
+
+/**
+ * Compute what normalizeOverrides would do to a single concept row
+ * without writing anything to the database.
+ *
+ * Safe to call with any row shape — null/undefined overrides produce a
+ * single-key result with overrides_version only.
+ */
+export function computeDryRunCandidate(row: {
+  id: string;
+  source: string | null;
+  overrides: Record<string, unknown> | null;
+}): DryRunCandidate {
+  const raw = row.overrides ?? {};
+  const { overrides: normalized, warnings } = normalizeOverrides(raw);
+
+  const currentVersion =
+    typeof raw['overrides_version'] === 'string' && raw['overrides_version']
+      ? (raw['overrides_version'] as string)
+      : null;
+
+  const change_keys: DryRunChangeKey[] = [];
+
+  if (currentVersion !== OVERRIDES_VERSION) {
+    change_keys.push('add_overrides_version');
+  }
+  if ('estimatedBudget' in raw) {
+    change_keys.push('remove_estimatedBudget');
+  }
+  if ('trendLevel' in raw) {
+    change_keys.push('remove_trendLevel');
+  }
+  if ('hasScript' in raw && !('hasScript' in normalized)) {
+    change_keys.push('remove_hasScript');
+  }
+
+  return {
+    id: row.id,
+    source: row.source,
+    would_change: change_keys.length > 0,
+    current_overrides_version: currentVersion,
+    next_overrides_version: OVERRIDES_VERSION,
+    change_keys,
+    warnings,
+  };
+}
+
 export function validateNewConceptOverrides(overrides: Record<string, unknown>): string[] {
   const missing: string[] = [];
   for (const field of REQUIRED_CANONICAL) {

@@ -1,0 +1,75 @@
+ Prompt till Replit:
+
+  Implement Phase 84A — Ingest Contract Backfill Dry Run.
+
+  Repository boundary:
+  Do not change dependency/runtime/packaging configuration.
+  Do not edit package.json, pnpm-lock.yaml, pnpm-workspace.yaml, Dockerfile, .npmrc, Railway/Replit/Vite/React
+  dependency config.
+  Do not create or commit attached_assets/Pasted*.txt or pasted prompt artifacts.
+  Treat current main as Railway deploy ground truth.
+
+  Context:
+  Current main includes Phase 83 ingest contract health panel.
+  Supabase snapshot from orchestrator:
+  - 33 concepts total
+  - 33 missing overrides_version
+  - 6 with deprecated estimatedBudget
+  - 4 with deprecated trendLevel
+  - 6 with both hasScript and script_mode
+  - 22 with scene_breakdown
+
+  Goal:
+  Add a dry-run-only backfill preview for normalizing concept overrides to canonical v1.
+  This phase must not write to the database.
+
+  Required work:
+  1. Add a pure helper, preferably in artifacts/api-server/src/lib/concept-overrides.ts or a nearby testable module:
+     - Input: concept row { id, source, overrides }
+     - Use existing normalizeOverrides() behavior where appropriate.
+     - Output:
+       - id
+       - source
+       - would_change boolean
+       - current_overrides_version
+       - next_overrides_version
+       - change_keys array, e.g. add_overrides_version, remove_estimatedBudget, remove_trendLevel, remove_hasScript
+       - warnings from normalization
+     - Do not include full script/headline values in the dry-run response unless already needed. Keep response compact.
+
+  2. Add admin-only API endpoint:
+     POST /api/admin/concepts/backfill-overrides-version/dry-run
+     - require admin role, not just CM
+     - read concepts id/source/overrides
+     - return summary counts and candidate list
+     - no DB writes
+     - no migration
+
+  3. Add UI to the Phase 83 panel:
+     - Add a small “Dry-run backfill” button visible only when health has missing/deprecated counts.
+     - Button calls the new dry-run endpoint.
+     - Show summary:
+       - candidates
+       - would add overrides_version
+       - would remove deprecated estimatedBudget
+       - would remove deprecated trendLevel
+       - would remove hasScript where script_mode exists
+     - Show first 10 candidate IDs/sources/change_keys.
+     - No “apply” button in this phase.
+
+  4. Add docs/agent-plans/84a-ingest-contract-backfill-dry-run.md:
+     - endpoint shape
+     - dry-run response example
+     - what normalization would do
+     - explicit note: no database writes
+     - Phase 84B should be the confirmed apply step after orchestrator/user review.
+
+  5. Tests:
+     - Add or update api-server tests for the pure dry-run helper.
+     - Verify no DB mutation path exists in this phase.
+
+  Verification:
+  - Run api-server typecheck.
+  - Run api-server tests.
+  - Run frontend build if frontend changed.
+  - Do not touch /admin/demos.

@@ -5,7 +5,7 @@ import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 import { proxyHagenJson } from '../../lib/upstream-proxy.js';
 import { updateIngestRun } from '../../lib/ingest-runs.js';
-import { normalizeOverrides, validateNewConceptOverrides } from '../../lib/concept-overrides.js';
+import { normalizeOverrides, validateNewConceptOverrides, computeDryRunCandidate } from '../../lib/concept-overrides.js';
 import regenerateRouter from './concept-regenerate.js';
 
 const router = Router();
@@ -157,6 +157,54 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
     res.status(201).json({ concept: data });
   } catch (err) {
     logger.error(err, 'admin concepts POST error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/concepts/backfill-overrides-version/dry-run
+// Admin-only. No DB writes. Returns what normalizeOverrides would change on
+// each concept row without applying any mutations.
+router.post('/backfill-overrides-version/dry-run', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+
+    const { data: concepts, error } = await supabase
+      .from('concepts')
+      .select('id, source, overrides')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    const rows = (concepts ?? []) as Array<{
+      id: string;
+      source: string | null;
+      overrides: Record<string, unknown> | null;
+    }>;
+
+    const candidates = rows.map((row) => computeDryRunCandidate(row));
+    const toChange = candidates.filter((c) => c.would_change);
+
+    const summary = {
+      total: candidates.length,
+      would_change: toChange.length,
+      would_add_overrides_version: toChange.filter((c) => c.change_keys.includes('add_overrides_version')).length,
+      would_remove_estimatedBudget: toChange.filter((c) => c.change_keys.includes('remove_estimatedBudget')).length,
+      would_remove_trendLevel: toChange.filter((c) => c.change_keys.includes('remove_trendLevel')).length,
+      would_remove_hasScript: toChange.filter((c) => c.change_keys.includes('remove_hasScript')).length,
+    };
+
+    res.json({
+      dry_run: true,
+      summary,
+      // Return first 10 candidates for UI preview; all are included for API consumers.
+      candidates: toChange.slice(0, 10),
+      total_candidates: toChange.length,
+    });
+  } catch (err) {
+    logger.error(err, 'admin concepts dry-run backfill error');
     res.status(500).json({ error: 'Internt serverfel' });
   }
 });

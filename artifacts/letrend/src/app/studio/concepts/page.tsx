@@ -874,6 +874,30 @@ function relativeTime(iso: string): string {
 
 // ─── Ingest Contract Health ───────────────────────────────────────────────
 
+interface DryRunCandidate {
+  id: string;
+  source: string | null;
+  would_change: boolean;
+  current_overrides_version: string | null;
+  next_overrides_version: string;
+  change_keys: string[];
+  warnings: string[];
+}
+
+interface DryRunResult {
+  dry_run: true;
+  summary: {
+    total: number;
+    would_change: number;
+    would_add_overrides_version: number;
+    would_remove_estimatedBudget: number;
+    would_remove_trendLevel: number;
+    would_remove_hasScript: number;
+  };
+  candidates: DryRunCandidate[];
+  total_candidates: number;
+}
+
 interface IngestContractHealth {
   total: number;
   with_overrides_version: number;
@@ -900,6 +924,35 @@ function IngestContractHealthPanel() {
   const [health, setHealth] = useState<IngestContractHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [collapsed, setCollapsed] = useState(true);
+  const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
+  const [dryRunLoading, setDryRunLoading] = useState(false);
+  const [dryRunError, setDryRunError] = useState<string | null>(null);
+
+  const handleDryRun = async () => {
+    setDryRunLoading(true);
+    setDryRunError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch('/api/admin/concepts/backfill-overrides-version/dry-run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        setDryRunError(err.error ?? `HTTP ${resp.status}`);
+        return;
+      }
+      const payload = await resp.json() as DryRunResult;
+      setDryRun(payload);
+    } catch (err) {
+      setDryRunError(err instanceof Error ? err.message : 'Okänt fel');
+    } finally {
+      setDryRunLoading(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1048,7 +1101,7 @@ function IngestContractHealthPanel() {
             <StatChip label="hasScript + script_mode" value={health.with_has_script_and_script_mode} warn />
           </div>
 
-          {/* Warning note */}
+          {/* Warning note + dry-run */}
           {hasMissing ? (
             <div
               style={{
@@ -1062,8 +1115,136 @@ function IngestContractHealthPanel() {
                 lineHeight: 1.5,
               }}
             >
-              {health.missing_overrides_version} av {health.total} koncept saknar <code>overrides_version</code> — dessa är pre-v1-kontrakt.
-              Fas 84 planeras med dry-run-normalisering för att backfilla dem.
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                <span>
+                  {health.missing_overrides_version} av {health.total} koncept saknar <code>overrides_version</code> — dessa är pre-v1-kontrakt.
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); void handleDryRun(); }}
+                  disabled={dryRunLoading}
+                  style={{
+                    flexShrink: 0,
+                    padding: '5px 12px',
+                    borderRadius: LeTrendRadius.md,
+                    border: `1px solid ${LeTrendColors.warning}88`,
+                    background: '#fff',
+                    color: '#92400e',
+                    fontSize: LeTrendTypography.fontSize.xs,
+                    fontWeight: LeTrendTypography.fontWeight.semibold,
+                    cursor: dryRunLoading ? 'not-allowed' : 'pointer',
+                    opacity: dryRunLoading ? 0.6 : 1,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {dryRunLoading ? 'Kör…' : 'Dry-run backfill'}
+                </button>
+              </div>
+              {dryRunError ? (
+                <div style={{ marginTop: 6, color: LeTrendColors.error }}>{dryRunError}</div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Dry-run results */}
+          {dryRun ? (
+            <div
+              style={{
+                margin: '0 16px 12px',
+                borderRadius: LeTrendRadius.md,
+                border: `1px solid ${LeTrendColors.border}`,
+                overflow: 'hidden',
+              }}
+            >
+              {/* Summary row */}
+              <div
+                style={{
+                  padding: '8px 12px',
+                  background: LeTrendColors.surface,
+                  borderBottom: `1px solid ${LeTrendColors.border}`,
+                  display: 'flex',
+                  gap: 16,
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ fontSize: LeTrendTypography.fontSize.xs, fontWeight: LeTrendTypography.fontWeight.semibold, color: LeTrendColors.brownDark }}>
+                  Dry-run-resultat
+                </span>
+                <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted }}>
+                  {dryRun.summary.total} totalt · <strong style={{ color: '#92400e' }}>{dryRun.summary.would_change}</strong> skulle ändras
+                </span>
+                {dryRun.summary.would_add_overrides_version > 0 && (
+                  <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: '#1d4ed8' }}>+overrides_version: {dryRun.summary.would_add_overrides_version}</span>
+                )}
+                {dryRun.summary.would_remove_estimatedBudget > 0 && (
+                  <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.success }}>−estimatedBudget: {dryRun.summary.would_remove_estimatedBudget}</span>
+                )}
+                {dryRun.summary.would_remove_trendLevel > 0 && (
+                  <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.success }}>−trendLevel: {dryRun.summary.would_remove_trendLevel}</span>
+                )}
+                {dryRun.summary.would_remove_hasScript > 0 && (
+                  <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.success }}>−hasScript: {dryRun.summary.would_remove_hasScript}</span>
+                )}
+              </div>
+
+              {/* Candidate list (first 10) */}
+              {dryRun.candidates.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                    padding: '6px 12px',
+                    borderBottom: `1px solid ${LeTrendColors.border}`,
+                    background: '#fff',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <span style={{ fontSize: 10, fontFamily: 'monospace', color: LeTrendColors.textMuted, paddingTop: 2, flexShrink: 0 }}>
+                    {c.id.slice(0, 14)}…
+                  </span>
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      padding: '1px 6px',
+                      borderRadius: LeTrendRadius.full,
+                      background: LeTrendColors.surface,
+                      color: LeTrendColors.textSecondary,
+                      fontSize: 10,
+                    }}
+                  >
+                    {c.source ?? '—'}
+                  </span>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
+                    {c.change_keys.map((key) => (
+                      <span
+                        key={key}
+                        style={{
+                          padding: '1px 6px',
+                          borderRadius: LeTrendRadius.full,
+                          background: '#eff6ff',
+                          color: '#1d4ed8',
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {key}
+                      </span>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 10, color: LeTrendColors.textMuted, paddingTop: 2, flexShrink: 0 }}>
+                    {c.current_overrides_version ?? 'ingen'} → {c.next_overrides_version}
+                  </span>
+                </div>
+              ))}
+
+              {dryRun.total_candidates > dryRun.candidates.length ? (
+                <div style={{ padding: '6px 12px', fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted, background: LeTrendColors.surface }}>
+                  … och {dryRun.total_candidates - dryRun.candidates.length} fler (visas inte här). Se API-svaret för fullständig lista.
+                </div>
+              ) : null}
             </div>
           ) : null}
 
