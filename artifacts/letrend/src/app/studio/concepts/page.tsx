@@ -872,6 +872,313 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
 }
 
+// ─── Ingest Contract Health ───────────────────────────────────────────────
+
+interface IngestContractHealth {
+  total: number;
+  with_overrides_version: number;
+  missing_overrides_version: number;
+  with_deprecated_estimated_budget: number;
+  with_deprecated_trend_level: number;
+  with_has_script_and_script_mode: number;
+  with_scene_breakdown: number;
+  recent_ingest_runs: Array<{
+    id: string;
+    status: string;
+    stage: string | null;
+    concept_id: string | null;
+    customer_profile_id: string | null;
+    hagen_request_id: string | null;
+    hagen_contract_version: string | null;
+    warnings: unknown[];
+    created_at: string;
+    updated_at: string;
+  }>;
+}
+
+function IngestContractHealthPanel() {
+  const [health, setHealth] = useState<IngestContractHealth | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const resp = await fetch('/api/studio/ingest-contract-health', {
+          headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+        });
+        if (!resp.ok || cancelled) return;
+        const payload = await resp.json() as { health?: IngestContractHealth };
+        if (!cancelled) setHealth(payload.health ?? null);
+      } catch {
+        // non-fatal
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const hasMissing = (health?.missing_overrides_version ?? 0) > 0;
+  const hasDeprecated = (health?.with_deprecated_estimated_budget ?? 0) + (health?.with_deprecated_trend_level ?? 0) > 0;
+  const hasWarning = hasMissing || hasDeprecated;
+
+  const StatChip = ({ label, value, warn }: { label: string; value: number; warn?: boolean }) => (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '8px 14px',
+        borderRadius: LeTrendRadius.lg,
+        background: warn && value > 0 ? '#fff8ec' : LeTrendColors.surface,
+        border: `1px solid ${warn && value > 0 ? LeTrendColors.warning + '55' : LeTrendColors.border}`,
+        minWidth: 80,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 20,
+          fontWeight: LeTrendTypography.fontWeight.bold,
+          color: warn && value > 0 ? '#92400e' : LeTrendColors.brownDark,
+          lineHeight: 1.2,
+        }}
+      >
+        {value}
+      </span>
+      <span
+        style={{
+          fontSize: LeTrendTypography.fontSize.xs,
+          color: LeTrendColors.textMuted,
+          textAlign: 'center',
+          marginTop: 2,
+          lineHeight: 1.3,
+        }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        marginBottom: 14,
+        borderRadius: LeTrendRadius.xl,
+        border: `1px solid ${hasWarning ? LeTrendColors.warning + '44' : LeTrendColors.border}`,
+        background: hasWarning ? '#fffbf5' : '#fff',
+        overflow: 'hidden',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 16px',
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+        onClick={() => setCollapsed((c) => !c)}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span
+            style={{
+              fontSize: LeTrendTypography.fontSize.sm,
+              fontWeight: LeTrendTypography.fontWeight.semibold,
+              color: hasWarning ? '#92400e' : LeTrendColors.brownDark,
+            }}
+          >
+            Kontraktshälsa
+          </span>
+          {loading ? (
+            <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted }}>Laddar…</span>
+          ) : health ? (
+            <>
+              <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted }}>
+                {health.total} koncept
+              </span>
+              {hasMissing ? (
+                <span
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: LeTrendRadius.full,
+                    background: LeTrendColors.warning + '22',
+                    color: '#92400e',
+                    fontSize: LeTrendTypography.fontSize.xs,
+                    fontWeight: LeTrendTypography.fontWeight.semibold,
+                  }}
+                >
+                  {health.missing_overrides_version} saknar overrides_version
+                </span>
+              ) : (
+                <span
+                  style={{
+                    padding: '2px 8px',
+                    borderRadius: LeTrendRadius.full,
+                    background: '#f0fdf4',
+                    color: LeTrendColors.success,
+                    fontSize: LeTrendTypography.fontSize.xs,
+                    fontWeight: LeTrendTypography.fontWeight.semibold,
+                  }}
+                >
+                  ✓ Alla har overrides_version
+                </span>
+              )}
+            </>
+          ) : null}
+        </div>
+        <span style={{ fontSize: 11, color: LeTrendColors.textMuted }}>{collapsed ? '▸' : '▾'}</span>
+      </div>
+
+      {/* Body */}
+      {!collapsed && health ? (
+        <div style={{ borderTop: `1px solid ${LeTrendColors.border}` }}>
+          {/* Stat chips */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '14px 16px 10px' }}>
+            <StatChip label="Totalt" value={health.total} />
+            <StatChip label="Med overrides_version" value={health.with_overrides_version} />
+            <StatChip label="Saknar overrides_version" value={health.missing_overrides_version} warn />
+            <StatChip label="Med scene_breakdown" value={health.with_scene_breakdown} />
+            <StatChip label="Deprecated estimatedBudget" value={health.with_deprecated_estimated_budget} warn />
+            <StatChip label="Deprecated trendLevel" value={health.with_deprecated_trend_level} warn />
+            <StatChip label="hasScript + script_mode" value={health.with_has_script_and_script_mode} warn />
+          </div>
+
+          {/* Warning note */}
+          {hasMissing ? (
+            <div
+              style={{
+                margin: '0 16px 12px',
+                padding: '8px 12px',
+                borderRadius: LeTrendRadius.md,
+                background: '#fff8ec',
+                border: `1px solid ${LeTrendColors.warning}44`,
+                fontSize: LeTrendTypography.fontSize.xs,
+                color: '#92400e',
+                lineHeight: 1.5,
+              }}
+            >
+              {health.missing_overrides_version} av {health.total} koncept saknar <code>overrides_version</code> — dessa är pre-v1-kontrakt.
+              Fas 84 planeras med dry-run-normalisering för att backfilla dem.
+            </div>
+          ) : null}
+
+          {/* Recent ingest runs */}
+          {health.recent_ingest_runs.length > 0 ? (
+            <div>
+              <div
+                style={{
+                  padding: '6px 16px',
+                  fontSize: LeTrendTypography.fontSize.xs,
+                  fontWeight: LeTrendTypography.fontWeight.semibold,
+                  color: LeTrendColors.textSecondary,
+                  borderTop: `1px solid ${LeTrendColors.border}`,
+                  background: LeTrendColors.surface,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Senaste ingest-körningar
+              </div>
+              {health.recent_ingest_runs.map((run) => {
+                const isOk = run.status === 'completed' || run.status === 'ready_for_review';
+                const isFailed = run.status === 'failed';
+                const warnCount = Array.isArray(run.warnings) ? run.warnings.length : 0;
+                return (
+                  <div
+                    key={run.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 8,
+                      padding: '8px 16px',
+                      borderBottom: `1px solid ${LeTrendColors.border}`,
+                      background: '#fff',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span
+                      style={{
+                        flexShrink: 0,
+                        padding: '2px 7px',
+                        borderRadius: LeTrendRadius.full,
+                        background: isFailed ? LeTrendColors.errorLight : isOk ? '#f0fdf4' : LeTrendColors.surface,
+                        color: isFailed ? LeTrendColors.error : isOk ? LeTrendColors.success : LeTrendColors.textSecondary,
+                        fontSize: LeTrendTypography.fontSize.xs,
+                        fontWeight: LeTrendTypography.fontWeight.semibold,
+                        whiteSpace: 'nowrap',
+                        minWidth: 54,
+                        textAlign: 'center',
+                      }}
+                    >
+                      {run.status}
+                    </span>
+                    {run.stage ? (
+                      <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted, paddingTop: 3, flexShrink: 0 }}>
+                        {run.stage}
+                      </span>
+                    ) : null}
+                    <span style={{ flex: 1, fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textSecondary, paddingTop: 3, fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                      {run.hagen_contract_version ? (
+                        <span
+                          style={{
+                            marginRight: 6,
+                            padding: '1px 5px',
+                            borderRadius: 3,
+                            background: '#eff6ff',
+                            color: '#1d4ed8',
+                            fontSize: 10,
+                          }}
+                        >
+                          {run.hagen_contract_version}
+                        </span>
+                      ) : null}
+                      {run.hagen_request_id ? run.hagen_request_id.slice(0, 16) + '…' : run.id.slice(0, 16) + '…'}
+                    </span>
+                    {run.concept_id ? (
+                      <Link
+                        to={`/studio/concepts/${run.concept_id}/review`}
+                        style={{
+                          flexShrink: 0,
+                          fontSize: LeTrendTypography.fontSize.xs,
+                          color: LeTrendColors.brownLight,
+                          textDecoration: 'none',
+                          fontWeight: LeTrendTypography.fontWeight.semibold,
+                          paddingTop: 3,
+                          whiteSpace: 'nowrap',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Koncept →
+                      </Link>
+                    ) : null}
+                    {warnCount > 0 ? (
+                      <span style={{ flexShrink: 0, fontSize: LeTrendTypography.fontSize.xs, color: '#92400e', paddingTop: 3, whiteSpace: 'nowrap' }}>
+                        {warnCount} varning{warnCount !== 1 ? 'ar' : ''}
+                      </span>
+                    ) : null}
+                    <span style={{ flexShrink: 0, fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted, paddingTop: 3, whiteSpace: 'nowrap' }}>
+                      {relativeTime(run.created_at)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ padding: '10px 16px 14px', fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted }}>
+              Inga ingest-körningar hittades.
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function IngestStatusPanel() {
   const [runs, setRuns] = useState<IngestRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1624,6 +1931,7 @@ export default function StudioConceptsPage() {
       </div>
 
       <IngestStatusPanel />
+      <IngestContractHealthPanel />
 
       {draftPendingConcepts.length > 0 ? (
         <div

@@ -747,4 +747,90 @@ router.delete('/email/schedules/:id', requireAuth, CM_ONLY, async (req, res) => 
   }
 });
 
+// ---------------------------------------------------------------------------
+// GET /api/studio/ingest-contract-health
+// Read-only health surface for the ingest/concept contract.
+// Returns library-level counts and recent ingest run metadata.
+// ---------------------------------------------------------------------------
+router.get('/ingest-contract-health', requireAuth, CM_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+
+    // Fetch all concepts with only the fields we need for health checks.
+    // At current library size (tens to low hundreds) this is fast and avoids
+    // complex PostgREST JSON aggregate syntax.
+    const { data: concepts, error: conceptsError } = await supabase
+      .from('concepts')
+      .select('id, overrides, backend_data');
+
+    if (conceptsError) {
+      res.status(500).json({ error: conceptsError.message });
+      return;
+    }
+
+    const rows = (concepts ?? []) as Array<{
+      id: string;
+      overrides: Record<string, unknown> | null;
+      backend_data: Record<string, unknown> | null;
+    }>;
+
+    const total = rows.length;
+    let withOverridesVersion = 0;
+    let withDeprecatedEstimatedBudget = 0;
+    let withDeprecatedTrendLevel = 0;
+    let withHasScriptAndScriptMode = 0;
+    let withSceneBreakdown = 0;
+
+    for (const row of rows) {
+      const ov = row.overrides ?? {};
+      const bd = row.backend_data ?? {};
+
+      if (typeof ov['overrides_version'] === 'string' && ov['overrides_version']) {
+        withOverridesVersion++;
+      }
+      if ('estimatedBudget' in ov) {
+        withDeprecatedEstimatedBudget++;
+      }
+      if ('trendLevel' in ov) {
+        withDeprecatedTrendLevel++;
+      }
+      if ('hasScript' in ov && 'script_mode' in ov) {
+        withHasScriptAndScriptMode++;
+      }
+      if (Array.isArray(bd['scene_breakdown']) && bd['scene_breakdown'].length > 0) {
+        withSceneBreakdown++;
+      }
+    }
+
+    // Fetch the last 15 ingest runs for the ops surface.
+    const { data: runs, error: runsError } = await supabase
+      .from('ingest_runs')
+      .select(
+        'id, status, stage, concept_id, customer_profile_id, hagen_request_id, hagen_contract_version, warnings, created_at, updated_at',
+      )
+      .order('created_at', { ascending: false })
+      .limit(15);
+
+    if (runsError) {
+      logger.warn({ err: runsError }, 'ingest-contract-health: ingest_runs query failed (non-fatal)');
+    }
+
+    res.json({
+      health: {
+        total,
+        with_overrides_version: withOverridesVersion,
+        missing_overrides_version: total - withOverridesVersion,
+        with_deprecated_estimated_budget: withDeprecatedEstimatedBudget,
+        with_deprecated_trend_level: withDeprecatedTrendLevel,
+        with_has_script_and_script_mode: withHasScriptAndScriptMode,
+        with_scene_breakdown: withSceneBreakdown,
+        recent_ingest_runs: runs ?? [],
+      },
+    });
+  } catch (err) {
+    logger.error(err, 'studio ingest-contract-health GET error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
 export default router;
