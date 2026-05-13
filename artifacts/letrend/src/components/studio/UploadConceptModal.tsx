@@ -170,6 +170,8 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
+  // Phase 79: AI-utkast card collapsed by default
+  const [showAiDraft, setShowAiDraft] = useState(false);
 
   // ALL hooks must run before any conditional return (Rules of Hooks).
   // This effect guards itself with the phase check — safe when isOpen=false
@@ -203,6 +205,8 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
   const platform = videoUrl.trim() ? detectPlatform(videoUrl) : null;
   const busy = step !== 'idle';
   const stepIndex = STEPS.findIndex((currentStep) => currentStep.key === step);
+  // Phase 79: scene count read-only display (positive only)
+  const sceneCount = (pendingBackend?.scene_breakdown as unknown[] | undefined)?.length ?? 0;
 
   const reset = () => {
     setVideoUrl('');
@@ -220,6 +224,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
     setCustomerSearch('');
     setSelectedCustomerId(null);
     setAssignError(null);
+    setShowAiDraft(false);
   };
 
   const handleClose = () => {
@@ -686,22 +691,42 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
               </div>
             ) : null}
 
-            {/* AI-förhandsgranskning av rubrik + beskrivning */}
-            <div style={{ marginBottom: 16, padding: '12px 16px', borderRadius: 10, border: '1px solid #e0e7ff', background: '#eef2ff' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 8 }}>
-                AI-förhandsgranskning
-              </div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#1e1b4b', marginBottom: 4, lineHeight: 1.35 }}>
-                {(pendingOverrides.headline_sv as string | undefined) || pendingHeadline || '—'}
-              </div>
-              {typeof pendingOverrides.description_sv === 'string' && (pendingOverrides.description_sv as string).trim() ? (
-                <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.55 }}>
-                  {pendingOverrides.description_sv as string}
+            {/* AI-utkast (collapsible, collapsed by default) */}
+            <div style={{ marginBottom: 16, borderRadius: 10, border: '1px solid #e0e7ff', background: '#eef2ff', overflow: 'hidden' }}>
+              <button
+                type="button"
+                onClick={() => setShowAiDraft((v) => !v)}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '10px 16px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#6366f1', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                    AI-utkast
+                  </span>
+                  {sceneCount > 0 ? (
+                    <span style={{ fontSize: 10, color: '#818cf8', background: '#e0e7ff', borderRadius: 999, padding: '2px 7px', fontWeight: 600 }}>
+                      AI hittade {sceneCount} scener
+                    </span>
+                  ) : null}
+                </div>
+                <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+                  {showAiDraft ? 'Dölj ↑' : 'Visa AI-utkast ↓'}
+                </span>
+              </button>
+              {showAiDraft ? (
+                <div style={{ padding: '0 16px 12px' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#1e1b4b', marginBottom: 4, lineHeight: 1.35 }}>
+                    {(pendingOverrides.headline_sv as string | undefined) || pendingHeadline || '—'}
+                  </div>
+                  {typeof pendingOverrides.description_sv === 'string' && (pendingOverrides.description_sv as string).trim() ? (
+                    <div style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.55 }}>
+                      {pendingOverrides.description_sv as string}
+                    </div>
+                  ) : null}
+                  <div style={{ fontSize: 11, color: '#818cf8', marginTop: 8, fontStyle: 'italic' }}>
+                    Rubrik och beskrivning kan redigeras i biblioteket efter att du sparat.
+                  </div>
                 </div>
               ) : null}
-              <div style={{ fontSize: 11, color: '#818cf8', marginTop: 8, fontStyle: 'italic' }}>
-                Rubrik och beskrivning kan redigeras i biblioteket efter att du sparat.
-              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -800,6 +825,9 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
               </div>
             )}
 
+            <div style={{ fontSize: 11, color: '#6b7280', textAlign: 'right', marginBottom: 8 }}>
+              Sparade koncept aktiveras direkt i biblioteket.
+            </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button
                 onClick={() => { setPhase('classify'); setStep('classifying'); setAssignError(null); }}
@@ -812,14 +840,14 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
                 disabled={step === 'saving'}
                 style={{ ...buttonStyle('primary'), background: '#fff', color: LeTrendColors.brownDark, border: `1px solid ${LeTrendColors.brownLight}`, opacity: step === 'saving' ? 0.55 : 1 }}
               >
-                Bara bibliotek
+                {step === 'saving' ? 'Sparar...' : 'Spara och aktivera'}
               </button>
               <button
                 onClick={() => void handleSaveAndAssign()}
                 disabled={step === 'saving' || !selectedCustomerId}
                 style={{ ...buttonStyle('primary'), opacity: (step === 'saving' || !selectedCustomerId) ? 0.55 : 1, cursor: (step === 'saving' || !selectedCustomerId) ? 'not-allowed' : 'pointer' }}
               >
-                {step === 'saving' ? 'Sparar...' : 'Tilldela & spara →'}
+                {step === 'saving' ? 'Sparar...' : 'Spara, aktivera och tilldela →'}
               </button>
             </div>
           </>

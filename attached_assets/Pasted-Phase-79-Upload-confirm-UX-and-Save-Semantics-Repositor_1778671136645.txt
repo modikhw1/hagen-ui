@@ -1,0 +1,93 @@
+Phase 79 — Upload-confirm UX and Save Semantics
+
+  Repository boundary:
+  Do not change dependency/runtime/packaging configuration unless explicitly asked by the orchestrator.
+  Do not edit:
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - Dockerfile
+  - .npmrc
+  - scripts/replit-overrides.sh
+  - scripts/assert-railway-packaging.sh
+  - React / @types/react / pnpm / Vite / Railway / Replit config
+
+  Treat current main as the Railway deploy ground truth.
+  If Replit needs local preview-specific settings, keep them local and do not commit them.
+  Focus only on the requested app/product code and docs for this phase.
+
+  Context:
+  Use docs/agent-plans/77-canonical-ingest-contract.md and docs/agent-plans/78-ingest-contract-type-alignment.md.
+  Phase 78 added scene_count support and made mechanism optional.
+  UploadConceptModal already has an AI preview card for headline/description. Do not duplicate it.
+
+  Goal:
+  Improve upload-confirm so the CM clearly sees AI draft copy before saving, sees scene count when available, and
+  understands that saving activates the concept in the library.
+
+  Allowed files:
+  - artifacts/letrend/src/components/studio/UploadConceptModal.tsx
+  - docs/agent-plans/79-upload-confirm-ux.md
+  - nearby tests only if an existing pattern exists
+
+  Do not touch:
+  - API routes
+  - database/migrations
+  - concept-enrichment prompt/schema unless absolutely required
+  - package/dependency/build config
+
+  Tasks:
+  1. In UploadConceptModal classify step, refine the existing AI preview card:
+     - Label it clearly as "AI-utkast".
+     - Show headline and description from pendingOverrides.
+     - Keep it visually consistent with current modal design.
+     - Prefer collapsed-by-default with a small "Visa AI-utkast" / "Dölj AI-utkast" toggle if this can be added cleanly.
+     - If collapsed state adds unnecessary hook/state complexity, keep it expanded but document why.
+
+  2. Add scene count display in the classify step:
+     - Derive from pendingBackend?.scene_breakdown?.length.
+     - Show only when the value is a positive number.
+     - Suggested text: "AI hittade X scener".
+     - This is read-only context for CM, not an editable field.
+
+  3. Make save semantics explicit:
+     - Change "Bara bibliotek" to "Spara och aktivera".
+     - Change "Tilldela & spara →" to "Spara, aktivera och tilldela →".
+     - Keep loading text short, e.g. "Sparar...".
+     - Do not change actual save/assignment behavior.
+
+  4. Add small helper copy near action buttons or classify step:
+     - Explain briefly that saved concepts become active in the library.
+     - Keep it concise and operational, not a marketing/explainer block.
+
+  5. Verify deprecated fields are not visible in the upload-confirm flow:
+     - estimatedBudget must not be shown.
+     - trendLevel must not be shown.
+     - Do not remove compatibility comments/pages outside this flow.
+
+  6. Preserve existing behavior:
+     - Analyze/enrich flow unchanged.
+     - Assign flow unchanged.
+     - Close button behavior unchanged.
+     - No new required fields.
+     - No changes to /admin/demos.
+
+  7. Add docs/agent-plans/79-upload-confirm-ux.md with:
+     - files changed
+     - UX changes made
+     - save semantics clarified
+     - verification commands/results
+     - remaining work for Phase 80
+
+  Verification:
+  Run what is feasible in Replit:
+  - pnpm --filter "./artifacts/letrend" run typecheck
+  - PORT=5173 BASE_PATH=/ pnpm --filter "./artifacts/letrend" run build
+  - bash scripts/assert-railway-packaging.sh
+
+  If Replit requires local packageManager override to run pnpm, apply it locally only and restore package.json before
+  commit.
+  Do not commit Replit-specific dependency/runtime changes.
+
+  Commit message:
+  Clarify upload confirm activation flow
