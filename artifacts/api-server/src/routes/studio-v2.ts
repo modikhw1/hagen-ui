@@ -365,9 +365,13 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
       res.status(400).json({ error: 'concept_id is required' });
       return;
     }
-    const feedOrder = typeof body.feed_order === 'number'
-      ? body.feed_order
-      : isCollaboration ? null : 1;
+    // Explicit null means "Nästa att göra" (unscheduled); other callers without
+    // feed_order still default to 1 to preserve existing DraftConceptPicker behavior.
+    const feedOrder = ('feed_order' in body && body.feed_order === null)
+      ? null
+      : typeof body.feed_order === 'number'
+        ? body.feed_order
+        : isCollaboration ? null : 1;
     const cmId = req.user!.id;
 
     // Pre-populate content_overrides from base concept's overrides (Phase 71)

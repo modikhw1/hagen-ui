@@ -23,7 +23,7 @@ interface UploadConceptModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (conceptId: string, meta: { assignedTo: string | null }) => void;
-  preSelectedCustomerId?: string | null;
+  // preSelectedCustomerId: future task — pass customer id when opened from Kundarbete
 }
 
 interface CustomerOption {
@@ -147,7 +147,7 @@ interface ClassificationDraft {
   setting: SigmaBackdrop | null;
 }
 
-export function UploadConceptModal({ isOpen, onClose, onSuccess, preSelectedCustomerId }: UploadConceptModalProps) {
+export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConceptModalProps) {
   const [videoUrl, setVideoUrl] = useState('');
   const [step, setStep] = useState<UploadStep>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -168,16 +168,12 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess, preSelectedCust
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(preSelectedCustomerId ?? null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
 
-  if (!isOpen) return null;
-
-  const platform = videoUrl.trim() ? detectPlatform(videoUrl) : null;
-  const busy = step !== 'idle';
-  const stepIndex = STEPS.findIndex((currentStep) => currentStep.key === step);
-
-  // Fetch CM's customers when entering the assign phase
+  // ALL hooks must run before any conditional return (Rules of Hooks).
+  // This effect guards itself with the phase check — safe when isOpen=false
+  // because phase will be 'url' (initial/reset state) in that case.
   useEffect(() => {
     if (phase !== 'assign') return;
     let cancelled = false;
@@ -198,6 +194,16 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess, preSelectedCust
     return () => { cancelled = true; };
   }, [phase]);
 
+  // Early return AFTER all hooks — opening/closing the modal will not change
+  // hook call count, preventing React's hook-order runtime error.
+  if (!isOpen) return null;
+
+  // Derived values — not hooks, placed after early return so they are only
+  // computed when the modal is actually open.
+  const platform = videoUrl.trim() ? detectPlatform(videoUrl) : null;
+  const busy = step !== 'idle';
+  const stepIndex = STEPS.findIndex((currentStep) => currentStep.key === step);
+
   const reset = () => {
     setVideoUrl('');
     setStep('idle');
@@ -212,7 +218,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess, preSelectedCust
     setIngestRunId(null);
     setCustomers([]);
     setCustomerSearch('');
-    setSelectedCustomerId(preSelectedCustomerId ?? null);
+    setSelectedCustomerId(null);
     setAssignError(null);
   };
 
@@ -433,7 +439,8 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess, preSelectedCust
       const assignRes = await fetch(`/api/studio-v2/customers/${selectedCustomerId}/concepts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ concept_id: id }),
+        // feed_order: null → lands in "Nästa att göra" (unscheduled), not at position 1
+        body: JSON.stringify({ concept_id: id, feed_order: null }),
       });
       if (!assignRes.ok) {
         const assignData = await assignRes.json().catch(() => ({}));
