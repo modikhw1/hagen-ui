@@ -1,0 +1,42 @@
+Phase 76 — Stabilize React Type Boundary Between hagen and letrend
+
+  Context:
+  Latest main includes Phase 75 packaging boundary. Keep it intact:
+  - package.json on main must remain "packageManager": "pnpm@9.15.9"
+  - Dockerfile must keep corepack prepare pnpm@9.15.9
+  - If Replit needs pnpm 10.x locally, use the existing Replit override workflow, but restore package.json before
+  commit.
+  - Run bash scripts/assert-railway-packaging.sh before final commit.
+
+  Problem to investigate:
+  Local orchestrator validation shows:
+  - pnpm --filter "./artifacts/api-server" run typecheck passes
+  - PORT=5173 BASE_PATH=/ pnpm --filter "./artifacts/letrend" run build passes
+  - pnpm --filter "./artifacts/letrend" exec tsc --noEmit fails with ReactNode / Suspense / bigint React type mismatch
+  - artifacts/letrend has @types/react 19.2.14
+  - artifacts/hagen has React/@types React 18
+  - node_modules/.pnpm/node_modules/@types/react resolves to 18.3.28 locally
+
+  Goal:
+  Make letrend frontend typecheck deterministic and green without weakening TypeScript checks or breaking Railway
+  packaging.
+
+  Tasks:
+  1. Pull latest main.
+  2. Apply Replit local packageManager override only if needed for pnpm to run.
+  3. Reproduce:
+     - pnpm --filter "./artifacts/letrend" run typecheck
+     - pnpm --filter "./artifacts/letrend" exec tsc --noEmit
+  4. Inspect whether artifacts/hagen being part of pnpm-workspace is causing React 18 types to leak into letrend.
+  5. Choose the lowest-risk fix. Preferred direction if confirmed:
+     - isolate artifacts/hagen from the hagen-ui pnpm workspace if it is only a reference/import copy, or
+     - otherwise adjust workspace/type resolution so letrend cannot see React 18 globals from hagen.
+  6. Do not change product UX or ingest behavior in this phase.
+  7. Verify:
+     - pnpm --filter "./artifacts/api-server" run typecheck
+     - PORT=5173 BASE_PATH=/ pnpm --filter "./artifacts/letrend" run build
+     - pnpm --filter "./artifacts/letrend" run typecheck
+     - bash scripts/assert-railway-packaging.sh
+  8. Add a short docs/agent-plans/76-react-type-boundary.md explaining the root cause, the chosen fix, and verification
+  results.
+  9. Commit the fix with Railway-safe package.json restored.
