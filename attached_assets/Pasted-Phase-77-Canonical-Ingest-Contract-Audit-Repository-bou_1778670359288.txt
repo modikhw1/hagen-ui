@@ -1,0 +1,120 @@
+Phase 77 — Canonical Ingest Contract Audit
+
+  Repository boundary:
+  Do not change dependency/runtime/packaging configuration unless explicitly asked by the orchestrator.
+  Do not edit:
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - Dockerfile
+  - .npmrc
+  - scripts/replit-overrides.sh
+  - scripts/assert-railway-packaging.sh
+  - React / @types/react / pnpm / Vite / Railway / Replit config
+
+  Treat current main as the Railway deploy ground truth.
+  If Replit needs local preview-specific settings, keep them local and do not commit them.
+  Focus only on the requested app/product code and docs for this phase.
+
+  Goal:
+  Create a clear canonical ingest contract for how TikTok/video concepts move from Hagen analysis into hagen-ui, concept
+  library, customer assignment, and customer-specific overrides.
+
+  This phase is primarily audit + contract documentation. Do not perform a broad refactor yet. Only make tiny code/docs
+  edits if needed to clarify current behavior.
+
+  Business rules to encode:
+  - Upload-confirm is generally the preferred CM approval UX.
+  - /analyze-rate-v1 in old Hagen seemed better at objective preselected metadata such as number of people, filming
+  time, difficulty. Compare that logic with current upload-confirm/analyze flow.
+  - A successful Gemini/API response is not the same as successful metadata extraction.
+  - Objective-ish fields are safer:
+    - number of people
+    - number of scenes
+    - script length / script mode
+    - difficulty / replicability
+    - visible setup complexity
+    - business types, and this must support multiple business types
+  - Budget should not be part of the canonical model. It is not useful.
+  - Production tips, title, why it works, humor analysis, and similar fields are subjective and must be treated as CM-
+  editable/candidate text, not trusted facts.
+  - Script/manus is optional:
+    - some TikTok concepts have only overlay text
+    - some are 3-second sketches
+    - some have short dialogue
+    - some have longer scripts
+  - Save means approval. When a CM saves an ingested concept, it should become active in the library immediately.
+  - Library edits should modify reusable core concept data.
+  - Customer-specific adaptations should live outside the core library concept, in customer assignment / customer
+  concept override structures.
+  - AI quality/recommendation score should not be treated as reliable now.
+  - Current niche focus is hospitality: restaurant, bar, cafe, hotel/venue-style businesses.
+  - Trend level is not an AI-inferred truth now. If used later, it should be CM-marked/manual.
+
+  Files/areas to inspect:
+  - artifacts/letrend/src/app/studio/concepts
+  - artifacts/letrend/src/components/studio
+  - artifacts/letrend/src/components/studio/customer-detail
+  - artifacts/letrend/src/components/admin/concepts or equivalent upload modal areas
+  - artifacts/letrend/src/lib related to concept enrichment/analyze/ingest
+  - artifacts/api-server routes for concept analyze/enrich/ingest/save/assignment
+  - artifacts/hagen routes/pages related to:
+    - analyze-rate-v1
+    - upload-confirm
+    - TikTok fetch/analyze
+    - Gemini/Vertex/OpenAI metadata extraction
+  - existing docs/agent-plans around ingest, Hagen sync, and feedplanner
+
+  Deliverable:
+  Create docs/agent-plans/77-canonical-ingest-contract.md.
+
+  The document must include:
+  1. Current flow map:
+     - source video/TikTok URL
+     - Hagen fetch/analyze
+     - upload-confirm or equivalent CM confirmation
+     - save to concept library
+     - assignment to customer
+     - customer-specific overrides
+     - feedplanner/customer-facing display
+  2. Current data model map:
+     - concepts table/object fields
+     - customer_concepts or assignment object
+     - overrides/content_overrides
+     - metadata/enrichment fields
+     - any Hagen payload fields
+  3. Canonical field classification:
+     - objective fields
+     - semi-objective fields
+     - subjective AI text fields
+     - deprecated/avoid fields, including budget
+     - future/manual fields, including trend level
+  4. Proposed canonical ingest contract:
+     - request payload
+     - normalized concept object
+     - CM review/edit object
+     - save/activate behavior
+     - customer assignment behavior
+     - customer override behavior
+  5. Mismatch list:
+     - where current code violates or ambiguously handles the intended model
+     - where old Hagen behavior differs from hagen-ui
+     - where data is duplicated or unclear
+  6. Implementation plan for next phases:
+     - Phase 78: minimal schema/type/constants alignment
+     - Phase 79: upload-confirm UX/data cleanup
+     - Phase 80: API contract normalization
+     - Phase 81: library edit vs customer override separation
+  7. Verification notes:
+     - Commands run if any
+     - Any tests/build skipped and why
+
+  Constraints:
+  - Do not change dependencies or packaging.
+  - Do not attempt the full implementation in this phase.
+  - Do not remove existing fields yet unless they are purely docs-only references.
+  - Do not touch /admin/demos unless only mentioning it as out of scope.
+  - Keep the docs actionable for the next implementation agent.
+
+  Commit with message:
+  Document canonical ingest contract
