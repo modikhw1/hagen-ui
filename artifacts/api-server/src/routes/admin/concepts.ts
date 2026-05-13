@@ -5,6 +5,7 @@ import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 import { proxyHagenJson } from '../../lib/upstream-proxy.js';
 import { updateIngestRun } from '../../lib/ingest-runs.js';
+import { normalizeOverrides, validateNewConceptOverrides } from '../../lib/concept-overrides.js';
 import regenerateRouter from './concept-regenerate.js';
 
 const router = Router();
@@ -72,12 +73,33 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
     const body = req.body as Record<string, unknown>;
     const requestedId = typeof body.id === 'string' ? body.id.trim() : '';
     const ingestRunId = typeof body.ingest_run_id === 'string' ? body.ingest_run_id.trim() : null;
+    const source = typeof body.source === 'string' ? body.source : 'cm_created';
+
+    // Normalize overrides: strip deprecated fields, add overrides_version.
+    const rawOverrides = typeof body.overrides === 'object' && body.overrides ? body.overrides : {};
+    const { overrides: normalizedOverrides, warnings: overrideWarnings } = normalizeOverrides(rawOverrides);
+    if (overrideWarnings.length > 0) {
+      logger.info({ warnings: overrideWarnings, source }, 'admin concepts POST: overrides normalized');
+    }
+
+    // For new CM-created concepts, validate required canonical fields.
+    if (source === 'cm_created') {
+      const missingFields = validateNewConceptOverrides(normalizedOverrides);
+      if (missingFields.length > 0) {
+        res.status(400).json({
+          error: `Konceptet saknar obligatoriska fält: ${missingFields.join(', ')}. Klassificera konceptet fullständigt innan du sparar.`,
+          missing_fields: missingFields,
+        });
+        return;
+      }
+    }
+
     const insert = {
       id: requestedId || `concept-${randomUUID()}`,
-      source: typeof body.source === 'string' ? body.source : 'cm_created',
+      source,
       created_by: req.user!.id,
       backend_data: typeof body.backend_data === 'object' && body.backend_data ? body.backend_data : {},
-      overrides: typeof body.overrides === 'object' && body.overrides ? body.overrides : {},
+      overrides: normalizedOverrides,
       is_active: typeof body.is_active === 'boolean' ? body.is_active : true,
       version: 1,
     };
@@ -172,6 +194,16 @@ async function patchHandler(req: Request, res: Response) {
     const allowed = ['backend_data', 'overrides', 'is_active', 'source'];
     for (const key of allowed) {
       if (key in body) patch[key] = body[key];
+    }
+
+    // Normalize overrides on PATCH conservatively: strip deprecated fields only.
+    // Do not validate required fields — partial edits are valid (e.g. tag updates).
+    if ('overrides' in patch && patch['overrides'] != null) {
+      const { overrides: normalizedOverrides, warnings } = normalizeOverrides(patch['overrides']);
+      if (warnings.length > 0) {
+        logger.info({ warnings, conceptId: req.params['id'] }, 'admin concepts PATCH: overrides normalized');
+      }
+      patch['overrides'] = normalizedOverrides;
     }
 
     let previousOwner: string | null = null;

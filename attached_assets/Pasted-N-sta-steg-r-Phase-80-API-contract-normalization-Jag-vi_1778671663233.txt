@@ -1,0 +1,130 @@
+Nästa steg är Phase 80 — API contract normalization. Jag vill göra den konservativ: normalisera nya saves och göra
+  mapping/contract explicit, men inte börja hårt rejecta okända legacy-fält ännu.
+
+  Phase 80 — API Contract Normalization for Concept Ingest
+
+  Repository boundary:
+  Do not change dependency/runtime/packaging configuration unless explicitly asked by the orchestrator.
+  Do not edit:
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - Dockerfile
+  - .npmrc
+  - scripts/replit-overrides.sh
+  - scripts/assert-railway-packaging.sh
+  - React / @types/react / pnpm / Vite / Railway / Replit config
+
+  Treat current main as the Railway deploy ground truth.
+  If Replit needs local preview-specific settings, keep them local and do not commit them.
+  Focus only on the requested app/product code and docs for this phase.
+
+  Context:
+  Use these docs as source of truth:
+  - docs/agent-plans/77-canonical-ingest-contract.md
+  - docs/agent-plans/78-ingest-contract-type-alignment.md
+  - docs/agent-plans/79-upload-confirm-ux.md
+
+  Important correction:
+  Do NOT force `mechanism` to be required. Phase 78 intentionally made it optional because it is an expert/AI-only field
+  and should not block saves.
+
+  Goal:
+  Make the Express API contract for concept ingest explicit and safer without changing UI, database schema, or
+  deployment config.
+
+  Allowed files:
+  - artifacts/api-server/src/routes/admin/concepts.ts
+  - artifacts/api-server/src/routes/studio.ts
+  - artifacts/api-server/src/routes/studio-v2.ts
+  - artifacts/api-server/src/lib/upstream-proxy.ts
+  - artifacts/api-server/src/lib/ingest-runs.ts only if needed for typed stage/metadata updates
+  - optional new helper under artifacts/api-server/src/lib/
+  - nearby tests if an existing pattern fits
+  - docs/agent-plans/80-api-contract-normalization.md
+
+  Do not touch:
+  - frontend UI components
+  - hagen artifact code
+  - database migrations
+  - dependency/build config
+
+  Tasks:
+  1. Add a small API-server-side helper for concept override normalization.
+     Preferred new file if useful:
+     - artifacts/api-server/src/lib/concept-overrides.ts
+
+     The helper should:
+     - accept unknown overrides
+     - return a plain object safe for JSONB storage
+     - preserve existing unknown non-deprecated keys for backward compatibility
+     - remove deprecated fields from new saves:
+       - estimatedBudget
+       - trendLevel
+     - remove hasScript only when script_mode exists, because script_mode is canonical
+     - add `overrides_version: 'v1'` for new saves
+     - validate minimally for new CM-created concepts:
+       - script_mode must exist
+       - difficulty must exist
+       - filmTime must exist
+       - peopleNeeded must exist
+       - businessTypes must be a non-empty array
+     - do not require mechanism
+
+  2. Apply the helper in `POST /api/admin/concepts`.
+     - If required canonical fields are missing, return 400 with a clear Swedish error.
+     - Keep `is_active` default behavior unchanged: save defaults to active.
+     - Keep old backend_data passthrough behavior unchanged.
+     - Do not break non-CM/import legacy sources if the route supports them; apply strict required-field validation
+  primarily to `source: cm_created` / default ingest saves.
+
+  3. For `PATCH /api/admin/concepts/:id`, be more conservative:
+     - If `overrides` is present, normalize deprecated fields but do not require all canonical fields.
+     - Do not accidentally remove customer assignment data.
+     - Do not touch `customer_concepts`.
+
+  4. Make Hagen contract version explicit in upstream calls.
+     - Add a constant such as `HAGEN_CONTRACT_VERSION = 'v1'`.
+     - Add request header `x-hagen-contract-version: v1` in `fetchHagenJson`.
+     - Do not require Hagen to return anything new.
+     - If practical, include `hagen_contract_version: 'v1'` and `hagen_request_id` in ingest_run updates for analyze/
+  enrich outcomes.
+
+  5. Make customer assignment field mapping explicit in `studio-v2.ts`.
+     - The current mapping is:
+       - headline_sv -> content_overrides.headline
+       - script_sv -> content_overrides.script
+       - whyItWorks_sv -> content_overrides.why_it_fits
+       - productionNotes_sv[] -> content_overrides.filming_instructions
+     - Move this into a small named helper or constant block.
+     - Keep behavior unchanged.
+     - Add a comment explaining: library concept data and customer-specific overrides are intentionally separate.
+
+  6. Add tests if a nearby pattern exists.
+     Minimum useful tests:
+     - deprecated fields are stripped on new save normalization
+     - hasScript is stripped when script_mode exists
+     - mechanism is optional
+     - required canonical fields produce a validation error for new cm_created saves
+     - customer content override mapping preserves current output
+
+  7. Add docs/agent-plans/80-api-contract-normalization.md with:
+     - files changed
+     - API behavior changed
+     - compatibility decisions
+     - what intentionally did not change
+     - verification commands/results
+     - remaining work for Phase 81
+
+  Verification:
+  Run what is feasible in Replit:
+  - pnpm --filter "./artifacts/api-server" run typecheck
+  - pnpm --filter "./artifacts/api-server" test
+  - bash scripts/assert-railway-packaging.sh
+
+  If Replit requires local packageManager override to run pnpm, apply it locally only and restore package.json before
+  commit.
+  Do not commit Replit-specific dependency/runtime changes.
+
+  Commit message:
+  Normalize concept ingest API contract

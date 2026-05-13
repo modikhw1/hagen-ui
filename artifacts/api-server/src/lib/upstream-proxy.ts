@@ -24,6 +24,13 @@ import { logger } from './logger.js';
 
 const REQUEST_ID_HEADER = 'x-letrend-request-id';
 
+/**
+ * Sent to Hagen on every request so upstream logs can correlate contract
+ * expectations. Hagen does not yet validate this but will be able to once
+ * the contract stabilises.
+ */
+export const HAGEN_CONTRACT_VERSION = 'v1' as const;
+
 export function getHagenBase(): string | null {
   return process.env['HAGEN_BASE_URL']?.trim() || null;
 }
@@ -94,6 +101,7 @@ export async function fetchHagenJson(opts: ProxyJsonOptions): Promise<UpstreamRe
       'Content-Type': 'application/json',
       Accept: 'application/json',
       [REQUEST_ID_HEADER]: requestId,
+      'x-hagen-contract-version': HAGEN_CONTRACT_VERSION,
     };
 
     // Add shared secret header if configured

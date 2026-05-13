@@ -58,6 +58,38 @@ function sanitizePrice(input: unknown): number | null {
   return Math.round(n);
 }
 
+/**
+ * Map library concept overrides to the initial content_overrides for a new
+ * customer assignment (customer_concepts.content_overrides).
+ *
+ * Library concept data (concepts.overrides) and customer-specific overrides
+ * (customer_concepts.content_overrides) are intentionally separate columns.
+ * The library stores CM-editable canonical fields. The customer column stores
+ * per-assignment copy that may diverge once the customer starts production.
+ *
+ * Field mapping (library overrides → customer content_overrides):
+ *   headline_sv        → headline
+ *   script_sv          → script
+ *   whyItWorks_sv      → why_it_fits
+ *   productionNotes_sv → filming_instructions  (array joined with \n)
+ */
+function buildConceptContentOverrides(overrides: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (typeof overrides.headline_sv === 'string' && overrides.headline_sv) {
+    out.headline = overrides.headline_sv;
+  }
+  if (typeof overrides.script_sv === 'string' && overrides.script_sv) {
+    out.script = overrides.script_sv;
+  }
+  if (typeof overrides.whyItWorks_sv === 'string' && overrides.whyItWorks_sv) {
+    out.why_it_fits = overrides.whyItWorks_sv;
+  }
+  if (Array.isArray(overrides.productionNotes_sv) && overrides.productionNotes_sv.length > 0) {
+    out.filming_instructions = (overrides.productionNotes_sv as string[]).join('\n');
+  }
+  return out;
+}
+
 function isPlannedUpcomingFeedRow(row: Record<string, unknown>): boolean {
   const status = typeof row.status === 'string' ? row.status : null;
   const rowKind = typeof row.row_kind === 'string' ? row.row_kind : null;
@@ -374,7 +406,19 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
         : isCollaboration ? null : 1;
     const cmId = req.user!.id;
 
-    // Pre-populate content_overrides from base concept's overrides (Phase 71)
+    // Pre-populate content_overrides from base concept's overrides (Phase 71).
+    //
+    // Library concept data (concepts.overrides) and customer-specific overrides
+    // (customer_concepts.content_overrides) are intentionally separate JSONB columns.
+    // The library stores CM-editable canonical fields (headline_sv, script_sv, etc.).
+    // The customer column stores per-assignment copy that may diverge from the
+    // library version once the customer starts production.
+    //
+    // Field mapping (library → customer assignment):
+    //   overrides.headline_sv         → content_overrides.headline
+    //   overrides.script_sv           → content_overrides.script
+    //   overrides.whyItWorks_sv       → content_overrides.why_it_fits
+    //   overrides.productionNotes_sv  → content_overrides.filming_instructions (joined with \n)
     let prePopulated: Record<string, string> = {};
     if (conceptId) {
       const { data: baseConcept } = await supabase
@@ -382,19 +426,7 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
         .select('overrides')
         .eq('id', conceptId)
         .single();
-      const baseOv = (baseConcept?.overrides ?? {}) as Record<string, unknown>;
-      if (typeof baseOv.headline_sv === 'string' && baseOv.headline_sv) {
-        prePopulated.headline = baseOv.headline_sv;
-      }
-      if (typeof baseOv.script_sv === 'string' && baseOv.script_sv) {
-        prePopulated.script = baseOv.script_sv;
-      }
-      if (typeof baseOv.whyItWorks_sv === 'string' && baseOv.whyItWorks_sv) {
-        prePopulated.why_it_fits = baseOv.whyItWorks_sv;
-      }
-      if (Array.isArray(baseOv.productionNotes_sv) && baseOv.productionNotes_sv.length > 0) {
-        prePopulated.filming_instructions = baseOv.productionNotes_sv.join('\n');
-      }
+      prePopulated = buildConceptContentOverrides((baseConcept?.overrides ?? {}) as Record<string, unknown>);
     }
     const finalContentOverrides = {
       ...prePopulated,
