@@ -79,6 +79,25 @@ export interface BackendContentClassification {
     | 'atmosphere_vibe'
 }
 
+/**
+ * Mirrors BackendContentClassification.content_type.
+ * Exported for future library/filter use — not yet rendered in UI.
+ */
+export const CONTENT_TYPE_VALUES = [
+  'sketch_comedy',
+  'reaction_content',
+  'informational',
+  'interview_format',
+  'montage_visual',
+  'tutorial_how_to',
+  'testimonial',
+  'promotional_direct',
+  'trend_recreation',
+  'hybrid',
+] as const
+
+export type ContentType = (typeof CONTENT_TYPE_VALUES)[number]
+
 export interface BackendReplicabilityDecomposed {
   one_to_one_copy_feasibility?: {
     score?: 1 | 2 | 3
@@ -298,6 +317,8 @@ export interface TranslatedConcept {
   setup_complexity?: SigmaSetupComplexity | null
   skill_required?: SigmaSkillLevel | null
   setting?: SigmaBackdrop | null
+  /** Display-only. Derived from backend_data.scene_breakdown?.length. Not persisted as a DB column. */
+  scene_count?: number
   vibeAlignments: string[]
   whyItFits: string[]
   price: number
@@ -313,31 +334,80 @@ export interface TranslatedConcept {
   whyItFits_sv?: string[]
 }
 
+/**
+ * Version marker for the canonical overrides contract.
+ * Written as a constant — not persisted to DB yet. Use for future migration guards.
+ */
+export const CANONICAL_OVERRIDES_VERSION = 'v1' as const
+
+/**
+ * Fields stored in concepts.overrides (JSONB) — written at upload-confirm and editable in library.
+ * Split into objective signals (AI-proposed, CM-confirmed) and subjective copy (AI draft, CM-editable).
+ */
 export interface ClipOverride {
+  // ── Subjective AI copy — AI-generated drafts, CM-editable in library. Not trusted facts. ──
+  /** AI draft. CM should review and edit before customer sees it. */
   headline_sv?: string
+  /** AI draft. */
   description_sv?: string
+  /** AI draft. */
   whyItWorks_sv?: string
+  /** AI draft. Optional — only present when script_mode is not 'none' or 'visual_only'. */
   script_sv?: string
+  /** AI draft. 3-5 production steps. */
   productionNotes_sv?: string[]
+  /** AI draft. 2-3 selling arguments for CM. */
   whyItFits_sv?: string[]
+
+  // ── Objective signals — AI-proposed, CM-confirmed in upload-confirm modal. ──
+  /** AI-proposed, CM-confirmed. Required for new concepts. */
+  difficulty?: Difficulty
+  /** AI-proposed, CM-confirmed. Labeled as estimate in UI. */
+  filmTime?: FilmTime
+  /** CM-set. Default 'SE'. AI default is always SE. */
+  market?: Market
+  /** AI-proposed, CM-confirmed. Key name retained for backward compat — maps to actor_count semantics. */
+  peopleNeeded?: PeopleNeeded
+  /** AI-proposed, CM-confirmed. 1-5 hospitality business types. */
+  businessTypes?: BusinessType[]
+  /** AI-proposed, CM-confirmed. Required for new concepts. Supersedes hasScript. */
+  script_mode?: ScriptMode
+  /** AI-proposed, CM-confirmed. Nullable — CM may leave as AI default. */
+  setup_complexity?: SigmaSetupComplexity
+  /** AI-proposed, CM-confirmed. Nullable. */
+  skill_required?: SigmaSkillLevel
+  /** AI-proposed, CM-confirmed. Nullable. */
+  setting?: SigmaBackdrop
+
+  // ── Backend / internal — not shown in upload modal or library UI. ──
+  /** AI-set. Not shown in modal. Too expert for CM to validate. Stored for backend use only. */
+  mechanism?: HumorMechanism
+  /** Raw transcript from video. */
+  transcript?: string
+
+  // ── UI metadata ──
   matchPercentage?: number
   price?: number
   isNew?: boolean
   remaining?: number
-  difficulty?: Difficulty
-  filmTime?: FilmTime
-  market?: Market
-  peopleNeeded?: PeopleNeeded
-  mechanism?: HumorMechanism
-  businessTypes?: BusinessType[]
+
+  // ── Deprecated — kept for parsing old DB records; never write to new concepts. ──
+  /**
+   * @deprecated Do not write for new concepts. Budget inference is not reliable
+   * and is not useful for hospitality CMs. Old DB records may have this field — ignore silently.
+   */
+  estimatedBudget?: string
+  /**
+   * @deprecated AI trend inference is unreliable. Use trend_status (manual CM field, future).
+   * Old DB records may have this field — ignore silently.
+   */
+  trendLevel?: number
+  /**
+   * @deprecated Use script_mode instead. Kept for backward compat when reading old concepts
+   * that were saved before script_mode was introduced. Translator falls back to this when
+   * script_mode is absent.
+   */
   hasScript?: boolean
-  transcript?: string
-  // V1 contract additions — set by upload-confirm or library edit
-  script_mode?: ScriptMode
-  // V1 objective signals — from sigma_taste, confirmed by CM at ingest
-  setup_complexity?: SigmaSetupComplexity
-  skill_required?: SigmaSkillLevel
-  setting?: SigmaBackdrop
 }
 
 /**
@@ -904,6 +974,7 @@ export function translateClipToConcept(
     setup_complexity,
     skill_required,
     setting,
+    scene_count: clip.scene_breakdown?.length,
     vibeAlignments: translateVibes(clip),
     whyItFits,
     price: override?.price ?? 24,

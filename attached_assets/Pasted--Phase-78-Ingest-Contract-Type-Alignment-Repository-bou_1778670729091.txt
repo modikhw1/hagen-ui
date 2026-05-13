@@ -1,0 +1,90 @@
+ Phase 78 — Ingest Contract Type Alignment
+
+  Repository boundary:
+  Do not change dependency/runtime/packaging configuration unless explicitly asked by the orchestrator.
+  Do not edit:
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - Dockerfile
+  - .npmrc
+  - scripts/replit-overrides.sh
+  - scripts/assert-railway-packaging.sh
+  - React / @types/react / pnpm / Vite / Railway / Replit config
+
+  Treat current main as the Railway deploy ground truth.
+  If Replit needs local preview-specific settings, keep them local and do not commit them.
+  Focus only on the requested app/product code and docs for this phase.
+
+  Context:
+  Use docs/agent-plans/77-canonical-ingest-contract.md as the source of truth.
+  This phase should prepare the ingest contract in code without changing UI behavior or database schema.
+
+  Goal:
+  Align existing concept ingest types/constants with the canonical ingest contract, with minimal product-code change.
+
+  Scope:
+  Allowed files:
+  - artifacts/letrend/src/lib/translator.ts
+  - artifacts/letrend/src/lib/concept-enrichment.ts
+  - docs/agent-plans/78-ingest-contract-type-alignment.md
+  - tests only if there is an existing nearby test pattern
+
+  Do not touch UI components in this phase.
+  Do not touch API server routes in this phase.
+  Do not touch database migrations.
+
+  Tasks:
+  1. In translator/concept types, add a display-only `scene_count?: number` to the translated concept shape if that
+  shape exists and is appropriate.
+     - Derive it from `backend_data.scene_breakdown?.length`.
+     - Do not persist a new DB field.
+     - Do not render it in UI yet.
+
+  2. Export content type constants from translator if the backend type already exists:
+     - `CONTENT_TYPE_VALUES`
+     - values should mirror `BackendContentClassification.content_type`.
+     - This is preparation for future filtering only.
+
+  3. Add a canonical override version constant:
+     - `CANONICAL_OVERRIDES_VERSION = 'v1'`
+     - Keep it colocated with concept override/translation code.
+     - Do not write it into DB yet unless the current save path already supports a harmless version field.
+
+  4. Add JSDoc comments to `ClipOverride`:
+     - Mark `estimatedBudget` as `@deprecated` and note: do not write for new concepts.
+     - Mark `trendLevel` as `@deprecated` and note: AI trend inference is not reliable.
+     - Mark `hasScript` as `@deprecated` and note: use `script_mode`.
+     - Mark subjective AI text fields as AI draft / CM-editable, not trusted facts.
+     - Mark objective fields as AI-proposed / CM-confirmed.
+
+  5. Verify `mechanism` in `enrichedConceptSchema`:
+     - It must be optional, not required.
+     - New concept saves should not fail just because the AI did not produce a humor mechanism.
+     - If it is currently required, make it optional.
+     - Do not remove the field from compatibility types.
+
+  6. Keep behavior backward compatible:
+     - Existing concepts with `hasScript` should still translate correctly through current fallback logic.
+     - Existing concepts with `estimatedBudget` or `trendLevel` should not crash parsing.
+     - Do not rename `peopleNeeded`.
+
+  7. Add docs/agent-plans/78-ingest-contract-type-alignment.md with:
+     - files changed
+     - what changed
+     - what intentionally did not change
+     - verification commands and results
+     - remaining work for Phase 79
+
+  Verification:
+  Run what is feasible in Replit:
+  - pnpm --filter "./artifacts/letrend" run typecheck
+  - PORT=5173 BASE_PATH=/ pnpm --filter "./artifacts/letrend" run build
+  - bash scripts/assert-railway-packaging.sh
+
+  If Replit requires local packageManager override to run pnpm, apply it locally only and restore package.json before
+  commit.
+  Do not commit Replit-specific dependency/runtime changes.
+
+  Commit message:
+  Align ingest contract types
