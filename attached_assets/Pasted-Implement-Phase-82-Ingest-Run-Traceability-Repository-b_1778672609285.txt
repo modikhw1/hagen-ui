@@ -1,0 +1,107 @@
+Implement Phase 82 — Ingest Run Traceability.
+
+  Repository boundary:
+  Do not change dependency/runtime/packaging configuration unless explicitly asked by the orchestrator.
+  Do not edit:
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - Dockerfile
+  - .npmrc
+  - scripts/replit-overrides.sh
+  - scripts/assert-railway-packaging.sh
+  - React / @types/react / pnpm / Vite / Railway / Replit config
+
+  Treat current main as the Railway deploy ground truth.
+  If Replit needs local preview-specific settings, keep them local and do not commit them.
+  Focus only on app/product code and docs for this phase.
+
+  Context:
+  Current main is c4f3192. Phase 81 clarified that library edits and customer assignment edits are separate. Phase 82
+  should improve ingest observability without changing the canonical ingest contract and without adding a DB migration.
+
+  Supabase schema note from orchestrator:
+  public.ingest_runs already has these nullable columns:
+  - hagen_contract_version text
+  - hagen_video_id text
+  - hagen_request_id text
+  - customer_profile_id uuid
+  stage is text without a DB check constraint, so adding an app-level stage like assigned is safe if needed.
+
+  Goal:
+  Make /studio upload ingest runs traceable across:
+  1. Hagen analyze
+  2. Hagen enrich
+  3. CM save to library
+  4. Optional assignment to customer
+  5. Fire-and-forget humor enrich
+
+  Required work:
+  1. In api-server ingest run typing:
+     - Update IngestRunStage in artifacts/api-server/src/lib/ingest-runs.ts if needed to include assignment tracking,
+  preferably `assigned`.
+     - Do not invent a large new state machine. Keep existing statuses.
+
+  2. In artifacts/api-server/src/routes/studio.ts:
+     - Import HAGEN_CONTRACT_VERSION from upstream-proxy.
+     - When analyze starts, write hagen_contract_version to the ingest run.
+     - When analyze succeeds, write:
+       - hagen_request_id scalar from fetchHagenJson result.requestId
+       - hagen_contract_version scalar
+       - mergeResult.analyze_summary.request_id
+       - mergeResult.analyze_summary.hagen_contract_version
+       - existing gcs_uri and has_analysis
+       - hagen_video_id only if a stable id exists in the response body; do not guess from unrelated fields.
+     - When analyze fails, also write hagen_request_id and hagen_contract_version before marking failed.
+     - When enrich succeeds or fails, similarly preserve request id and contract version in scalar fields and
+  mergeResult.enrich_summary.
+     - For humor-enrich, include request id and contract version in mergeResult.humor_enrich on success/failure. Do not
+  change the top-level completed status after save.
+
+  3. In GET /api/studio/ingest-runs:
+     - Include hagen_request_id, hagen_contract_version, hagen_video_id, and customer_profile_id in the list select so
+  ops/status views can display/correlate runs.
+
+  4. In artifacts/api-server/src/routes/admin/concepts.ts:
+     - On successful POST /api/admin/concepts, expand save_summary to include:
+       - concept_id
+       - source
+       - is_active
+       - overrides_version from normalized overrides
+       - scene_count if backend_data.scene_breakdown is an array
+     - Keep Save = active immediately.
+     - Do not treat user-correctable classification validation as a backend ingest failure unless the current code
+  already does so. Prefer preserving ready_for_review for fixable CM input errors.
+
+  5. In customer assignment flow:
+     - In UploadConceptModal, when Save and Assign posts to /api/studio-v2/customers/:customerId/concepts, include
+  ingest_run_id in the request body.
+     - In artifacts/api-server/src/routes/studio-v2.ts POST /customers/:customerId/concepts:
+       - Accept optional ingest_run_id.
+       - On successful insert, update ingest_runs non-fatally:
+         - stage: assigned
+         - status: completed
+         - customer_profile_id
+         - finished_at
+         - mergeResult.assignment_summary with customer_id, customer_concept_id, concept_id, feed_order, row_kind
+       - On assignment failure, append a warning to the ingest run rather than marking the whole ingest failed if the
+  library save already succeeded.
+
+  6. Verify scene_breakdown round-trip:
+     - Confirm that backend_data.scene_breakdown survives save and is still readable after concept GET/list.
+     - If the current API response already returns it through backend_data, document that. Do not add a DB column.
+     - If a small response-level scene_count is already idiomatic in existing mappers, add it there; otherwise leave it
+  in save_summary only.
+
+  7. Docs:
+     - Add docs/agent-plans/82-ingest-run-traceability.md.
+     - Include files changed, behavior before/after, exact ingest_run fields written per stage, and verification
+  commands/results.
+     - Mention explicitly that no DB migration and no dependency/runtime config changes were made.
+
+  Verification:
+  - Run api-server typecheck.
+  - Run relevant api-server tests, especially ingest-runs and concept override tests.
+  - If UploadConceptModal or frontend code changed, run the frontend build, but do not modify dependency/runtime config
+  to make Replit happy.
+  - Do not touch /admin/demos.

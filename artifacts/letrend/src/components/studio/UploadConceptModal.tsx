@@ -445,7 +445,7 @@ export function UploadConceptModal({ isOpen, onClose, onSuccess }: UploadConcept
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // feed_order: null → lands in "Nästa att göra" (unscheduled), not at position 1
-        body: JSON.stringify({ concept_id: id, feed_order: null }),
+        body: JSON.stringify({ concept_id: id, feed_order: null, ingest_run_id: ingestRunId }),
       });
       if (!assignRes.ok) {
         const assignData = await assignRes.json().catch(() => ({}));

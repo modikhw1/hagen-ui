@@ -133,11 +133,24 @@ router.post('/', requireAuth, CM_ONLY, async (req, res) => {
     // Mark run completed and link to the new concept.
     if (ingestRunId) {
       const savedId = (data as Record<string, unknown>)['id'] as string | undefined ?? insert.id;
+      const backendData = (insert.backend_data ?? {}) as Record<string, unknown>;
+      const sceneBreakdown = backendData['scene_breakdown'];
       void updateIngestRun(ingestRunId, {
         status: 'completed',
         concept_id: savedId,
         finished_at: new Date().toISOString(),
-        mergeResult: { save_summary: { concept_id: savedId } },
+        mergeResult: {
+          save_summary: {
+            concept_id: savedId,
+            source: insert.source,
+            is_active: insert.is_active,
+            overrides_version:
+              typeof (insert.overrides as Record<string, unknown>)?.['overrides_version'] === 'string'
+                ? (insert.overrides as Record<string, unknown>)['overrides_version']
+                : null,
+            ...(Array.isArray(sceneBreakdown) ? { scene_count: sceneBreakdown.length } : {}),
+          },
+        },
       });
     }
 

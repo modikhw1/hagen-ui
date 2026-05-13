@@ -3,7 +3,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { ensureCustomerAccess } from '../middleware/cm-access.js';
 import { createSupabaseAdmin } from '../lib/supabase.js';
 import { logger } from '../lib/logger.js';
-import { fetchHagenJson, getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
+import { fetchHagenJson, getHagenBase, proxyHagenJson, HAGEN_CONTRACT_VERSION } from '../lib/upstream-proxy.js';
 import { updateIngestRun, safeRunId } from '../lib/ingest-runs.js';
 import {
   extractSourceUrl,
@@ -196,7 +196,7 @@ router.get('/ingest-runs', requireAuth, CM_ONLY, async (req, res) => {
     let query = supabase
       .from('ingest_runs')
       .select(
-        'id, source, source_url, platform, status, stage, concept_id, error_code, error_message, warnings, result, created_at, updated_at, finished_at, started_at, created_by',
+        'id, source, source_url, platform, status, stage, concept_id, error_code, error_message, warnings, result, created_at, updated_at, finished_at, started_at, created_by, hagen_request_id, hagen_contract_version, hagen_video_id, customer_profile_id',
       )
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -293,6 +293,7 @@ router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
       status: 'running',
       stage: 'analyzing',
       started_at: now,
+      hagen_contract_version: HAGEN_CONTRACT_VERSION,
     });
   }
 
@@ -309,11 +310,23 @@ router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
     if (result.ok) {
       const data = result.data as Record<string, unknown>;
       const upload = data['upload'] as Record<string, unknown> | undefined;
+      // Derive hagen_video_id from the stable videoId field in the analysis envelope if present.
+      const analysisEnv = data['analysis'] as Record<string, unknown> | undefined;
+      const analysisInner = (analysisEnv?.['analysis'] as Record<string, unknown> | undefined) ?? analysisEnv;
+      const hagenVideoId =
+        typeof analysisInner?.['videoId'] === 'string' && analysisInner['videoId']
+          ? (analysisInner['videoId'] as string)
+          : null;
       void updateIngestRun(ingestRunId, {
+        hagen_request_id: result.requestId,
+        hagen_contract_version: HAGEN_CONTRACT_VERSION,
+        ...(hagenVideoId ? { hagen_video_id: hagenVideoId } : {}),
         mergeResult: {
           analyze_summary: {
             gcs_uri: upload?.['gcsUri'] ?? null,
             has_analysis: Boolean(data['analysis']),
+            request_id: result.requestId,
+            hagen_contract_version: HAGEN_CONTRACT_VERSION,
           },
         },
       });
@@ -322,6 +335,8 @@ router.post('/concepts/analyze', requireAuth, CM_ONLY, async (req, res) => {
         status: 'failed',
         stage: 'analyzing',
         finished_at: new Date().toISOString(),
+        hagen_request_id: result.requestId,
+        hagen_contract_version: HAGEN_CONTRACT_VERSION,
         error_code: 'analyze_failed',
         error_message: String(result.body['error'] ?? result.body['message'] ?? 'analyze proxy error'),
       });
@@ -364,8 +379,14 @@ router.post('/concepts/enrich', requireAuth, CM_ONLY, async (req, res) => {
       void updateIngestRun(ingestRunId, {
         status: 'ready_for_review',
         stage: 'classifying',
+        hagen_request_id: result.requestId,
+        hagen_contract_version: HAGEN_CONTRACT_VERSION,
         mergeResult: {
-          enrich_summary: { has_overrides: Boolean(result.data['overrides']) },
+          enrich_summary: {
+            has_overrides: Boolean(result.data['overrides']),
+            request_id: result.requestId,
+            hagen_contract_version: HAGEN_CONTRACT_VERSION,
+          },
         },
       });
     } else {
@@ -373,6 +394,8 @@ router.post('/concepts/enrich', requireAuth, CM_ONLY, async (req, res) => {
         status: 'failed',
         stage: 'enriching',
         finished_at: new Date().toISOString(),
+        hagen_request_id: result.requestId,
+        hagen_contract_version: HAGEN_CONTRACT_VERSION,
         error_code: 'enrich_failed',
         error_message: String(result.body['error'] ?? result.body['message'] ?? 'enrich proxy error'),
       });
@@ -427,12 +450,26 @@ router.post('/concepts/humor-enrich', requireAuth, CM_ONLY, async (req, res) => 
     if (result.ok) {
       const fields = (result.data['fields'] ?? {}) as Record<string, unknown>;
       void updateIngestRun(ingestRunId, {
-        mergeResult: { humor_enrich: { status: 'completed', fields } },
+        mergeResult: {
+          humor_enrich: {
+            status: 'completed',
+            fields,
+            request_id: result.requestId,
+            hagen_contract_version: HAGEN_CONTRACT_VERSION,
+          },
+        },
       });
     } else {
       const errCode = String(result.body['error'] ?? 'humor-enrich failed');
       void updateIngestRun(ingestRunId, {
-        mergeResult: { humor_enrich: { status: 'failed', error: errCode } },
+        mergeResult: {
+          humor_enrich: {
+            status: 'failed',
+            error: errCode,
+            request_id: result.requestId,
+            hagen_contract_version: HAGEN_CONTRACT_VERSION,
+          },
+        },
         appendWarning: { stage: 'humor_enriching', error: errCode },
       });
     }

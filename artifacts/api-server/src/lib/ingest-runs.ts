@@ -30,7 +30,8 @@ export type IngestRunStage =
   | 'enriching'
   | 'classifying'
   | 'saving'
-  | 'humor_enriching';
+  | 'humor_enriching'
+  | 'assigned';
 
 export interface IngestRunPatch {
   // ── Scalar fields (written directly) ──────────────────────────────────────
@@ -41,6 +42,7 @@ export interface IngestRunPatch {
   started_at?: string | null;
   finished_at?: string | null;
   concept_id?: string | null;
+  customer_profile_id?: string | null;
   hagen_video_id?: string | null;
   hagen_request_id?: string | null;
   hagen_contract_version?: string | null;

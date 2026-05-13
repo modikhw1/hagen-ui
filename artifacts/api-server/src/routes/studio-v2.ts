@@ -16,6 +16,7 @@ import {
 } from '../lib/studio/confirm-published-concept.js';
 import { renumberImportedRows } from '../lib/studio/history-import.js';
 import { fetchHagenJson, getHagenBase, proxyHagenJson } from '../lib/upstream-proxy.js';
+import { updateIngestRun, safeRunId } from '../lib/ingest-runs.js';
 
 const router = Router();
 const CM_ONLY = requireRole(['admin', 'content_manager']);
@@ -465,6 +466,8 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
       }
     }
 
+    const ingestRunId = safeRunId(body.ingest_run_id);
+
     const { data, error } = await supabase
       .from('customer_concepts')
       .insert(insert)
@@ -472,9 +475,43 @@ router.post('/customers/:customerId/concepts', requireAuth, CM_ONLY, async (req,
       .single();
 
     if (error) {
+      // If a library save already recorded this run as completed, only append a
+      // warning rather than overwriting the top-level status to failed.
+      if (ingestRunId) {
+        void updateIngestRun(ingestRunId, {
+          appendWarning: {
+            stage: 'assigned',
+            error: 'customer_concepts insert failed',
+            message: error.message,
+            customer_id: customerId,
+          },
+        });
+      }
       res.status(500).json({ error: error.message });
       return;
     }
+
+    // Non-fatally record the assignment outcome on the ingest run.
+    if (ingestRunId) {
+      const row = data as Record<string, unknown>;
+      const customerIdStr = Array.isArray(customerId) ? customerId[0] : customerId;
+      void updateIngestRun(ingestRunId, {
+        stage: 'assigned',
+        status: 'completed',
+        customer_profile_id: customerIdStr,
+        finished_at: new Date().toISOString(),
+        mergeResult: {
+          assignment_summary: {
+            customer_id: customerId,
+            customer_concept_id: row['id'] ?? null,
+            concept_id: row['concept_id'] ?? null,
+            feed_order: row['feed_order'] ?? null,
+            row_kind: row['row_kind'] ?? null,
+          },
+        },
+      });
+    }
+
     res.status(201).json({ concept: data });
   } catch (err) {
     logger.error(err, 'studio-v2 customer concepts POST error');
