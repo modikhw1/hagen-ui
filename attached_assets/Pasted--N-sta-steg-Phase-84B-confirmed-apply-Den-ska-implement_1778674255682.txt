@@ -1,0 +1,96 @@
+ Nästa steg: Phase 84B, confirmed apply. Den ska implementera själva backfill-knappen, men med spärrar: ingen auto-run,
+  admin-only, kräver dry-run först, explicit confirmation, och re-check av counts innan mutation.
+
+  Prompt till Replit:
+
+  Implement Phase 84B — Confirmed Ingest Contract Backfill Apply.
+
+  Repository boundary:
+  Do not change dependency/runtime/packaging configuration.
+  Do not edit package.json, pnpm-lock.yaml, pnpm-workspace.yaml, Dockerfile, .npmrc, Railway/Replit/Vite/React
+  dependency config.
+  Do not create or commit attached_assets/Pasted*.txt or pasted prompt artifacts.
+  Treat current main as Railway deploy ground truth.
+
+  Context:
+  Phase 84A added a dry-run-only endpoint:
+  POST /api/admin/concepts/backfill-overrides-version/dry-run
+
+  It computes which concept overrides would be normalized to v1:
+  - add overrides_version
+  - remove estimatedBudget
+  - remove trendLevel
+  - remove hasScript when script_mode exists
+
+  Goal:
+  Add a confirmed apply step for the same normalization.
+  This phase may add DB mutation code, but must never run automatically. The UI must require a dry-run first and
+  explicit confirmation.
+
+  Required backend work:
+  1. Add admin-only endpoint:
+     POST /api/admin/concepts/backfill-overrides-version/apply
+
+  2. Endpoint body must require:
+     - confirm: "APPLY_OVERRIDES_VERSION_V1"
+     - expected_would_change: number
+     - expected_total: number
+
+  3. Endpoint behavior:
+     - Read concepts id/source/overrides.
+     - Recompute dry-run candidates using existing computeDryRunCandidate().
+     - If current total or would_change does not match expected_total / expected_would_change, return 409 with fresh
+  summary and do not write.
+     - Only update rows where would_change=true.
+     - Use normalizeOverrides() to produce the next overrides JSON.
+     - Update only concepts.overrides.
+     - Do not touch backend_data, customer_concepts, ingest_runs, demos, or package/runtime config.
+     - Return:
+       - applied: true
+       - updated_count
+       - failed_count
+       - updated_ids
+       - failures: [{ id, error }]
+       - summary_before
+       - summary_after, recomputed after writes
+
+  4. Prefer row-by-row updates with partial-failure reporting.
+     - This is acceptable because the dataset is small.
+     - Do not hide partial failures.
+     - If a row fails, continue and report it.
+
+  Required frontend work:
+  1. In IngestContractHealthPanel:
+     - Show “Apply backfill” only after dry-run has completed and dryRun.summary.would_change > 0.
+     - Require an explicit confirmation step.
+     - The button text should make it clear this writes to the database.
+     - Send confirm, expected_would_change, expected_total from the dry-run result.
+     - After successful apply, refresh health data and clear/re-run dry-run state.
+     - Show updated_count / failed_count result.
+     - Do not auto-call apply on mount or after dry-run.
+
+  2. If apply returns 409:
+     - Show message that library changed since dry-run.
+     - Show fresh summary if returned.
+     - Ask user to run dry-run again.
+
+  Docs:
+  Add docs/agent-plans/84b-ingest-contract-backfill-apply.md with:
+  - endpoint shape
+  - safety guards
+  - UI flow
+  - what tables/columns are mutated
+  - verification results
+  - explicit note that no apply is executed by tests or on load
+
+  Tests:
+  - Add tests for apply planning helpers if you extract pure helpers.
+  - Existing computeDryRunCandidate tests should still pass.
+  - Add at least one test for stale dry-run guard logic if implemented as a pure helper.
+
+  Verification:
+  - Run api-server typecheck.
+  - Run api-server tests.
+  - Run frontend build.
+  - Do not run the apply endpoint against live/prod data.
+  - Do not touch /admin/demos.

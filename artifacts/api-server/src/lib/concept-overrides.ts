@@ -108,6 +108,63 @@ export interface DryRunCandidate {
  * Safe to call with any row shape — null/undefined overrides produce a
  * single-key result with overrides_version only.
  */
+export interface DryRunSummary {
+  total: number;
+  would_change: number;
+  would_add_overrides_version: number;
+  would_remove_estimatedBudget: number;
+  would_remove_trendLevel: number;
+  would_remove_hasScript: number;
+}
+
+/** Build a summary object from a list of dry-run candidates. Pure, no DB access. */
+export function buildDryRunSummary(candidates: DryRunCandidate[]): DryRunSummary {
+  const toChange = candidates.filter((c) => c.would_change);
+  return {
+    total: candidates.length,
+    would_change: toChange.length,
+    would_add_overrides_version: toChange.filter((c) => c.change_keys.includes('add_overrides_version')).length,
+    would_remove_estimatedBudget: toChange.filter((c) => c.change_keys.includes('remove_estimatedBudget')).length,
+    would_remove_trendLevel: toChange.filter((c) => c.change_keys.includes('remove_trendLevel')).length,
+    would_remove_hasScript: toChange.filter((c) => c.change_keys.includes('remove_hasScript')).length,
+  };
+}
+
+export interface StaleDryRunGuardInput {
+  expected_total: number;
+  expected_would_change: number;
+  actual_total: number;
+  actual_would_change: number;
+}
+
+export interface StaleDryRunGuardResult {
+  stale: boolean;
+  reason?: string;
+}
+
+/**
+ * Check whether the state of the library has changed since the dry-run was
+ * computed. Returns `stale: true` when the caller should refuse to apply and
+ * ask for a fresh dry-run instead.
+ *
+ * Pure function — safe to unit-test without a DB.
+ */
+export function checkStaleDryRun(input: StaleDryRunGuardInput): StaleDryRunGuardResult {
+  if (input.actual_total !== input.expected_total) {
+    return {
+      stale: true,
+      reason: `total changed: expected ${input.expected_total}, got ${input.actual_total}`,
+    };
+  }
+  if (input.actual_would_change !== input.expected_would_change) {
+    return {
+      stale: true,
+      reason: `would_change count changed: expected ${input.expected_would_change}, got ${input.actual_would_change}`,
+    };
+  }
+  return { stale: false };
+}
+
 export function computeDryRunCandidate(row: {
   id: string;
   source: string | null;

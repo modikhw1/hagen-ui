@@ -898,6 +898,21 @@ interface DryRunResult {
   total_candidates: number;
 }
 
+interface ApplyFailure {
+  id: string;
+  error: string;
+}
+
+interface ApplyResult {
+  applied: true;
+  updated_count: number;
+  failed_count: number;
+  updated_ids: string[];
+  failures: ApplyFailure[];
+  summary_before: DryRunResult['summary'];
+  summary_after: DryRunResult['summary'];
+}
+
 interface IngestContractHealth {
   total: number;
   with_overrides_version: number;
@@ -928,7 +943,17 @@ function IngestContractHealthPanel() {
   const [dryRunLoading, setDryRunLoading] = useState(false);
   const [dryRunError, setDryRunError] = useState<string | null>(null);
 
+  const [applyResult, setApplyResult] = useState<ApplyResult | null>(null);
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [applyConfirming, setApplyConfirming] = useState(false);
+  const [applyStale, setApplyStale] = useState<{ reason?: string; summary?: DryRunResult['summary'] } | null>(null);
+
   const handleDryRun = async () => {
+    setApplyResult(null);
+    setApplyError(null);
+    setApplyStale(null);
+    setApplyConfirming(false);
     setDryRunLoading(true);
     setDryRunError(null);
     try {
@@ -951,6 +976,62 @@ function IngestContractHealthPanel() {
       setDryRunError(err instanceof Error ? err.message : 'Okänt fel');
     } finally {
       setDryRunLoading(false);
+    }
+  };
+
+  const refreshHealth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch('/api/studio/ingest-contract-health', {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+      });
+      if (!resp.ok) return;
+      const payload = await resp.json() as { health?: IngestContractHealth };
+      setHealth(payload.health ?? null);
+    } catch {
+      // non-fatal
+    }
+  };
+
+  const handleApply = async () => {
+    if (!dryRun) return;
+    setApplyLoading(true);
+    setApplyError(null);
+    setApplyStale(null);
+    setApplyConfirming(false);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const resp = await fetch('/api/admin/concepts/backfill-overrides-version/apply', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          confirm: 'APPLY_OVERRIDES_VERSION_V1',
+          expected_would_change: dryRun.summary.would_change,
+          expected_total: dryRun.summary.total,
+        }),
+      });
+      if (resp.status === 409) {
+        const payload = await resp.json() as { reason?: string; summary_before?: DryRunResult['summary'] };
+        setApplyStale({ reason: payload.reason, summary: payload.summary_before });
+        setDryRun(null);
+        return;
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({})) as { error?: string };
+        setApplyError(err.error ?? `HTTP ${resp.status}`);
+        return;
+      }
+      const payload = await resp.json() as ApplyResult;
+      setApplyResult(payload);
+      setDryRun(null);
+      await refreshHealth();
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : 'Okänt fel');
+    } finally {
+      setApplyLoading(false);
     }
   };
 
@@ -1243,6 +1324,155 @@ function IngestContractHealthPanel() {
               {dryRun.total_candidates > dryRun.candidates.length ? (
                 <div style={{ padding: '6px 12px', fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted, background: LeTrendColors.surface }}>
                   … och {dryRun.total_candidates - dryRun.candidates.length} fler (visas inte här). Se API-svaret för fullständig lista.
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Apply button + confirmation + stale + result */}
+          {dryRun && dryRun.summary.would_change > 0 && !applyResult ? (
+            <div style={{ margin: '0 16px 12px' }}>
+              {!applyConfirming ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setApplyConfirming(true); }}
+                    disabled={applyLoading}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: LeTrendRadius.md,
+                      border: `1px solid ${LeTrendColors.error}66`,
+                      background: '#fff5f5',
+                      color: LeTrendColors.error,
+                      fontSize: LeTrendTypography.fontSize.xs,
+                      fontWeight: LeTrendTypography.fontWeight.semibold,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Skriv backfill till DB ({dryRun.summary.would_change} koncept)
+                  </button>
+                  {applyError ? (
+                    <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.error }}>{applyError}</span>
+                  ) : null}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: LeTrendRadius.md,
+                    border: `1px solid ${LeTrendColors.error}66`,
+                    background: '#fff5f5',
+                    fontSize: LeTrendTypography.fontSize.xs,
+                    color: LeTrendColors.error,
+                  }}
+                >
+                  <div style={{ fontWeight: LeTrendTypography.fontWeight.semibold, marginBottom: 6 }}>
+                    ⚠ Detta skriver till databasen — {dryRun.summary.would_change} rader uppdateras. Åtgärden kan inte ångras automatiskt.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); void handleApply(); }}
+                      disabled={applyLoading}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: LeTrendRadius.md,
+                        border: `1px solid ${LeTrendColors.error}`,
+                        background: LeTrendColors.error,
+                        color: '#fff',
+                        fontSize: LeTrendTypography.fontSize.xs,
+                        fontWeight: LeTrendTypography.fontWeight.semibold,
+                        cursor: applyLoading ? 'not-allowed' : 'pointer',
+                        opacity: applyLoading ? 0.6 : 1,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {applyLoading ? 'Skriver…' : 'Bekräfta och skriv till DB'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setApplyConfirming(false); }}
+                      disabled={applyLoading}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: LeTrendRadius.md,
+                        border: `1px solid ${LeTrendColors.border}`,
+                        background: '#fff',
+                        color: LeTrendColors.textSecondary,
+                        fontSize: LeTrendTypography.fontSize.xs,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Avbryt
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {/* Stale dry-run warning */}
+          {applyStale ? (
+            <div
+              style={{
+                margin: '0 16px 12px',
+                padding: '8px 12px',
+                borderRadius: LeTrendRadius.md,
+                background: '#fff8ec',
+                border: `1px solid ${LeTrendColors.warning}44`,
+                fontSize: LeTrendTypography.fontSize.xs,
+                color: '#92400e',
+              }}
+            >
+              <div style={{ fontWeight: LeTrendTypography.fontWeight.semibold, marginBottom: 4 }}>
+                Biblioteket har ändrats sedan dry-run kördes — apply avbröts.
+              </div>
+              {applyStale.reason ? (
+                <div style={{ fontFamily: 'monospace', marginBottom: 6 }}>{applyStale.reason}</div>
+              ) : null}
+              <div>Kör dry-run igen för att få ett aktuellt underlag.</div>
+            </div>
+          ) : null}
+
+          {/* Apply result */}
+          {applyResult ? (
+            <div
+              style={{
+                margin: '0 16px 12px',
+                borderRadius: LeTrendRadius.md,
+                border: `1px solid ${applyResult.failed_count > 0 ? LeTrendColors.warning + '66' : LeTrendColors.success + '44'}`,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  padding: '8px 12px',
+                  background: applyResult.failed_count > 0 ? '#fff8ec' : '#f0fdf4',
+                  display: 'flex',
+                  gap: 16,
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                }}
+              >
+                <span style={{ fontSize: LeTrendTypography.fontSize.xs, fontWeight: LeTrendTypography.fontWeight.semibold, color: applyResult.failed_count > 0 ? '#92400e' : LeTrendColors.success }}>
+                  {applyResult.failed_count > 0 ? '⚠ Apply klar med fel' : '✓ Apply klar'}
+                </span>
+                <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted }}>
+                  {applyResult.updated_count} uppdaterade
+                  {applyResult.failed_count > 0 ? ` · ${applyResult.failed_count} misslyckades` : ''}
+                </span>
+                <span style={{ fontSize: LeTrendTypography.fontSize.xs, color: LeTrendColors.textMuted }}>
+                  would_change: {applyResult.summary_before.would_change} → {applyResult.summary_after.would_change}
+                </span>
+              </div>
+              {applyResult.failures.length > 0 ? (
+                <div style={{ padding: '6px 12px', background: '#fff' }}>
+                  {applyResult.failures.map((f) => (
+                    <div key={f.id} style={{ fontSize: 10, fontFamily: 'monospace', color: LeTrendColors.error, padding: '2px 0' }}>
+                      {f.id.slice(0, 14)}… — {f.error}
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </div>

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeOverrides, validateNewConceptOverrides, computeDryRunCandidate, OVERRIDES_VERSION } from './concept-overrides.js';
+import {
+  normalizeOverrides,
+  validateNewConceptOverrides,
+  computeDryRunCandidate,
+  buildDryRunSummary,
+  checkStaleDryRun,
+  OVERRIDES_VERSION,
+} from './concept-overrides.js';
 
 // ---------------------------------------------------------------------------
 // normalizeOverrides
@@ -209,6 +216,80 @@ describe('computeDryRunCandidate', () => {
     // Pure: calling twice gives same result
     const result2 = computeDryRunCandidate(row);
     expect(result).toEqual(result2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildDryRunSummary
+// ---------------------------------------------------------------------------
+describe('buildDryRunSummary', () => {
+  const makeCandidate = (overrides: Record<string, unknown> | null, id = 'x') =>
+    computeDryRunCandidate({ id, source: 'hagen', overrides });
+
+  it('returns zero counts for an empty candidate list', () => {
+    const s = buildDryRunSummary([]);
+    expect(s.total).toBe(0);
+    expect(s.would_change).toBe(0);
+  });
+
+  it('counts already-normalized concepts as would_change=0', () => {
+    const c = makeCandidate({ overrides_version: OVERRIDES_VERSION, difficulty: 'easy' });
+    const s = buildDryRunSummary([c]);
+    expect(s.total).toBe(1);
+    expect(s.would_change).toBe(0);
+  });
+
+  it('counts deprecated concepts correctly', () => {
+    const c1 = makeCandidate({ estimatedBudget: '10000' }, 'a');
+    const c2 = makeCandidate({ trendLevel: 2, hasScript: true, script_mode: 'none' }, 'b');
+    const c3 = makeCandidate({ overrides_version: OVERRIDES_VERSION }, 'c');
+    const s = buildDryRunSummary([c1, c2, c3]);
+    expect(s.total).toBe(3);
+    expect(s.would_change).toBe(2);
+    expect(s.would_remove_estimatedBudget).toBe(1);
+    expect(s.would_remove_trendLevel).toBe(1);
+    expect(s.would_remove_hasScript).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkStaleDryRun
+// ---------------------------------------------------------------------------
+describe('checkStaleDryRun', () => {
+  const match = { expected_total: 33, expected_would_change: 33, actual_total: 33, actual_would_change: 33 };
+
+  it('returns stale=false when counts match', () => {
+    expect(checkStaleDryRun(match).stale).toBe(false);
+  });
+
+  it('returns stale=true when total has changed', () => {
+    const result = checkStaleDryRun({ ...match, actual_total: 34 });
+    expect(result.stale).toBe(true);
+    expect(result.reason).toMatch(/total changed/);
+    expect(result.reason).toContain('33');
+    expect(result.reason).toContain('34');
+  });
+
+  it('returns stale=true when would_change count has changed', () => {
+    const result = checkStaleDryRun({ ...match, actual_would_change: 30 });
+    expect(result.stale).toBe(true);
+    expect(result.reason).toMatch(/would_change count changed/);
+  });
+
+  it('total mismatch takes priority over would_change mismatch', () => {
+    const result = checkStaleDryRun({ ...match, actual_total: 35, actual_would_change: 30 });
+    expect(result.stale).toBe(true);
+    expect(result.reason).toMatch(/total changed/);
+  });
+
+  it('returns no reason when not stale', () => {
+    const result = checkStaleDryRun(match);
+    expect(result.reason).toBeUndefined();
+  });
+
+  it('handles zero counts correctly', () => {
+    const result = checkStaleDryRun({ expected_total: 0, expected_would_change: 0, actual_total: 0, actual_would_change: 0 });
+    expect(result.stale).toBe(false);
   });
 });
 

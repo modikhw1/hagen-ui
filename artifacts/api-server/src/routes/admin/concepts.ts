@@ -5,7 +5,13 @@ import { createSupabaseAdmin } from '../../lib/supabase.js';
 import { logger } from '../../lib/logger.js';
 import { proxyHagenJson } from '../../lib/upstream-proxy.js';
 import { updateIngestRun } from '../../lib/ingest-runs.js';
-import { normalizeOverrides, validateNewConceptOverrides, computeDryRunCandidate } from '../../lib/concept-overrides.js';
+import {
+  normalizeOverrides,
+  validateNewConceptOverrides,
+  computeDryRunCandidate,
+  buildDryRunSummary,
+  checkStaleDryRun,
+} from '../../lib/concept-overrides.js';
 import regenerateRouter from './concept-regenerate.js';
 
 const router = Router();
@@ -185,16 +191,8 @@ router.post('/backfill-overrides-version/dry-run', requireAuth, ADMIN_ONLY, asyn
     }>;
 
     const candidates = rows.map((row) => computeDryRunCandidate(row));
+    const summary = buildDryRunSummary(candidates);
     const toChange = candidates.filter((c) => c.would_change);
-
-    const summary = {
-      total: candidates.length,
-      would_change: toChange.length,
-      would_add_overrides_version: toChange.filter((c) => c.change_keys.includes('add_overrides_version')).length,
-      would_remove_estimatedBudget: toChange.filter((c) => c.change_keys.includes('remove_estimatedBudget')).length,
-      would_remove_trendLevel: toChange.filter((c) => c.change_keys.includes('remove_trendLevel')).length,
-      would_remove_hasScript: toChange.filter((c) => c.change_keys.includes('remove_hasScript')).length,
-    };
 
     res.json({
       dry_run: true,
@@ -205,6 +203,125 @@ router.post('/backfill-overrides-version/dry-run', requireAuth, ADMIN_ONLY, asyn
     });
   } catch (err) {
     logger.error(err, 'admin concepts dry-run backfill error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+const APPLY_CONFIRM_TOKEN = 'APPLY_OVERRIDES_VERSION_V1';
+
+// POST /api/admin/concepts/backfill-overrides-version/apply
+// Admin-only. Applies normalizeOverrides to every concept that would_change.
+// Requires explicit confirm token + expected counts from a prior dry-run.
+// Returns partial-failure report — never hides row-level errors.
+router.post('/backfill-overrides-version/apply', requireAuth, ADMIN_ONLY, async (req, res) => {
+  const body = req.body as {
+    confirm?: unknown;
+    expected_would_change?: unknown;
+    expected_total?: unknown;
+  };
+
+  if (body.confirm !== APPLY_CONFIRM_TOKEN) {
+    res.status(400).json({ error: `confirm must be "${APPLY_CONFIRM_TOKEN}"` });
+    return;
+  }
+  if (typeof body.expected_would_change !== 'number' || typeof body.expected_total !== 'number') {
+    res.status(400).json({ error: 'expected_would_change and expected_total must be numbers' });
+    return;
+  }
+
+  const expected_total = body.expected_total as number;
+  const expected_would_change = body.expected_would_change as number;
+
+  try {
+    const supabase = createSupabaseAdmin();
+
+    const { data: concepts, error: fetchError } = await supabase
+      .from('concepts')
+      .select('id, source, overrides')
+      .order('created_at', { ascending: true });
+
+    if (fetchError) {
+      res.status(500).json({ error: fetchError.message });
+      return;
+    }
+
+    const rows = (concepts ?? []) as Array<{
+      id: string;
+      source: string | null;
+      overrides: Record<string, unknown> | null;
+    }>;
+
+    const candidates = rows.map((row) => computeDryRunCandidate(row));
+    const summary_before = buildDryRunSummary(candidates);
+
+    const guard = checkStaleDryRun({
+      expected_total,
+      expected_would_change,
+      actual_total: summary_before.total,
+      actual_would_change: summary_before.would_change,
+    });
+
+    if (guard.stale) {
+      res.status(409).json({
+        error: 'Dry-run is stale — library changed since last dry-run. Run dry-run again before applying.',
+        reason: guard.reason,
+        summary_before,
+      });
+      return;
+    }
+
+    const toChange = candidates.filter((c) => c.would_change);
+    const updated_ids: string[] = [];
+    const failures: Array<{ id: string; error: string }> = [];
+
+    for (const candidate of toChange) {
+      try {
+        const rawRow = rows.find((r) => r.id === candidate.id);
+        const { overrides: normalized } = normalizeOverrides(rawRow?.overrides ?? null);
+        const { error: updateError } = await supabase
+          .from('concepts')
+          .update({ overrides: normalized })
+          .eq('id', candidate.id);
+
+        if (updateError) {
+          failures.push({ id: candidate.id, error: updateError.message });
+        } else {
+          updated_ids.push(candidate.id);
+        }
+      } catch (rowErr) {
+        failures.push({
+          id: candidate.id,
+          error: rowErr instanceof Error ? rowErr.message : 'unknown row error',
+        });
+      }
+    }
+
+    // Recompute summary_after from fresh DB read
+    const { data: refreshed } = await supabase
+      .from('concepts')
+      .select('id, source, overrides')
+      .order('created_at', { ascending: true });
+
+    const refreshedRows = (refreshed ?? []) as Array<{
+      id: string;
+      source: string | null;
+      overrides: Record<string, unknown> | null;
+    }>;
+    const summary_after = buildDryRunSummary(refreshedRows.map((r) => computeDryRunCandidate(r)));
+
+    logger.info({ updated_count: updated_ids.length, failed_count: failures.length }, 'backfill apply complete');
+
+    res.json({
+      applied: true,
+      updated_count: updated_ids.length,
+      failed_count: failures.length,
+      updated_ids,
+      failures,
+      summary_before,
+      summary_after,
+    });
+  } catch (err) {
+    logger.error(err, 'admin concepts apply backfill error');
     res.status(500).json({ error: 'Internt serverfel' });
   }
 });
