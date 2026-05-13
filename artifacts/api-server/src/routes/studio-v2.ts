@@ -2199,8 +2199,11 @@ router.post('/reconciliation-candidates/:candidateId/reject', requireAuth, CM_ON
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // PATCH /api/studio-v2/library-concepts/:conceptId
-// Patches the overrides JSONB on the concepts library table.
+// Patches the overrides JSONB on the concepts library table ONLY.
 // Accepts either a DB UUID or the backend clip ID (backend_data->>'id').
+// This route NEVER touches customer_concepts — library and customer-assignment
+// data are intentionally separate. Editing a library concept here does NOT
+// propagate changes to existing customer assignments.
 router.patch('/library-concepts/:conceptId', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { conceptId } = req.params;
@@ -2280,6 +2283,9 @@ router.patch('/library-concepts/:conceptId', requireAuth, CM_ONLY, async (req, r
 });
 
 // PATCH /api/studio-v2/concepts/:conceptId
+// Updates a single customer_concepts row ONLY (assignment-specific data).
+// This route NEVER touches the concepts library table. content_overrides here
+// is per-assignment copy that may diverge from the library after production starts.
 router.patch('/concepts/:conceptId', requireAuth, CM_ONLY, async (req, res) => {
   try {
     const { conceptId } = req.params;

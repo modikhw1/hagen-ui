@@ -886,6 +886,9 @@ export default function ConceptReviewPage() {
               </div>
             </details>
 
+            <div style={{ marginBottom: 8, fontSize: 11, color: '#9ca3af', textAlign: 'right' }}>
+              Ändringar här uppdaterar konceptbiblioteket. Befintliga kundkopplingar ändras inte.
+            </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
               {saved ? <span style={{ fontSize: 14, color: '#10b981', fontWeight: 500 }}>✓ Sparat!</span> : null}
               <button onClick={() => void handleSave()} disabled={saving || !headlineSv.trim()} style={{ padding: '10px 24px', borderRadius: 8, border: 'none', background: saving || !headlineSv.trim() ? '#9ca3af' : '#4f46e5', color: '#fff', fontSize: 14, fontWeight: 600, cursor: saving || !headlineSv.trim() ? 'not-allowed' : 'pointer' }}>{saving ? 'Sparar...' : 'Spara'}</button>

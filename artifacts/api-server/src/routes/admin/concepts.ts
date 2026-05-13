@@ -186,6 +186,8 @@ router.get('/:id', requireAuth, CM_ONLY, async (req, res) => {
 });
 
 // PATCH (and PUT alias) /api/admin/concepts/:id
+// Updates the concepts library table ONLY — never customer_concepts.
+// Existing customer assignments are not affected by library edits.
 async function patchHandler(req: Request, res: Response) {
   try {
     const supabase = createSupabaseAdmin();

@@ -1,0 +1,88 @@
+ Phase 81 — Library vs Customer Override Boundary
+
+  Repository boundary:
+  Do not change dependency/runtime/packaging configuration unless explicitly asked by the orchestrator.
+  Do not edit:
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - Dockerfile
+  - .npmrc
+  - scripts/replit-overrides.sh
+  - scripts/assert-railway-packaging.sh
+  - React / @types/react / pnpm / Vite / Railway / Replit config
+
+  Treat current main as the Railway deploy ground truth.
+  If Replit needs local preview-specific settings, keep them local and do not commit them.
+  Focus only on the requested app/product code and docs for this phase.
+
+  Context:
+  Use these docs as source of truth:
+  - docs/agent-plans/77-canonical-ingest-contract.md
+  - docs/agent-plans/80-api-contract-normalization.md
+
+  Goal:
+  Make it explicit in UI and API comments that:
+  - Library edits update reusable core concept data in concepts.overrides.
+  - Customer edits update only that customer assignment in customer_concepts.content_overrides.
+  - Existing customer assignments must not be silently changed when a library concept is edited.
+
+  Allowed files:
+  - artifacts/letrend/src/app/studio/concepts/[id]/review/page.tsx
+  - artifacts/letrend/src/components/studio/customer-detail/* files that actually edit
+  customer_concepts.content_overrides
+  - artifacts/api-server/src/routes/admin/concepts.ts
+  - artifacts/api-server/src/routes/studio-v2.ts or artifacts/api-server/src/routes/customer.ts only if they contain the
+  relevant customer override PATCH/POST logic
+  - docs/agent-plans/81-library-customer-override-boundary.md
+  - nearby tests only if an existing pattern fits
+
+  Do not touch:
+  - UploadConceptModal unless absolutely necessary
+  - Hagen code
+  - DB migrations
+  - dependency/build config
+  - /admin/demos
+
+  Tasks:
+  1. Locate the library concept edit surface.
+     Expected area: /studio/concepts/[id]/review.
+     Add a compact banner or helper text near the save action:
+     "Ändringar här uppdaterar konceptbiblioteket. Befintliga kundkopplingar ändras inte."
+
+  2. Locate customer-specific concept edit surfaces.
+     Find where customer_concepts.content_overrides is edited in Kundarbete/customer workspace.
+     Add compact helper text near the save/edit action:
+     "Ändringar här gäller bara denna kundkoppling och påverkar inte bibliotekskonceptet."
+
+  3. Verify API separation.
+     - PATCH /api/admin/concepts/:id must only update concepts.
+     - Customer concept PATCH/POST must only update customer_concepts/content_overrides.
+     - Do not add propagation from library concepts to existing customer assignments.
+     - Add short comments only where this boundary is non-obvious.
+
+  4. Do not change behavior unless a bug is found.
+     This phase is primarily clarity and guardrails, not a refactor.
+
+  5. Add docs/agent-plans/81-library-customer-override-boundary.md with:
+     - files changed
+     - where library edits are saved
+     - where customer-specific edits are saved
+     - UI copy added
+     - API separation confirmed
+     - verification commands/results
+     - remaining work for Phase 82
+
+  Verification:
+  Run what is feasible in Replit:
+  - pnpm --filter "./artifacts/letrend" run typecheck
+  - PORT=5173 BASE_PATH=/ pnpm --filter "./artifacts/letrend" run build
+  - pnpm --filter "./artifacts/api-server" run typecheck
+  - bash scripts/assert-railway-packaging.sh
+
+  If Replit requires local packageManager override to run pnpm, apply it locally only and restore package.json before
+  commit.
+  Do not commit Replit-specific dependency/runtime changes.
+
+  Commit message:
+  Clarify library and customer override boundaries

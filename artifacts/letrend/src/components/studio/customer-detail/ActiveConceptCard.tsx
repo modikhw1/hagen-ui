@@ -337,6 +337,9 @@ function CustomizeModal({
           </div>
         )}
 
+        <div style={{ marginBottom: 8, fontSize: 11, color: '#9ca3af' }}>
+          Ändringar här gäller bara denna kundkoppling och påverkar inte bibliotekskonceptet.
+        </div>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button
             type="button"
