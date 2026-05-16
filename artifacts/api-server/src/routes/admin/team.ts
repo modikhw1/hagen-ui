@@ -825,4 +825,273 @@ router.get('/available', requireAuth, ADMIN_ONLY, async (_req, res) => {
   }
 });
 
+// DELETE /api/admin/team/absences/:absenceId — end an absence early
+// (sets ends_on to today if still active, otherwise deletes the row).
+router.delete('/absences/:absenceId', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { absenceId } = req.params;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data: existing, error: fetchError } = await (supabase as any)
+      .from('cm_absences')
+      .select('id, starts_on, ends_on')
+      .eq('id', absenceId)
+      .maybeSingle();
+
+    if (fetchError) {
+      res.status(500).json({ error: fetchError.message });
+      return;
+    }
+    if (!existing) {
+      res.status(404).json({ error: 'Frånvaron hittades inte' });
+      return;
+    }
+
+    // Future absence → delete. Active/past → truncate ends_on to today.
+    if (existing.starts_on > today) {
+      const { error } = await (supabase as any)
+        .from('cm_absences')
+        .delete()
+        .eq('id', absenceId);
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+    } else {
+      const newEnd = today < existing.starts_on ? existing.starts_on : today;
+      const { error } = await (supabase as any)
+        .from('cm_absences')
+        .update({ ends_on: newEnd } as any)
+        .eq('id', absenceId);
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error(err, 'team absence end error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// PATCH /api/admin/team/:cmId — update CM profile fields.
+router.patch('/:cmId', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { cmId } = req.params;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+
+    const update: Record<string, unknown> = {};
+    if (typeof body['name'] === 'string') update['name'] = (body['name'] as string).trim();
+    if (typeof body['email'] === 'string') update['email'] = (body['email'] as string).trim();
+    if ('phone' in body) update['phone'] = body['phone'] ? String(body['phone']).trim() : null;
+    if ('city' in body) update['city'] = body['city'] ? String(body['city']).trim() : null;
+    if ('bio' in body) update['bio'] = body['bio'] ? String(body['bio']).trim() : null;
+    if ('avatar_url' in body) update['avatar_url'] = body['avatar_url'] ? String(body['avatar_url']).trim() : null;
+    if (typeof body['commission_rate_pct'] === 'number') {
+      const pct = body['commission_rate_pct'] as number;
+      if (pct < 0 || pct > 50) {
+        res.status(422).json({ error: 'commission_rate_pct måste vara mellan 0 och 50' });
+        return;
+      }
+      // UI sends percent (0–50); column stores decimal fraction.
+      update['commission_rate'] = pct / 100;
+    }
+
+    if (Object.keys(update).length === 0) {
+      res.status(400).json({ error: 'Inga fält att uppdatera' });
+      return;
+    }
+
+    const { data, error } = await (supabase as any)
+      .from('team_members')
+      .update(update)
+      .eq('id', cmId)
+      .select('id, name, email, phone, role, is_active, commission_rate, avatar_url, region, city, bio, color')
+      .single();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ member: data });
+  } catch (err) {
+    logger.error(err, 'team patch error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// DELETE /api/admin/team/:cmId — archive (deactivate) a CM.
+// Refuses if the CM still has active assignments.
+router.delete('/:cmId', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { cmId } = req.params;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data: activeAssignments, error: assignError } = await (supabase as any)
+      .from('cm_assignments')
+      .select('id, valid_to')
+      .eq('cm_id', cmId)
+      .or(`valid_to.is.null,valid_to.gte.${today}`);
+
+    if (assignError) {
+      res.status(500).json({ error: assignError.message });
+      return;
+    }
+    if ((activeAssignments?.length ?? 0) > 0) {
+      res.status(409).json({
+        error: `CM:en har ${activeAssignments.length} aktiva kunder. Flytta dem först.`,
+      });
+      return;
+    }
+
+    const { error } = await (supabase as any)
+      .from('team_members')
+      .update({ is_active: false } as any)
+      .eq('id', cmId);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error(err, 'team archive error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/team/:fromCmId/reassign-customers — move customers to another CM.
+router.post('/:fromCmId/reassign-customers', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const supabase = createSupabaseAdmin();
+    const { fromCmId } = req.params;
+    const body = (req.body ?? {}) as { targetCmId?: string; customerIds?: string[] };
+    const targetCmId = body.targetCmId;
+    const customerIds = Array.isArray(body.customerIds) ? body.customerIds.filter(Boolean) : [];
+
+    if (!targetCmId || customerIds.length === 0) {
+      res.status(422).json({ error: 'targetCmId och customerIds krävs' });
+      return;
+    }
+    if (targetCmId === fromCmId) {
+      res.status(422).json({ error: 'Mottagande CM måste vara en annan än källan' });
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // Close current assignments for the source CM on the selected customers.
+    const { error: closeError } = await (supabase as any)
+      .from('cm_assignments')
+      .update({ valid_to: nowIso } as any)
+      .eq('cm_id', fromCmId)
+      .is('valid_to', null)
+      .in('customer_id', customerIds);
+
+    if (closeError) {
+      res.status(500).json({ error: closeError.message });
+      return;
+    }
+
+    // Open new assignments for the target CM.
+    const inserts = customerIds.map((customer_id) => ({
+      customer_id,
+      cm_id: targetCmId,
+      valid_from: nowIso,
+      valid_to: null,
+    }));
+    const { error: insertError } = await (supabase as any)
+      .from('cm_assignments')
+      .insert(inserts);
+
+    if (insertError) {
+      res.status(500).json({ error: insertError.message });
+      return;
+    }
+
+    res.json({ ok: true, moved: customerIds.length });
+  } catch (err) {
+    logger.error(err, 'team reassign customers error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// POST /api/admin/team/upload-avatar — upload a CM avatar to the public
+// 'avatars' bucket. Accepts JSON { filename, contentType, dataBase64 } so we
+// can reuse the existing express.json parser without adding a multipart dep.
+// Returns { path, url } where url is the public URL ready for avatar_url.
+const ALLOWED_AVATAR_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const MAX_AVATAR_BYTES = 4 * 1024 * 1024; // 4 MB
+
+router.post('/upload-avatar', requireAuth, ADMIN_ONLY, async (req, res) => {
+  try {
+    const body = (req.body ?? {}) as {
+      filename?: string;
+      contentType?: string;
+      dataBase64?: string;
+    };
+    const filename = typeof body.filename === 'string' ? body.filename.trim() : '';
+    const contentType = typeof body.contentType === 'string' ? body.contentType.trim() : '';
+    const dataBase64 = typeof body.dataBase64 === 'string' ? body.dataBase64 : '';
+
+    if (!filename || !contentType || !dataBase64) {
+      res.status(422).json({ error: 'filename, contentType och dataBase64 krävs' });
+      return;
+    }
+    if (!ALLOWED_AVATAR_TYPES.has(contentType)) {
+      res.status(415).json({ error: 'Endast PNG, JPEG eller WebP stöds' });
+      return;
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(dataBase64, 'base64');
+    } catch {
+      res.status(422).json({ error: 'Ogiltig base64-data' });
+      return;
+    }
+    if (buffer.length === 0) {
+      res.status(422).json({ error: 'Tom fil' });
+      return;
+    }
+    if (buffer.length > MAX_AVATAR_BYTES) {
+      res.status(413).json({ error: 'Filen är för stor (max 4 MB)' });
+      return;
+    }
+
+    const ext =
+      contentType === 'image/png' ? 'png' :
+      contentType === 'image/webp' ? 'webp' : 'jpg';
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60) || 'avatar';
+    const userId = req.user?.id ?? 'unknown';
+    const objectPath = `team/${userId}/${Date.now()}-${safeName}.${ext}`;
+
+    const supabase = createSupabaseAdmin();
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(objectPath, buffer, {
+        contentType,
+        upsert: false,
+        cacheControl: '3600',
+      });
+
+    if (uploadError) {
+      logger.error({ err: uploadError }, 'avatar upload failed');
+      res.status(500).json({ error: uploadError.message });
+      return;
+    }
+
+    const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(objectPath);
+    res.json({ path: objectPath, url: publicData.publicUrl });
+  } catch (err) {
+    logger.error(err, 'team upload-avatar error');
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
 export default router;

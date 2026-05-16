@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Info, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -16,6 +16,7 @@ import {
 } from '@/components/admin/ui/adminModalTokens';
 import { LeTrendColors } from '@/styles/letrend-design-system';
 import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
+import { apiClient, ApiError } from '@/lib/admin/api-client';
 
 export interface StandaloneInvoiceModalProps {
   open: boolean;
@@ -42,6 +43,16 @@ type DraftInvoiceLine = {
   amountKr: string;
 };
 
+const MAX_AMOUNT_KR_PER_LINE = 500_000;
+const INTEGER_RX = /^\d+$/;
+
+function generateUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+
 function createDraftLine(): DraftInvoiceLine {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -50,10 +61,20 @@ function createDraftLine(): DraftInvoiceLine {
   };
 }
 
+function parseStrictAmountKr(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!INTEGER_RX.test(trimmed)) return null;
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value <= 0 || value > MAX_AMOUNT_KR_PER_LINE) {
+    return null;
+  }
+  return value;
+}
+
 function sumDraftLines(lines: DraftInvoiceLine[]) {
   return lines.reduce((total, line) => {
-    const amount = Number(line.amountKr);
-    return total + (Number.isFinite(amount) && amount > 0 ? Math.round(amount) : 0);
+    const amount = parseStrictAmountKr(line.amountKr);
+    return total + (amount ?? 0);
   }, 0);
 }
 
@@ -67,13 +88,30 @@ export function StandaloneInvoiceModal({
   const [lines, setLines] = useState<DraftInvoiceLine[]>([createDraftLine()]);
   const [daysUntilDue, setDaysUntilDue] = useState<string>('14');
   const [submitting, setSubmitting] = useState(false);
+  // Idempotency-key per modal-instans, regen vid line- eller dueDays-byte.
+  // Se AVTAL_AUDIT.md (#A3-D2).
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateUuid());
 
   const refresh = useAdminRefresh();
   const totalKr = useMemo(() => sumDraftLines(lines), [lines]);
 
+  useEffect(() => {
+    if (open) {
+      setIdempotencyKey(generateUuid());
+    }
+  }, [open]);
+
+  // Bara mutationen av lines/daysUntilDue ska rotera nyckeln (inte enbart
+  // antalet rader — det hade triggat på varje keystroke i description).
+  useEffect(() => {
+    setIdempotencyKey(generateUuid());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines.length, daysUntilDue]);
+
   function resetForm() {
     setLines([createDraftLine()]);
     setDaysUntilDue('14');
+    setIdempotencyKey(generateUuid());
   }
 
   function updateLine(
@@ -97,80 +135,109 @@ export function StandaloneInvoiceModal({
   }
 
   async function handleSubmit() {
+    if (!customerId) {
+      toast.error('Kund saknas — ladda om sidan och försök igen.');
+      return;
+    }
+
     const parsedDays = Number(daysUntilDue);
-    const normalizedLines = lines
-      .map((line) => ({
-        description: line.description.trim(),
-        amount: Math.round(Number(line.amountKr)),
-      }))
-      .filter((line) => line.description.length > 0 || line.amount > 0);
-
-    if (normalizedLines.length === 0) {
-      toast.error('Lägg till minst en fakturarad.');
-      return;
-    }
-
-    if (
-      normalizedLines.some(
-        (line) => !line.description || !Number.isFinite(line.amount) || line.amount <= 0,
-      )
-    ) {
-      toast.error('Varje rad måste ha beskrivning och belopp över 0.');
-      return;
-    }
-
     if (!Number.isFinite(parsedDays) || parsedDays < 1 || parsedDays > 90) {
       toast.error('Ange förfallodagar mellan 1 och 90.');
       return;
     }
 
+    // Strikt validering: varje rad måste ha både beskrivning OCH belopp.
+    // Inga "tomma" rader tystas bort. Se AVTAL_AUDIT.md (#A3-D4, D5).
+    const invalidIndex = lines.findIndex((line, index) => {
+      const description = line.description.trim();
+      const amount = parseStrictAmountKr(line.amountKr);
+      const isEmpty = description.length === 0 && line.amountKr.trim().length === 0;
+      // Tillåt sista raden att vara helt tom (UX: klick på "Lägg till rad")
+      if (isEmpty && index === lines.length - 1 && lines.length > 1) return false;
+      return description.length === 0 || amount === null;
+    });
+
+    if (invalidIndex !== -1) {
+      toast.error(
+        `Rad ${invalidIndex + 1}: beskrivning + heltal i kronor (1–${MAX_AMOUNT_KR_PER_LINE.toLocaleString('sv-SE')}).`,
+      );
+      return;
+    }
+
+    const normalizedItems = lines
+      .map((line) => {
+        const amount = parseStrictAmountKr(line.amountKr);
+        return amount === null
+          ? null
+          : {
+              description: line.description.trim(),
+              amount_ore: amount * 100,
+            };
+      })
+      .filter((item): item is { description: string; amount_ore: number } => item !== null);
+
+    if (normalizedItems.length === 0) {
+      toast.error('Lägg till minst en fakturarad.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const res = await fetch('/api/admin/invoices/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      // Använd apiClient (skickar Authorization-header). Se AVTAL_AUDIT.md (#A3-D3).
+      const body = await apiClient.post<{ invoice?: Record<string, unknown>; error?: string }>(
+        '/api/admin/invoices/create',
+        {
           customer_profile_id: customerId,
-          items: normalizedLines,
+          items: normalizedItems,
           days_until_due: Math.round(parsedDays),
           auto_finalize: true,
-        }),
-      });
-      const body = await res.json().catch(() => ({}));
+          idempotency_key: idempotencyKey,
+        },
+      );
 
-      if (!res.ok) {
-        toast.error(body.error ?? `Kunde inte skapa faktura (${res.status})`);
-        return;
-      }
-
-      const createdInvoice = body.invoice;
+      const createdInvoice = body?.invoice as Record<string, unknown> | undefined;
+      const stripeStatus = String(createdInvoice?.status ?? 'open');
 
       if (createdInvoice?.id && onCreated) {
+        const amountDue = Number(createdInvoice.amount_due ?? 0);
+        const amountPaid = Number(createdInvoice.amount_paid ?? 0);
+        const fallbackTotal = normalizedItems.reduce((sum, item) => sum + item.amount_ore, 0);
         onCreated({
-          stripe_invoice_id: createdInvoice.id,
-          number: createdInvoice.number ?? null,
-          status: createdInvoice.status ?? 'open',
-          amount_due: createdInvoice.amount_due ?? 0,
-          amount_paid: createdInvoice.amount_paid ?? 0,
-          display_amount_ore: Math.max(
-            createdInvoice.amount_due ?? 0,
-            createdInvoice.amount_paid ?? 0,
-          ),
-          currency: createdInvoice.currency ?? 'sek',
+          stripe_invoice_id: String(createdInvoice.id),
+          number: (createdInvoice.number as string | null) ?? null,
+          status: stripeStatus,
+          amount_due: amountDue,
+          amount_paid: amountPaid,
+          // Fallback till summerat belopp om Stripe inte hunnit räkna ut det.
+          // Se AVTAL_AUDIT.md (#A3-D6).
+          display_amount_ore: Math.max(amountDue, amountPaid, fallbackTotal),
+          currency: (createdInvoice.currency as string | undefined) ?? 'sek',
           created_at: createdInvoice.created
-            ? new Date(createdInvoice.created * 1000).toISOString()
+            ? new Date(Number(createdInvoice.created) * 1000).toISOString()
             : new Date().toISOString(),
-          hosted_invoice_url: createdInvoice.hosted_invoice_url ?? null,
-          has_incomplete_operation: false,
+          hosted_invoice_url: (createdInvoice.hosted_invoice_url as string | null) ?? null,
+          has_incomplete_operation: stripeStatus === 'draft',
         });
       }
 
-      toast.success(`Engångsfaktura skapad för ${customerName}.`);
+      // Differentiera mellan riktigt skickad och utkast (D9).
+      if (stripeStatus === 'draft') {
+        toast.warning(
+          `Fakturan skapades som utkast för ${customerName}. Granska i Stripe innan den skickas.`,
+        );
+      } else {
+        toast.success(`Engångsfaktura skapad för ${customerName}.`);
+      }
+
       resetForm();
       await refresh([{ type: 'customer-billing', customerId }, 'billing']);
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Nätverksfel');
+      if (err instanceof ApiError) {
+        toast.error(err.message || `Kunde inte skapa faktura (${err.status})`);
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Nätverksfel');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -233,9 +300,17 @@ export function StandaloneInvoiceModal({
                 <input
                   type="number"
                   min={1}
+                  max={MAX_AMOUNT_KR_PER_LINE}
                   step={1}
                   value={line.amountKr}
-                  onChange={(event) => updateLine(line.id, { amountKr: event.currentTarget.value })}
+                  onChange={(event) => {
+                    // Avvisa decimaler, vetenskaplig notation, mellanslag.
+                    const v = event.currentTarget.value;
+                    if (v === '' || INTEGER_RX.test(v)) {
+                      updateLine(line.id, { amountKr: v });
+                    }
+                  }}
+                  onWheel={(event) => event.currentTarget.blur()}
                   style={adminModalInputStyle}
                 />
               </div>
@@ -260,7 +335,7 @@ export function StandaloneInvoiceModal({
           <button
             type="button"
             onClick={addLine}
-            disabled={submitting}
+            disabled={submitting || lines.length >= 50}
             style={{ ...adminModalSecondaryButtonStyle }}
           >
             <Plus size={14} />

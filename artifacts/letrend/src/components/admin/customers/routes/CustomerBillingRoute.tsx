@@ -572,6 +572,7 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
               open={pricingOpen}
               onOpenChange={setPricingOpen}
               customerId={customerId}
+              customerName={customerName}
               currentPriceOre={data.monthly_price_ore}
               upcomingPrice={data.upcoming_price_change ?? null}
             />
@@ -598,7 +599,7 @@ export function CustomerBillingRoute(props: CustomerBillingRouteProps) {
               customerId={customerId}
               customerName={customerName}
               resumeMode={isPaused}
-              pausedUntil={null}
+              pausedUntil={(customer as { paused_until?: string | null } | undefined)?.paused_until ?? null}
               nextInvoiceDate={data.next_invoice_date}
               nextInvoiceAmountOre={effectivePriceOre}
             />

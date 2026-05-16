@@ -5,6 +5,11 @@ export const pauseSubscriptionActionSchema = z
   .object({
     action: z.literal('pause_subscription'),
     pause_until: z.string().trim().min(1).optional().nullable(),
+    // Idempotensnyckel per operatörs-intention (modal-instans + valt
+    // datum). Servern speglar denna till Stripes Idempotency-Key så
+    // dubbelklick/retry inte skapar dubbla pause_collection-side-effekter.
+    // Se AVTAL_AUDIT.md (#A5).
+    idempotency_key: z.string().uuid().optional(),
   })
   .strict();
 
@@ -25,14 +30,24 @@ export const cancelSubscriptionActionSchema = z
       .enum(['refund', 'customer_balance', 'outside_stripe'])
       .optional()
       .nullable(),
+    // Idempotensnyckel — bunden till operatörs-intention (modal-instans +
+    // (mode, credit_amount_ore)-kombo). Skyddar mot dubbla cancel/credit
+    // side-effekter vid retry/dubbelklick.
+    idempotency_key: z.string().uuid().optional(),
   })
   .strict();
 
 export const changeSubscriptionPriceActionSchema = z
   .object({
     action: z.literal('change_subscription_price'),
-    monthly_price: z.number().min(0).max(1_000_000),
+    // SEK, heltal (Stripe lagras i ören; UI:t pratar kronor). min(1) → gratis-sub
+    // sker via separat flow (cancel/discount), inte via "ändra pris".
+    monthly_price: z.number().int().min(1).max(1_000_000),
     mode: z.enum(['now', 'next_period']),
+    // Idempotensnyckel skickad från klienten — bunden till en operatörs-intention
+    // (modal-instans + (price,mode)-kombo). Servern speglar denna till Stripes
+    // Idempotency-Key så dubbelklick/retry inte skapar dubbla prorationsfakturor.
+    idempotency_key: z.string().uuid().optional(),
     discount: z
       .object({
         type: z.string(),
@@ -50,6 +65,7 @@ export const changeAccountManagerActionSchema = z
     cm_id: z.string().uuid().optional().nullable(),
     effective_date: z.string().trim().min(1),
     handover_note: z.string().trim().max(1000).optional().nullable(),
+    idempotency_key: z.string().uuid().optional(),
   })
   .strict();
 
@@ -75,6 +91,7 @@ export const setTemporaryCoverageActionSchema = z
     compensation_mode: z
       .enum(['covering_cm', 'primary_cm'])
       .default('covering_cm'),
+    idempotency_key: z.string().uuid().optional(),
   })
   .strict();
 
@@ -93,6 +110,8 @@ export const sendReminderActionSchema = z
 export const resumeSubscriptionActionSchema = z
   .object({
     action: z.literal('resume_subscription'),
+    // Se pauseSubscriptionActionSchema — samma idempotens-kontrakt.
+    idempotency_key: z.string().uuid().optional(),
   })
   .strict();
 

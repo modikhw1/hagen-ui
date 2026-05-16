@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { LeTrendColors, LeTrendRadius, LeTrendShadows } from '@/styles/letrend-design-system';
+import { sanitizeRichTextHtml } from '@/components/gameplan-editor/utils/sanitize';
 
 type EmailPreviewProps = {
   open: boolean;
@@ -101,7 +102,7 @@ export function EmailPreview({ open, subject, html, title, onClose }: EmailPrevi
               overflow: 'hidden',
               background: '#FFFFFF',
             }}
-            dangerouslySetInnerHTML={{ __html: html }}
+            dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(html || '') }}
           />
         </div>
       </div>

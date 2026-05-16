@@ -104,21 +104,64 @@ export default function SubscriptionModal({
     };
   }, [action, customer.next_invoice_date, currentPriceOre]);
 
+  // Idempotensnyckel per (price,mode)-intention. Skyddar mot dubbla
+  // prorationsfakturor om operatören dubbelklickar eller nätet retryar.
+  const priceIntentionKey = `${priceOre}:${priceMode}`;
+  const priceIdempotencyKey = useMemo(
+    () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    [priceIntentionKey],
+  );
+
+  // Separat idempotensnyckel för cancel/pause/resume — bunden till valt
+  // action + (cancel-mode, pause-datum) för att skydda mot dubbla
+  // cancel/credit-side-effekter vid retry/dubbelklick.
+  const actionIntentionKey = `${action}:${pauseUntil}`;
+  const actionIdempotencyKey = useMemo(
+    () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    [actionIntentionKey],
+  );
+
+  const today = todayDateInput();
+  const pauseInvalid = action === 'pause' && (!pauseUntil || pauseUntil <= today);
+
   const handleSave = async () => {
     try {
       if (action === 'change_price' && priceChanged) {
         await updatePrice.mutateAsync({
           monthly_price: oreToSek(priceOre),
           mode: priceMode,
+          idempotency_key: priceIdempotencyKey,
         });
       } else if (action === 'cancel_at_period_end') {
-        await cancelSub.mutateAsync({ mode: 'end_of_period' });
+        await cancelSub.mutateAsync({
+          mode: 'end_of_period',
+          idempotency_key: actionIdempotencyKey,
+        });
       } else if (action === 'cancel_now') {
-        await cancelSub.mutateAsync({ mode: 'immediate' });
+        // Match preview-panelens läge: ger prorata-kreditering om sub har
+        // återstående debiterad period. Tidigare skickades 'immediate' vilket
+        // gjorde preview och faktisk åtgärd osynkade.
+        await cancelSub.mutateAsync({
+          mode: 'immediate_with_credit',
+          idempotency_key: actionIdempotencyKey,
+        });
       } else if (action === 'pause') {
-        await pauseSub.mutateAsync({ pause_until: pauseUntil || null });
+        if (pauseInvalid) {
+          toast.error('Välj ett pausdatum i framtiden.');
+          return;
+        }
+        await pauseSub.mutateAsync({
+          pause_until: pauseUntil || null,
+          idempotency_key: actionIdempotencyKey,
+        });
       } else if (action === 'resume') {
-        await resumeSub.mutateAsync({});
+        await resumeSub.mutateAsync({
+          idempotency_key: actionIdempotencyKey,
+        });
       }
 
       toast.success('Abonnemanget har uppdaterats');
@@ -168,7 +211,7 @@ export default function SubscriptionModal({
             </button>
             <button
               onClick={onConfirmClick}
-              disabled={isPending || action === 'none'}
+              disabled={isPending || action === 'none' || pauseInvalid}
               className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
             >
               {isPending ? 'Sparar...' : 'Bekräfta åtgärd'}

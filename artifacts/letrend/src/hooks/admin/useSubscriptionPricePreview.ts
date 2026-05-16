@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { apiClient, ApiError } from '@/lib/admin/api-client';
 
 export interface PreviewLineItem {
   id: string;
@@ -70,35 +71,30 @@ export function useSubscriptionPricePreview({
       return;
     }
 
+    // Använd apiClient så vi får Authorization-headern (rå fetch saknade den
+    // → 401 mot autentiserade endpoints). apiClient sätter även x-request-id
+    // för korrelation mot serverloggar.
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
       setLoading(true);
       setError(null);
 
       try {
-        const res = await fetch(
+        const json = await apiClient.post<{ preview: SubscriptionPricePreview }>(
           `/api/admin/customers/${customerId}/subscription-price/preview`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-              monthly_price_sek: newMonthlyPriceKr,
-              mode,
-            }),
-          },
+          { monthly_price_sek: newMonthlyPriceKr, mode },
+          { signal: controller.signal },
         );
-
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error(body?.error ?? `HTTP ${res.status}`);
-        }
-
-        const json = await res.json();
         setPreview(json.preview ?? null);
       } catch (error) {
         if ((error as Error).name === 'AbortError') return;
-        setError(error instanceof Error ? error.message : 'Kunde inte hämta preview');
+        const msg =
+          error instanceof ApiError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : 'Kunde inte hämta preview';
+        setError(msg);
         setPreview(null);
       } finally {
         setLoading(false);

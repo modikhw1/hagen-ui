@@ -326,6 +326,17 @@ export default function ChangeCMModal(props: ChangeCMModalProps) {
   const changeMutation = useCustomerMutation(customerId, 'change_account_manager');
   const temporaryMutation = useCustomerMutation(customerId, 'set_temporary_coverage');
 
+  // Idempotensnyckel per operatörsintention. Rotera när relevanta fält
+  // ändras så att retry/dubbelklick på "samma" intention dedupliceras
+  // serverside men en ny intention får en ny nyckel.
+  const intentionKey = `${mode}:${selectedCmId}:${effectiveDate}:${coverageEndDate}:${compensationMode}`;
+  const idempotencyKey = useMemo(
+    () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    [intentionKey],
+  );
+
   function resetFormState() {
     setMode('now');
     setSelectedCmId('');
@@ -342,9 +353,11 @@ export default function ChangeCMModal(props: ChangeCMModalProps) {
   }
 
   const selectedMode = MODE_DEFINITIONS.find((item) => item.value === mode)!;
+  const today = todayDateInput();
+  const futureEffectiveOk = mode === 'now' || (Boolean(effectiveDate) && effectiveDate >= today);
   const canSubmit =
     Boolean(selectedCmId) &&
-    (mode === 'now' || Boolean(effectiveDate)) &&
+    futureEffectiveOk &&
     (mode !== 'temporary' ||
       (Boolean(effectiveDate) &&
         Boolean(coverageEndDate) &&
@@ -353,6 +366,10 @@ export default function ChangeCMModal(props: ChangeCMModalProps) {
   async function handleSubmit() {
     if (!selectedCmId) {
       toast.error('Valj en content manager.');
+      return;
+    }
+    if (mode !== 'now' && (!effectiveDate || effectiveDate < today)) {
+      toast.error('Effektivt datum maste vara idag eller senare.');
       return;
     }
 
@@ -369,12 +386,14 @@ export default function ChangeCMModal(props: ChangeCMModalProps) {
           ends_on: coverageEndDate,
           note: handoverNote.trim() || undefined,
           compensation_mode: compensationMode,
+          idempotency_key: idempotencyKey,
         });
       } else {
         await changeMutation.mutateAsync({
           cm_id: selectedCmId,
-          effective_date: mode === 'now' ? todayDateInput() : effectiveDate,
+          effective_date: mode === 'now' ? today : effectiveDate,
           handover_note: handoverNote.trim() || undefined,
+          idempotency_key: idempotencyKey,
         });
       }
 
@@ -523,6 +542,7 @@ export default function ChangeCMModal(props: ChangeCMModalProps) {
               placeholder="Valj datum"
               valueFormat="YYYY-MM-DD"
               clearable={false}
+              minDate={parseDateValue(today) ?? undefined}
             />
           )}
           {mode === 'temporary' && (
