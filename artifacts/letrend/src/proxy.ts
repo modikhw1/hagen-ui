@@ -4,7 +4,13 @@ import type { NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { getPrimaryRouteForRole, resolveAppRole } from '@/lib/auth/navigation'
 
-const PROFILE_CACHE = new Map<string, { profile: any, expires: number }>()
+// NOTE: previously this module held a module-scope PROFILE_CACHE Map that
+// persisted across requests within the same isolate. Even though it was keyed
+// by user.id (so not strictly cross-user), it served stale role data after
+// role changes / demotions and could leak roles between deploys that share an
+// isolate. We now fetch the profile per request and rely on Supabase to
+// dedupe at the connection layer. If hot-path latency becomes an issue,
+// replace with an explicit, short-TTL request-scoped cache — not module scope.
 const PROFILE_PROMISES = new Map<string, Promise<any>>()
 
 const MOBILE_REGEX = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i
@@ -191,10 +197,6 @@ export async function proxy(request: NextRequest) {
     }
 
     let profile = null
-    const cached = PROFILE_CACHE.get(user.id)
-    if (cached && cached.expires > Date.now()) {
-      profile = cached.profile
-    }
 
     if (isApiRoute) {
       // Inject user ID to avoid re-fetching in API if possible
@@ -206,27 +208,27 @@ export async function proxy(request: NextRequest) {
       }))
     }
 
-    if (!profile) {
-      // Deduplicate concurrent lookups for the same user
-      let profilePromise = PROFILE_PROMISES.get(user.id)
-      if (!profilePromise) {
-        profilePromise = Promise.resolve(supabase
-          .from('profiles')
-          .select('id, email, is_admin, role')
-          .eq('id', user.id)
-          .single()
-          .then((res) => {
-            PROFILE_PROMISES.delete(user.id)
-            return res.data
-          }))
-        PROFILE_PROMISES.set(user.id, profilePromise)
-      }
-
-      profile = await profilePromise
-      if (profile) {
-        PROFILE_CACHE.set(user.id, { profile, expires: Date.now() + 30000 })
-      }
+    // Deduplicate concurrent lookups for the same user (in-flight only — no
+    // result caching across requests; see note at top of file).
+    let profilePromise = PROFILE_PROMISES.get(user.id)
+    if (!profilePromise) {
+      profilePromise = Promise.resolve(supabase
+        .from('profiles')
+        .select('id, email, is_admin, role')
+        .eq('id', user.id)
+        .single()
+        .then((res) => {
+          PROFILE_PROMISES.delete(user.id)
+          return res.data
+        })
+        .catch(() => {
+          PROFILE_PROMISES.delete(user.id)
+          return null
+        }))
+      PROFILE_PROMISES.set(user.id, profilePromise)
     }
+
+    profile = await profilePromise
 
     if (!profile) {
       const url = request.nextUrl.clone()

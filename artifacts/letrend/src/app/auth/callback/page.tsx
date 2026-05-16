@@ -7,6 +7,9 @@ import { supabase } from '@/lib/supabase/client';
 import type { Session } from '@supabase/supabase-js';
 import { clearOnboardingSession, saveOnboardingSession } from '@/lib/onboarding/session';
 
+// Dev-only logger: PII and session details must never leak to the production console.
+const devLog: typeof console.log = import.meta.env.DEV ? console.log.bind(console) : () => {};
+
 type AuthStatus = 'loading' | 'set-password' | 'error' | 'success';
 const INVITE_LINK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -83,10 +86,10 @@ function AuthCallbackContent() {
   }, []);
 
   const handleSessionEstablished = useCallback(async (session: Session, isInviteFlow: boolean) => {
-    console.log('[SESSION] Session established for:', session.user.email);
-    console.log('[SESSION] isInviteFlow:', isInviteFlow);
-    console.log('[SESSION] user_metadata.invited_at:', session.user.user_metadata?.invited_at);
-    console.log('[SESSION] email_confirmed_at:', session.user.email_confirmed_at);
+    devLog('[SESSION] Session established for:', session.user.email);
+    devLog('[SESSION] isInviteFlow:', isInviteFlow);
+    devLog('[SESSION] user_metadata.invited_at:', session.user.user_metadata?.invited_at);
+    devLog('[SESSION] email_confirmed_at:', session.user.email_confirmed_at);
 
     // Check invite markers first to keep set-password flow deterministic.
     const metadataInvitedAt = parseMetadataDate(session.user.user_metadata?.invited_at);
@@ -106,7 +109,7 @@ function AuthCallbackContent() {
       }
 
       // New invite - go to set password first (regardless of profile status)
-      console.log('[SESSION] New invite detected, going to set password');
+      devLog('[SESSION] New invite detected, going to set password');
 
       // Store session for set password flow
       sessionRef.current = session;
@@ -130,7 +133,7 @@ function AuthCallbackContent() {
 
       if (profileData.hasProfile) {
         // User already has a profile and no invite flag - they're returning
-        console.log('[SESSION] User already has profile, redirecting to dashboard');
+        devLog('[SESSION] User already has profile, redirecting to dashboard');
         const destination = await resolveRoleDestination(session.user.id, session.access_token);
         const joiner = destination.includes('?') ? '&' : '?';
         router.replace(`${destination}${joiner}already_registered=true`);
@@ -141,17 +144,17 @@ function AuthCallbackContent() {
     }
 
     // No invite flag and no profile - check if this is part of invite flow
-    console.log('[SESSION] No invite flag, checking flow params');
+    devLog('[SESSION] No invite flag, checking flow params');
     sessionRef.current = session;
 
     // Get business name directly from user metadata (faster and more reliable)
     const fetchedBusinessName = session.user.user_metadata?.business_name || session.user.user_metadata?.name || null;
-    console.log('[SESSION] Business name from metadata:', fetchedBusinessName);
+    devLog('[SESSION] Business name from metadata:', fetchedBusinessName);
 
-    console.log('[SESSION] Flow check:', { isInviteFlow, hasInviteMarker, fetchedBusinessName });
+    devLog('[SESSION] Flow check:', { isInviteFlow, hasInviteMarker, fetchedBusinessName });
 
     // Normal login - redirect (isInviteFlow paths already returned above)
-    console.log('[SESSION] Setting status to success, redirecting');
+    devLog('[SESSION] Setting status to success, redirecting');
     updateState({ status: 'success' });
     const destination = await resolveRoleDestination(session.user.id, session.access_token);
     router.replace(destination);
@@ -169,7 +172,7 @@ function AuthCallbackContent() {
         const errorDesc = searchParams?.get('error_description');
 
         if (errorParam) {
-          console.log('Error in URL:', errorParam, errorDesc);
+          devLog('Error in URL:', errorParam, errorDesc);
           
           // Handle specific error cases
           if (errorParam === 'access_denied') {
@@ -194,11 +197,11 @@ function AuthCallbackContent() {
         const refreshToken = hashParams.get('refresh_token');
         const type = hashParams.get('type');
 
-        console.log('Hash params:', { hasAccessToken: !!accessToken, type });
+        devLog('Hash params:', { hasAccessToken: !!accessToken, type });
 
         // If we have tokens in the hash, set the session manually
         if (accessToken && refreshToken) {
-          console.log('Setting session from hash tokens...');
+          devLog('Setting session from hash tokens...');
           const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -217,7 +220,7 @@ function AuthCallbackContent() {
         }
 
         // Fallback: check if we already have a session
-        console.log('Checking existing user...');
+        devLog('Checking existing user...');
         const { data: { user }, error: getUserError } = await supabase.auth.getUser();
 
         if (getUserError) {
@@ -243,7 +246,7 @@ function AuthCallbackContent() {
         }
 
         // No session found - could be an error scenario
-        console.log('No session found after all attempts');
+        devLog('No session found after all attempts');
         
         // Check if this looks like a failed auth attempt
         const hashParamsStr = window.location.hash;
@@ -261,7 +264,7 @@ function AuthCallbackContent() {
         
         // Don't show error for abort signals
         if (err instanceof Error && (err.message?.includes('abort') || err.message?.includes('network'))) {
-          console.log('Network/abort error caught, retrying...');
+          devLog('Network/abort error caught, retrying...');
           return;
         }
         
@@ -274,17 +277,17 @@ function AuthCallbackContent() {
 
     // Also listen for auth state changes as backup
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event, 'Session:', !!session, 'Current status:', statusRef.current);
+      devLog('Auth event:', event, 'Session:', !!session, 'Current status:', statusRef.current);
 
       // Handle USER_UPDATED specially - check if we're in password flow
       if (event === 'USER_UPDATED' && session) {
         if (statusRef.current === 'set-password') {
-          console.log('User updated but in set-password flow, ignoring redirect');
+          devLog('User updated but in set-password flow, ignoring redirect');
           return;
         }
         // Only redirect if we're in loading state (not yet handled)
         if (statusRef.current === 'loading') {
-          console.log('User updated, redirecting...');
+          devLog('User updated, redirecting...');
           const destination = await resolveRoleDestination(session.user.id, session.access_token);
           router.replace(destination);
         }
@@ -309,7 +312,7 @@ function AuthCallbackContent() {
     // Timeout fallback
     const timeout = setTimeout(() => {
       if (statusRef.current === 'loading') {
-        console.log('Timeout - no session established');
+        devLog('Timeout - no session established');
         updateState({ status: 'error', error: 'Verifieringen tog för lång tid. Försök igen eller begär en ny länk.' });
       }
     }, 30000);
@@ -322,10 +325,10 @@ function AuthCallbackContent() {
 
   const handleSetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('[PASSWORD] ========== handleSetPassword CALLED ==========');
-    console.log('[PASSWORD] Form submitted');
+    devLog('[PASSWORD] ========== handleSetPassword CALLED ==========');
+    devLog('[PASSWORD] Form submitted');
     updateState({ error: null, isSubmitting: true });
-    console.log('[PASSWORD] State updated to isSubmitting: true');
+    devLog('[PASSWORD] State updated to isSubmitting: true');
 
     const pwd = state.password;
     const confirmPwd = state.confirmPassword;
@@ -345,15 +348,15 @@ function AuthCallbackContent() {
       // if the user took several minutes to fill in the password form.
       const { data: { user: freshUser } } = await supabase.auth.getUser();
       const user = freshUser ?? sessionRef.current?.user;
-      console.log('[PASSWORD] Checking user...');
+      devLog('[PASSWORD] Checking user...');
 
       if (!user) {
-        console.log('[PASSWORD] No user available!');
+        devLog('[PASSWORD] No user available!');
         updateState({ error: 'Sessionen har gått ut. Klicka på inbjudningslänken igen.', isSubmitting: false });
         return;
       }
 
-      console.log('[PASSWORD] Using user:', user.email);
+      devLog('[PASSWORD] Using user:', user.email);
 
       // Update password via the Supabase client (handles token refresh automatically)
       const { error: updateError } = await supabase.auth.updateUser({ password: pwd });
@@ -376,7 +379,7 @@ function AuthCallbackContent() {
         return;
       }
 
-      console.log('Password set successfully!');
+      devLog('Password set successfully!');
 
       // Get fresh session after password update
       const { data: { session } } = await supabase.auth.getSession();
@@ -393,7 +396,7 @@ function AuthCallbackContent() {
             invited_at: null,
           },
         });
-        console.log('[PASSWORD] Cleared invited_at flag');
+        devLog('[PASSWORD] Cleared invited_at flag');
       } catch (err) {
         console.error('[PASSWORD] Failed to clear invited_at:', err);
         // Continue anyway - not critical
@@ -420,7 +423,7 @@ function AuthCallbackContent() {
 
       // Ensure profile setup completes before redirect so onboarding APIs can authenticate reliably.
       if (isTeamInvite) {
-        console.log('[PASSWORD] Ensuring team-member profile is created before redirect');
+        devLog('[PASSWORD] Ensuring team-member profile is created before redirect');
         const teamRole = session.user.user_metadata?.role || 'content_manager';
 
         const setupResponse = await fetch('/api/admin/profiles/setup', {
@@ -457,7 +460,7 @@ function AuthCallbackContent() {
         // If there's a Stripe subscription, we'll fetch the actual price from agreement page
         if (stripeSubscriptionId || customerProfileId) {
           // Will be handled by /onboarding → /agreement flow
-          console.log('[PASSWORD] Has Stripe subscription, going to onboarding');
+          devLog('[PASSWORD] Has Stripe subscription, going to onboarding');
         }
 
         const setupResponse = await fetch('/api/admin/profiles/setup', {
@@ -481,10 +484,10 @@ function AuthCallbackContent() {
         }
       }
 
-      console.log('[PASSWORD] Redirecting to:', redirectPath, isTeamInvite ? '(team member)' : '(customer)');
+      devLog('[PASSWORD] Redirecting to:', redirectPath, isTeamInvite ? '(team member)' : '(customer)');
 
       // Single client-side transition keeps auth/navigation flow predictable.
-      console.log('[PASSWORD] Redirecting to:', redirectPath);
+      devLog('[PASSWORD] Redirecting to:', redirectPath);
       router.replace(redirectPath);
       router.refresh();
 

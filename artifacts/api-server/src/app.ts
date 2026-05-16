@@ -71,8 +71,9 @@ app.use(
   webhookRouter,
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Larger JSON limit to accommodate small base64-encoded uploads (e.g. avatars).
+app.use(express.json({ limit: '6mb' }));
+app.use(express.urlencoded({ extended: true, limit: '6mb' }));
 
 app.use("/api", router);
 

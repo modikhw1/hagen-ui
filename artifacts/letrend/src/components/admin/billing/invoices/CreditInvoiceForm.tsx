@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -15,7 +15,10 @@ import {
   Text,
   TextInput,
   Textarea,
+  Tooltip,
 } from '@mantine/core';
+
+import { apiClient, ApiError, callCustomerAction } from '@/lib/admin/api-client';
 
 type AdjustmentMode =
   | 'credit_only'
@@ -39,11 +42,30 @@ export interface CreditInvoiceFormProps {
   lines: InvoiceLine[];
   hasActiveSubscription: boolean;
   canRefundPaymentMethod: boolean;
+  /** ISO-4217, default 'sek'. Se AVTAL_AUDIT.md (#A8-D17). */
+  currency?: string;
   onCompleted: () => Promise<void>;
+  /** Stänger föräldermodalen efter lyckad submit. Se AVTAL_AUDIT.md (#A8-D22). */
+  onSuccess?: () => void;
 }
 
-function formatAmountOre(amountOre: number) {
-  return `${Math.round(amountOre / 100).toLocaleString('sv-SE')} kr`;
+function generateUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+
+function formatAmountOre(amountOre: number, currency: string) {
+  try {
+    return new Intl.NumberFormat('sv-SE', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+      maximumFractionDigits: 0,
+    }).format(Math.round(amountOre / 100));
+  } catch {
+    return `${Math.round(amountOre / 100).toLocaleString('sv-SE')} ${currency.toUpperCase()}`;
+  }
 }
 
 export function CreditInvoiceForm({
@@ -54,12 +76,16 @@ export function CreditInvoiceForm({
   lines,
   hasActiveSubscription,
   canRefundPaymentMethod,
+  currency = 'sek',
   onCompleted,
+  onSuccess,
 }: CreditInvoiceFormProps) {
   const [mode, setMode] = useState<AdjustmentMode>('credit_only');
   const [scope, setScope] = useState<CreditScope>('invoice');
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
-  const [reason, setReason] = useState<string>('order_change');
+  // Default '' — operatören måste aktivt välja anledning.
+  // Se AVTAL_AUDIT.md (#A8-D18).
+  const [reason, setReason] = useState<string>('');
   const [memo, setMemo] = useState('');
   const [amountKr, setAmountKr] = useState<string | number>(
     String(Math.round(defaultAmountOre / 100)),
@@ -68,17 +94,38 @@ export function CreditInvoiceForm({
     String(Math.round(defaultAmountOre / 100)),
   );
   const [newDescription, setNewDescription] = useState('');
-  const [settlementMode, setSettlementMode] =
-    useState<SettlementMode>('customer_balance');
+  const [settlementMode, setSettlementMode] = useState<SettlementMode>(
+    canRefundPaymentMethod ? 'refund' : 'customer_balance',
+  );
   const [submitting, setSubmitting] = useState(false);
   const [autoReissue, setAutoReissue] = useState(false);
+  // Idempotency-key per form-instans, regen vid mode/amount/scope-byte.
+  // Se AVTAL_AUDIT.md (#A8-D12).
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => generateUuid());
 
   const isPaidInvoice = invoiceStatus === 'paid';
   const isOpenInvoice = invoiceStatus === 'open';
-  const resolvedSettlementMode =
+
+  // Auto-flippa till credit_and_reissue när autoReissue slås på.
+  // Se AVTAL_AUDIT.md (#A8-D11, D23).
+  useEffect(() => {
+    if (autoReissue && mode === 'credit_only') {
+      setMode('credit_and_reissue');
+    }
+  }, [autoReissue, mode]);
+
+  // Rotera idempotensnyckel vid varje meningsfull intentionsändring.
+  useEffect(() => {
+    setIdempotencyKey(generateUuid());
+  }, [mode, scope, amountKr, selectedLineId, settlementMode]);
+
+  // Klampa settlementMode om kortet inte kan refundas — men visa det
+  // visuellt (disablad radio + tooltip) i stället för att tysta. (D15)
+  const effectiveSettlementMode: SettlementMode =
     !canRefundPaymentMethod && settlementMode === 'refund'
       ? 'customer_balance'
       : settlementMode;
+
   const selectedLine =
     lines.find((line) => line.id === selectedLineId) ?? null;
   const maxCreditOre =
@@ -90,9 +137,9 @@ export function CreditInvoiceForm({
     () =>
       lines.map((line) => ({
         value: line.id,
-        label: `${line.description} (${formatAmountOre(Math.abs(line.amount))})`,
+        label: `${line.description} (${formatAmountOre(Math.abs(line.amount), currency)})`,
       })),
-    [lines],
+    [lines, currency],
   );
 
   const modeOptions = [
@@ -125,18 +172,32 @@ export function CreditInvoiceForm({
     setAmountKr(String(roundedKr));
   }
 
-  async function handleAdjustInvoice() {
+  function validateCommon(): { amountOre: number } | null {
+    if (!reason) {
+      toast.error('Välj en anledning.');
+      return null;
+    }
     const amountOre = Math.round(Number(amountKr) * 100);
     if (!Number.isFinite(amountOre) || amountOre <= 0) {
       toast.error('Ange ett kreditbelopp över 0.');
-      return;
-    }
-    if (scope === 'line' && !selectedLineId) {
-      toast.error('Välj fakturaraden som ska krediteras.');
-      return;
+      return null;
     }
     if (amountOre > maxCreditOre) {
-      toast.error('Kreditbeloppet får inte överstiga valt belopp.');
+      toast.error(
+        `Kreditbeloppet får inte överstiga ${formatAmountOre(maxCreditOre, currency)}.`,
+      );
+      return null;
+    }
+    return { amountOre };
+  }
+
+  async function handleAdjustInvoice() {
+    const validation = validateCommon();
+    if (!validation) return;
+    const { amountOre } = validation;
+
+    if (scope === 'line' && !selectedLineId) {
+      toast.error('Välj fakturaraden som ska krediteras.');
       return;
     }
 
@@ -147,9 +208,7 @@ export function CreditInvoiceForm({
         !Number.isFinite(replacementOre) ||
         replacementOre <= 0
       ) {
-        toast.error(
-          'Ange nytt belopp och beskrivning för ersättningsfakturan.',
-        );
+        toast.error('Ange nytt belopp och beskrivning för ersättningsfakturan.');
         return;
       }
     }
@@ -163,9 +222,10 @@ export function CreditInvoiceForm({
             amount_ore: amountOre,
             stripe_line_item_id:
               scope === 'line' ? selectedLineId ?? undefined : undefined,
-            settlement_mode: isPaidInvoice ? resolvedSettlementMode : undefined,
+            settlement_mode: isPaidInvoice ? effectiveSettlementMode : undefined,
             new_amount_ore: Math.round(Number(newAmountKr) * 100),
             new_description: newDescription.trim(),
+            idempotency_key: idempotencyKey,
           }
         : {
             action: 'credit_note_only' as const,
@@ -174,21 +234,18 @@ export function CreditInvoiceForm({
             amount_ore: amountOre,
             stripe_line_item_id:
               scope === 'line' ? selectedLineId ?? undefined : undefined,
-            settlement_mode: isPaidInvoice ? resolvedSettlementMode : undefined,
+            settlement_mode: isPaidInvoice ? effectiveSettlementMode : undefined,
+            idempotency_key: idempotencyKey,
           };
 
-    const res = await fetch(`/api/admin/invoices/${invoiceId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(result.error ?? `HTTP ${res.status}`);
-    }
+    // Använd apiClient (Authorization + ApiError). Se AVTAL_AUDIT.md (#A8-D13).
+    const result = await apiClient.patch<{ requires_attention?: boolean }>(
+      `/api/admin/invoices/${invoiceId}`,
+      body,
+    );
 
-    if (result.requires_attention) {
-      toast.error(
+    if (result?.requires_attention) {
+      toast.warning(
         'Kreditnota skapad men ersättningsfakturan behövde manuell uppföljning.',
       );
     } else if (mode === 'credit_and_reissue') {
@@ -199,48 +256,64 @@ export function CreditInvoiceForm({
   }
 
   async function handleCancelSubscription() {
-    const amountOre = Math.round(Number(amountKr) * 100);
-    if (!Number.isFinite(amountOre) || amountOre <= 0) {
-      toast.error('Ange ett kreditbelopp över 0.');
-      return;
-    }
+    const validation = validateCommon();
+    if (!validation) return;
+    const { amountOre } = validation;
 
-    const res = await fetch(`/api/admin/customers/${customerId}/cancel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode: 'immediate_with_credit',
-        invoice_id: invoiceId,
-        credit_amount_ore: amountOre,
-        memo: memo.trim() || undefined,
-        reason,
-        credit_settlement_mode: isPaidInvoice
-          ? resolvedSettlementMode
-          : undefined,
-      }),
+    // Routea via dispatcher-mönstret (samma som A2/A5). Se AVTAL_AUDIT.md (#A8-D16).
+    const result = await callCustomerAction(customerId, {
+      action: 'cancel_subscription',
+      mode: 'immediate_with_credit',
+      invoice_id: invoiceId,
+      credit_amount_ore: amountOre,
+      memo: memo.trim() || undefined,
+      reason: reason as
+        | 'duplicate'
+        | 'fraudulent'
+        | 'order_change'
+        | 'product_unsatisfactory',
+      credit_settlement_mode: isPaidInvoice ? effectiveSettlementMode : undefined,
     });
-    const result = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      throw new Error(result.error ?? `HTTP ${res.status}`);
+
+    if (!result.ok) {
+      throw new Error(result.error);
     }
 
     toast.success('Abonnemang avslutat och kreditering skapad.');
   }
 
   async function handleSubmit() {
+    if (submitting) return; // dubbelklick-skydd utöver disabled
     setSubmitting(true);
+    let didSucceed = false;
     try {
       if (mode === 'cancel_subscription') {
         await handleCancelSubscription();
       } else {
         await handleAdjustInvoice();
       }
-      await onCompleted();
+      didSucceed = true;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Nätverksfel');
-    } finally {
-      setSubmitting(false);
+      if (error instanceof ApiError) {
+        toast.error(error.message);
+      } else {
+        toast.error(error instanceof Error ? error.message : 'Nätverksfel');
+      }
     }
+
+    if (didSucceed) {
+      // Stäng modalen INNAN vi släpper submitting — annars kan operatören
+      // hinna klicka igen. (D22)
+      onSuccess?.();
+      try {
+        await onCompleted();
+      } catch (refreshError) {
+        // Lyckad operation men refresh failade — varna, inte error. (D21)
+        console.warn('CreditInvoiceForm refresh failed', refreshError);
+        toast.warning('Kreditering skapad men listan kunde inte uppdateras.');
+      }
+    }
+    setSubmitting(false);
   }
 
   return (
@@ -272,8 +345,10 @@ export function CreditInvoiceForm({
 
       <Select
         label="Anledning"
-        value={reason}
-        onChange={(value) => setReason(value || 'order_change')}
+        value={reason || null}
+        onChange={(value) => setReason(value ?? '')}
+        placeholder="Välj anledning…"
+        required
         data={[
           { value: 'order_change', label: 'Ändring av order' },
           { value: 'duplicate', label: 'Dubblett' },
@@ -300,10 +375,7 @@ export function CreditInvoiceForm({
             label="Vad ska krediteras?"
           >
             <Stack mt="xs" gap="xs">
-              <Radio
-                value="invoice"
-                label="Hela fakturan / valfritt totalbelopp"
-              />
+              <Radio value="invoice" label="Hela fakturan / valfritt totalbelopp" />
               <Radio value="line" label="En specifik fakturarad" />
             </Stack>
           </Radio.Group>
@@ -326,28 +398,41 @@ export function CreditInvoiceForm({
       <NumberInput
         label={
           mode === 'cancel_subscription'
-            ? 'Kreditbelopp vid avslut (kr)'
-            : 'Kreditbelopp (kr)'
+            ? `Kreditbelopp vid avslut (${currency.toUpperCase()})`
+            : `Kreditbelopp (${currency.toUpperCase()})`
         }
         min={1}
+        max={Math.round(maxCreditOre / 100)}
         step={1}
         value={amountKr}
         onChange={setAmountKr}
+        description={`Max ${formatAmountOre(maxCreditOre, currency)} (faktura/rad-summa)`}
       />
 
-      {isPaidInvoice && (
+      {isPaidInvoice && mode !== 'cancel_subscription' && (
         <Radio.Group
-          value={resolvedSettlementMode}
+          value={effectiveSettlementMode}
           onChange={(value) => setSettlementMode(value as SettlementMode)}
           label="Hur ska krediten hanteras?"
         >
           <Stack mt="xs" gap="xs">
-            {canRefundPaymentMethod && (
-              <Radio
-                value="refund"
-                label="Återbetala till kundens betalmetod"
-              />
-            )}
+            <Tooltip
+              label={
+                canRefundPaymentMethod
+                  ? ''
+                  : 'Kortet kan inte återbetalas (utgånget eller ej tillgängligt).'
+              }
+              disabled={canRefundPaymentMethod}
+              withArrow
+            >
+              <div>
+                <Radio
+                  value="refund"
+                  label="Återbetala till kundens betalmetod"
+                  disabled={!canRefundPaymentMethod}
+                />
+              </div>
+            </Tooltip>
             <Radio
               value="customer_balance"
               label="Lägg som kundsaldo för framtida fakturor"
@@ -367,7 +452,7 @@ export function CreditInvoiceForm({
             in orelaterade pending invoice items.
           </Alert>
           <NumberInput
-            label="Nytt fakturabelopp (kr)"
+            label={`Nytt fakturabelopp (${currency.toUpperCase()})`}
             min={1}
             step={1}
             value={newAmountKr}
@@ -389,21 +474,6 @@ export function CreditInvoiceForm({
           onChange={(event) => setAutoReissue(event.currentTarget.checked)}
           label="Skapa i stället en korrigerad ersättningsfaktura efter kreditering"
         />
-      )}
-
-      {autoReissue && mode === 'credit_only' && (
-        <>
-          <Alert color="blue">
-            Du har slagit på ersättningsfaktura. Formuläret byter till samma
-            flöde som Kreditera och ersättningsfakturera.
-          </Alert>
-          <Button
-            variant="light"
-            onClick={() => setMode('credit_and_reissue')}
-          >
-            Byt till ersättningsflöde
-          </Button>
-        </>
       )}
 
       <Textarea

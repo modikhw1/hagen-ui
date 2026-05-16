@@ -7,6 +7,7 @@ import type { TranslatedConcept } from '@/lib/translator';
 import { LeTrendColors, LeTrendRadius } from '@/styles/letrend-design-system';
 import type { CustomerConcept, CustomerProfile, EmailJobEntry, EmailLogEntry } from '@/types/studio-v2';
 import { EMAIL_TEMPLATES } from './shared';
+import { sanitizeRichTextHtml } from '@/components/gameplan-editor/utils/sanitize';
 
 interface CustomerCommunicationPanelProps {
   customer: CustomerProfile;
@@ -513,7 +514,7 @@ export function CustomerCommunicationPanel({
                         color: LeTrendColors.textPrimary,
                         lineHeight: 1.6,
                       }}
-                      dangerouslySetInnerHTML={{ __html: email.body_html }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(email.body_html || '') }}
                     />
                   )}
                 </div>

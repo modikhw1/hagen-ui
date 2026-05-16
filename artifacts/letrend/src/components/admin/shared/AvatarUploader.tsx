@@ -37,11 +37,22 @@ export function AvatarUploader({
     setUploading(true);
     setLocalError(null);
     try {
-      const formData = new FormData();
-      formData.set('file', file);
+      const buf = await file.arrayBuffer();
+      // Convert to base64 in chunks to avoid call-stack overflow on large files.
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      const dataBase64 = btoa(binary);
       const response = await apiClient.post<AvatarUploadResponse>(
         '/api/admin/team/upload-avatar',
-        formData,
+        {
+          filename: file.name,
+          contentType: file.type || 'image/jpeg',
+          dataBase64,
+        },
       );
       onChange(response.url);
     } catch (uploadError) {

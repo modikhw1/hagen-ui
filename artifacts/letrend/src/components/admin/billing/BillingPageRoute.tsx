@@ -2,7 +2,14 @@
 
 import { useMemo, useState, type ElementType } from 'react';
 import { Link } from 'wouter';
-import { useRouter } from '@/lib/navigation-compat';
+import { useRouter, useSearchParams, usePathname } from '@/lib/navigation-compat';
+import SubscriptionsRoute from './subscriptions/SubscriptionsRoute';
+import InvoicesRoute from './invoices/InvoicesRoute';
+import type {
+  BillingInvoiceStatusFilter,
+  BillingSubscriptionStatusFilter,
+  EnvFilter,
+} from '@/lib/admin/billing';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
@@ -94,6 +101,48 @@ function eventColor(action: string): string {
 
 export default function BillingPageRoute() {
   const router = useRouter();
+  const pathname = usePathname() ?? '/admin/billing';
+  const [searchParams] = useSearchParams();
+  const view = (searchParams?.get('view') ?? '') as '' | 'subscriptions' | 'invoices';
+  const env = (searchParams?.get('env') ?? 'all') as EnvFilter;
+  const page = Math.max(1, Number(searchParams?.get('page') ?? 1) || 1);
+  const subStatus = (searchParams?.get('status') ?? 'all') as BillingSubscriptionStatusFilter;
+  const invStatus = (searchParams?.get('status') ?? 'all') as BillingInvoiceStatusFilter;
+
+  const setView = (next: '' | 'subscriptions' | 'invoices') => {
+    const params = new URLSearchParams(searchParams?.toString() ?? '');
+    if (next) params.set('view', next); else params.delete('view');
+    params.delete('page');
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  };
+
+  const ViewTabs = () => (
+    <nav className="flex gap-1 rounded-md border border-border bg-card p-1 text-sm">
+      {[
+        { key: '', label: 'Översikt' },
+        { key: 'subscriptions', label: 'Abonnemang' },
+        { key: 'invoices', label: 'Fakturor' },
+      ].map((tab) => {
+        const active = view === tab.key;
+        return (
+          <button
+            key={tab.key || 'overview'}
+            type="button"
+            onClick={() => setView(tab.key as '' | 'subscriptions' | 'invoices')}
+            className={
+              active
+                ? 'rounded px-3 py-1.5 bg-primary text-primary-foreground font-medium'
+                : 'rounded px-3 py-1.5 text-muted-foreground hover:text-foreground hover:bg-muted'
+            }
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+
   const [searchTerm, setSearchTerm] = useState('');
 
   const isInvoiceSearch = useMemo(() => {
@@ -195,12 +244,39 @@ export default function BillingPageRoute() {
   const arr = mrrNow * 12;
   const mrrDelta = mrrNow - mrr30dAgo;
 
+  if (view === 'subscriptions') {
+    return (
+      <div className="space-y-4">
+        <PageHeader
+          title="Abonnemang"
+          subtitle="Alla abonnemang sorterade efter senaste"
+        />
+        <ViewTabs />
+        <SubscriptionsRoute env={env} status={subStatus} page={page} />
+      </div>
+    );
+  }
+
+  if (view === 'invoices') {
+    return (
+      <div className="space-y-4">
+        <PageHeader
+          title="Fakturor"
+          subtitle="Alla fakturor sorterade efter senaste"
+        />
+        <ViewTabs />
+        <InvoicesRoute env={env} status={invStatus} page={page} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Billing-cockpit"
         subtitle="Kassaflöde, åtgärder, kommande pengar in och Stripe-händelser"
       />
+      <ViewTabs />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <SummaryCard
@@ -309,7 +385,7 @@ export default function BillingPageRoute() {
                               );
                               return;
                             }
-                            router.push('/admin/billing/invoices');
+                            router.push('/admin/billing?view=invoices');
                           }}
                           className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted"
                         >
@@ -563,7 +639,7 @@ export default function BillingPageRoute() {
             <ul className="space-y-1 text-sm">
               <li>
                 <Link
-                  href="/admin/billing/invoices"
+                  href="/admin/billing?view=invoices"
                   className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted"
                 >
                   Alla fakturor <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -571,7 +647,7 @@ export default function BillingPageRoute() {
               </li>
               <li>
                 <Link
-                  href="/admin/billing/subscriptions"
+                  href="/admin/billing?view=subscriptions"
                   className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-muted"
                 >
                   Alla abonnemang <ArrowRight className="h-4 w-4 text-muted-foreground" />

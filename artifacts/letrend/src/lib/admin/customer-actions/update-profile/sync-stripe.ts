@@ -78,11 +78,19 @@ export async function syncStripeContactInfo(params: {
     return;
   }
 
-  await ctx.stripeClient.customers.update(profile.stripe_customer_id, {
-    email: nextContactEmail,
-    name:
-      typeof profile.business_name === 'string' && profile.business_name
-        ? profile.business_name
-        : undefined,
-  });
+  await ctx.stripeClient.customers.update(
+    profile.stripe_customer_id,
+    {
+      email: nextContactEmail,
+      name:
+        typeof profile.business_name === 'string' && profile.business_name
+          ? profile.business_name
+          : undefined,
+    },
+    {
+      // Stable per (customer, requestId) so a retried request never
+      // double-applies a profile change in Stripe.
+      idempotencyKey: `cust-update:${profile.stripe_customer_id}:${ctx.requestId}`,
+    },
+  );
 }

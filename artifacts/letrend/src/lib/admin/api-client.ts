@@ -299,14 +299,22 @@ function resolveCustomerActionRequest(
         body: withoutAction(payload),
       };
     case 'pause_subscription':
+      // C1: kanonisk B-route (POST /:id/pause) wired i api-server.
       return {
         path: `/api/admin/customers/${id}/pause`,
         method: 'POST',
         body: withoutAction(payload),
       };
     case 'resume_subscription':
-      return { path: `/api/admin/customers/${id}/resume`, method: 'POST', body: {} };
+      // C1: kanonisk B-route (POST /:id/resume) wired i api-server.
+      return {
+        path: `/api/admin/customers/${id}/resume`,
+        method: 'POST',
+        body: withoutAction(payload),
+      };
     case 'change_subscription_price':
+      // C1: kanonisk B4-route (POST /:id/subscription-price) — gör riktig
+      // Stripe-swap + DB-mirror. Body matchar { monthly_price, mode }.
       return {
         path: `/api/admin/customers/${id}/subscription-price`,
         method: 'POST',

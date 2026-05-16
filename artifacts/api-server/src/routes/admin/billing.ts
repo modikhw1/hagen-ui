@@ -6,59 +6,9 @@ import { logger } from '../../lib/logger.js';
 const router = Router();
 const ADMIN_ONLY = requireRole(['admin']);
 
-// GET /api/admin/billing/invoices
-router.get('/invoices', requireAuth, ADMIN_ONLY, async (req, res) => {
-  try {
-    const supabase = createSupabaseAdmin();
-    const status = req.query['status'] as string | undefined;
-    const limit = Math.min(Number(req.query['limit'] ?? 50), 200);
-
-    let query = supabase
-      .from('invoices')
-      .select('id, stripe_invoice_id, customer_profile_id, amount_due, status, created_at, due_date, hosted_invoice_url')
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (status) {
-      query = (query as any).eq('status', status);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      res.status(500).json({ error: error.message });
-      return;
-    }
-
-    res.json({ invoices: data ?? [], total: data?.length ?? 0 });
-  } catch (err) {
-    logger.error(err, 'billing invoices error');
-    res.status(500).json({ error: 'Internt serverfel' });
-  }
-});
-
-// GET /api/admin/billing/subscriptions
-router.get('/subscriptions', requireAuth, ADMIN_ONLY, async (req, res) => {
-  try {
-    const supabase = createSupabaseAdmin();
-    const limit = Math.min(Number(req.query['limit'] ?? 50), 200);
-
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .select('stripe_subscription_id, customer_profile_id, status, cancel_at_period_end, current_period_end, current_period_start, amount, created')
-      .order('created', { ascending: false })
-      .limit(limit);
-
-    if (error) {
-      res.status(500).json({ error: error.message });
-      return;
-    }
-
-    res.json({ subscriptions: data ?? [], total: data?.length ?? 0 });
-  } catch (err) {
-    logger.error(err, 'billing subscriptions error');
-    res.status(500).json({ error: 'Internt serverfel' });
-  }
-});
+// NOTE: /invoices and /subscriptions list endpoints are served by
+// routes/admin/invoices.ts and routes/admin/subscriptions.ts (canonical).
+// Duplicates previously defined here were removed to avoid drift.
 
 // GET /api/admin/billing/health
 router.get('/health', requireAuth, ADMIN_ONLY, async (_req, res) => {
@@ -107,7 +57,7 @@ router.get('/recent-events', requireAuth, ADMIN_ONLY, async (req, res) => {
     const { data: auditRows, error } = await supabase
       .from('audit_log')
       .select('id, action, entity_type, entity_id, actor_email, actor_role, metadata, created_at')
-      .like('action', 'admin.invoice%')
+      .or('action.like.admin.invoice%,action.like.admin.subscription%,action.like.admin.discount%')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -123,6 +73,12 @@ router.get('/recent-events', requireAuth, ADMIN_ONLY, async (req, res) => {
       'admin.invoice.payment_failed': 'Betalning misslyckades',
       'admin.invoice.payment_succeeded': 'Betalning lyckades',
       'admin.invoice.reissued': 'Faktura återutfärdad',
+      'admin.subscription.paused': 'Abonnemang pausat',
+      'admin.subscription.resumed': 'Abonnemang återupptaget',
+      'admin.subscription.cancelled': 'Abonnemang avslutat',
+      'admin.subscription.price_changed': 'Pris ändrat',
+      'admin.discount.applied': 'Rabatt tillagd',
+      'admin.discount.removed': 'Rabatt borttagen',
     };
 
     // Resolve customer business names referenced by metadata.customer_profile_id.

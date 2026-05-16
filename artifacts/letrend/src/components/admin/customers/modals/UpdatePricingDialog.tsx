@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Alert,
@@ -20,10 +20,23 @@ import { useAdminRefresh } from '@/hooks/admin/useAdminRefresh';
 import { useCustomerMutation } from '@/hooks/admin/useCustomerMutation';
 import { useSubscriptionPricePreview } from '@/hooks/admin/useSubscriptionPricePreview';
 
+function generateUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export interface UpdatePricingDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   customerId: string;
+  /** Kundens namn — krävs för typad bekräftelse vid "Omedelbart"-flöde. */
+  customerName?: string;
   currentPriceOre: number;
   upcomingPrice?: {
     price_ore: number;
@@ -49,6 +62,7 @@ export function UpdatePricingDialog({
   open,
   onOpenChange,
   customerId,
+  customerName,
   currentPriceOre,
   upcomingPrice,
 }: UpdatePricingDialogProps) {
@@ -56,6 +70,20 @@ export function UpdatePricingDialog({
   const [effectiveDate, setEffectiveDate] = useState<'next_cycle' | 'immediate'>(
     'next_cycle',
   );
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmInput, setConfirmInput] = useState('');
+
+  const mode = effectiveDate === 'next_cycle' ? 'next_period' : 'now';
+
+  // Rotera idempotensnyckel per (price,mode)-intention.
+  const intentionKey = `${newPriceKr}:${mode}`;
+  const idempotencyKey = useMemo(() => generateUuid(), [intentionKey]);
+
+  // Återställ bekräftelseflöde om operatören ändrar intention.
+  useEffect(() => {
+    setShowConfirm(false);
+    setConfirmInput('');
+  }, [intentionKey]);
 
   const { mutateAsync, isPending } = useCustomerMutation(
     customerId,
@@ -70,11 +98,21 @@ export function UpdatePricingDialog({
       customerId,
       newMonthlyPriceKr: Number.isFinite(numericPriceKr) ? numericPriceKr : null,
       currentPriceOre,
-      mode: effectiveDate === 'next_cycle' ? 'next_period' : 'now',
+      mode,
       debounceMs: 500,
     });
 
-  const handleSubmit = async () => {
+  // Destruktiv bekräftelse när "Omedelbart" ger en faktura > 0 kr.
+  const requiresConfirm = Boolean(
+    preview && mode === 'now' && preview.invoice_total_ore > 0,
+  );
+  const confirmMatches =
+    !requiresConfirm ||
+    !customerName ||
+    (confirmInput.length > 0 &&
+      normalizeName(confirmInput) === normalizeName(customerName));
+
+  const performSubmit = async () => {
     const num = Number(newPriceKr);
     if (!Number.isFinite(num) || num <= 0) {
       toast.error('Ange ett giltigt pris över 0 kr.');
@@ -84,7 +122,8 @@ export function UpdatePricingDialog({
     try {
       await mutateAsync({
         monthly_price: num,
-        mode: effectiveDate === 'next_cycle' ? 'next_period' : 'now',
+        mode,
+        idempotency_key: idempotencyKey,
       });
       toast.success('Pris uppdaterat.');
       await refresh([
@@ -96,6 +135,18 @@ export function UpdatePricingDialog({
     } catch {
       // Mutation hook handles error rendering.
     }
+  };
+
+  const handleSubmit = async () => {
+    if (requiresConfirm && !showConfirm) {
+      setShowConfirm(true);
+      return;
+    }
+    if (requiresConfirm && !confirmMatches) {
+      toast.error('Skriv kundens namn för att bekräfta.');
+      return;
+    }
+    await performSubmit();
   };
 
   const diff = Number(newPriceKr) - currentPriceOre / 100;
@@ -227,12 +278,42 @@ export function UpdatePricingDialog({
           </Box>
         ) : null}
 
+        {requiresConfirm && showConfirm && customerName ? (
+          <Alert
+            color="red"
+            icon={<IconAlertTriangle size={16} />}
+            title="Bekräfta destruktiv åtgärd"
+          >
+            <Stack gap={6}>
+              <Text size="xs">
+                Detta fakturerar kunden{' '}
+                <strong>{formatKr(preview!.invoice_total_ore)}</strong> direkt.
+                Skriv kundens namn för att bekräfta: <strong>{customerName}</strong>
+              </Text>
+              <TextInput
+                autoFocus
+                value={confirmInput}
+                onChange={(event) => setConfirmInput(event.target.value)}
+                placeholder={customerName}
+                size="xs"
+              />
+            </Stack>
+          </Alert>
+        ) : null}
+
         <Group justify="flex-end" mt="md">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Avbryt
           </Button>
-          <Button onClick={() => void handleSubmit()} loading={isPending}>
-            Spara ändring
+          <Button
+            onClick={() => void handleSubmit()}
+            loading={isPending}
+            disabled={requiresConfirm && showConfirm && !confirmMatches}
+            color={requiresConfirm ? 'red' : undefined}
+          >
+            {requiresConfirm && !showConfirm
+              ? `Fortsätt (${formatKr(preview!.invoice_total_ore)} faktureras nu)`
+              : 'Spara ändring'}
           </Button>
         </Group>
       </Stack>

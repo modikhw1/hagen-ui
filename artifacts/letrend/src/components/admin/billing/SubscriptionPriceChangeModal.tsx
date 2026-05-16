@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { apiClient } from '@/lib/admin/api-client';
+import { ApiError, apiClient, callCustomerAction } from '@/lib/admin/api-client';
 import { Metric, ModeButton } from '@/components/admin/_primitives';
 import { Table } from '@mantine/core';
 import { AdminFormDialog } from '@/components/admin/ui/feedback/AdminFormDialog';
@@ -14,6 +14,17 @@ import { shortDateSv } from '@/lib/admin/time';
 import { subscriptionPriceChangeSchema } from '@/lib/schemas/billing';
 import { cn } from '@/lib/utils';
 import { ADMIN_MODAL_INPUT_CLS, ADMIN_MODAL_LABEL_CLS } from '@/components/admin/ui/adminModalTokens';
+
+function generateUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}-${Math.random().toString(16).slice(2)}`;
+}
+
+function normalizeName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
 type PreviewPayload = {
   mode: 'now' | 'next_period';
@@ -74,6 +85,22 @@ export default function SubscriptionPriceChangeModal({
   const validatedMonthlyPrice = validation.success ? validation.data.monthly_price : null;
   const validatedMode = validation.success ? validation.data.mode : null;
 
+  // Idempotensnyckel rotateras när användarens intention (pris+mode) ändras.
+  // Skyddar mot dubbla prorationsfakturor vid dubbelklick / nät-retry.
+  const idempotencyKey = useMemo(
+    () => (previewKey ? generateUuid() : null),
+    [previewKey],
+  );
+
+  // Steg-2-bekräftelse krävs när "Byt pris nu" ger en faktura > 0 kr.
+  // Operatören måste skriva kundens namn exakt → skyddar mot fel-tabb-misstag.
+  const [confirmInput, setConfirmInput] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+  useEffect(() => {
+    setShowConfirm(false);
+    setConfirmInput('');
+  }, [previewKey]);
+
   const previewMutation = useMutation({
     mutationKey: ['admin', 'customer-subscription-preview', customerId],
     mutationFn: async (input: {
@@ -101,18 +128,35 @@ export default function SubscriptionPriceChangeModal({
       if (!validation.success || previewedFor !== previewKey) {
         throw new Error('Förhandsvisningen är inaktuell. Uppdatera innan du sparar.');
       }
+      if (!idempotencyKey) {
+        throw new Error('Internt fel: saknad idempotensnyckel.');
+      }
 
-      await apiClient.patch<unknown>(
-        `/api/admin/customers/${customerId}/subscription-price`,
-        {
-          monthly_price: validation.data.monthly_price,
-          mode: validation.data.mode,
-        },
-      );
+      // Gå via dispatcher-pathen (samma som UpdatePricingDialog/SubscriptionModal).
+      // Tidigare gick denna modal en egen apiClient.patch-väg som 404:ade på
+      // Express-servern. Se AVTAL_AUDIT.md (#A2 / D1).
+      const result = await callCustomerAction(customerId, {
+        action: 'change_subscription_price',
+        monthly_price: validation.data.monthly_price,
+        mode: validation.data.mode,
+        idempotency_key: idempotencyKey,
+      });
+
+      if (!result.ok) {
+        throw new ApiError(result.status, result.error, undefined, undefined, result.details);
+      }
+      return result;
     },
     onSuccess: () => {
+      toast.success('Pris uppdaterat.');
       onClose();
       void onChanged();
+    },
+    onError: (error) => {
+      logAdminClientError('SubscriptionPriceChangeModal.save', error, {
+        customerId,
+        mode,
+      });
     },
   });
 
@@ -173,6 +217,36 @@ export default function SubscriptionPriceChangeModal({
     ? saveMutation.error.message
     : previewError || (validation.success ? null : validation.error.issues[0]?.message);
 
+  // Destruktiv bekräftelse: när "Byt pris nu" ger en faktura > 0 kr ska
+  // operatören skriva kundens namn för att bekräfta. Skyddar mot fel-tabb.
+  const requiresConfirm = Boolean(
+    preview && mode === 'now' && preview.invoice_total_ore > 0,
+  );
+  const confirmMatches =
+    !requiresConfirm ||
+    (confirmInput.length > 0 &&
+      normalizeName(confirmInput) === normalizeName(customerName));
+
+  const previewReady = validation.success && previewedFor === previewKey;
+  const saveDisabled =
+    saveMutation.isPending || !previewReady || (requiresConfirm && !confirmMatches);
+
+  const handlePrimaryClick = () => {
+    if (requiresConfirm && !showConfirm) {
+      setShowConfirm(true);
+      return;
+    }
+    saveMutation.mutate();
+  };
+
+  const primaryLabel = saveMutation.isPending
+    ? 'Sparar...'
+    : requiresConfirm && !showConfirm
+      ? `Fortsätt (${formatSek(preview!.invoice_total_ore)} faktureras nu)`
+      : mode === 'now'
+        ? 'Byt pris nu'
+        : 'Schemalägg prisbyte';
+
   return (
     <AdminFormDialog
       open={open}
@@ -186,11 +260,11 @@ export default function SubscriptionPriceChangeModal({
             Avbryt
           </button>
           <button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !validation.success || previewedFor !== previewKey}
+            onClick={handlePrimaryClick}
+            disabled={saveDisabled && !(requiresConfirm && !showConfirm)}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
           >
-            {saveMutation.isPending ? 'Sparar...' : mode === 'now' ? 'Byt pris nu' : 'Schemalägg prisbyte'}
+            {primaryLabel}
           </button>
         </>
       }
@@ -306,6 +380,26 @@ export default function SubscriptionPriceChangeModal({
             </div>
           )}
         </div>
+
+        {requiresConfirm && showConfirm && (
+          <div className="rounded-md border border-status-danger-fg/40 bg-status-danger-bg/40 p-3 space-y-2">
+            <div className="text-xs font-bold text-status-danger-fg uppercase tracking-tight">
+              Bekräfta destruktiv åtgärd
+            </div>
+            <div className="text-[11px] text-foreground">
+              Detta fakturerar kunden{' '}
+              <strong>{preview ? formatSek(preview.invoice_total_ore) : ''}</strong>{' '}
+              direkt. Skriv kundens namn för att bekräfta: <strong>{customerName}</strong>
+            </div>
+            <input
+              autoFocus
+              value={confirmInput}
+              onChange={(e) => setConfirmInput(e.target.value)}
+              placeholder={customerName}
+              className={cn(ADMIN_MODAL_INPUT_CLS)}
+            />
+          </div>
+        )}
 
         {errorMsg && (
           <div className="rounded-md border border-status-danger-fg/30 bg-status-danger-bg px-3 py-2 text-sm text-status-danger-fg">

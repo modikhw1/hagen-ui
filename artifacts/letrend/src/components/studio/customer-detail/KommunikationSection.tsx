@@ -14,6 +14,7 @@ import { EMAIL_TEMPLATES } from './shared';
 import type { EmailLogEntry, EmailJobEntry } from '@/types/studio-v2';
 import { ConceptAttacher } from '@/components/email/ConceptAttacher';
 import { EmailPreview } from '@/components/email/EmailPreview';
+import { sanitizeRichTextHtml } from '@/components/gameplan-editor/utils/sanitize';
 
 const WEEKDAY_OPTIONS = [
   { value: 1, label: 'Mån' },
@@ -738,7 +739,7 @@ export function KommunikationSection({
                         color: LeTrendColors.textPrimary,
                         lineHeight: 1.6,
                       }}
-                      dangerouslySetInnerHTML={{ __html: email.body_html }}
+                      dangerouslySetInnerHTML={{ __html: sanitizeRichTextHtml(email.body_html || '') }}
                     />
                   )}
                 </div>
